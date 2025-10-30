@@ -7,7 +7,7 @@ import {
 } from "typeorm";
 
 @Entity()
-export class User {
+export class UserCard {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -15,13 +15,10 @@ export class User {
   uid: string;
 
   @Column()
-  name: string;
+  card_id: string;
 
   @Column()
-  avatar: string;
-
-  @Column()
-  point: number;
+  card_uuid: string;
 
   @CreateDateColumn()
   createdAt: Date;
