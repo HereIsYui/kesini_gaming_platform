@@ -7,26 +7,19 @@ import {
 } from "typeorm";
 
 @Entity()
-export class UserCard {
+export class DropItem {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
-  uid: string;
+  drop_name: string;
 
   @Column()
-  card_id: string;
+  drop_desc: string;
 
-  // 是否可以出售
+  // 掉落物品类型 0 卡片碎片 1 积分 2 道具 3 其他
   @Column()
-  can_sell: boolean;
-
-  // 是否可以抽奖
-  @Column()
-  can_lottery: boolean;
-
-  @Column()
-  card_uuid: string;
+  drop_type: string;
 
   @CreateDateColumn()
   createdAt: Date;

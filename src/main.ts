@@ -1,7 +1,8 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
-import { RedisUtil } from "./utils/redis";
+import servestatic from "serve-static";
+import { join } from "path";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +16,8 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api", app, document);
+
+  app.use("/file", servestatic(join(__dirname, "/public")));
 
   await app.listen(3000);
 }
