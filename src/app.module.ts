@@ -9,6 +9,7 @@ import { UserCard } from "./entity/userCard.entity";
 import { DropItem } from "./entity/drop.entity";
 import { User } from "./entity/user.entity";
 import { ApisModule } from './apis/apis.module';
+import { CardModule } from './card/card.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ApisModule } from './apis/apis.module';
     }),
     TypeOrmModule.forFeature([CardItem, DropItem, UserCard, User]),
     ApisModule,
+    CardModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

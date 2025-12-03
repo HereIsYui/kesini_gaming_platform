@@ -18,10 +18,28 @@ export class User {
   name: string;
 
   @Column()
+  nickname: string;
+
+  @Column()
   avatar: string;
 
   @Column()
   point: number;
+
+  @Column()
+  card_count_n: number;
+
+  @Column()
+  card_count_r: number;
+
+  @Column()
+  card_count_sr: number;
+
+  @Column()
+  card_count_ssr: number;
+
+  @Column()
+  card_count_ur: number;
 
   @CreateDateColumn()
   createdAt: Date;
