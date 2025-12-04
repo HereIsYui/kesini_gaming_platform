@@ -7,9 +7,11 @@ import { PoolInfo } from 'src/entity/pool.entity';
 import { User } from 'src/entity/user.entity';
 import { UserCard } from 'src/entity/userCard.entity';
 import { UserHistory } from 'src/entity/history.entity';
+import { DropItem } from 'src/entity/drop.entity';
+import { UserInventory } from 'src/entity/inventory.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CardItem, PoolInfo, User, UserCard, UserHistory])],
+  imports: [TypeOrmModule.forFeature([CardItem, PoolInfo, User, UserCard, UserHistory, DropItem, UserInventory])],
   controllers: [CardController],
   providers: [CardService],
   exports: [CardService],

@@ -231,4 +231,32 @@ export class CardController {
             return ResponseDto.error(error.message || '获取用户卡片列表失败');
         }
     }
+
+    /**
+     * 合成卡片
+     * POST /card/synthesize
+     */
+    @Post('synthesize')
+    async synthesizeCard(@Body() body: { uid: string; card_id: number }): Promise<ResponseDto<any>> {
+        try {
+            const result = await this.cardService.synthesizeCard(body.uid, body.card_id);
+            return ResponseDto.success(result.data, result.msg || "合成成功");
+        } catch (error) {
+            return ResponseDto.error(error.message || "合成失败");
+        }
+    }
+
+    /**
+     * 分解卡片
+     * POST /card/decompose
+     */
+    @Post('decompose')
+    async decomposeCard(@Body() body: { uid: string; card_id: number }): Promise<ResponseDto<any>> {
+        try {
+            const result = await this.cardService.decomposeCard(body.uid, body.card_id);
+            return ResponseDto.success(result.data, result.msg || "分解成功");
+        } catch (error) {
+            return ResponseDto.error(error.message || "分解失败");
+        }
+    }
 }

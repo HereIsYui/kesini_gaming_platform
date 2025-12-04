@@ -52,31 +52,5 @@ export class ApisController {
     }
   }
 
-  /**
-   * 合成卡片
-   * POST /apis/synthesize-card
-   */
-  @Post("/synthesize-card")
-  async synthesizeCard(@Body() body: { user_id: number; card_id: number }): Promise<ResponseDto<any>> {
-    try {
-      const result = await this.apisService.synthesizeCard(body.user_id, body.card_id);
-      return ResponseDto.success(result.data, result.msg || "合成成功");
-    } catch (error) {
-      return ResponseDto.error(error.message || "合成失败");
-    }
-  }
 
-  /**
-   * 分解卡片
-   * POST /apis/decompose-card
-   */
-  @Post("/decompose-card")
-  async decomposeCard(@Body() body: { user_id: number; card_id: number }): Promise<ResponseDto<any>> {
-    try {
-      const result = await this.apisService.decomposeCard(body.user_id, body.card_id);
-      return ResponseDto.success(result.data, result.msg || "分解成功");
-    } catch (error) {
-      return ResponseDto.error(error.message || "分解失败");
-    }
-  }
 }

@@ -5,6 +5,8 @@ import { PoolInfo } from 'src/entity/pool.entity';
 import { User } from 'src/entity/user.entity';
 import { UserCard } from 'src/entity/userCard.entity';
 import { UserHistory } from 'src/entity/history.entity';
+import { DropItem } from 'src/entity/drop.entity';
+import { UserInventory } from 'src/entity/inventory.entity';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -68,6 +70,8 @@ export class CardService {
         @InjectRepository(User) private readonly userRepository: Repository<User>,
         @InjectRepository(UserCard) private readonly userCardRepository: Repository<UserCard>,
         @InjectRepository(UserHistory) private readonly userCardHistoryRepository: Repository<UserHistory>,
+        @InjectRepository(DropItem) private readonly dropRepository: Repository<DropItem>,
+        @InjectRepository(UserInventory) private readonly inventoryRepository: Repository<UserInventory>,
     ) { }
 
     /**
@@ -493,5 +497,160 @@ export class CardService {
             pageSize,
             totalPages,
         };
+    }
+
+    /**
+     * 合成卡片
+     */
+    async synthesizeCard(uid: string, cardId: number) {
+        // 检查卡片是否存在
+        const card = await this.cardRepository.findOne({ where: { id: cardId } });
+        if (!card) {
+            throw new Error("卡片不存在");
+        }
+
+        // 检查是否为UR卡片
+        if (card.card_level.includes('UR')) {
+            throw new Error("不能合成UR卡片");
+        }
+
+        // 获取合成所需碎片数量
+        const requiredFragments = this.getRequiredFragments(card.card_level);
+        
+        // 查找卡片碎片物品 (drop_type为0的DropItem)
+        const fragmentItem = await this.dropRepository.findOne({ 
+            where: { drop_type: 0 } 
+        });
+        
+        if (!fragmentItem) {
+            throw new Error("卡片碎片物品不存在");
+        }
+
+        // 检查用户背包中的碎片数量
+        const userInventory = await this.inventoryRepository.findOne({
+            where: { user_id: parseInt(uid), item_id: fragmentItem.id }
+        });
+
+        const currentFragments = userInventory?.quantity || 0;
+        
+        if (currentFragments < requiredFragments) {
+            throw new Error(`碎片不足，需要${requiredFragments}个碎片，当前拥有${currentFragments}个`);
+        }
+
+        // 扣除碎片
+        if (userInventory) {
+            userInventory.quantity -= requiredFragments;
+            // 即使数量为0也不删除记录，只更新数量
+            await this.inventoryRepository.save(userInventory);
+        }
+
+        // 添加卡片到用户背包
+        const userCard = new UserCard();
+        userCard.uid = uid;
+        userCard.card_id = cardId.toString();
+        userCard.card_uuid = uuidv4();
+        userCard.can_sell = true;
+        userCard.can_lottery = true;
+        await this.userCardRepository.save(userCard);
+
+        return {
+            data: {
+                card_id: cardId,
+                card_name: card.card_name,
+                fragments_used: requiredFragments,
+                user_card_uuid: userCard.card_uuid
+            },
+            msg: "合成成功"
+        };
+    }
+
+    /**
+     * 分解卡片
+     */
+    async decomposeCard(uid: string, cardId: number) {
+        // 检查卡片是否存在
+        const card = await this.cardRepository.findOne({ where: { id: cardId } });
+        if (!card) {
+            throw new Error("卡片不存在");
+        }
+
+        // 检查是否为UR卡片
+        if (card.card_level.includes('UR')) {
+            throw new Error("UR卡片不可以分解");
+        }
+
+        // 获取分解可获得的碎片数量范围
+        const fragmentRange = this.getDecomposeFragmentRange(card.card_level);
+        
+        // 随机生成碎片数量
+        const fragmentCount = Math.floor(Math.random() * (fragmentRange.max - fragmentRange.min + 1)) + fragmentRange.min;
+
+        // 查找卡片碎片物品
+        const fragmentItem = await this.dropRepository.findOne({ 
+            where: { drop_type: 0 } 
+        });
+        
+        if (!fragmentItem) {
+            throw new Error("卡片碎片物品不存在");
+        }
+
+        // 检查用户是否拥有这张卡片
+        const userCard = await this.userCardRepository.findOne({
+            where: { uid: uid, card_id: cardId.toString() }
+        });
+
+        if (!userCard) {
+            throw new Error("用户没有这张卡片");
+        }
+
+        // 删除用户卡片
+        await this.userCardRepository.remove(userCard);
+
+        // 添加碎片到用户背包
+        let userInventory = await this.inventoryRepository.findOne({
+            where: { user_id: parseInt(uid), item_id: fragmentItem.id }
+        });
+
+        if (!userInventory) {
+            userInventory = new UserInventory();
+            userInventory.user_id = parseInt(uid);
+            userInventory.item_id = fragmentItem.id;
+            userInventory.quantity = fragmentCount;
+            await this.inventoryRepository.save(userInventory);
+        } else {
+            userInventory.quantity += fragmentCount;
+            await this.inventoryRepository.save(userInventory);
+        }
+
+        return {
+            data: {
+                card_id: cardId,
+                card_name: card.card_name,
+                fragments_gained: fragmentCount
+            },
+            msg: "分解成功"
+        };
+    }
+
+    /**
+     * 根据卡片等级获取合成所需碎片数量
+     */
+    private getRequiredFragments(cardLevel: string): number {
+        if (cardLevel.includes('N')) return 80;
+        if (cardLevel.includes('R')) return 160;
+        if (cardLevel.includes('SR')) return 320;
+        if (cardLevel.includes('SSR')) return 1000;
+        throw new Error("未知的卡片等级");
+    }
+
+    /**
+     * 根据卡片等级获取分解碎片数量范围
+     */
+    private getDecomposeFragmentRange(cardLevel: string): { min: number; max: number } {
+        if (cardLevel.includes('N')) return { min: 1, max: 10 };
+        if (cardLevel.includes('R')) return { min: 10, max: 20 };
+        if (cardLevel.includes('SR')) return { min: 20, max: 40 };
+        if (cardLevel.includes('SSR')) return { min: 40, max: 80 };
+        throw new Error("未知的卡片等级");
     }
 }
