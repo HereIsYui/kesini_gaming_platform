@@ -5,41 +5,63 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { Response } from 'express';
-import { ResponseDto } from '../dto/response.dto';
+import { Request, Response } from 'express';
 
 /**
  * HTTP异常过滤器
- * 统一处理异常响应格式
+ * 用于统一处理HTTP异常并返回标准格式
+ */
+@Catch(HttpException)
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: HttpException, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+    const status = exception.getStatus();
+
+    const exceptionResponse = exception.getResponse();
+    const message =
+      typeof exceptionResponse === 'string'
+        ? exceptionResponse
+        : (exceptionResponse as any).message || '请求失败';
+
+    response.status(status).json({
+      code: status,
+      message: Array.isArray(message) ? message.join(', ') : message,
+      data: null,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+    });
+  }
+}
+
+/**
+ * 全局异常过滤器
+ * 捕获所有未处理的异常
  */
 @Catch()
-export class HttpExceptionFilter implements ExceptionFilter {
+export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
-    let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = '服务器内部错误';
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    if (exception instanceof HttpException) {
-      status = exception.getStatus();
-      const exceptionResponse = exception.getResponse();
-      
-      if (typeof exceptionResponse === 'string') {
-        message = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        message = (exceptionResponse as any).message || message;
-        
-        // 处理验证错误
-        if (Array.isArray((exceptionResponse as any).message)) {
-          message = (exceptionResponse as any).message.join(', ');
-        }
-      }
-    } else if (exception instanceof Error) {
-      message = exception.message;
-    }
+    const message =
+      exception instanceof HttpException
+        ? exception.message
+        : '服务器内部错误';
 
-    // 返回统一格式
-    response.status(status).json(ResponseDto.error(message));
+    response.status(status).json({
+      code: status,
+      message: message,
+      data: null,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+    });
   }
 }

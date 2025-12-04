@@ -1,24 +1,28 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { ValidationPipe,Logger } from "@nestjs/common";
 import servestatic from "serve-static";
 import { join } from "path";
+import * as dotenv from 'dotenv';
 
+// 加载环境变量
+dotenv.config({ path: '.env.dev' });
+const logger = new Logger("Server");
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors();
-  const config = new DocumentBuilder()
-    .setTitle("抽卡对接文档")
-    .setDescription("kejini game")
-    .setVersion("1.0")
-    .addTag("users", "用户相关接口")
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("api", app, document);
+  
+  // 启用全局验证管道
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
 
   app.use("/file", servestatic(join(__dirname, "/public")));
 
-  await app.listen(3000);
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  logger.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap();

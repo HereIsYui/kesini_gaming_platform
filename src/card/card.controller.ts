@@ -1,15 +1,26 @@
-import { Controller, Post, Get, Body, Param, Query, UseInterceptors, UseFilters } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseInterceptors, UseFilters, UseGuards } from '@nestjs/common';
 import { CardService} from './card.service';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { TransformInterceptor } from 'src/common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from 'src/common/filters/http-exception.filter';
-import { GachaConfig, GachaResult } from 'src/types/api';
+import type { GachaConfig, GachaResult } from 'src/types/api';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { GetUser } from 'src/auth/get-user.decorator';
+import { IsInt, IsOptional } from 'class-validator';
 
 // 抽卡请求DTO
 export class DrawCardDto {
-    uid: string;
+    @IsOptional()
+    @IsInt()
     poolId?: number;      // 指定卡池ID
+
+    @IsOptional()
     config?: GachaConfig; // 可选的自定义配置
+}
+
+// 用户信息接口
+interface UserInfo {
+    uid: string;
 }
 
 @Controller('card')
@@ -23,9 +34,10 @@ export class CardController {
      * POST /card/draw/once
      */
     @Post('draw/once')
-    async drawOnce(@Body() dto: DrawCardDto): Promise<ResponseDto<GachaResult | null>> {
-        if (!dto.uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+    @UseGuards(JwtAuthGuard)
+    async drawOnce(@Body() dto: DrawCardDto, @GetUser() user: UserInfo): Promise<ResponseDto<GachaResult | null>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
 
         try {
@@ -34,7 +46,7 @@ export class CardController {
             if (dto.poolId && config) {
                 config.poolId = dto.poolId;
             }
-            const result = await this.cardService.drawOnce(dto.uid, config);
+            const result = await this.cardService.drawOnce(user.uid, config);
             return ResponseDto.success(result, '抽卡成功');
         } catch (error) {
             return ResponseDto.error(error.message || '抽卡失败');
@@ -46,9 +58,10 @@ export class CardController {
      * POST /card/draw/ten
      */
     @Post('draw/ten')
-    async drawTen(@Body() dto: DrawCardDto): Promise<ResponseDto<GachaResult[] | null>> {
-        if (!dto.uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+    @UseGuards(JwtAuthGuard)
+    async drawTen(@Body() dto: DrawCardDto, @GetUser() user: UserInfo): Promise<ResponseDto<GachaResult[] | null>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
 
         try {
@@ -56,7 +69,7 @@ export class CardController {
             if (dto.poolId && config) {
                 config.poolId = dto.poolId;
             }
-            const results = await this.cardService.drawTen(dto.uid, config);
+            const results = await this.cardService.drawTen(user.uid, config);
             return ResponseDto.success(results, '十连抽成功');
         } catch (error) {
             return ResponseDto.error(error.message || '十连抽失败');
@@ -68,11 +81,13 @@ export class CardController {
      * POST /card/draw/multiple
      */
     @Post('draw/multiple')
+    @UseGuards(JwtAuthGuard)
     async drawMultiple(
-        @Body() dto: DrawCardDto & { count: number }
+        @Body() dto: DrawCardDto & { count: number },
+        @GetUser() user: UserInfo
     ): Promise<ResponseDto<GachaResult[] | null>> {
-        if (!dto.uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
         if (!dto.count || dto.count <= 0) {
             return ResponseDto.error('缺少必要参数: count，且必须大于0');
@@ -83,7 +98,7 @@ export class CardController {
             if (dto.poolId && config) {
                 config.poolId = dto.poolId;
             }
-            const results = await this.cardService.drawMultiple(dto.uid, dto.count, config);
+            const results = await this.cardService.drawMultiple(user.uid, dto.count, config);
             return ResponseDto.success(results, `${dto.count}连抽成功`);
         } catch (error) {
             return ResponseDto.error(error.message || '抽卡失败');
@@ -92,16 +107,17 @@ export class CardController {
 
     /**
      * 获取用户抽卡统计
-     * GET /card/stats/:uid
+     * GET /card/stats
      */
-    @Get('stats/:uid')
-    async getUserStats(@Param('uid') uid: string): Promise<ResponseDto<any>> {
-        if (!uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+    @Get('stats')
+    @UseGuards(JwtAuthGuard)
+    async getUserStats(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
 
         try {
-            const stats = await this.cardService.getUserGachaStats(uid);
+            const stats = await this.cardService.getUserGachaStats(user.uid);
             return ResponseDto.success(stats, '获取统计成功');
         } catch (error) {
             return ResponseDto.error(error.message || '获取统计失败');
@@ -110,16 +126,17 @@ export class CardController {
 
     /**
      * 重置用户抽卡历史
-     * POST /card/reset/:uid
+     * POST /card/reset
      */
-    @Post('reset/:uid')
-    async resetUserHistory(@Param('uid') uid: string): Promise<ResponseDto<null>> {
-        if (!uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+    @Post('reset')
+    @UseGuards(JwtAuthGuard)
+    async resetUserHistory(@GetUser() user: UserInfo): Promise<ResponseDto<null>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
 
         try {
-            await this.cardService.resetUserHistory(uid);
+            await this.cardService.resetUserHistory(user.uid);
             return ResponseDto.success(null, '抽卡历史已重置');
         } catch (error) {
             return ResponseDto.error(error.message || '重置失败');
@@ -200,28 +217,28 @@ export class CardController {
 
     /**
      * 获取用户卡片列表（支持分页）
-     * GET /card/:uid/cards?rarity=SSR&poolId=1&page=1&pageSize=10
-     * @param uid 用户ID
+     * GET /card/user/cards?rarity=SSR&poolId=1&page=1&pageSize=10
      * @param rarity 卡片等级筛选 (可选，支持: N, R, SR, SSR, UR)
      * @param poolId 卡池ID筛选 (可选)
      * @param page 页码 (从1开始，默认1)
      * @param pageSize 每页数量 (默认10，最大100)
      */
-    @Get('user/:uid/cards')
+    @Get('user/cards')
+    @UseGuards(JwtAuthGuard)
     async getUserCards(
-        @Param('uid') uid: string,
+        @GetUser() user: UserInfo,
         @Query('rarity') rarity?: string,
         @Query('poolId') poolId?: number,
         @Query('page') page?: number,
         @Query('pageSize') pageSize?: number
     ): Promise<ResponseDto<any>> {
-        if (!uid) {
-            return ResponseDto.error('缺少必要参数: uid');
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
         }
 
         try {
             const result = await this.cardService.getUserCards(
-                uid,
+                user.uid,
                 rarity,
                 poolId,
                 page ? parseInt(page.toString()) : 1,
@@ -238,9 +255,13 @@ export class CardController {
      * POST /card/synthesize
      */
     @Post('synthesize')
-    async synthesizeCard(@Body() body: { uid: string; card_id: number }): Promise<ResponseDto<any>> {
+    @UseGuards(JwtAuthGuard)
+    async synthesizeCard(@Body() body: { card_id: number }, @GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
+        }
         try {
-            const result = await this.cardService.synthesizeCard(body.uid, body.card_id);
+            const result = await this.cardService.synthesizeCard(user.uid, body.card_id);
             return ResponseDto.success(result.data, result.msg || "合成成功");
         } catch (error) {
             return ResponseDto.error(error.message || "合成失败");
@@ -252,9 +273,13 @@ export class CardController {
      * POST /card/decompose
      */
     @Post('decompose')
-    async decomposeCard(@Body() body: { uid: string; card_uuid: string }): Promise<ResponseDto<any>> {
+    @UseGuards(JwtAuthGuard)
+    async decomposeCard(@Body() body: { card_uuid: string }, @GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+        if (!user || !user.uid) {
+            return ResponseDto.error('用户身份验证失败');
+        }
         try {
-            const result = await this.cardService.decomposeCard(body.uid, body.card_uuid);
+            const result = await this.cardService.decomposeCard(user.uid, body.card_uuid);
             return ResponseDto.success(result.data, result.msg || "分解成功");
         } catch (error) {
             return ResponseDto.error(error.message || "分解失败");

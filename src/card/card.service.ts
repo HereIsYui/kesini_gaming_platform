@@ -11,18 +11,10 @@ import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { In } from 'typeorm';
 import { GachaConfig, GachaResult } from 'src/types/api';
+import { GachaConfigService } from './gacha-config.service';
 
 @Injectable()
 export class CardService {
-    // 默认稀有度概率配置
-    private defaultRarityProbabilities = {
-        'N': 0.50,    // 50%
-        'R': 0.30,    // 30%
-        'SR': 0.15,   // 15%
-        'SSR': 0.045, // 4.5%
-        'UR': 0.005,  // 0.5%
-    };
-
     constructor(
         @InjectRepository(CardItem) private readonly cardRepository: Repository<CardItem>,
         @InjectRepository(PoolInfo) private readonly poolRepository: Repository<PoolInfo>,
@@ -31,6 +23,7 @@ export class CardService {
         @InjectRepository(UserHistory) private readonly userCardHistoryRepository: Repository<UserHistory>,
         @InjectRepository(DropItem) private readonly dropRepository: Repository<DropItem>,
         @InjectRepository(UserInventory) private readonly inventoryRepository: Repository<UserInventory>,
+        private readonly gachaConfigService: GachaConfigService,
     ) { }
 
     /**
@@ -88,7 +81,7 @@ export class CardService {
         }
 
         // 获取概率配置
-        const probabilities = config?.rarityProbabilities || this.defaultRarityProbabilities;
+        const probabilities = this.getProbabilities(config);
 
         // 用于记录本次抽卡的所有卡片信息
         const cardIds: number[] = [];
@@ -141,6 +134,25 @@ export class CardService {
         await this.saveUserHistoryToDB(uid, count, cardIds, cardLevels, cardUuids);
 
         return results;
+    }
+
+    /**
+     * 获取概率配置
+     */
+    private getProbabilities(config?: GachaConfig): { [rarity: string]: number } {
+        if (config?.rarityProbabilities) {
+            // 使用自定义配置
+            return config.rarityProbabilities;
+        }
+
+        if (config?.poolId) {
+            // 根据卡池ID获取配置
+            const poolConfig = this.gachaConfigService.getConfigByPoolId(config.poolId);
+            return poolConfig.rarityProbabilities || this.gachaConfigService.getDefaultConfig().rarityProbabilities!;
+        }
+
+        // 使用默认配置
+        return this.gachaConfigService.getDefaultConfig().rarityProbabilities!;
     }
 
     /**

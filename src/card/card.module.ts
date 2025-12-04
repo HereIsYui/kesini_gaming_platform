@@ -9,11 +9,13 @@ import { UserCard } from 'src/entity/userCard.entity';
 import { UserHistory } from 'src/entity/history.entity';
 import { DropItem } from 'src/entity/drop.entity';
 import { UserInventory } from 'src/entity/inventory.entity';
+import { AuthModule } from 'src/auth/auth.module';
+import { GachaConfigService } from './gacha-config.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CardItem, PoolInfo, User, UserCard, UserHistory, DropItem, UserInventory])],
+  imports: [TypeOrmModule.forFeature([CardItem, PoolInfo, User, UserCard, UserHistory, DropItem, UserInventory]), AuthModule],
   controllers: [CardController],
-  providers: [CardService],
-  exports: [CardService],
+  providers: [CardService, GachaConfigService],
+  exports: [CardService, GachaConfigService],
 })
 export class CardModule { }

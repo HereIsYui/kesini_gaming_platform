@@ -4,12 +4,14 @@ import axios from "axios";
 import { User } from "src/entity/user.entity";
 import { LoginData } from "src/types/api";
 import { Repository } from "typeorm";
+import { JwtUtilsService } from "src/utils/jwt";
 
 @Injectable()
 export class ApisService {
 
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
+    private readonly jwtUtilsService: JwtUtilsService,
   ) { }
 
   private logger = new Logger(ApisService.name);
@@ -113,8 +115,14 @@ export class ApisService {
     }
 
 
+    // 生成JWT token
+    const token = this.jwtUtilsService.generateToken({ uid: user.uid });
+
     return {
-      data: user,
+      data: {
+        user,
+        token,
+      },
       msg: "登录成功",
     };
   }
@@ -171,7 +179,7 @@ export class ApisService {
       const lines = response.data.split("\n");
       const result: Record<string, string> = {};
 
-      lines.forEach((line) => {
+      lines.forEach((line: string) => {
         const [key, value] = line.split(":");
         if (key && value) {
           result[key.trim()] = value.trim();

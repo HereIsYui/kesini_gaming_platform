@@ -6,24 +6,27 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { ResponseDto } from '../dto/response.dto';
 
 /**
- * 统一响应格式拦截器
- * 自动将Controller返回的数据包装成标准格式
+ * 响应数据转换拦截器
+ * 用于统一处理响应数据格式
  */
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<T, ResponseDto<T>> {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<ResponseDto<T>> {
+export class TransformInterceptor<T> implements NestInterceptor<T, any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
-      map((data) => {
-        // 如果已经是ResponseDto格式，直接返回
-        if (data instanceof ResponseDto) {
+      map(data => {
+        // 如果响应数据已经是 ResponseDto 格式，直接返回
+        if (data && typeof data === 'object' && 'code' in data && 'message' in data) {
           return data;
         }
         
-        // 否则包装成成功响应
-        return ResponseDto.success(data);
+        // 否则包装成统一格式
+        return {
+          code: 200,
+          message: '操作成功',
+          data: data,
+        };
       }),
     );
   }

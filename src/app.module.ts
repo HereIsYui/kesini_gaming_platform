@@ -10,22 +10,18 @@ import { DropItem } from "./entity/drop.entity";
 import { User } from "./entity/user.entity";
 import { ApisModule } from './apis/apis.module';
 import { CardModule } from './card/card.module';
+import { ConfigurationModule } from './config/configuration.module';
+import { ConfigurationService } from './config/configuration.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: "mysql",
-      host: "127.0.0.1",
-      port: 3306,
-      username: "root",
-      password: "123456",
-      database: "kesini",
-      retryDelay: 500, // 重试连接数据库间隔
-      retryAttempts: 10, // 允许重连次数
-      synchronize: true, // 是否将实体同步到数据库
-      autoLoadEntities: true, // 自动加载实体配置，forFeature()注册的每个实体都自己动加载
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigurationModule],
+      useFactory: (configService: ConfigurationService) => configService.databaseConfig,
+      inject: [ConfigurationService],
     }),
     TypeOrmModule.forFeature([CardItem, DropItem, UserCard, User]),
+    ConfigurationModule,
     ApisModule,
     CardModule,
   ],
