@@ -1,8 +1,9 @@
 import { Controller, Post, Get, Body, Param, Query, UseInterceptors, UseFilters } from '@nestjs/common';
-import { CardService, GachaConfig, GachaResult } from './card.service';
+import { CardService} from './card.service';
 import { ResponseDto } from 'src/common/dto/response.dto';
 import { TransformInterceptor } from 'src/common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from 'src/common/filters/http-exception.filter';
+import { GachaConfig, GachaResult } from 'src/types/api';
 
 // 抽卡请求DTO
 export class DrawCardDto {
@@ -251,9 +252,9 @@ export class CardController {
      * POST /card/decompose
      */
     @Post('decompose')
-    async decomposeCard(@Body() body: { uid: string; card_id: number }): Promise<ResponseDto<any>> {
+    async decomposeCard(@Body() body: { uid: string; card_uuid: string }): Promise<ResponseDto<any>> {
         try {
-            const result = await this.cardService.decomposeCard(body.uid, body.card_id);
+            const result = await this.cardService.decomposeCard(body.uid, body.card_uuid);
             return ResponseDto.success(result.data, result.msg || "分解成功");
         } catch (error) {
             return ResponseDto.error(error.message || "分解失败");

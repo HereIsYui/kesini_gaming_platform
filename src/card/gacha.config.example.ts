@@ -1,4 +1,4 @@
-import { GachaConfig } from './card.service';
+import { GachaConfig } from "src/types/api";
 
 /**
  * 抽卡配置示例（无保底版本）

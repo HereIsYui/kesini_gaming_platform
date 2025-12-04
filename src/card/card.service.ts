@@ -9,49 +9,8 @@ import { DropItem } from 'src/entity/drop.entity';
 import { UserInventory } from 'src/entity/inventory.entity';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
-
-// 抽卡配置接口
-export interface GachaConfig {
-    // 卡池ID (如果指定，则从该卡池抽取)
-    poolId?: number;
-
-    // 稀有度概率配置 (总和应为1)
-    rarityProbabilities?: {
-        [rarity: string]: number; // 如 { 'N': 0.5, 'R': 0.3, 'SR': 0.15, 'SSR': 0.045, 'UR': 0.005 }
-    };
-
-    // UP卡配置 (指定UP的卡片ID和UP倍率)
-    upCards?: {
-        enabled: boolean;
-        cardIds: number[]; // UP卡片ID列表
-        upRate: number;    // UP倍率 (0-1之间，表示抽到该稀有度时获得UP卡的概率)
-    };
-}
-
-// 抽卡结果
-export interface GachaResult {
-    cardId: number;
-    cardName: string;
-    cardDesc: string;
-    rarity: string;
-    cardType: number;     // 卡片类型
-    poolId: number;       // 所属卡池
-    isUp: boolean;        // 是否UP卡
-    userCardUuid: string; // 用户卡片唯一ID
-}
-
-// 用户抽卡统计
-export interface UserGachaStats {
-    uid: string;
-    totalDraws: number;           // 总抽数
-    cardCounts: {
-        N: number;
-        R: number;
-        SR: number;
-        SSR: number;
-        UR: number;
-    };
-}
+import { In } from 'typeorm';
+import { GachaConfig, GachaResult } from 'src/types/api';
 
 @Injectable()
 export class CardService {
@@ -154,6 +113,7 @@ export class CardService {
             userCard.can_sell = true;
             userCard.can_lottery = true;
             userCard.card_uuid = uuidv4();
+            userCard.delete_flag = false;
 
             await this.userCardRepository.save(userCard);
 
@@ -405,6 +365,7 @@ export class CardService {
         pageSize: number = 10
     ): Promise<{
         list: any[];
+        dropItems: any[];
         total: number;
         page: number;
         pageSize: number;
@@ -414,36 +375,62 @@ export class CardService {
         page = Math.max(1, page);
         pageSize = Math.min(100, Math.max(1, pageSize)); // 限制最大每页100条
 
-        // 构建用户卡片查询
-        const queryBuilder = this.userCardRepository
-            .createQueryBuilder('userCard')
-            .where('userCard.uid = :uid', { uid });
+        // 构建筛选条件
+        const whereConditions: any = {
+            uid: uid,
+            delete_flag: false
+        };
 
-        // 如果指定了稀有度筛选，使用子查询
-        if (rarity) {
-            queryBuilder.andWhere(
-                'EXISTS (SELECT 1 FROM card_item ci WHERE ci.id = CAST(userCard.card_id AS UNSIGNED) AND ci.card_level LIKE :rarity)',
-                { rarity: `%${rarity}%` }
-            );
+        // 如果有筛选条件，先获取符合条件的卡片ID
+        let filteredCardIds: number[] = [];
+        if (rarity || poolId) {
+            const cardQueryBuilder = this.cardRepository.createQueryBuilder('card');
+            
+            if (rarity) {
+                cardQueryBuilder.andWhere('card.card_level LIKE :rarity', { rarity: `%${rarity}%` });
+            }
+            
+            if (poolId) {
+                cardQueryBuilder.andWhere('card.pool = :poolId', { poolId });
+            }
+            
+            const filteredCards = await cardQueryBuilder.select('card.id').getMany();
+            filteredCardIds = filteredCards.map(card => card.id);
+            
+            if (filteredCardIds.length === 0) {
+                return {
+                    list: [],
+                    dropItems: [],
+                    total: 0,
+                    page,
+                    pageSize,
+                    totalPages: 0,
+                };
+            }
         }
 
-        // 如果指定了卡池ID筛选，使用子查询
-        if (poolId) {
-            queryBuilder.andWhere(
-                'EXISTS (SELECT 1 FROM card_item ci WHERE ci.id = CAST(userCard.card_id AS UNSIGNED) AND ci.pool = :poolId)',
-                { poolId }
-            );
+        // 构建查询条件
+        const findOptions: any = {
+            where: whereConditions,
+            order: { id: 'DESC' },
+            skip: (page - 1) * pageSize,
+            take: pageSize
+        };
+
+        // 如果有卡片筛选，添加到where条件中
+        if (filteredCardIds.length > 0) {
+            findOptions.where.card_id = In(filteredCardIds.map(id => id.toString()));
         }
 
-        // 按ID降序排序，最新的卡片在前
-        queryBuilder.orderBy('userCard.id', 'DESC');
-
-        // 先获取总数（应用筛选条件后）
-        const total = await queryBuilder.getCount();
+        // 获取总数
+        const total = await this.userCardRepository.count({
+            where: findOptions.where
+        });
 
         if (total === 0) {
             return {
                 list: [],
+                dropItems: [],
                 total: 0,
                 page,
                 pageSize,
@@ -452,11 +439,7 @@ export class CardService {
         }
 
         // 分页查询
-        const skip = (page - 1) * pageSize;
-        const userCards = await queryBuilder
-            .skip(skip)
-            .take(pageSize)
-            .getMany();
+        const userCards = await this.userCardRepository.find(findOptions);
 
         // 获取所有卡片ID（去重）
         const cardIds = [...new Set(userCards.map(uc => parseInt(uc.card_id)))];
@@ -466,6 +449,43 @@ export class CardService {
             .createQueryBuilder('card')
             .where('card.id IN (:...cardIds)', { cardIds })
             .getMany();
+
+        // 获取用户ID用于查询物品
+        const user = await this.userRepository.findOne({ where: { uid: uid } });
+        if (!user) {
+            throw new Error("用户不存在");
+        }
+
+        // 查询用户拥有的掉落物品
+        const userInventories = await this.inventoryRepository.find({
+            where: { user_id: user.id }
+        });
+
+        // 获取所有物品ID并查询物品信息
+        const itemIds = userInventories.map(inv => inv.item_id);
+        let dropItems: any[] = [];
+        if (itemIds.length > 0) {
+            dropItems = await this.dropRepository.find({
+                where: { id: In(itemIds) }
+            });
+        }
+
+        // 构建物品信息映射
+        const itemInfoMap = new Map();
+        dropItems.forEach(item => {
+            const inventory = userInventories.find(inv => inv.item_id === item.id);
+            if (inventory) {
+                itemInfoMap.set(item.id, {
+                    id: item.id,
+                    name: item.drop_name,
+                    desc: item.drop_desc,
+                    type: item.drop_type,
+                    itemType: item.drop_item_type,
+                    itemValue: item.drop_item_value,
+                    num: inventory.num
+                });
+            }
+        });
 
         // 构建返回结果：每个用户卡片UUID对应一条记录
         const list = userCards.map(userCard => {
@@ -492,10 +512,11 @@ export class CardService {
 
         return {
             list,
+            dropItems: Array.from(itemInfoMap.values()), // 独立返回用户拥有的所有掉落物品
             total,
             page,
             pageSize,
-            totalPages,
+            totalPages
         };
     }
 
@@ -526,12 +547,18 @@ export class CardService {
             throw new Error("卡片碎片物品不存在");
         }
 
+        // 获取用户信息
+        const user = await this.userRepository.findOne({ where: { uid: uid } });
+        if (!user) {
+            throw new Error("用户不存在");
+        }
+
         // 检查用户背包中的碎片数量
         const userInventory = await this.inventoryRepository.findOne({
-            where: { user_id: parseInt(uid), item_id: fragmentItem.id }
+            where: { user_id: user.id, item_id: fragmentItem.id }
         });
 
-        const currentFragments = userInventory?.quantity || 0;
+        const currentFragments = userInventory?.num || 0;
         
         if (currentFragments < requiredFragments) {
             throw new Error(`碎片不足，需要${requiredFragments}个碎片，当前拥有${currentFragments}个`);
@@ -539,7 +566,7 @@ export class CardService {
 
         // 扣除碎片
         if (userInventory) {
-            userInventory.quantity -= requiredFragments;
+            userInventory.num -= requiredFragments;
             // 即使数量为0也不删除记录，只更新数量
             await this.inventoryRepository.save(userInventory);
         }
@@ -551,14 +578,14 @@ export class CardService {
         userCard.card_uuid = uuidv4();
         userCard.can_sell = true;
         userCard.can_lottery = true;
+        userCard.delete_flag = false;
         await this.userCardRepository.save(userCard);
 
         return {
             data: {
-                card_id: cardId,
                 card_name: card.card_name,
                 fragments_used: requiredFragments,
-                user_card_uuid: userCard.card_uuid
+                card_uuid: userCard.card_uuid
             },
             msg: "合成成功"
         };
@@ -567,9 +594,20 @@ export class CardService {
     /**
      * 分解卡片
      */
-    async decomposeCard(uid: string, cardId: number) {
-        // 检查卡片是否存在
-        const card = await this.cardRepository.findOne({ where: { id: cardId } });
+    async decomposeCard(uid: string, cardUuid: string) {
+        // 首先检查用户是否拥有这张卡片
+        const userCard = await this.userCardRepository.findOne({
+            where: { uid: uid, card_uuid: cardUuid, delete_flag: false }
+        });
+
+        if (!userCard) {
+            throw new Error("用户没有这张卡片");
+        }
+
+        // 获取卡片信息
+        const card = await this.cardRepository.findOne({ 
+            where: { id: parseInt(userCard.card_id) } 
+        });
         if (!card) {
             throw new Error("卡片不存在");
         }
@@ -594,38 +632,37 @@ export class CardService {
             throw new Error("卡片碎片物品不存在");
         }
 
-        // 检查用户是否拥有这张卡片
-        const userCard = await this.userCardRepository.findOne({
-            where: { uid: uid, card_id: cardId.toString() }
-        });
+        // 标记用户卡片为已删除（软删除）
+        userCard.delete_flag = true;
+        await this.userCardRepository.save(userCard);
 
-        if (!userCard) {
-            throw new Error("用户没有这张卡片");
+        // 获取用户信息
+        const user = await this.userRepository.findOne({ where: { uid: uid } });
+        if (!user) {
+            throw new Error("用户不存在");
         }
-
-        // 删除用户卡片
-        await this.userCardRepository.remove(userCard);
 
         // 添加碎片到用户背包
         let userInventory = await this.inventoryRepository.findOne({
-            where: { user_id: parseInt(uid), item_id: fragmentItem.id }
+            where: { user_id: user.id, item_id: fragmentItem.id }
         });
 
         if (!userInventory) {
             userInventory = new UserInventory();
-            userInventory.user_id = parseInt(uid);
+            userInventory.user_id = user.id;
             userInventory.item_id = fragmentItem.id;
-            userInventory.quantity = fragmentCount;
+            userInventory.num = fragmentCount;
             await this.inventoryRepository.save(userInventory);
         } else {
-            userInventory.quantity += fragmentCount;
+            userInventory.num += fragmentCount;
             await this.inventoryRepository.save(userInventory);
         }
 
         return {
             data: {
-                card_id: cardId,
+                card_id: parseInt(userCard.card_id),
                 card_name: card.card_name,
+                card_uuid: cardUuid,
                 fragments_gained: fragmentCount
             },
             msg: "分解成功"

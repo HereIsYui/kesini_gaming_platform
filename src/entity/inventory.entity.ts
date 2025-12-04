@@ -24,7 +24,7 @@ export class UserInventory {
 
   // 物品数量
   @Column()
-  quantity: number;
+  num: number;
 
   @CreateDateColumn()
   createdAt: Date;

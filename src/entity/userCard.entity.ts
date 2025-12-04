@@ -1,4 +1,4 @@
-// user.entity.ts
+// userCard.entity.ts
 import {
   Entity,
   Column,
@@ -27,6 +27,10 @@ export class UserCard {
 
   @Column()
   card_uuid: string;
+
+  // 删除标记：false-正常，true-已删除
+  @Column({ default: false })
+  delete_flag: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

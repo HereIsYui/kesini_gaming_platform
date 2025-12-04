@@ -16,4 +16,4 @@ import { UserInventory } from 'src/entity/inventory.entity';
   providers: [CardService],
   exports: [CardService],
 })
-export class CardModule {}
+export class CardModule { }
