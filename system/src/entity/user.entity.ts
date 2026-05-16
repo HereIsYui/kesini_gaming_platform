@@ -43,6 +43,10 @@ export class User {
   @Column({ default: 0 })
   card_count_ur: number;
 
+  // 是否为后台管理员
+  @Column({ default: false })
+  is_admin: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

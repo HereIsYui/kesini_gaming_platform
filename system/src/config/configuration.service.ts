@@ -41,6 +41,14 @@ export class ConfigurationService {
     };
   }
 
+  // 后台管理员白名单
+  get adminUids(): string[] {
+    return (process.env.ADMIN_UIDS || "")
+      .split(",")
+      .map((uid) => uid.trim())
+      .filter(Boolean);
+  }
+
   // 抽卡概率配置
   get gachaProbabilities() {
     return {

@@ -110,6 +110,7 @@ export class ApisService {
       newUser.card_count_sr = 0;
       newUser.card_count_ssr = 0;
       newUser.card_count_ur = 0;
+      newUser.is_admin = false;
       await this.userRepository.save(newUser);
       user = newUser;
     } else {

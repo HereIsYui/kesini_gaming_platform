@@ -1,0 +1,23 @@
+{
+  "name": "kesini-admin-backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev --host 0.0.0.0",
+    "build": "rsbuild build",
+    "preview": "rsbuild preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@rsbuild/core": "^2.0.6",
+    "@rsbuild/plugin-react": "^2.0.0",
+    "lucide-react": "^0.555.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

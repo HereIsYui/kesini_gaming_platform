@@ -13,6 +13,7 @@ import { ApisModule } from "./apis/apis.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
 import { ConfigurationService } from "./config/configuration.service";
+import { AdminModule } from "./admin/admin.module";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ConfigurationService } from "./config/configuration.service";
     ConfigurationModule,
     ApisModule,
     CardModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

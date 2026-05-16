@@ -713,6 +713,7 @@ export class CardService {
         card_count_sr: 0,
         card_count_ssr: 0,
         card_count_ur: 0,
+        is_admin: false,
       });
       return userRepository.save(user);
     }

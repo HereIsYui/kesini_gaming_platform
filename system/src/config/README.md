@@ -31,6 +31,7 @@ BASE_URL=http://localhost:3000 # 基础URL
 ```bash
 JWT_SECRET=your-secret-key   # JWT密钥（生产环境必须配置）
 JWT_EXPIRES_IN=7d           # JWT过期时间
+ADMIN_UIDS=123456,789012    # 后台管理员UID白名单
 ```
 
 ### MySQL数据库配置
@@ -108,12 +109,12 @@ EVENT_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity"
 
 ## 卡池类型说明
 
-| 卡池ID | 类型 | 说明 |
-|---------|------|------|
-| 0/1 | 常驻卡池 | 标准概率 |
-| 2 | 限定卡池 | 包含UP卡 |
-| 3 | 新手卡池 | 高概率 |
-| 4 | 活动卡池 | 限时活动，包含UP卡 |
+| 卡池ID | 类型     | 说明               |
+| ------ | -------- | ------------------ |
+| 0/1    | 常驻卡池 | 标准概率           |
+| 2      | 限定卡池 | 包含UP卡           |
+| 3      | 新手卡池 | 高概率             |
+| 4      | 活动卡池 | 限时活动，包含UP卡 |
 
 ## 使用方式
 
@@ -148,7 +149,7 @@ const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 
 ## 环境变量最佳实践
 
-1. **生产环境安全**: 
+1. **生产环境安全**:
    - 使用强密码的JWT_SECRET
    - 生产环境缺失JWT_SECRET时应用会拒绝启动
    - 修改默认数据库密码
@@ -167,6 +168,7 @@ const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 ## 配置热更新
 
 目前配置在应用启动时加载，如需热更新功能，可以：
+
 1. 实现配置变更监听
 2. 使用配置管理服务（如Consul、ETCD）
 3. 添加配置刷新接口
