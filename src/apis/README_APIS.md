@@ -113,10 +113,13 @@ curl -X POST http://localhost:3000/apis/login \
   "code": 0,
   "msg": "登录成功",
   "data": {
-    "userId": "123456",
-    "userName": "testuser",
-    "userNickname": "测试用户",
-    "userAvatarURL": "https://example.com/avatar.jpg"
+    "user": {
+      "uid": "123456",
+      "name": "testuser",
+      "nickname": "测试用户",
+      "avatar": "https://example.com/avatar.jpg"
+    },
+    "token": "JWT_TOKEN"
   }
 }
 ```
@@ -171,7 +174,7 @@ curl -X POST http://localhost:3000/apis/login \
    POST /apis/login
    ↓
 7. 后端验证签名并获取用户信息
-   返回: { code: 0, data: { userId, userName, ... } }
+   返回: { code: 0, data: { user, token } }
    ↓
 8. 登录成功，保存用户信息
 ```

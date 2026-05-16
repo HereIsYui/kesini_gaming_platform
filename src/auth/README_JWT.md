@@ -14,8 +14,8 @@
 // POST /apis/login
 // 响应示例
 {
-  "code": 200,
-  "message": "登录成功",
+  "code": 0,
+  "msg": "登录成功",
   "data": {
     "user": {
       "uid": "123456",
@@ -62,16 +62,14 @@ Authorization: Bearer {token}
 ```json
 {
   "uid": "123456",
-  "poolId": 1,
-  "config": { ... }
+  "poolId": 1
 }
 ```
 
 **现在：**
 ```json
 {
-  "poolId": 1,
-  "config": { ... }
+  "poolId": 1
 }
 ```
 
@@ -88,8 +86,10 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 401,
-  "message": "Unauthorized"
+  "code": -1,
+  "msg": "Unauthorized",
+  "data": null,
+  "status": 401
 }
 ```
 
@@ -140,4 +140,4 @@ curl -X POST http://localhost:3000/card/draw/once \
 
 1. **Token存储**: 客户端应安全存储JWT token
 2. **Token刷新**: Token过期后需要重新登录
-3. **环境配置**: 生产环境应使用环境变量设置JWT_SECRET
+3. **环境配置**: 生产环境必须使用环境变量设置JWT_SECRET，缺失时应用会拒绝启动

@@ -4,9 +4,12 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  Index,
 } from "typeorm";
 
 @Entity()
+@Index("IDX_user_card_owner", ["uid", "delete_flag", "card_id"])
+@Index("IDX_user_card_uuid", ["card_uuid"], { unique: true })
 export class UserCard {
   @PrimaryGeneratedColumn()
   id: number;
@@ -16,6 +19,10 @@ export class UserCard {
 
   @Column()
   card_id: string;
+
+  // 实际获得时的稀有度，旧数据允许为空
+  @Column({ nullable: true })
+  card_level?: string;
 
   // 是否可以出售
   @Column()

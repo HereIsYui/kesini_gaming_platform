@@ -4,9 +4,11 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  Index,
 } from "typeorm";
 
 @Entity()
+@Index("IDX_user_uid", ["uid"], { unique: true })
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -23,22 +25,22 @@ export class User {
   @Column()
   avatar: string;
 
-  @Column()
+  @Column({ default: 0 })
   point: number;
 
-  @Column()
+  @Column({ default: 0 })
   card_count_n: number;
 
-  @Column()
+  @Column({ default: 0 })
   card_count_r: number;
 
-  @Column()
+  @Column({ default: 0 })
   card_count_sr: number;
 
-  @Column()
+  @Column({ default: 0 })
   card_count_ssr: number;
 
-  @Column()
+  @Column({ default: 0 })
   card_count_ur: number;
 
   @CreateDateColumn()

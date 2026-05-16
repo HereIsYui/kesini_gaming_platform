@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { GachaConfig } from '../types/api';
-import { ConfigurationService } from '../config/configuration.service';
+import { Injectable } from "@nestjs/common";
+import { GachaConfig } from "../types/api";
+import { ConfigurationService } from "../config/configuration.service";
 
 @Injectable()
 export class GachaConfigService {
@@ -13,6 +13,7 @@ export class GachaConfigService {
     return {
       poolId: 1, // 常驻卡池类型
       rarityProbabilities: this.configService.gachaProbabilities.standard,
+      pitySystem: this.configService.gachaPityConfigs.standard,
     };
   }
 
@@ -25,6 +26,7 @@ export class GachaConfigService {
       poolId: 2, // 限定卡池类型
       rarityProbabilities: this.configService.gachaProbabilities.limited,
       upCards: upConfig,
+      pitySystem: this.configService.gachaPityConfigs.limited,
     };
   }
 
@@ -35,6 +37,7 @@ export class GachaConfigService {
     return {
       poolId: 3, // 新手卡池
       rarityProbabilities: this.configService.gachaProbabilities.beginner,
+      pitySystem: this.configService.gachaPityConfigs.beginner,
     };
   }
 
@@ -47,6 +50,7 @@ export class GachaConfigService {
       poolId: 4, // 活动卡池类型
       rarityProbabilities: this.configService.gachaProbabilities.event,
       upCards: upConfig,
+      pitySystem: this.configService.gachaPityConfigs.event,
     };
   }
 
@@ -81,8 +85,14 @@ export class GachaConfigService {
    * 验证概率配置是否有效
    */
   validateProbabilities(probabilities: Record<string, number>): boolean {
-    const total = Object.values(probabilities).reduce((sum, prob) => sum + prob, 0);
-    return Math.abs(total - 1.0) < 0.0001; // 允许小的浮点误差
+    const total = Object.values(probabilities).reduce(
+      (sum, prob) => sum + prob,
+      0,
+    );
+    return (
+      Object.values(probabilities).every((prob) => prob >= 0 && prob <= 1) &&
+      Math.abs(total - 1.0) < 0.0001
+    ); // 允许小的浮点误差
   }
 
   /**

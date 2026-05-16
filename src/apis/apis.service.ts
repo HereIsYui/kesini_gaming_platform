@@ -8,11 +8,10 @@ import { JwtUtilsService } from "src/utils/jwt";
 
 @Injectable()
 export class ApisService {
-
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
     private readonly jwtUtilsService: JwtUtilsService,
-  ) { }
+  ) {}
 
   private logger = new Logger(ApisService.name);
   private readonly OP_ENDPOINT = "https://fishpi.cn";
@@ -106,14 +105,19 @@ export class ApisService {
       newUser.nickname = userInfo.userNickname;
       newUser.avatar = userInfo.userAvatarURL;
       newUser.point = 0;
+      newUser.card_count_n = 0;
+      newUser.card_count_r = 0;
+      newUser.card_count_sr = 0;
+      newUser.card_count_ssr = 0;
+      newUser.card_count_ur = 0;
       await this.userRepository.save(newUser);
       user = newUser;
     } else {
       user.avatar = userInfo.userAvatarURL;
       user.name = userInfo.userName;
       user.nickname = userInfo.userNickname;
+      await this.userRepository.save(user);
     }
-
 
     // 生成JWT token
     const token = this.jwtUtilsService.generateToken({ uid: user.uid });
@@ -132,7 +136,7 @@ export class ApisService {
    */
   private async fetchUserInfo(userId: string): Promise<LoginData> {
     const response = await axios.get(
-      `${this.OP_ENDPOINT}/api/user/getInfoById?userId=${userId}`
+      `${this.OP_ENDPOINT}/api/user/getInfoById?userId=${userId}`,
     );
     const { data } = response;
     if (data && data.code == 0) {
@@ -170,7 +174,7 @@ export class ApisService {
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       this.logger.debug("签名验证响应:", response.data);
@@ -227,6 +231,4 @@ export class ApisService {
     }
     return match[1];
   }
-
-
 }

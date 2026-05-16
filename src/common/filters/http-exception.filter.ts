@@ -4,8 +4,8 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
 
 /**
  * HTTP异常过滤器
@@ -21,16 +21,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const exceptionResponse = exception.getResponse();
     const message =
-      typeof exceptionResponse === 'string'
+      typeof exceptionResponse === "string"
         ? exceptionResponse
-        : (exceptionResponse as any).message || '请求失败';
+        : (exceptionResponse as any).message || "请求失败";
 
     response.status(status).json({
-      code: status,
-      message: Array.isArray(message) ? message.join(', ') : message,
+      code: -1,
+      msg: Array.isArray(message) ? message.join(", ") : message,
       data: null,
       timestamp: new Date().toISOString(),
       path: request.url,
+      status,
     });
   }
 }
@@ -52,16 +53,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const message =
-      exception instanceof HttpException
-        ? exception.message
-        : '服务器内部错误';
+      exception instanceof HttpException ? exception.message : "服务器内部错误";
 
     response.status(status).json({
-      code: status,
-      message: message,
+      code: -1,
+      msg: message,
       data: null,
       timestamp: new Date().toISOString(),
       path: request.url,
+      status,
     });
   }
 }

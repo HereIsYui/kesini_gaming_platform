@@ -4,45 +4,62 @@ export interface LoginData {
   userAvatarURL: string;
 }
 
+export type CardRarity = "N" | "R" | "SR" | "SSR" | "UR";
+
+export interface PityRule {
+  count: number;
+  guaranteedRarity: CardRarity;
+}
+
+export interface PitySystemConfig {
+  enabled: boolean;
+  softPity?: PityRule;
+  hardPity?: PityRule;
+}
+
 // 抽卡配置接口
 export interface GachaConfig {
-    // 卡池ID (如果指定，则从该卡池抽取)
-    poolId?: number;
+  // 卡池ID (如果指定，则从该卡池抽取)
+  poolId?: number;
 
-    // 稀有度概率配置 (总和应为1)
-    rarityProbabilities?: {
-        [rarity: string]: number; // 如 { 'N': 0.5, 'R': 0.3, 'SR': 0.15, 'SSR': 0.045, 'UR': 0.005 }
-    };
+  // 稀有度概率配置 (总和应为1)
+  rarityProbabilities?: {
+    [rarity: string]: number; // 如 { 'N': 0.5, 'R': 0.3, 'SR': 0.15, 'SSR': 0.045, 'UR': 0.005 }
+  };
 
-    // UP卡配置 (指定UP的卡片ID和UP倍率)
-    upCards?: {
-        enabled: boolean;
-        cardIds: number[]; // UP卡片ID列表
-        upRate: number;    // UP倍率 (0-1之间，表示抽到该稀有度时获得UP卡的概率)
-    };
+  // UP卡配置 (指定UP的卡片ID和UP倍率)
+  upCards?: {
+    enabled: boolean;
+    cardIds: number[]; // UP卡片ID列表
+    upRate: number; // UP倍率 (0-1之间，表示抽到该稀有度时获得UP卡的概率)
+  };
+
+  // 保底配置，只允许服务端生成
+  pitySystem?: PitySystemConfig;
 }
 
 // 抽卡结果
 export interface GachaResult {
-    cardId: number;
-    cardName: string;
-    cardDesc: string;
-    rarity: string;
-    cardType: number;     // 卡片类型
-    poolId: number;       // 所属卡池
-    isUp: boolean;        // 是否UP卡
-    userCardUuid: string; // 用户卡片唯一ID
+  cardId: number;
+  cardName: string;
+  cardDesc: string;
+  rarity: string;
+  cardType: number; // 卡片类型
+  poolId: number; // 所属卡池
+  isUp: boolean; // 是否UP卡
+  isPity: boolean; // 是否触发保底
+  userCardUuid: string; // 用户卡片唯一ID
 }
 
 // 用户抽卡统计
 export interface UserGachaStats {
-    uid: string;
-    totalDraws: number;           // 总抽数
-    cardCounts: {
-        N: number;
-        R: number;
-        SR: number;
-        SSR: number;
-        UR: number;
-    };
+  uid: string;
+  totalDraws: number; // 总抽数
+  cardCounts: {
+    N: number;
+    R: number;
+    SR: number;
+    SSR: number;
+    UR: number;
+  };
 }

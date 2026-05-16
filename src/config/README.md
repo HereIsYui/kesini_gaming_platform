@@ -29,7 +29,7 @@ BASE_URL=http://localhost:3000 # 基础URL
 ### JWT配置
 
 ```bash
-JWT_SECRET=your-secret-key   # JWT密钥（生产环境请修改）
+JWT_SECRET=your-secret-key   # JWT密钥（生产环境必须配置）
 JWT_EXPIRES_IN=7d           # JWT过期时间
 ```
 
@@ -97,6 +97,15 @@ LIMITED_POOL_UP_CONFIG={"enabled":true,"cardIds":[101,102,103],"upRate":0.5}
 EVENT_POOL_UP_CONFIG={"enabled":true,"cardIds":[201,202,203,204],"upRate":0.75}
 ```
 
+### 保底配置
+
+```bash
+STANDARD_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
+LIMITED_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
+BEGINNER_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":50,"guaranteedRarity":"SSR"}}
+EVENT_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
+```
+
 ## 卡池类型说明
 
 | 卡池ID | 类型 | 说明 |
@@ -141,6 +150,7 @@ const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 
 1. **生产环境安全**: 
    - 使用强密码的JWT_SECRET
+   - 生产环境缺失JWT_SECRET时应用会拒绝启动
    - 修改默认数据库密码
    - 设置适当的数据库权限
 

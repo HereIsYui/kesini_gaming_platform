@@ -1,13 +1,14 @@
 // common/utils/redis.util.ts
 import { Injectable, Logger } from "@nestjs/common";
 import Redis from "ioredis";
+import { ConfigurationService } from "src/config/configuration.service";
 
 @Injectable()
 export class RedisUtil {
   private readonly logger = new Logger(RedisUtil.name);
   private redisClient: Redis;
 
-  constructor() {
+  constructor(private readonly configService: ConfigurationService) {
     this.initRedis();
   }
 
@@ -15,10 +16,11 @@ export class RedisUtil {
    * 初始化 Redis 连接
    */
   private initRedis(): void {
+    const redisConfig = this.configService.redisConfig;
     this.redisClient = new Redis({
-      host: "154.13.6.73",
-      port: 6379,
-      password: "yuimeta",
+      host: redisConfig.host,
+      port: redisConfig.port,
+      password: redisConfig.password,
       db: 0,
       keepAlive: 1,
     });
