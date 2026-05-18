@@ -37,7 +37,7 @@ export class RedeemCode {
   enabled: boolean;
 
   // 空值表示不限总库存
-  @Column({ nullable: true })
+  @Column({ type: "int", nullable: true })
   total_limit?: number | null;
 
   @Column({ default: 0 })
