@@ -5,8 +5,13 @@ jest.mock("uuid", () => ({
 import { ArgumentMetadata, ValidationPipe } from "@nestjs/common";
 import { CardService } from "./card.service";
 import { GachaConfigService } from "./gacha-config.service";
-import { DrawCardDto } from "./card.controller";
+import { DrawCardDto, DrawMultipleDto } from "./card.controller";
 import { CardItem } from "src/entity/card.entity";
+import { PoolInfo } from "src/entity/pool.entity";
+import { User } from "src/entity/user.entity";
+import { UserCard } from "src/entity/userCard.entity";
+import { UserHistory } from "src/entity/history.entity";
+import { UserGachaPity } from "src/entity/userGachaPity.entity";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -156,5 +161,182 @@ describe("CardController 入参安全", () => {
         metadata,
       ),
     ).rejects.toThrow();
+  });
+
+  it("自定义多抽只允许 1 抽或 10 抽", async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const metadata: ArgumentMetadata = {
+      type: "body",
+      metatype: DrawMultipleDto,
+      data: "",
+    };
+
+    await expect(
+      pipe.transform({ poolId: 1, count: 2 }, metadata),
+    ).rejects.toThrow();
+    await expect(pipe.transform({ poolId: 1, count: 10 }, metadata)).resolves
+      .toEqual(expect.objectContaining({ count: 10 }));
+  });
+});
+
+describe("CardService 抽卡积分扣除", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createDrawService(user: Partial<User>, drawCosts = { once: 10, ten: 100 }) {
+    const poolRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        pool_name: "测试卡池",
+        card_desc: "",
+        card_type: 0,
+      }),
+    });
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          card_name: "测试卡",
+          card_level: "N",
+          card_desc: "测试",
+          card_type: 0,
+          pool: 1,
+        },
+      ]),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        uid: "u1",
+        point: 100,
+        card_count_n: 0,
+        card_count_r: 0,
+        card_count_sr: 0,
+        card_count_ssr: 0,
+        card_count_ur: 0,
+        ...user,
+      }),
+    });
+    const userCardRepository = createRepository();
+    const historyRepository = createRepository();
+    const pityRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const repositories = new Map<any, any>([
+      [PoolInfo, poolRepository],
+      [CardItem, cardRepository],
+      [User, userRepository],
+      [UserCard, userCardRepository],
+      [UserHistory, historyRepository],
+      [UserGachaPity, pityRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const configService = {
+      getDefaultConfig: jest.fn(() => ({
+        poolId: 1,
+        rarityProbabilities: { N: 1 },
+        drawCosts,
+      })),
+      getConfigByPoolId: jest.fn(async (poolId: number) => ({
+        poolId,
+        rarityProbabilities: { N: 1 },
+        drawCosts,
+      })),
+      validateProbabilities: jest.fn(() => true),
+    } as unknown as GachaConfigService;
+    const service = new CardService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      configService,
+      dataSource as any,
+    );
+
+    return {
+      service,
+      dataSource,
+      userRepository,
+      userCardRepository,
+      historyRepository,
+      pityRepository,
+    };
+  }
+
+  it("单抽成功会在同一事务内扣除单抽积分", async () => {
+    const { service, userRepository, userCardRepository } = createDrawService({
+      point: 10,
+    });
+
+    await service.drawOnce("u1", 1);
+
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ card_id: "1", card_level: "N" }),
+      ]),
+    );
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        point: 0,
+        card_count_n: 1,
+      }),
+    );
+  });
+
+  it("十连成功会扣除十连积分", async () => {
+    const { service, userRepository, userCardRepository } = createDrawService({
+      point: 100,
+    });
+
+    await service.drawTen("u1", 1);
+
+    expect(userCardRepository.save.mock.calls[0][0]).toHaveLength(10);
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        point: 0,
+        card_count_n: 10,
+      }),
+    );
+  });
+
+  it("积分不足时不会发卡、写历史或保存保底", async () => {
+    const { service, userCardRepository, historyRepository, pityRepository } =
+      createDrawService({ point: 9 });
+
+    await expect(service.drawOnce("u1", 1)).rejects.toThrow(
+      "积分不足，需要10，当前9",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+    expect(historyRepository.save).not.toHaveBeenCalled();
+    expect(pityRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("非 1 抽或 10 抽会在开启事务前拒绝", async () => {
+    const { service, dataSource } = createDrawService({ point: 100 });
+
+    await expect(service.drawMultiple("u1", 2, 1)).rejects.toThrow(
+      "抽卡次数仅支持1抽或10抽",
+    );
+    expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 });

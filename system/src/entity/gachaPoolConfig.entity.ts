@@ -48,6 +48,14 @@ export class GachaPoolConfig {
     };
   } | null;
 
+  // 单抽积分消耗
+  @Column({ type: "int", default: 10 })
+  single_draw_cost: number;
+
+  // 十连抽积分消耗
+  @Column({ type: "int", default: 100 })
+  ten_draw_cost: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

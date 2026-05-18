@@ -268,6 +268,13 @@ class GachaConfigPatchDto {
     softPity?: { count: number; guaranteedRarity: string };
     hardPity?: { count: number; guaranteedRarity: string };
   } | null;
+
+  @IsOptional()
+  @IsObject()
+  drawCosts?: {
+    once: number;
+    ten: number;
+  };
 }
 
 class RedeemCodeDto {

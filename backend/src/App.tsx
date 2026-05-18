@@ -2551,6 +2551,7 @@ function ConfigPage() {
                 key={poolKey}
                 poolKey={poolKey}
                 config={config}
+                poolName={data.poolNames?.[poolKey]}
                 onEdit={() => setEditing({ poolKey, config })}
               />
             ))}
@@ -2581,6 +2582,7 @@ function ConfigPage() {
         <GachaConfigModal
           poolKey={editing.poolKey}
           config={editing.config}
+          poolName={data?.poolNames?.[editing.poolKey]}
           onCancel={() => setEditing(null)}
           onSubmit={async (poolId, values) => {
             await request(`/admin/config/gacha/${poolId}`, {
@@ -2599,10 +2601,12 @@ function ConfigPage() {
 function GachaConfigCard({
   poolKey,
   config,
+  poolName,
   onEdit,
 }: {
   poolKey: string;
   config: GachaPoolConfig;
+  poolName?: string;
   onEdit?: () => void;
 }) {
   const probabilities = config.rarityProbabilities || {};
@@ -2610,6 +2614,7 @@ function GachaConfigCard({
   const maxProbability = Math.max(...probabilityEntries.map(([, value]) => value), 1);
   const upCards = config.upCards;
   const pity = config.pitySystem;
+  const drawCosts = config.drawCosts || { once: 10, ten: 100 };
 
   return (
     <article className="config-card">
@@ -2619,7 +2624,7 @@ function GachaConfigCard({
             卡池 #{config.poolId || poolKey} ·{" "}
             {config.source === "database" ? "数据库配置" : "环境默认"}
           </span>
-          <h3>{poolNameById(Number(config.poolId || poolKey))}</h3>
+          <h3>{poolName || poolNameById(Number(config.poolId || poolKey))}</h3>
         </div>
         <div className="config-actions">
           <Badge>{config.enabled === false ? "配置未启用" : "配置生效"}</Badge>
@@ -2634,6 +2639,16 @@ function GachaConfigCard({
           )}
         </div>
       </div>
+
+      <section className="config-section">
+        <h4>积分消耗</h4>
+        <DescriptionList
+          items={[
+            ["单抽", `${drawCosts.once ?? 10} 积分`],
+            ["十连", `${drawCosts.ten ?? 100} 积分`],
+          ]}
+        />
+      </section>
 
       <section className="config-section">
         <h4>稀有度概率</h4>
@@ -2708,11 +2723,13 @@ function GachaConfigCard({
 function GachaConfigModal({
   poolKey,
   config,
+  poolName,
   onCancel,
   onSubmit,
 }: {
   poolKey: string;
   config: GachaPoolConfig;
+  poolName?: string;
   onCancel: () => void;
   onSubmit: (poolId: number, values: GachaPoolConfig) => Promise<void>;
 }) {
@@ -2744,7 +2761,7 @@ function GachaConfigModal({
         <header>
           <div>
             <span className="eyebrow">抽卡配置</span>
-            <h2>编辑 {poolNameById(values.poolId)}</h2>
+            <h2>编辑 {poolName || poolNameById(values.poolId)}</h2>
           </div>
           <button type="button" onClick={onCancel}>
             关闭
@@ -2793,6 +2810,47 @@ function GachaConfigModal({
                   </label>
                 );
               })}
+            </div>
+          </section>
+          <section>
+            <h3>积分消耗</h3>
+            <div className="form-grid no-padding">
+              <label className="form-field">
+                <span>单抽消耗</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={values.drawCosts?.once || 10}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      drawCosts: {
+                        once: Number(event.target.value),
+                        ten: values.drawCosts?.ten || 100,
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label className="form-field">
+                <span>十连消耗</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={values.drawCosts?.ten || 100}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      drawCosts: {
+                        once: values.drawCosts?.once || 10,
+                        ten: Number(event.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
             </div>
           </section>
           <section>
@@ -3230,6 +3288,10 @@ function createGachaFormState(
       SR: Number(config.rarityProbabilities?.SR ?? 0.15),
       SSR: Number(config.rarityProbabilities?.SSR ?? 0.045),
       UR: Number(config.rarityProbabilities?.UR ?? 0.005),
+    },
+    drawCosts: {
+      once: Number(config.drawCosts?.once || 10),
+      ten: Number(config.drawCosts?.ten || 100),
     },
     upCards: {
       enabled: config.upCards?.enabled === true,

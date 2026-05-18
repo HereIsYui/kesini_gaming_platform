@@ -554,11 +554,29 @@ h3 {
   align-content: center;
 }
 
-.count-field {
+.cost-board {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 8px;
+  margin-bottom: 2px;
+}
+
+.cost-board div {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   color: var(--text-muted);
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 9px 12px;
+}
+
+.cost-board strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .auth-panel {

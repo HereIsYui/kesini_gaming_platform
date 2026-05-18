@@ -20,10 +20,10 @@ import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { GetUser } from "src/auth/get-user.decorator";
 import {
   IsInt,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
-  Max,
   Min,
 } from "class-validator";
 
@@ -39,8 +39,7 @@ export class DrawCardDto {
 export class DrawMultipleDto extends DrawCardDto {
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(100)
+  @IsIn([1, 10])
   count: number;
 }
 

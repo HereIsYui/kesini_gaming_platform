@@ -2,15 +2,25 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
-import { CardRarity, GachaConfig, PitySystemConfig } from "../types/api";
+import {
+  CardRarity,
+  DrawCosts,
+  GachaConfig,
+  PitySystemConfig,
+} from "../types/api";
 import { ConfigurationService } from "../config/configuration.service";
 
 const ALLOWED_RARITIES: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
+export const DEFAULT_DRAW_COSTS: DrawCosts = {
+  once: 10,
+  ten: 100,
+};
 
 export type EditableGachaConfig = Omit<GachaConfig, "upCards" | "pitySystem"> & {
   enabled?: boolean;
   upCards?: GachaConfig["upCards"] | null;
   pitySystem?: GachaConfig["pitySystem"] | null;
+  drawCosts?: DrawCosts;
 };
 
 export interface GachaConfigView extends GachaConfig {
@@ -35,6 +45,7 @@ export class GachaConfigService {
       poolId: 1, // 常驻卡池类型
       rarityProbabilities: this.configService.gachaProbabilities.standard,
       pitySystem: this.configService.gachaPityConfigs.standard,
+      drawCosts: DEFAULT_DRAW_COSTS,
     };
   }
 
@@ -48,6 +59,7 @@ export class GachaConfigService {
       rarityProbabilities: this.configService.gachaProbabilities.limited,
       upCards: upConfig,
       pitySystem: this.configService.gachaPityConfigs.limited,
+      drawCosts: DEFAULT_DRAW_COSTS,
     };
   }
 
@@ -59,6 +71,7 @@ export class GachaConfigService {
       poolId: 3, // 新手卡池
       rarityProbabilities: this.configService.gachaProbabilities.beginner,
       pitySystem: this.configService.gachaPityConfigs.beginner,
+      drawCosts: DEFAULT_DRAW_COSTS,
     };
   }
 
@@ -72,6 +85,7 @@ export class GachaConfigService {
       rarityProbabilities: this.configService.gachaProbabilities.event,
       upCards: upConfig,
       pitySystem: this.configService.gachaPityConfigs.event,
+      drawCosts: DEFAULT_DRAW_COSTS,
     };
   }
 
@@ -173,6 +187,50 @@ export class GachaConfigService {
     );
   }
 
+  async getPoolConfigsByPoolIds(
+    poolIds: number[],
+  ): Promise<Record<number, GachaConfigView>> {
+    const normalizedPoolIds = [
+      ...new Set(
+        poolIds
+          .map((poolId) => Number(poolId))
+          .filter((poolId) => Number.isInteger(poolId) && poolId > 0),
+      ),
+    ].sort((a, b) => a - b);
+
+    if (normalizedPoolIds.length === 0) {
+      return this.getAllPoolConfigs();
+    }
+
+    const dbConfigs = await this.gachaPoolConfigRepository.find({
+      where: { pool_id: In(normalizedPoolIds) },
+      order: { pool_id: "ASC" },
+    });
+    const dbConfigMap = new Map(
+      dbConfigs.map((config) => [config.pool_id, config]),
+    );
+
+    return normalizedPoolIds.reduce(
+      (result, poolId) => {
+        const dbConfig = dbConfigMap.get(poolId);
+        const envConfig = this.getEnvConfigByPoolId(poolId);
+        const enabled = dbConfig?.enabled === true;
+        result[poolId] = {
+          ...(enabled ? this.toGachaConfig(dbConfig, envConfig) : envConfig),
+          poolId,
+          enabled,
+          source: enabled ? "database" : "env",
+          updatedAt: dbConfig?.updatedAt || null,
+          drawCosts: enabled
+            ? this.toDrawCosts(dbConfig, envConfig.drawCosts)
+            : this.normalizeDrawCosts(envConfig.drawCosts),
+        };
+        return result;
+      },
+      {} as Record<number, GachaConfigView>,
+    );
+  }
+
   async savePoolConfig(
     poolId: number,
     input: EditableGachaConfig,
@@ -185,6 +243,14 @@ export class GachaConfigService {
     const existing = await this.gachaPoolConfigRepository.findOne({
       where: { pool_id: poolId },
     });
+    const inheritedDrawCosts = this.normalizeDrawCosts(
+      existing
+        ? {
+            once: existing.single_draw_cost,
+            ten: existing.ten_draw_cost,
+          }
+        : envConfig.drawCosts,
+    );
     const nextConfig: EditableGachaConfig = {
       poolId,
       enabled: input.enabled ?? existing?.enabled ?? true,
@@ -200,6 +266,7 @@ export class GachaConfigService {
         input.pitySystem === null
           ? undefined
           : input.pitySystem || existing?.pity_system || envConfig.pitySystem,
+      drawCosts: input.drawCosts || inheritedDrawCosts,
     };
 
     this.validateEditableConfig(nextConfig);
@@ -211,6 +278,8 @@ export class GachaConfigService {
       rarity_probabilities: nextConfig.rarityProbabilities!,
       up_cards: nextConfig.upCards || null,
       pity_system: nextConfig.pitySystem || null,
+      single_draw_cost: nextConfig.drawCosts!.once,
+      ten_draw_cost: nextConfig.drawCosts!.ten,
     });
     const saved = await this.gachaPoolConfigRepository.save(entity);
     return {
@@ -254,6 +323,10 @@ export class GachaConfigService {
     if (config.pitySystem) {
       this.assertPityConfig(config.pitySystem);
     }
+
+    if (config.drawCosts) {
+      this.assertDrawCosts(config.drawCosts);
+    }
   }
 
   private toGachaConfig(
@@ -266,7 +339,43 @@ export class GachaConfigService {
         dbConfig.rarity_probabilities || fallback.rarityProbabilities,
       upCards: dbConfig.up_cards || undefined,
       pitySystem: dbConfig.pity_system || fallback.pitySystem,
+      drawCosts: this.toDrawCosts(dbConfig, fallback.drawCosts),
     };
+  }
+
+  private toDrawCosts(
+    dbConfig: GachaPoolConfig,
+    fallback?: DrawCosts,
+  ): DrawCosts {
+    return this.normalizeDrawCosts({
+      once: dbConfig.single_draw_cost,
+      ten: dbConfig.ten_draw_cost,
+    }, fallback);
+  }
+
+  private normalizeDrawCosts(
+    costs?: Partial<DrawCosts>,
+    fallback: DrawCosts = DEFAULT_DRAW_COSTS,
+  ): DrawCosts {
+    const once = Number(costs?.once ?? fallback.once);
+    const ten = Number(costs?.ten ?? fallback.ten);
+    return {
+      once: Number.isInteger(once) && once > 0 ? once : fallback.once,
+      ten: Number.isInteger(ten) && ten > 0 ? ten : fallback.ten,
+    };
+  }
+
+  private assertDrawCosts(costs: DrawCosts): void {
+    const once = Number(costs.once);
+    const ten = Number(costs.ten);
+    if (
+      !Number.isInteger(once) ||
+      once <= 0 ||
+      !Number.isInteger(ten) ||
+      ten <= 0
+    ) {
+      throw new Error("抽卡积分消耗必须为正整数");
+    }
   }
 
   private assertPityConfig(config: PitySystemConfig): void {

@@ -30,6 +30,10 @@ export interface PoolInfo {
   pool_name: string;
   card_desc: string;
   card_type: number;
+  drawCosts?: {
+    once: number;
+    ten: number;
+  };
   createdAt?: string;
 }
 
@@ -58,6 +62,7 @@ export interface GachaResult {
 
 export interface UserGachaStats {
   uid: string;
+  point: number;
   totalDraws: number;
   cardCounts: Record<CardRarity, number>;
   pity?: Array<{

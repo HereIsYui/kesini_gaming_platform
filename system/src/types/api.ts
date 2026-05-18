@@ -17,6 +17,11 @@ export interface PitySystemConfig {
   hardPity?: PityRule;
 }
 
+export interface DrawCosts {
+  once: number;
+  ten: number;
+}
+
 // 抽卡配置接口
 export interface GachaConfig {
   // 卡池ID (如果指定，则从该卡池抽取)
@@ -40,6 +45,9 @@ export interface GachaConfig {
   // 保底配置，只允许服务端生成
   pitySystem?: PitySystemConfig;
 
+  // 抽卡积分消耗，只允许服务端配置
+  drawCosts?: DrawCosts;
+
   // 后台展示用元信息
   source?: "database" | "env";
   updatedAt?: Date | null;
@@ -61,6 +69,7 @@ export interface GachaResult {
 // 用户抽卡统计
 export interface UserGachaStats {
   uid: string;
+  point: number; // 当前积分余额
   totalDraws: number; // 总抽数
   cardCounts: {
     N: number;

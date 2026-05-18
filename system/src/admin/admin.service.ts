@@ -444,8 +444,16 @@ export class AdminService {
   }
 
   async getGachaConfig() {
+    const pools = await this.poolRepository.find({
+      order: { id: "ASC" },
+    });
     return {
-      pools: await this.gachaConfigService.getAllPoolConfigs(),
+      pools: await this.gachaConfigService.getPoolConfigsByPoolIds(
+        pools.map((pool) => pool.id),
+      ),
+      poolNames: Object.fromEntries(
+        pools.map((pool) => [String(pool.id), pool.pool_name]),
+      ),
       adminUids: this.configService.adminUids,
     };
   }

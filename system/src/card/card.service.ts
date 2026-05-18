@@ -13,6 +13,7 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import {
   CardRarity,
+  DrawCosts,
   GachaConfig,
   GachaResult,
   PitySystemConfig,
@@ -20,7 +21,7 @@ import {
 import { GachaConfigService } from "./gacha-config.service";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
-const MAX_DRAW_COUNT = 100;
+const ALLOWED_DRAW_COUNTS = [1, 10];
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -80,12 +81,13 @@ export class CardService {
     if (!Number.isInteger(count) || count <= 0) {
       throw new Error("抽卡次数必须为正整数");
     }
-    if (count > MAX_DRAW_COUNT) {
-      throw new Error(`单次最多只能抽取${MAX_DRAW_COUNT}次`);
+    if (!ALLOWED_DRAW_COUNTS.includes(count)) {
+      throw new Error("抽卡次数仅支持1抽或10抽");
     }
 
     const serverConfig = await this.resolveServerConfig(poolId);
     const effectivePoolId = serverConfig.poolId!;
+    const drawCost = this.getDrawCost(serverConfig.drawCosts, count);
 
     return this.dataSource.transaction(async (manager) => {
       const poolRepository = manager.getRepository(PoolInfo);
@@ -109,6 +111,7 @@ export class CardService {
       this.assertPoolCanDraw(cardsByRarity, probabilities, effectivePoolId);
 
       const user = await this.findOrCreateUser(manager, uid);
+      this.deductUserPoint(user, drawCost);
       const pity = await this.findOrCreatePity(
         pityRepository,
         uid,
@@ -208,6 +211,7 @@ export class CardService {
 
     return {
       uid,
+      point: user?.point || 0,
       totalDraws,
       cardCounts: {
         N: user?.card_count_n || 0,
@@ -237,16 +241,18 @@ export class CardService {
    * 获取所有卡池列表
    */
   async getAllPools(): Promise<PoolInfo[]> {
-    return this.poolRepository.find();
+    const pools = await this.poolRepository.find();
+    return Promise.all(pools.map((pool) => this.decoratePoolWithDrawCosts(pool)));
   }
 
   /**
    * 根据卡池ID获取卡池信息
    */
-  async getPoolById(poolId: number): Promise<PoolInfo | null> {
-    return this.poolRepository.findOne({
+  async getPoolById(poolId: number): Promise<any | null> {
+    const pool = await this.poolRepository.findOne({
       where: { id: this.resolvePoolId(poolId) },
     });
+    return pool ? this.decoratePoolWithDrawCosts(pool) : null;
   }
 
   /**
@@ -263,7 +269,10 @@ export class CardService {
    * @param cardType 0 常驻卡池 1 活动卡池 2 限定卡池
    */
   async getPoolsByType(cardType: number): Promise<PoolInfo[]> {
-    return this.poolRepository.find({ where: { card_type: cardType } });
+    const pools = await this.poolRepository.find({
+      where: { card_type: cardType },
+    });
+    return Promise.all(pools.map((pool) => this.decoratePoolWithDrawCosts(pool)));
   }
 
   /**
@@ -534,6 +543,27 @@ export class CardService {
       throw new Error("服务端抽卡概率配置无效");
     }
     return probabilities;
+  }
+
+  private getDrawCost(costs: DrawCosts | undefined, count: number): number {
+    const drawCosts = costs || { once: 10, ten: 100 };
+    return count === 10 ? drawCosts.ten : drawCosts.once;
+  }
+
+  private deductUserPoint(user: User, cost: number): void {
+    this.normalizeUserStats(user);
+    if (user.point < cost) {
+      throw new Error(`积分不足，需要${cost}，当前${user.point}`);
+    }
+    user.point -= cost;
+  }
+
+  private async decoratePoolWithDrawCosts(pool: PoolInfo) {
+    const config = await this.gachaConfigService.getConfigByPoolId(pool.id);
+    return {
+      ...pool,
+      drawCosts: config.drawCosts || { once: 10, ten: 100 },
+    };
   }
 
   private rollRarity(

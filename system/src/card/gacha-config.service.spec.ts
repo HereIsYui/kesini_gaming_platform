@@ -43,6 +43,8 @@ describe("GachaConfigService", () => {
         rarity_probabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
         up_cards: null,
         pity_system: { enabled: false },
+        single_draw_cost: 12,
+        ten_draw_cost: 108,
       }),
     });
     const service = createConfigService(repository);
@@ -52,6 +54,7 @@ describe("GachaConfigService", () => {
         poolId: 1,
         rarityProbabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
         pitySystem: { enabled: false },
+        drawCosts: { once: 12, ten: 108 },
       }),
     );
   });
@@ -70,8 +73,36 @@ describe("GachaConfigService", () => {
       expect.objectContaining({
         poolId: 1,
         rarityProbabilities: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
+        drawCosts: { once: 10, ten: 100 },
       }),
     );
+  });
+
+  it("保存配置时会写入默认抽卡积分消耗", async () => {
+    const repository = createRepository();
+    const service = createConfigService(repository);
+
+    await service.savePoolConfig(1, {
+      rarityProbabilities: { N: 1 },
+    } as any);
+
+    expect(repository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        single_draw_cost: 10,
+        ten_draw_cost: 100,
+      }),
+    );
+  });
+
+  it("保存配置时拒绝非正整数抽卡积分消耗", async () => {
+    const service = createConfigService(createRepository());
+
+    await expect(
+      service.savePoolConfig(1, {
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 0, ten: 100 },
+      } as any),
+    ).rejects.toThrow("抽卡积分消耗必须为正整数");
   });
 
   it("保存配置时拒绝概率总和错误", async () => {

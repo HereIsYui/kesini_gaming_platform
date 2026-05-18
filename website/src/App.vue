@@ -3,7 +3,6 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
-  Gem,
   Gift,
   History,
   LoaderCircle,
@@ -77,7 +76,6 @@ const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
 const exchangeItems = ref<ExchangeShopItem[]>([]);
 const lastResults = ref<GachaResult[]>([]);
-const drawCount = ref(20);
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
 const cardPage = ref(1);
@@ -100,6 +98,9 @@ let feedbackTimer: number | undefined;
 const isAuthed = computed(() => Boolean(token.value));
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
+);
+const selectedDrawCosts = computed(
+  () => selectedPool.value?.drawCosts || { once: 10, ten: 100 },
 );
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
@@ -318,25 +319,15 @@ async function refreshAll() {
   notify("success", "页面数据已刷新");
 }
 
-async function performDraw(mode: "once" | "ten" | "multiple") {
+async function performDraw(mode: "once" | "ten") {
   if (!isAuthed.value) {
     notify("error", "请先登录后再抽卡");
     return;
   }
-  if (mode === "multiple" && (!Number.isInteger(drawCount.value) || drawCount.value < 1 || drawCount.value > 100)) {
-    notify("error", "自定义抽数必须为 1-100 的整数");
-    return;
-  }
 
-  const endpoint =
-    mode === "once"
-      ? "/card/draw/once"
-      : mode === "ten"
-        ? "/card/draw/ten"
-        : "/card/draw/multiple";
+  const endpoint = mode === "once" ? "/card/draw/once" : "/card/draw/ten";
   const body = {
     poolId: activePoolId.value || undefined,
-    ...(mode === "multiple" ? { count: drawCount.value } : {}),
   };
 
   busy.drawing = true;
@@ -601,7 +592,9 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
               @click="activePoolId = pool.id"
             >
               <span>{{ pool.pool_name }}</span>
-              <small>{{ poolTypeLabel(pool.card_type) }}</small>
+              <small>
+                {{ poolTypeLabel(pool.card_type) }} · 单抽 {{ pool.drawCosts?.once || 10 }}
+              </small>
             </button>
             <div v-if="!busy.public && pools.length === 0" class="empty-inline">
               暂无可用卡池
@@ -618,21 +611,27 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             </div>
 
             <div class="draw-actions">
+              <div class="cost-board">
+                <div>
+                  <span>积分余额</span>
+                  <strong>{{ isAuthed ? stats?.point ?? 0 : "未登录" }}</strong>
+                </div>
+                <div>
+                  <span>单抽</span>
+                  <strong>{{ selectedDrawCosts.once }} 积分</strong>
+                </div>
+                <div>
+                  <span>十连</span>
+                  <strong>{{ selectedDrawCosts.ten }} 积分</strong>
+                </div>
+              </div>
               <button class="primary-action" type="button" :disabled="busy.drawing" @click="performDraw('once')">
                 <Sparkles :size="18" />
-                单抽
+                单抽 · {{ selectedDrawCosts.once }}
               </button>
               <button class="primary-action golden" type="button" :disabled="busy.drawing" @click="performDraw('ten')">
                 <Ticket :size="18" />
-                十连
-              </button>
-              <label class="count-field">
-                <span>自定义</span>
-                <input v-model.number="drawCount" type="number" min="1" max="100" />
-              </label>
-              <button class="secondary-action" type="button" :disabled="busy.drawing" @click="performDraw('multiple')">
-                <Gem :size="18" />
-                多抽
+                十连 · {{ selectedDrawCosts.ten }}
               </button>
             </div>
           </div>
@@ -672,6 +671,10 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
 
           <div v-else class="stats-grid">
             <div class="stat-card">
+              <small>积分余额</small>
+              <strong>{{ stats?.point || 0 }}</strong>
+            </div>
+            <div class="stat-card">
               <small>累计抽数</small>
               <strong>{{ stats?.totalDraws || 0 }}</strong>
             </div>
@@ -682,10 +685,6 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             <div class="stat-card">
               <small>SSR</small>
               <strong>{{ stats?.cardCounts?.SSR || 0 }}</strong>
-            </div>
-            <div class="stat-card">
-              <small>背包物品</small>
-              <strong>{{ inventoryItems.length }}</strong>
             </div>
           </div>
         </aside>
@@ -707,7 +706,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         <div v-if="lastResults.length === 0" class="empty-state">
           <Sparkles :size="30" />
           <strong>还没有抽卡结果</strong>
-          <span>完成单抽、十连或多抽后，结果会在这里以卡片网格展示。</span>
+          <span>完成单抽或十连后，结果会在这里以卡片网格展示。</span>
         </div>
 
         <div v-else class="result-grid">
