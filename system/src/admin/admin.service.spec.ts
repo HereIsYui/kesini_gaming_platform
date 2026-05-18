@@ -29,6 +29,8 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.pity || createRepository(),
     repositories.redeemCode || createRepository(),
     repositories.redeemUsage || createRepository(),
+    repositories.exchangeItem || createRepository(),
+    repositories.exchangeUsage || createRepository(),
     {
       getAllPoolConfigs: jest.fn(async () => ({ 1: { poolId: 1 } })),
       savePoolConfig: jest.fn(async (_poolId, config) => config),
@@ -269,6 +271,8 @@ describe("AdminService", () => {
       createRepository(),
       createRepository(),
       createRepository(),
+      createRepository(),
+      createRepository(),
       gachaService as any,
       { adminUids: [] } as any,
     );
@@ -332,5 +336,71 @@ describe("AdminService", () => {
         rewards: { points: 0, items: [{ itemId: 1, num: 1 }] },
       } as any),
     ).rejects.toThrow("奖励物品已禁用");
+  });
+
+  it("创建兑换商店项会校验消耗和奖励物品", async () => {
+    const exchangeItemRepository = createRepository();
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 1, drop_name: "活动代币", drop_type: 2, disabled: false },
+        { id: 2, drop_name: "通用碎片", drop_type: 0, disabled: false },
+      ]),
+    });
+    const service = createService({
+      exchangeItem: exchangeItemRepository,
+      drop: dropRepository,
+    });
+
+    await service.createExchangeItem({
+      name: "代币换碎片",
+      costs: [{ itemId: 1, num: 5 }],
+      rewards: { points: 100, items: [{ itemId: 2, num: 1 }] },
+      total_limit: 10,
+      user_limit: 1,
+      sort_order: 2,
+    } as any);
+
+    expect(exchangeItemRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "代币换碎片",
+        enabled: true,
+        used_count: 0,
+        delete_flag: false,
+        costs: [{ itemId: 1, num: 5 }],
+        rewards: { points: 100, items: [{ itemId: 2, num: 1 }] },
+      }),
+    );
+  });
+
+  it("兑换商店消耗不能选择虚拟积分物品", async () => {
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 1, drop_name: "积分物品", drop_type: 1, disabled: false },
+      ]),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await expect(
+      service.createExchangeItem({
+        name: "错误兑换",
+        costs: [{ itemId: 1, num: 1 }],
+        rewards: { points: 10, items: [] },
+      } as any),
+    ).rejects.toThrow("消耗物品不能选择虚拟积分");
+  });
+
+  it("删除兑换商店项会软删除并停用", async () => {
+    const item = { id: 9, name: "旧兑换", enabled: true, delete_flag: false };
+    const exchangeItemRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(item),
+    });
+    const service = createService({ exchangeItem: exchangeItemRepository });
+
+    await expect(service.deleteExchangeItem(9)).resolves.toEqual({
+      deleted: true,
+    });
+    expect(exchangeItemRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, delete_flag: true }),
+    );
   });
 });

@@ -15,6 +15,11 @@ import {
 import { ConfigurationService } from "src/config/configuration.service";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
+import {
+  ExchangeCostItem,
+  ExchangeShopItem,
+} from "src/entity/exchangeShopItem.entity";
+import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -56,6 +61,10 @@ export class AdminService {
     private readonly redeemCodeRepository: Repository<RedeemCode>,
     @InjectRepository(RedeemCodeUsage)
     private readonly redeemUsageRepository: Repository<RedeemCodeUsage>,
+    @InjectRepository(ExchangeShopItem)
+    private readonly exchangeItemRepository: Repository<ExchangeShopItem>,
+    @InjectRepository(ExchangeShopUsage)
+    private readonly exchangeUsageRepository: Repository<ExchangeShopUsage>,
     private readonly gachaConfigService: GachaConfigService,
     private readonly configService: ConfigurationService,
   ) {}
@@ -559,6 +568,80 @@ export class AdminService {
     return this.findAndPage(this.redeemUsageRepository, where, page, pageSize);
   }
 
+  async listExchangeItems(query: PageQuery) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where = query.keyword
+      ? [
+          { name: Like(`%${query.keyword}%`), delete_flag: false },
+          { description: Like(`%${query.keyword}%`), delete_flag: false },
+        ]
+      : { delete_flag: false };
+    return this.findAndPage(this.exchangeItemRepository, where, page, pageSize);
+  }
+
+  async getExchangeItem(id: number) {
+    const item = await this.mustFind(
+      this.exchangeItemRepository,
+      id,
+      "兑换项不存在",
+    );
+    if (item.delete_flag) {
+      throw new Error("兑换项不存在");
+    }
+    return item;
+  }
+
+  async createExchangeItem(body: Partial<ExchangeShopItem>) {
+    const normalized = await this.normalizeExchangeItemInput(body);
+    const entity = this.exchangeItemRepository.create({
+      ...normalized,
+      used_count: 0,
+      delete_flag: false,
+    });
+    this.assertExchangeTimeRange(entity.starts_at, entity.ends_at);
+    return this.exchangeItemRepository.save(entity);
+  }
+
+  async updateExchangeItem(id: number, body: Partial<ExchangeShopItem>) {
+    const item = await this.getExchangeItem(id);
+    const normalized = await this.normalizeExchangeItemInput({
+      ...item,
+      ...body,
+    });
+    if (
+      normalized.total_limit !== null &&
+      normalized.total_limit !== undefined &&
+      item.used_count > normalized.total_limit
+    ) {
+      throw new Error("总库存不能小于已兑换数量");
+    }
+    Object.assign(item, normalized);
+    this.assertExchangeTimeRange(item.starts_at, item.ends_at);
+    return this.exchangeItemRepository.save(item);
+  }
+
+  async deleteExchangeItem(id: number) {
+    const item = await this.getExchangeItem(id);
+    item.enabled = false;
+    item.delete_flag = true;
+    await this.exchangeItemRepository.save(item);
+    return { deleted: true };
+  }
+
+  async listExchangeUsages(
+    query: PageQuery & { uid?: string; itemId?: number },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<ExchangeShopUsage> = {};
+    if (query.uid) {
+      where.uid = query.uid;
+    }
+    if (query.itemId !== undefined) {
+      where.shop_item_id = query.itemId;
+    }
+    return this.findAndPage(this.exchangeUsageRepository, where, page, pageSize);
+  }
+
   private async attachInventoryInfo(result: {
     list: UserInventory[];
     total: number;
@@ -679,6 +762,94 @@ export class AdminService {
     return { points, items: normalizedItems };
   }
 
+  private async normalizeExchangeItemInput(body: Partial<ExchangeShopItem>) {
+    const name = String(body.name || "").trim();
+    this.assertRequired(name, "兑换项名称不能为空");
+    const costs = this.normalizeCosts(body.costs);
+    const rewards = this.normalizeExchangeRewards(body.rewards);
+    await Promise.all([
+      this.assertExchangeItemsAvailable(
+        costs.map((item) => item.itemId),
+        "消耗物品",
+      ),
+      this.assertExchangeItemsAvailable(
+        rewards.items.map((item) => item.itemId),
+        "奖励物品",
+      ),
+    ]);
+
+    const userLimit = this.normalizeNullablePositiveInt(
+      body.user_limit,
+      "单用户限兑必须为正整数",
+    );
+    const sortOrder = Number(body.sort_order || 0);
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      throw new Error("排序值必须为非负整数");
+    }
+
+    return {
+      name,
+      description: body.description || "",
+      enabled: body.enabled !== false,
+      costs,
+      rewards,
+      total_limit: this.normalizeTotalLimit(body.total_limit),
+      user_limit: userLimit,
+      starts_at: this.parseOptionalDate(body.starts_at),
+      ends_at: this.parseOptionalDate(body.ends_at),
+      sort_order: sortOrder,
+    };
+  }
+
+  private normalizeCosts(costs: unknown): ExchangeCostItem[] {
+    const items = Array.isArray(costs) ? costs : [];
+    const normalizedItems = items
+      .map((item) => ({
+        itemId: Number(item.itemId),
+        num: Number(item.num),
+      }))
+      .filter((item) => item.itemId > 0 || item.num > 0);
+    normalizedItems.forEach((item) => {
+      if (!Number.isInteger(item.itemId) || item.itemId <= 0) {
+        throw new Error("消耗物品ID无效");
+      }
+      if (!Number.isInteger(item.num) || item.num <= 0) {
+        throw new Error("消耗物品数量无效");
+      }
+    });
+    if (normalizedItems.length === 0) {
+      throw new Error("兑换消耗不能为空");
+    }
+    return normalizedItems;
+  }
+
+  private normalizeExchangeRewards(rewards: unknown): RedeemRewards {
+    const value = (rewards || {}) as Partial<RedeemRewards>;
+    const points = Number(value.points || 0);
+    if (!Number.isFinite(points) || points < 0) {
+      throw new Error("奖励积分无效");
+    }
+    const items = Array.isArray(value.items) ? value.items : [];
+    const normalizedItems = items
+      .map((item) => ({
+        itemId: Number(item.itemId),
+        num: Number(item.num),
+      }))
+      .filter((item) => item.itemId > 0 || item.num > 0);
+    normalizedItems.forEach((item) => {
+      if (!Number.isInteger(item.itemId) || item.itemId <= 0) {
+        throw new Error("奖励物品ID无效");
+      }
+      if (!Number.isInteger(item.num) || item.num <= 0) {
+        throw new Error("奖励物品数量无效");
+      }
+    });
+    if (points === 0 && normalizedItems.length === 0) {
+      throw new Error("兑换奖励不能为空");
+    }
+    return { points, items: normalizedItems };
+  }
+
   private normalizeDropItemInput(body: Partial<DropItem>) {
     const dropName = String(body.drop_name || "").trim();
     this.assertRequired(dropName, "物品名称不能为空");
@@ -754,16 +925,43 @@ export class AdminService {
     });
   }
 
+  private async assertExchangeItemsAvailable(itemIds: number[], label: string) {
+    const uniqueItemIds = [...new Set(itemIds)];
+    if (uniqueItemIds.length === 0) {
+      return;
+    }
+    const items = await this.dropRepository.find({
+      where: { id: In(uniqueItemIds) },
+    });
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    uniqueItemIds.forEach((itemId) => {
+      const item = itemMap.get(itemId);
+      if (!item) {
+        throw new Error(`${label}不存在: ${itemId}`);
+      }
+      if (item.disabled) {
+        throw new Error(`${label}已禁用: ${item.drop_name}`);
+      }
+      if (item.drop_type === 1) {
+        throw new Error(`${label}不能选择虚拟积分: ${item.drop_name}`);
+      }
+    });
+  }
+
   private async isDropItemReferenced(itemId: number): Promise<boolean> {
-    const [inventoryCount, cards, redeemCodes] = await Promise.all([
-      this.inventoryRepository.count({ where: { item_id: itemId } }),
-      this.cardRepository.find({
-        where: { drop_item: Like(`%${itemId}%`) },
-      }),
-      this.redeemCodeRepository.find({
-        where: { delete_flag: false },
-      }),
-    ]);
+    const [inventoryCount, cards, redeemCodes, exchangeItems] =
+      await Promise.all([
+        this.inventoryRepository.count({ where: { item_id: itemId } }),
+        this.cardRepository.find({
+          where: { drop_item: Like(`%${itemId}%`) },
+        }),
+        this.redeemCodeRepository.find({
+          where: { delete_flag: false },
+        }),
+        this.exchangeItemRepository.find({
+          where: { delete_flag: false },
+        }),
+      ]);
 
     if (inventoryCount > 0) {
       return true;
@@ -775,8 +973,17 @@ export class AdminService {
     ) {
       return true;
     }
-    return redeemCodes.some((code) =>
-      (code.rewards?.items || []).some((item) => Number(item.itemId) === itemId),
+    return (
+      redeemCodes.some((code) =>
+        (code.rewards?.items || []).some(
+          (item) => Number(item.itemId) === itemId,
+        ),
+      ) ||
+      exchangeItems.some((item) =>
+        [...(item.costs || []), ...(item.rewards?.items || [])].some(
+          (entry) => Number(entry.itemId) === itemId,
+        ),
+      )
     );
   }
 
@@ -801,6 +1008,20 @@ export class AdminService {
     return totalLimit;
   }
 
+  private normalizeNullablePositiveInt(
+    value: unknown,
+    message: string,
+  ): number | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const number = Number(value);
+    if (!Number.isInteger(number) || number <= 0) {
+      throw new Error(message);
+    }
+    return number;
+  }
+
   private parseOptionalDate(value: unknown): Date | null {
     if (value === undefined || value === null || value === "") {
       return null;
@@ -815,6 +1036,12 @@ export class AdminService {
   private assertRedeemTimeRange(start?: Date | null, end?: Date | null) {
     if (start && end && start.getTime() >= end.getTime()) {
       throw new Error("兑换结束时间必须晚于开始时间");
+    }
+  }
+
+  private assertExchangeTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() >= end.getTime()) {
+      throw new Error("兑换项结束时间必须晚于开始时间");
     }
   }
 }

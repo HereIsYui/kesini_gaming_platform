@@ -18,6 +18,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Store,
   Sun,
   Ticket,
   Trash2,
@@ -48,6 +49,8 @@ import type {
   AdminMeResponse,
   AdminOptions,
   DashboardData,
+  ExchangeCostItem,
+  ExchangeShopItemRecord,
   FieldConfig,
   GachaConfigData,
   GachaPoolConfig,
@@ -75,6 +78,7 @@ const navItems = [
   { key: "inventories", label: "背包", icon: Boxes },
   { key: "pity", label: "保底", icon: Ticket },
   { key: "redeem-codes", label: "兑换码", icon: Gift },
+  { key: "exchange-shop", label: "兑换商店", icon: Store },
   { key: "config", label: "配置", icon: Settings },
 ];
 
@@ -291,6 +295,29 @@ const redeemCodeFields: FieldConfig[] = [
   { key: "rewards", label: "奖励", readonly: true },
   { key: "starts_at", label: "开始时间", readonly: true },
   { key: "ends_at", label: "结束时间", readonly: true },
+];
+
+const exchangeItemFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "name", label: "兑换项", readonly: true },
+  { key: "enabled", label: "状态", readonly: true },
+  { key: "costs", label: "消耗", readonly: true },
+  { key: "rewards", label: "奖励", readonly: true },
+  { key: "used_count", label: "已兑换", readonly: true },
+  { key: "total_limit", label: "总库存", readonly: true },
+  { key: "user_limit", label: "单用户限兑", readonly: true },
+  { key: "starts_at", label: "开始时间", readonly: true },
+  { key: "ends_at", label: "结束时间", readonly: true },
+];
+
+const exchangeUsageFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "shop_item_name", label: "兑换项", readonly: true },
+  { key: "uid", label: "UID", readonly: true },
+  { key: "count", label: "兑换数量", readonly: true },
+  { key: "cost_snapshot", label: "消耗快照", readonly: true },
+  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "createdAt", label: "兑换时间", readonly: true },
 ];
 
 export function App() {
@@ -528,6 +555,9 @@ export function App() {
           )}
           {active === "redeem-codes" && (
             <RedeemCodesPage options={adminOptions} />
+          )}
+          {active === "exchange-shop" && (
+            <ExchangeShopPage options={adminOptions} />
           )}
           {active === "config" && <ConfigPage />}
         </section>
@@ -1907,6 +1937,579 @@ function RedeemCodeModal({
   );
 }
 
+function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [keyword, setKeyword] = useState("");
+  const [data, setData] =
+    useState<PageResult<ExchangeShopItemRecord> | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<ExchangeShopItemRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [detail, setDetail] = useState<ExchangeShopItemRecord | null>(null);
+
+  const filters = useMemo(
+    () => ({ page, pageSize, keyword }),
+    [page, pageSize, keyword],
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<PageResult<ExchangeShopItemRecord>>(
+      `/admin/exchange-items${toQuery(filters)}`,
+    )
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = data?.list || [];
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+
+  async function saveExchangeItem(values: Partial<ExchangeShopItemRecord>) {
+    const current = editing;
+    await request(
+      current ? `/admin/exchange-items/${current.id}` : "/admin/exchange-items",
+      {
+        method: current ? "PATCH" : "POST",
+        body: JSON.stringify(values),
+      },
+    );
+    setEditing(null);
+    setCreating(false);
+    load();
+  }
+
+  async function deleteExchangeItem(row: ExchangeShopItemRecord) {
+    if (!window.confirm(`确认停用并删除兑换项 ${row.name}？`)) {
+      return;
+    }
+    await request(`/admin/exchange-items/${row.id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="page-stack">
+      <Panel title="兑换商店" icon={<Store size={18} />}>
+        <div className="table-toolbar">
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={keyword}
+              onChange={(event) => {
+                setPage(1);
+                setKeyword(event.target.value);
+              }}
+              placeholder="搜索兑换项名称或说明"
+            />
+          </label>
+          <div className="toolbar-actions">
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw size={15} />
+              刷新
+            </button>
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={() => exportRowsToCsv("兑换商店", rows, exchangeItemFields)}
+              disabled={!rows.length}
+            >
+              <Download size={15} />
+              导出CSV
+            </button>
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={() => setCreating(true)}
+            >
+              新增
+            </button>
+          </div>
+        </div>
+
+        {error && <StateBox type="error">{error}</StateBox>}
+        {loading && !data && !error && <StateBox>正在加载兑换项...</StateBox>}
+        {data && rows.length === 0 && <StateBox>暂无兑换项</StateBox>}
+
+        {rows.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>兑换项</th>
+                  <th>状态</th>
+                  <th>消耗</th>
+                  <th>奖励</th>
+                  <th>库存</th>
+                  <th>限兑</th>
+                  <th>有效期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td data-label="兑换项">
+                      <span className="cell-text">{row.name}</span>
+                    </td>
+                    <td data-label="状态">
+                      <Badge>{row.enabled ? "启用" : "停用"}</Badge>
+                    </td>
+                    <td data-label="消耗">
+                      <span className="cell-text">{formatCosts(row.costs)}</span>
+                    </td>
+                    <td data-label="奖励">
+                      <span className="cell-text">{formatRewards(row.rewards)}</span>
+                    </td>
+                    <td data-label="库存">
+                      {row.used_count || 0} / {row.total_limit || "不限"}
+                    </td>
+                    <td data-label="限兑">{row.user_limit || "不限"}</td>
+                    <td data-label="有效期">
+                      <span className="cell-text">
+                        {formatDateRange(row.starts_at, row.ends_at)}
+                      </span>
+                    </td>
+                    <td data-label="操作">
+                      <div className="row-actions">
+                        <button
+                          className="secondary-button compact icon-text"
+                          type="button"
+                          onClick={() => setDetail(row)}
+                        >
+                          <Eye size={14} />
+                          详情
+                        </button>
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          onClick={() => setEditing(row)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          aria-label="删除"
+                          onClick={() => deleteExchangeItem(row)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="pagination">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            type="button"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span>
+            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+            type="button"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {(creating || editing) && (
+          <ExchangeShopModal
+            initial={editing || null}
+            itemOptions={options?.dropItems || []}
+            onCancel={() => {
+              setCreating(false);
+              setEditing(null);
+            }}
+            onSubmit={saveExchangeItem}
+          />
+        )}
+
+        {detail && (
+          <DetailModal
+            title="兑换项详情"
+            fields={exchangeItemFields}
+            data={detail}
+            loading={false}
+            onClose={() => setDetail(null)}
+          />
+        )}
+      </Panel>
+
+      <AdminTable
+        title="兑换商店记录"
+        endpoint="/admin/exchange-usages"
+        fields={exchangeUsageFields}
+        searchPlaceholder="按 UID 查询"
+        keywordParam="uid"
+      />
+    </div>
+  );
+}
+
+function ExchangeShopModal({
+  initial,
+  itemOptions,
+  onCancel,
+  onSubmit,
+}: {
+  initial: ExchangeShopItemRecord | null;
+  itemOptions: SelectOption[];
+  onCancel: () => void;
+  onSubmit: (values: Partial<ExchangeShopItemRecord>) => Promise<void>;
+}) {
+  const [values, setValues] = useState(() => createExchangeFormState(initial));
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const consumableGroups = groupItemOptions(
+    itemOptions,
+    (option) => option.type !== 1,
+  );
+  const rewardGroups = groupItemOptions(
+    itemOptions,
+    (option) => option.type !== 1,
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await onSubmit({
+        ...values,
+        starts_at: fromDateTimeLocal(values.starts_at),
+        ends_at: fromDateTimeLocal(values.ends_at),
+        total_limit: values.total_limit === "" ? null : Number(values.total_limit),
+        user_limit: values.user_limit === "" ? null : Number(values.user_limit),
+        sort_order: Number(values.sort_order || 0),
+      } as Partial<ExchangeShopItemRecord>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal wide" onSubmit={submit}>
+        <header>
+          <div>
+            <span className="eyebrow">兑换商店</span>
+            <h2>{initial ? "编辑兑换项" : "新增兑换项"}</h2>
+          </div>
+          <button type="button" onClick={onCancel}>
+            关闭
+          </button>
+        </header>
+        <div className="form-grid">
+          <label className="form-field">
+            <span>兑换项名称</span>
+            <input
+              value={values.name}
+              placeholder="例如：活动代币换积分"
+              onChange={(event) =>
+                setValues({ ...values, name: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>状态</span>
+            <select
+              value={String(values.enabled)}
+              onChange={(event) =>
+                setValues({ ...values, enabled: event.target.value === "true" })
+              }
+            >
+              <option value="true">启用</option>
+              <option value="false">停用</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>总库存</span>
+            <input
+              type="number"
+              min="1"
+              value={values.total_limit}
+              placeholder="留空表示不限"
+              onChange={(event) =>
+                setValues({ ...values, total_limit: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>单用户限兑</span>
+            <input
+              type="number"
+              min="1"
+              value={values.user_limit}
+              placeholder="留空表示不限"
+              onChange={(event) =>
+                setValues({ ...values, user_limit: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>开始时间</span>
+            <input
+              type="datetime-local"
+              value={values.starts_at}
+              onChange={(event) =>
+                setValues({ ...values, starts_at: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>结束时间</span>
+            <input
+              type="datetime-local"
+              value={values.ends_at}
+              onChange={(event) =>
+                setValues({ ...values, ends_at: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>排序</span>
+            <input
+              type="number"
+              min="0"
+              value={values.sort_order}
+              onChange={(event) =>
+                setValues({ ...values, sort_order: Number(event.target.value) })
+              }
+            />
+          </label>
+          <label className="form-field full-width">
+            <span>说明</span>
+            <textarea
+              value={values.description}
+              placeholder="给运营和客服看的兑换说明"
+              onChange={(event) =>
+                setValues({ ...values, description: event.target.value })
+              }
+            />
+          </label>
+        </div>
+
+        <div className="reward-editor">
+          <div className="section-title-row">
+            <h3>消耗物品</h3>
+            <Badge>{formatCosts(values.costs)}</Badge>
+          </div>
+          <div className="reward-items">
+            {values.costs.map((item, index) => (
+              <div className="reward-item-row" key={index}>
+                <select
+                  value={item.itemId || ""}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      costs: updateCostItem(values.costs, index, {
+                        itemId: Number(event.target.value),
+                      }),
+                    })
+                  }
+                >
+                  <option value="">选择消耗物品</option>
+                  {consumableGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((option) => (
+                        <option
+                          key={String(option.value)}
+                          value={String(option.value)}
+                          disabled={option.disabled}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.num}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      costs: updateCostItem(values.costs, index, {
+                        num: Number(event.target.value),
+                      }),
+                    })
+                  }
+                />
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={() =>
+                    setValues({
+                      ...values,
+                      costs: values.costs.filter((_, i) => i !== index),
+                    })
+                  }
+                >
+                  移除
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="form-note">
+            消耗项只支持背包物品，不能选择虚拟积分；积分消耗后续单独设计。
+          </p>
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={() =>
+              setValues({
+                ...values,
+                costs: [...values.costs, { itemId: 0, num: 1 }],
+              })
+            }
+          >
+            添加消耗物品
+          </button>
+        </div>
+
+        <div className="reward-editor">
+          <div className="section-title-row">
+            <h3>兑换奖励</h3>
+            <Badge>{formatRewards(values.rewards)}</Badge>
+          </div>
+          <label className="form-field">
+            <span>奖励积分</span>
+            <input
+              type="number"
+              min="0"
+              value={values.rewards.points}
+              onChange={(event) =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    points: Number(event.target.value),
+                  },
+                })
+              }
+            />
+          </label>
+          <div className="reward-items">
+            {values.rewards.items.map((item, index) => (
+              <div className="reward-item-row" key={index}>
+                <select
+                  value={item.itemId || ""}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        itemId: Number(event.target.value),
+                      }),
+                    })
+                  }
+                >
+                  <option value="">选择奖励物品</option>
+                  {rewardGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((option) => (
+                        <option
+                          key={String(option.value)}
+                          value={String(option.value)}
+                          disabled={option.disabled}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.num}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        num: Number(event.target.value),
+                      }),
+                    })
+                  }
+                />
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={() =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        items: values.rewards.items.filter((_, i) => i !== index),
+                      },
+                    })
+                  }
+                >
+                  移除
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="form-note">
+            积分请使用“奖励积分”字段；虚拟积分物品不会出现在奖励物品选择里。
+          </p>
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={() =>
+              setValues({
+                ...values,
+                rewards: {
+                  ...values.rewards,
+                  items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                },
+              })
+            }
+          >
+            添加奖励物品
+          </button>
+        </div>
+        {error && <div className="error-box">{error}</div>}
+        <footer>
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button
+            className="primary-button compact"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "保存中..." : "保存兑换项"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function ConfigPage() {
   const [data, setData] = useState<GachaConfigData | null>(null);
   const [error, setError] = useState("");
@@ -2498,6 +3101,40 @@ function createRedeemFormState(initial: RedeemCodeRecord | null) {
   };
 }
 
+function createExchangeFormState(initial: ExchangeShopItemRecord | null) {
+  return {
+    name: initial?.name || "",
+    description: initial?.description || "",
+    enabled: initial?.enabled !== false,
+    total_limit:
+      initial?.total_limit === null || initial?.total_limit === undefined
+        ? ""
+        : String(initial.total_limit),
+    user_limit:
+      initial?.user_limit === null || initial?.user_limit === undefined
+        ? ""
+        : String(initial.user_limit),
+    starts_at: toDateTimeLocal(initial?.starts_at),
+    ends_at: toDateTimeLocal(initial?.ends_at),
+    sort_order: Number(initial?.sort_order || 0),
+    costs: Array.isArray(initial?.costs)
+      ? initial!.costs.map((item) => ({
+          itemId: Number(item.itemId),
+          num: Number(item.num),
+        }))
+      : [],
+    rewards: {
+      points: Number(initial?.rewards?.points || 0),
+      items: Array.isArray(initial?.rewards?.items)
+        ? initial!.rewards.items.map((item) => ({
+            itemId: Number(item.itemId),
+            num: Number(item.num),
+          }))
+        : [],
+    },
+  };
+}
+
 function createItemFormState(initial: Record<string, any>) {
   return {
     drop_name: String(initial.drop_name || ""),
@@ -2524,8 +3161,15 @@ function getDropTypeUsage(type: number) {
   return usages[type] || usages[3];
 }
 
-function groupItemOptions(itemOptions: SelectOption[]) {
-  const enabledOptions = itemOptions.filter((option) => option.disabled !== true);
+function groupItemOptions(
+  itemOptions: SelectOption[],
+  predicate?: (option: SelectOption & { type?: number }) => boolean,
+) {
+  const enabledOptions = itemOptions
+    .filter((option) => option.disabled !== true)
+    .filter((option) =>
+      predicate ? predicate(option as SelectOption & { type?: number }) : true,
+    );
   const groups = dropTypeOptions
     .map((type) => ({
       label: String(type.label),
@@ -2560,6 +3204,16 @@ function updateRewardItem(
       currentIndex === index ? { ...item, ...patch } : item,
     ),
   };
+}
+
+function updateCostItem(
+  costs: ExchangeCostItem[],
+  index: number,
+  patch: Partial<{ itemId: number; num: number }>,
+): ExchangeCostItem[] {
+  return costs.map((item, currentIndex) =>
+    currentIndex === index ? { ...item, ...patch } : item,
+  );
 }
 
 function createGachaFormState(
@@ -2662,6 +3316,9 @@ function formatValue(value: unknown) {
   if (value instanceof Date) {
     return value.toLocaleString();
   }
+  if (Array.isArray(value)) {
+    return formatCosts(value as ExchangeCostItem[]);
+  }
   if (typeof value === "object") {
     if (isRewards(value)) {
       return formatRewards(value);
@@ -2700,6 +3357,16 @@ function formatRewards(rewards: RedeemRewards | undefined) {
     parts.push(`物品 ${items.length} 项`);
   }
   return parts.join("，") || "未配置";
+}
+
+function formatCosts(costs: ExchangeCostItem[] | undefined) {
+  const items = Array.isArray(costs) ? costs : [];
+  if (items.length === 0) {
+    return "未配置";
+  }
+  return items
+    .map((item) => `${item.itemName || `物品#${item.itemId}`} x${item.num}`)
+    .join("，");
 }
 
 function formatDateRange(start?: unknown, end?: unknown) {

@@ -4,6 +4,8 @@ import { AuthModule } from "src/auth/auth.module";
 import { GachaConfigService } from "src/card/gacha-config.service";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
+import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
@@ -29,6 +31,8 @@ import { AdminService } from "./admin.service";
       GachaPoolConfig,
       RedeemCode,
       RedeemCodeUsage,
+      ExchangeShopItem,
+      ExchangeShopUsage,
     ]),
     AuthModule,
   ],

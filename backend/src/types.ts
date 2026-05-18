@@ -102,7 +102,13 @@ export interface FieldConfig {
 
 export interface RedeemRewards {
   points: number;
-  items: Array<{ itemId: number; num: number }>;
+  items: Array<{ itemId: number; num: number; itemName?: string }>;
+}
+
+export interface ExchangeCostItem {
+  itemId: number;
+  num: number;
+  itemName?: string;
 }
 
 export interface RedeemCodeRecord {
@@ -116,6 +122,24 @@ export interface RedeemCodeRecord {
   starts_at?: string | null;
   ends_at?: string | null;
   rewards: RedeemRewards;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface ExchangeShopItemRecord {
+  id: number;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  costs: ExchangeCostItem[];
+  rewards: RedeemRewards;
+  total_limit?: number | null;
+  used_count: number;
+  user_limit?: number | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  sort_order?: number;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;

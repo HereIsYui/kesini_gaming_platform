@@ -15,6 +15,7 @@ import {
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsArray,
   IsDateString,
   IsInt,
   IsNumber,
@@ -107,6 +108,18 @@ class RedeemUsageQueryDto extends PageDto {
   @IsInt()
   @Min(1)
   codeId?: number;
+}
+
+class ExchangeUsageQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  itemId?: number;
 }
 
 class PoolDto {
@@ -294,6 +307,57 @@ class RedeemCodeDto {
     points: number;
     items: Array<{ itemId: number; num: number }>;
   };
+}
+
+class ExchangeShopItemDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  costs?: Array<{ itemId: number; num: number }>;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+  };
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  total_limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  user_limit?: number;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sort_order?: number;
 }
 
 interface UserInfo {
@@ -607,6 +671,65 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listRedeemUsages(query),
       "获取兑换记录成功",
+    );
+  }
+
+  @Get("exchange-items")
+  async listExchangeItems(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listExchangeItems(query),
+      "获取兑换商店列表成功",
+    );
+  }
+
+  @Get("exchange-items/:id")
+  async getExchangeItem(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getExchangeItem(id),
+      "获取兑换项详情成功",
+    );
+  }
+
+  @Post("exchange-items")
+  async createExchangeItem(
+    @Body() body: ExchangeShopItemDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.createExchangeItem(body as any),
+      "创建兑换项成功",
+    );
+  }
+
+  @Patch("exchange-items/:id")
+  async updateExchangeItem(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: ExchangeShopItemDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateExchangeItem(id, body as any),
+      "更新兑换项成功",
+    );
+  }
+
+  @Delete("exchange-items/:id")
+  async deleteExchangeItem(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.deleteExchangeItem(id),
+      "删除兑换项成功",
+    );
+  }
+
+  @Get("exchange-usages")
+  async listExchangeUsages(
+    @Query() query: ExchangeUsageQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listExchangeUsages(query),
+      "获取兑换商店记录成功",
     );
   }
 
