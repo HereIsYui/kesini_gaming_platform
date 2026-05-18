@@ -438,7 +438,8 @@ export function App() {
               deletable
               detailFetchable
               searchPlaceholder="搜索卡片名称"
-              extraFilters={<RarityFilter />}
+              enableRarityFilter
+              poolFilterOptions={adminOptions?.pools || []}
             />
           )}
           {active === "drop-items" && (
@@ -460,7 +461,7 @@ export function App() {
               fields={historyFields}
               searchPlaceholder="按 UID 查询"
               keywordParam="uid"
-              extraFilters={<RarityFilter />}
+              enableRarityFilter
             />
           )}
           {active === "inventories" && (
@@ -774,7 +775,8 @@ function AdminTable({
   detailFetchable,
   searchPlaceholder,
   keywordParam = "keyword",
-  extraFilters,
+  enableRarityFilter,
+  poolFilterOptions,
 }: {
   title: string;
   endpoint: string;
@@ -785,12 +787,14 @@ function AdminTable({
   detailFetchable?: boolean;
   searchPlaceholder?: string;
   keywordParam?: string;
-  extraFilters?: ReactNode;
+  enableRarityFilter?: boolean;
+  poolFilterOptions?: SelectOption[];
 }) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
   const [rarity, setRarity] = useState("");
+  const [poolId, setPoolId] = useState("");
   const [data, setData] = useState<PageResult<Record<string, any>> | null>(
     null,
   );
@@ -807,8 +811,9 @@ function AdminTable({
       pageSize,
       [keywordParam]: keyword,
       rarity,
+      poolId,
     }),
-    [page, pageSize, keyword, keywordParam, rarity],
+    [page, pageSize, keyword, keywordParam, rarity, poolId],
   );
 
   const load = useCallback(() => {
@@ -889,7 +894,23 @@ function AdminTable({
             placeholder={searchPlaceholder || "搜索"}
           />
         </label>
-        {extraFilters && (
+        {poolFilterOptions && (
+          <select
+            value={poolId}
+            onChange={(event) => {
+              setPage(1);
+              setPoolId(event.target.value);
+            }}
+          >
+            <option value="">全部卡池</option>
+            {poolFilterOptions.map((option) => (
+              <option key={String(option.value)} value={String(option.value)}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
+        {enableRarityFilter && (
           <select
             value={rarity}
             onChange={(event) => {
@@ -2196,10 +2217,6 @@ function StateBox({ children, type }: { children: ReactNode; type?: "error" }) {
       {children}
     </div>
   );
-}
-
-function RarityFilter() {
-  return null;
 }
 
 function createRedeemFormState(initial: RedeemCodeRecord | null) {

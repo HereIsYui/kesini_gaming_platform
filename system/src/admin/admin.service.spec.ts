@@ -173,6 +173,22 @@ describe("AdminService", () => {
     expect(dropRepository.findOne).toHaveBeenCalledWith({ where: { id: 4 } });
   });
 
+  it("卡片列表支持按卡池筛选", async () => {
+    const cardRepository = createRepository();
+    const service = createService({ card: cardRepository });
+
+    await service.listCards({ poolId: 12, keyword: "冥王星" });
+
+    expect(cardRepository.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          pool: 12,
+          card_name: expect.any(Object),
+        },
+      }),
+    );
+  });
+
   it("更新抽卡配置会委托配置服务校验和保存", async () => {
     const gachaService = {
       getAllPoolConfigs: jest.fn(),
