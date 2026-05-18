@@ -1159,57 +1159,30 @@ textarea {
   min-height: 40px;
 }
 
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 28;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(9, 9, 11, 0.48);
-  backdrop-filter: blur(3px);
-}
-
-.detail-drawer {
+.detail-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(520px, 100vw);
-  min-width: 0;
-  height: 100dvh;
-  overflow: auto;
-  border-left: 1px solid var(--border);
-  background: var(--popover);
-  box-shadow: var(--shadow-md);
+  width: min(760px, 100%);
+  overflow: hidden;
 }
 
-.detail-drawer header {
+.detail-modal header {
   position: sticky;
   top: 0;
   z-index: 1;
-  display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
   background: var(--popover);
 }
 
-.detail-drawer h2 {
+.detail-modal h2 {
   margin: 0;
   color: var(--foreground);
   font-size: 18px;
 }
 
-.detail-drawer header button {
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--foreground);
-  background: var(--card);
-}
-
-.detail-drawer .description-list {
+.detail-modal-body {
+  min-height: 0;
+  overflow: auto;
   padding: 4px 16px 16px;
 }
 

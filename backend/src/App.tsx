@@ -1057,7 +1057,7 @@ function AdminTable({
       )}
 
       {detail && (
-        <DetailDrawer
+        <DetailModal
           title={`${title}详情`}
           fields={fields}
           data={detail}
@@ -1407,7 +1407,7 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
         )}
 
         {detail && (
-          <DetailDrawer
+          <DetailModal
             title="兑换码详情"
             fields={redeemCodeFields}
             data={detail}
@@ -2104,7 +2104,7 @@ function GachaConfigModal({
   );
 }
 
-function DetailDrawer({
+function DetailModal({
   title,
   fields,
   data,
@@ -2120,9 +2120,11 @@ function DetailDrawer({
   const items = getDetailItems(data, fields);
 
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside
-        className="detail-drawer"
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="modal detail-modal"
+        role="dialog"
+        aria-modal="true"
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
       >
@@ -2138,9 +2140,11 @@ function DetailDrawer({
         {loading ? (
           <StateBox>正在读取详情...</StateBox>
         ) : (
-          <DescriptionList items={items} />
+          <div className="detail-modal-body">
+            <DescriptionList items={items} />
+          </div>
         )}
-      </aside>
+      </section>
     </div>
   );
 }
