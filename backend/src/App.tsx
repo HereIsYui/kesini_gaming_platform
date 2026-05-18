@@ -209,6 +209,7 @@ export function App() {
                 key={item.key}
                 className={active === item.key ? "active" : ""}
                 onClick={() => switchPage(item.key)}
+                aria-current={active === item.key ? "page" : undefined}
                 type="button"
               >
                 <Icon size={18} />
@@ -221,7 +222,7 @@ export function App() {
 
       <main className="main">
         <header className="topbar">
-          <div>
+          <div className="topbar-title">
             <span className="eyebrow">后台管理</span>
             <h1>{navItems.find((item) => item.key === active)?.label}</h1>
           </div>
@@ -498,8 +499,10 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
             <div className="stat-icon">
               <Icon size={20} />
             </div>
-            <span>{label as string}</span>
-            <strong>{String(value)}</strong>
+            <div>
+              <span>{label as string}</span>
+              <strong>{String(value)}</strong>
+            </div>
           </article>
         ))}
       </div>
@@ -684,15 +687,19 @@ function AdminTable({
               {rows.map((row) => (
                 <tr key={String(row.id)}>
                   {fields.map((field) => (
-                    <td key={field.key}>
+                    <td key={field.key} data-label={field.label}>
                       {formatValue(getValue(row, field.key))}
                     </td>
                   ))}
                   {(editable || deletable) && (
-                    <td>
+                    <td data-label="操作">
                       <div className="row-actions">
                         {editable && (
-                          <button type="button" onClick={() => setEditing(row)}>
+                          <button
+                            className="secondary-button compact"
+                            type="button"
+                            onClick={() => setEditing(row)}
+                          >
                             编辑
                           </button>
                         )}
@@ -892,7 +899,7 @@ function Panel({
   return (
     <section className="panel">
       <header className="panel-header">
-        <div>
+        <div className="panel-title">
           {icon}
           <h2>{title}</h2>
         </div>
