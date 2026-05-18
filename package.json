@@ -10,6 +10,7 @@
     "system:dev": "npm --workspace system run start:dev",
     "system:build": "npm --workspace system run build",
     "system:test": "npm --workspace system run test",
+    "system:seed:card-pools": "npm --workspace system run seed:card-pools --",
     "backend:dev": "npm --workspace backend run dev",
     "backend:build": "npm --workspace backend run build",
     "backend:preview": "npm --workspace backend run preview",
