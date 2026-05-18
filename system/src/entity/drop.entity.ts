@@ -1,4 +1,3 @@
-// user.entity.ts
 import {
   Entity,
   Column,
@@ -17,17 +16,21 @@ export class DropItem {
   @Column()
   drop_desc: string;
 
-  // 掉落物品类型 0 卡片碎片 1 积分 2 道具 3 其他
+  // 物品类型：0 卡片碎片 1 虚拟积分 2 普通道具 3 其他
   @Column()
   drop_type: number;
 
-  // 掉落道具类型 只有item_type为道具时才有效 
+  // 普通道具和其他类型的扩展参数类型
   @Column()
   drop_item_type: number;
 
-  // 掉落物品值 只有item_type不为道具时才有效 
+  // 普通道具和其他类型的扩展参数值
   @Column()
   drop_item_value: number;
+
+  // 禁用后不再作为新奖励或碎片配置使用，历史背包记录仍保留
+  @Column({ default: false })
+  disabled: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

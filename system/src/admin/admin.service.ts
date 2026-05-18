@@ -29,6 +29,13 @@ export interface PageQuery {
   keyword?: string;
 }
 
+const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
+  0: { label: "卡片碎片", usage: "用于卡片合成和分解产出" },
+  1: { label: "虚拟积分", usage: "建议优先使用用户积分字段，不放入背包" },
+  2: { label: "普通道具", usage: "可放入背包，也可作为兑换码奖励" },
+  3: { label: "其他", usage: "预留类型，需结合业务说明使用" },
+};
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -126,9 +133,12 @@ export class AdminService {
         pool: card.pool,
       })),
       dropItems: dropItems.map((item) => ({
-        label: item.drop_name,
+        label: this.formatDropItemOptionLabel(item),
         value: item.id,
         type: item.drop_type,
+        typeLabel: this.getDropTypeMeta(item.drop_type).label,
+        usageLabel: this.getDropTypeMeta(item.drop_type).usage,
+        disabled: item.disabled === true,
       })),
     };
   }
@@ -252,41 +262,47 @@ export class AdminService {
           { drop_desc: Like(`%${query.keyword}%`) },
         ]
       : {};
-    return this.findAndPage(this.dropRepository, where, page, pageSize);
+    const result = await this.findAndPage(
+      this.dropRepository,
+      where,
+      page,
+      pageSize,
+    );
+    return {
+      ...result,
+      list: result.list.map((item) => this.decorateDropItem(item)),
+    };
   }
 
   async getDropItem(id: number) {
-    return this.mustFind(this.dropRepository, id, "掉落物不存在");
+    return this.decorateDropItem(
+      await this.mustFind(this.dropRepository, id, "物品不存在"),
+    );
   }
 
   async createDropItem(body: Partial<DropItem>) {
-    this.assertRequired(body.drop_name, "道具名称不能为空");
+    const normalized = this.normalizeDropItemInput(body);
     const item = this.dropRepository.create({
-      drop_name: body.drop_name,
-      drop_desc: body.drop_desc || "",
-      drop_type: Number(body.drop_type || 0),
-      drop_item_type: Number(body.drop_item_type || 0),
-      drop_item_value: Number(body.drop_item_value || 0),
+      ...normalized,
+      disabled: body.disabled === true,
     });
     return this.dropRepository.save(item);
   }
 
   async updateDropItem(id: number, body: Partial<DropItem>) {
-    const item = await this.mustFind(this.dropRepository, id, "掉落物不存在");
-    Object.assign(
-      item,
-      this.pickDefined(body, [
-        "drop_name",
-        "drop_desc",
-        "drop_type",
-        "drop_item_type",
-        "drop_item_value",
-      ]),
-    );
+    const item = await this.mustFind(this.dropRepository, id, "物品不存在");
+    const normalized = this.normalizeDropItemInput({ ...item, ...body });
+    Object.assign(item, normalized, this.pickDefined(body, ["disabled"]));
     return this.dropRepository.save(item);
   }
 
   async deleteDropItem(id: number) {
+    const item = await this.mustFind(this.dropRepository, id, "物品不存在");
+    if (await this.isDropItemReferenced(id)) {
+      item.disabled = true;
+      await this.dropRepository.save(item);
+      return { deleted: false, disabled: true };
+    }
     await this.dropRepository.delete(id);
     return { deleted: true };
   }
@@ -462,7 +478,7 @@ export class AdminService {
     if (existing && !existing.delete_flag) {
       throw new Error("兑换码已存在");
     }
-    const rewards = this.normalizeRewards(body.rewards);
+    const rewards = await this.normalizeRewards(body.rewards);
     const totalLimit = this.normalizeTotalLimit(body.total_limit);
     const entity = this.redeemCodeRepository.create({
       code,
@@ -514,7 +530,7 @@ export class AdminService {
       next.ends_at = this.parseOptionalDate(body.ends_at);
     }
     if (body.rewards !== undefined) {
-      next.rewards = this.normalizeRewards(body.rewards);
+      next.rewards = await this.normalizeRewards(body.rewards);
     }
     this.assertRequired(next.name, "兑换码名称不能为空");
     this.assertRedeemTimeRange(next.starts_at, next.ends_at);
@@ -565,7 +581,10 @@ export class AdminService {
       list: result.list.map((inventory) => ({
         ...inventory,
         user: users.find((user) => user.id === inventory.user_id) || null,
-        item: items.find((item) => item.id === inventory.item_id) || null,
+        item:
+          this.decorateNullableDropItem(
+            items.find((item) => item.id === inventory.item_id) || null,
+          ) || null,
       })),
     };
   }
@@ -630,7 +649,7 @@ export class AdminService {
       .toUpperCase();
   }
 
-  private normalizeRewards(rewards: unknown): RedeemRewards {
+  private async normalizeRewards(rewards: unknown): Promise<RedeemRewards> {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isFinite(points) || points < 0) {
@@ -645,16 +664,130 @@ export class AdminService {
       .filter((item) => item.itemId > 0 || item.num > 0);
     normalizedItems.forEach((item) => {
       if (!Number.isInteger(item.itemId) || item.itemId <= 0) {
-        throw new Error("奖励道具ID无效");
+        throw new Error("奖励物品ID无效");
       }
       if (!Number.isInteger(item.num) || item.num <= 0) {
-        throw new Error("奖励道具数量无效");
+        throw new Error("奖励物品数量无效");
       }
     });
     if (points === 0 && normalizedItems.length === 0) {
       throw new Error("兑换码奖励不能为空");
     }
+    await this.assertRewardItemsAvailable(
+      normalizedItems.map((item) => item.itemId),
+    );
     return { points, items: normalizedItems };
+  }
+
+  private normalizeDropItemInput(body: Partial<DropItem>) {
+    const dropName = String(body.drop_name || "").trim();
+    this.assertRequired(dropName, "物品名称不能为空");
+    const dropType = Number(body.drop_type ?? 0);
+    if (!Number.isInteger(dropType) || !DROP_TYPE_META[dropType]) {
+      throw new Error("物品类型无效");
+    }
+
+    const itemType =
+      body.drop_item_type === undefined || body.drop_item_type === null
+        ? 0
+        : Number(body.drop_item_type);
+    const itemValue =
+      body.drop_item_value === undefined || body.drop_item_value === null
+        ? 0
+        : Number(body.drop_item_value);
+    if (!Number.isInteger(itemType) || itemType < 0) {
+      throw new Error("用途参数类型必须为非负整数");
+    }
+    if (!Number.isFinite(itemValue) || itemValue < 0) {
+      throw new Error("用途参数值必须为非负数字");
+    }
+
+    return {
+      drop_name: dropName,
+      drop_desc: body.drop_desc || "",
+      drop_type: dropType,
+      drop_item_type: dropType === 2 || dropType === 3 ? itemType : 0,
+      drop_item_value: dropType === 2 || dropType === 3 ? itemValue : 0,
+    };
+  }
+
+  private decorateNullableDropItem(item: DropItem | null) {
+    return item ? this.decorateDropItem(item) : null;
+  }
+
+  private decorateDropItem<T extends DropItem>(item: T) {
+    const meta = this.getDropTypeMeta(item.drop_type);
+    return {
+      ...item,
+      typeLabel: meta.label,
+      usageLabel: meta.usage,
+      disabled: item.disabled === true,
+    };
+  }
+
+  private getDropTypeMeta(type: number) {
+    return DROP_TYPE_META[type] || DROP_TYPE_META[3];
+  }
+
+  private formatDropItemOptionLabel(item: DropItem) {
+    const meta = this.getDropTypeMeta(item.drop_type);
+    return `${item.drop_name} · ${meta.label}${item.disabled ? "（已禁用）" : ""}`;
+  }
+
+  private async assertRewardItemsAvailable(itemIds: number[]) {
+    const uniqueItemIds = [...new Set(itemIds)];
+    if (uniqueItemIds.length === 0) {
+      return;
+    }
+    const items = await this.dropRepository.find({
+      where: { id: In(uniqueItemIds) },
+    });
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+    uniqueItemIds.forEach((itemId) => {
+      const item = itemMap.get(itemId);
+      if (!item) {
+        throw new Error(`奖励物品不存在: ${itemId}`);
+      }
+      if (item.disabled) {
+        throw new Error(`奖励物品已禁用: ${item.drop_name}`);
+      }
+    });
+  }
+
+  private async isDropItemReferenced(itemId: number): Promise<boolean> {
+    const [inventoryCount, cards, redeemCodes] = await Promise.all([
+      this.inventoryRepository.count({ where: { item_id: itemId } }),
+      this.cardRepository.find({
+        where: { drop_item: Like(`%${itemId}%`) },
+      }),
+      this.redeemCodeRepository.find({
+        where: { delete_flag: false },
+      }),
+    ]);
+
+    if (inventoryCount > 0) {
+      return true;
+    }
+    if (
+      cards.some((card) =>
+        this.parseDropItemIds(card.drop_item).includes(itemId),
+      )
+    ) {
+      return true;
+    }
+    return redeemCodes.some((code) =>
+      (code.rewards?.items || []).some((item) => Number(item.itemId) === itemId),
+    );
+  }
+
+  private parseDropItemIds(dropItem: string): number[] {
+    if (!dropItem) {
+      return [];
+    }
+    return dropItem
+      .split(";")
+      .map((item) => Number(item.split(",")[0]?.trim()))
+      .filter((id) => Number.isInteger(id) && id > 0);
   }
 
   private normalizeTotalLimit(value: unknown): number | null {

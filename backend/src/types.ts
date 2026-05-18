@@ -42,12 +42,20 @@ export interface DashboardData {
 export interface SelectOption {
   label: string;
   value: string | number | boolean;
+  disabled?: boolean;
 }
 
 export interface AdminOptions {
   pools: Array<SelectOption & { type?: number }>;
   cards: Array<SelectOption & { rarity?: string; pool?: number }>;
-  dropItems: Array<SelectOption & { type?: number }>;
+  dropItems: Array<
+    SelectOption & {
+      type?: number;
+      typeLabel?: string;
+      usageLabel?: string;
+      disabled?: boolean;
+    }
+  >;
 }
 
 export interface GachaPoolConfig {

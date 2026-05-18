@@ -70,7 +70,7 @@ const navItems = [
   { key: "users", label: "用户", icon: Users },
   { key: "pools", label: "卡池", icon: Layers },
   { key: "cards", label: "卡片", icon: Sparkles },
-  { key: "drop-items", label: "道具", icon: Package },
+  { key: "drop-items", label: "物品管理", icon: Package },
   { key: "histories", label: "历史", icon: History },
   { key: "inventories", label: "背包", icon: Boxes },
   { key: "pity", label: "保底", icon: Ticket },
@@ -107,9 +107,54 @@ const cardTypeOptions: SelectOption[] = [
 
 const dropTypeOptions: SelectOption[] = [
   { label: "卡片碎片", value: 0 },
-  { label: "积分", value: 1 },
-  { label: "道具", value: 2 },
+  { label: "普通道具", value: 2 },
+  { label: "虚拟积分", value: 1 },
   { label: "其他", value: 3 },
+];
+
+const itemTemplates = [
+  {
+    label: "通用碎片",
+    values: {
+      drop_name: "通用碎片",
+      drop_type: 0,
+      drop_desc: "用于卡片合成和分解产出的通用碎片。",
+      drop_item_type: 0,
+      drop_item_value: 0,
+    },
+  },
+  ...rarityOptions
+    .filter((option) => option.value !== "UR")
+    .map((option) => ({
+      label: `${option.label} 碎片`,
+      values: {
+        drop_name: `${option.label} 碎片`,
+        drop_type: 0,
+        drop_desc: `用于 ${option.label} 稀有度卡片的合成和分解产出。`,
+        drop_item_type: 0,
+        drop_item_value: 0,
+      },
+    })),
+  {
+    label: "兑换券",
+    values: {
+      drop_name: "兑换券",
+      drop_type: 2,
+      drop_desc: "可放入背包的活动兑换类道具。",
+      drop_item_type: 1,
+      drop_item_value: 0,
+    },
+  },
+  {
+    label: "活动道具",
+    values: {
+      drop_name: "活动道具",
+      drop_type: 2,
+      drop_desc: "可用于活动玩法或兑换码奖励的普通道具。",
+      drop_item_type: 2,
+      drop_item_value: 0,
+    },
+  },
 ];
 
 const poolFields: FieldConfig[] = [
@@ -135,6 +180,13 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
     options?.pools?.length
       ? options.pools
       : [{ label: "默认卡池 #1", value: 1 }];
+  const fragmentOptions =
+    options?.dropItems
+      ?.filter((item) => item.type === 0 && item.disabled !== true)
+      .map((item) => ({
+        ...item,
+        value: String(item.value),
+      })) || [];
 
   return [
     { key: "id", label: "ID", readonly: true },
@@ -162,42 +214,23 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
     },
     {
       key: "drop_item",
-      label: "掉落配置",
+      label: "分解产出碎片",
+      type: "select",
+      options: fragmentOptions,
       fullWidth: true,
-      placeholder: "item_001,0.3,2;item_002,0.7,1",
-      helper: "保留原有格式：道具ID,概率,最大数量；多项用英文分号分隔。",
+      helper:
+        "选择卡片合成/分解使用的碎片物品。消耗规则：N=80、R=160、SR=320、SSR=1000，UR不可合成/分解。",
     },
   ];
 }
 
 const dropFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "drop_name", label: "道具名称", placeholder: "例如：SSR碎片" },
-  {
-    key: "drop_desc",
-    label: "描述",
-    type: "textarea",
-    fullWidth: true,
-    placeholder: "填写道具说明",
-  },
-  {
-    key: "drop_type",
-    label: "掉落类型",
-    type: "select",
-    options: dropTypeOptions,
-  },
-  {
-    key: "drop_item_type",
-    label: "道具类型",
-    type: "number",
-    helper: "仅 drop_type 为道具时有效。",
-  },
-  {
-    key: "drop_item_value",
-    label: "道具值",
-    type: "number",
-    helper: "非道具类型可用于积分或碎片数值。",
-  },
+  { key: "drop_name", label: "物品名称", placeholder: "例如：SSR碎片" },
+  { key: "typeLabel", label: "物品类型", readonly: true },
+  { key: "usageLabel", label: "用途说明", readonly: true },
+  { key: "drop_desc", label: "物品说明", readonly: true },
+  { key: "disabled", label: "禁用", readonly: true },
 ];
 
 const userFields: FieldConfig[] = [
@@ -217,7 +250,9 @@ const userFields: FieldConfig[] = [
 const inventoryFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
   { key: "user.uid", label: "UID", readonly: true },
-  { key: "item.drop_name", label: "道具", readonly: true },
+  { key: "item.drop_name", label: "物品", readonly: true },
+  { key: "item.typeLabel", label: "物品类型", readonly: true },
+  { key: "item.usageLabel", label: "来源/用途", readonly: true },
   { key: "num", label: "数量", type: "number" },
 ];
 
@@ -444,14 +479,21 @@ export function App() {
           )}
           {active === "drop-items" && (
             <AdminTable
-              title="道具管理"
+              title="物品管理"
               endpoint="/admin/drop-items"
               fields={dropFields}
               editable
               creatable
               deletable
               detailFetchable
-              searchPlaceholder="搜索道具名称或描述"
+              searchPlaceholder="搜索物品名称或说明"
+              renderEditor={({ initial, onCancel, onSubmit }) => (
+                <ItemModal
+                  initial={initial}
+                  onCancel={onCancel}
+                  onSubmit={onSubmit}
+                />
+              )}
             />
           )}
           {active === "histories" && (
@@ -777,6 +819,7 @@ function AdminTable({
   keywordParam = "keyword",
   enableRarityFilter,
   poolFilterOptions,
+  renderEditor,
 }: {
   title: string;
   endpoint: string;
@@ -789,6 +832,11 @@ function AdminTable({
   keywordParam?: string;
   enableRarityFilter?: boolean;
   poolFilterOptions?: SelectOption[];
+  renderEditor?: (props: {
+    initial: Record<string, any>;
+    onCancel: () => void;
+    onSubmit: (values: Record<string, any>) => Promise<void>;
+  }) => ReactNode;
 }) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -1044,16 +1092,27 @@ function AdminTable({
       </div>
 
       {(editing || creating) && (
-        <EditModal
-          title={editing ? "编辑记录" : "新增记录"}
-          fields={fields.filter((field) => !field.readonly)}
-          initial={editing || {}}
-          onCancel={() => {
-            setEditing(null);
-            setCreating(false);
-          }}
-          onSubmit={saveForm}
-        />
+        renderEditor ? (
+          renderEditor({
+            initial: editing || {},
+            onCancel: () => {
+              setEditing(null);
+              setCreating(false);
+            },
+            onSubmit: saveForm,
+          })
+        ) : (
+          <EditModal
+            title={editing ? "编辑记录" : "新增记录"}
+            fields={fields.filter((field) => !field.readonly)}
+            initial={editing || {}}
+            onCancel={() => {
+              setEditing(null);
+              setCreating(false);
+            }}
+            onSubmit={saveForm}
+          />
+        )
       )}
 
       {detail && (
@@ -1085,7 +1144,9 @@ function EditModal({
   const [values, setValues] = useState<Record<string, any>>(() =>
     fields.reduce(
       (result, field) => {
-        result[field.key] = getValue(initial, field.key) ?? "";
+        const value = getValue(initial, field.key) ?? "";
+        result[field.key] =
+          field.key === "drop_item" ? normalizeDropItemSelectValue(value) : value;
         return result;
       },
       {} as Record<string, any>,
@@ -1119,6 +1180,10 @@ function EditModal({
           {fields.map((field) => {
             const fieldOptions =
               field.type === "boolean" ? booleanOptions : field.options;
+            const shouldRenderSelect =
+              field.type === "select" ||
+              field.type === "boolean" ||
+              Boolean(fieldOptions?.length);
             const fieldClass =
               field.fullWidth || field.type === "textarea"
                 ? "form-field full-width"
@@ -1138,7 +1203,7 @@ function EditModal({
                       })
                     }
                   />
-                ) : fieldOptions?.length ? (
+                ) : shouldRenderSelect ? (
                   <select
                     value={String(values[field.key] ?? "")}
                     onChange={(event) =>
@@ -1151,11 +1216,14 @@ function EditModal({
                       })
                     }
                   >
-                    <option value="">请选择</option>
-                    {fieldOptions.map((option) => (
+                    <option value="">
+                      {fieldOptions?.length ? "请选择" : "暂无可选项"}
+                    </option>
+                    {(fieldOptions || []).map((option) => (
                       <option
                         key={String(option.value)}
                         value={String(option.value)}
+                        disabled={option.disabled}
                       >
                         {option.label}
                       </option>
@@ -1193,6 +1261,177 @@ function EditModal({
             disabled={loading}
           >
             {loading ? "保存中..." : "保存"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function ItemModal({
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  initial: Record<string, any>;
+  onCancel: () => void;
+  onSubmit: (values: Record<string, any>) => Promise<void>;
+}) {
+  const [values, setValues] = useState(() => createItemFormState(initial));
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const currentType = Number(values.drop_type || 0);
+  const showUsageParams = currentType === 2 || currentType === 3;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await onSubmit({
+        ...values,
+        drop_type: currentType,
+        drop_item_type: showUsageParams ? Number(values.drop_item_type || 0) : 0,
+        drop_item_value: showUsageParams ? Number(values.drop_item_value || 0) : 0,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal" onSubmit={submit}>
+        <header>
+          <div>
+            <span className="eyebrow">物品管理</span>
+            <h2>{initial.id ? "编辑物品" : "新增物品"}</h2>
+          </div>
+          <button type="button" onClick={onCancel}>
+            关闭
+          </button>
+        </header>
+        <div className="item-template-row">
+          {itemTemplates.map((template) => (
+            <button
+              className="secondary-button compact"
+              type="button"
+              key={template.label}
+              onClick={() =>
+                setValues({
+                  ...values,
+                  ...template.values,
+                })
+              }
+            >
+              {template.label}
+            </button>
+          ))}
+        </div>
+        <div className="form-grid">
+          <label className="form-field">
+            <span>物品名称</span>
+            <input
+              value={values.drop_name}
+              placeholder="例如：SSR碎片"
+              onChange={(event) =>
+                setValues({ ...values, drop_name: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>物品类型</span>
+            <select
+              value={String(values.drop_type)}
+              onChange={(event) =>
+                setValues({
+                  ...values,
+                  drop_type: Number(event.target.value),
+                  drop_item_type: 0,
+                  drop_item_value: 0,
+                })
+              }
+            >
+              {dropTypeOptions.map((option) => (
+                <option key={String(option.value)} value={String(option.value)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="item-hint full-width">
+            <Badge>{getDropTypeLabel(currentType)}</Badge>
+            <span>{getDropTypeUsage(currentType)}</span>
+          </div>
+          <label className="form-field full-width">
+            <span>物品说明</span>
+            <textarea
+              value={values.drop_desc}
+              placeholder="给运营和玩家都能看懂的说明"
+              onChange={(event) =>
+                setValues({ ...values, drop_desc: event.target.value })
+              }
+            />
+          </label>
+          {showUsageParams && (
+            <>
+              <label className="form-field">
+                <span>用途参数类型</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={values.drop_item_type}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      drop_item_type: Number(event.target.value),
+                    })
+                  }
+                />
+                <small>普通道具和其他类型可用于后续业务扩展。</small>
+              </label>
+              <label className="form-field">
+                <span>用途参数值</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={values.drop_item_value}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      drop_item_value: Number(event.target.value),
+                    })
+                  }
+                />
+                <small>没有特殊规则时保持 0。</small>
+              </label>
+            </>
+          )}
+          <label className="form-field">
+            <span>状态</span>
+            <select
+              value={values.disabled ? "true" : "false"}
+              onChange={(event) =>
+                setValues({ ...values, disabled: event.target.value === "true" })
+              }
+            >
+              <option value="false">启用</option>
+              <option value="true">禁用</option>
+            </select>
+          </label>
+        </div>
+        {error && <div className="error-box">{error}</div>}
+        <footer>
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button
+            className="primary-button compact"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "保存中..." : "保存物品"}
           </button>
         </footer>
       </form>
@@ -1442,6 +1681,7 @@ function RedeemCodeModal({
   const [values, setValues] = useState(() => createRedeemFormState(initial));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const groupedItemOptions = groupItemOptions(itemOptions);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -1584,11 +1824,19 @@ function RedeemCodeModal({
                     })
                   }
                 >
-                  <option value="">选择道具</option>
-                  {itemOptions.map((option) => (
-                    <option key={String(option.value)} value={String(option.value)}>
-                      {option.label}
-                    </option>
+                  <option value="">选择物品</option>
+                  {groupedItemOptions.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((option) => (
+                        <option
+                          key={String(option.value)}
+                          value={String(option.value)}
+                          disabled={option.disabled}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <input
@@ -1622,6 +1870,9 @@ function RedeemCodeModal({
               </div>
             ))}
           </div>
+          <p className="form-note">
+            积分请使用“奖励积分”字段；物品奖励主要选择卡片碎片或普通道具。
+          </p>
           <button
             className="secondary-button compact"
             type="button"
@@ -1635,7 +1886,7 @@ function RedeemCodeModal({
               })
             }
           >
-            添加道具奖励
+            添加物品奖励
           </button>
         </div>
         {error && <div className="error-box">{error}</div>}
@@ -2247,6 +2498,57 @@ function createRedeemFormState(initial: RedeemCodeRecord | null) {
   };
 }
 
+function createItemFormState(initial: Record<string, any>) {
+  return {
+    drop_name: String(initial.drop_name || ""),
+    drop_desc: String(initial.drop_desc || ""),
+    drop_type: Number(initial.drop_type ?? 0),
+    drop_item_type: Number(initial.drop_item_type || 0),
+    drop_item_value: Number(initial.drop_item_value || 0),
+    disabled: initial.disabled === true,
+  };
+}
+
+function getDropTypeLabel(type: number) {
+  const option = dropTypeOptions.find((item) => Number(item.value) === type);
+  return option?.label || "其他";
+}
+
+function getDropTypeUsage(type: number) {
+  const usages: Record<number, string> = {
+    0: "用于卡片合成和分解产出。创建卡片时可选择它作为分解产出碎片。",
+    1: "虚拟积分建议直接使用用户积分字段或兑换码奖励积分，不建议放入背包。",
+    2: "可放入玩家背包，也可作为兑换码奖励发放。",
+    3: "预留给后续玩法，请在说明里写清楚用途。",
+  };
+  return usages[type] || usages[3];
+}
+
+function groupItemOptions(itemOptions: SelectOption[]) {
+  const enabledOptions = itemOptions.filter((option) => option.disabled !== true);
+  const groups = dropTypeOptions
+    .map((type) => ({
+      label: String(type.label),
+      options: enabledOptions.filter((option: any) => option.type === type.value),
+    }))
+    .filter((group) => group.options.length > 0);
+  const otherOptions = enabledOptions.filter(
+    (option: any) =>
+      option.type === undefined ||
+      !dropTypeOptions.some((type) => type.value === option.type),
+  );
+  return otherOptions.length
+    ? [...groups, { label: "其他物品", options: otherOptions }]
+    : groups;
+}
+
+function normalizeDropItemSelectValue(value: unknown) {
+  return String(value || "")
+    .split(";")[0]
+    .split(",")[0]
+    .trim();
+}
+
 function updateRewardItem(
   rewards: RedeemRewards,
   index: number,
@@ -2395,7 +2697,7 @@ function formatRewards(rewards: RedeemRewards | undefined) {
   }
   const items = Array.isArray(rewards.items) ? rewards.items : [];
   if (items.length) {
-    parts.push(`道具 ${items.length} 项`);
+    parts.push(`物品 ${items.length} 项`);
   }
   return parts.join("，") || "未配置";
 }

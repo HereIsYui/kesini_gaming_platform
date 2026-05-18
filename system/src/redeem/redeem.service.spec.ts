@@ -2,6 +2,7 @@ import { RedeemCode } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserInventory } from "src/entity/inventory.entity";
+import { DropItem } from "src/entity/drop.entity";
 import { RedeemService } from "./redeem.service";
 
 function createRepository(overrides: Record<string, any> = {}) {
@@ -46,12 +47,20 @@ describe("RedeemService", () => {
       findOne: jest.fn().mockResolvedValue(user),
     });
     const inventoryRepository = createRepository();
+    const dropRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 2,
+        drop_name: "测试道具",
+        disabled: false,
+      }),
+    });
     const { service } = createService(
       new Map<any, any>([
         [RedeemCode, redeemCodeRepository],
         [RedeemCodeUsage, usageRepository],
         [User, userRepository],
         [UserInventory, inventoryRepository],
+        [DropItem, dropRepository],
       ]),
     );
 
@@ -92,6 +101,7 @@ describe("RedeemService", () => {
         [RedeemCodeUsage, usageRepository],
         [User, createRepository()],
         [UserInventory, createRepository()],
+        [DropItem, createRepository()],
       ]),
     );
 
@@ -117,6 +127,7 @@ describe("RedeemService", () => {
         [RedeemCodeUsage, createRepository()],
         [User, createRepository()],
         [UserInventory, createRepository()],
+        [DropItem, createRepository()],
       ]),
     );
 

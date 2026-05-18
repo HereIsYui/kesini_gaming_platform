@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource, Repository } from "typeorm";
+import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import {
   RedeemCode,
@@ -24,6 +25,7 @@ export class RedeemService {
       const usageRepository = manager.getRepository(RedeemCodeUsage);
       const userRepository = manager.getRepository(User);
       const inventoryRepository = manager.getRepository(UserInventory);
+      const dropRepository = manager.getRepository(DropItem);
 
       const redeemCode = await redeemCodeRepository.findOne({
         where: { code: normalizedCode, delete_flag: false },
@@ -47,6 +49,7 @@ export class RedeemService {
       }
 
       const rewards = this.normalizeRewards(redeemCode!.rewards);
+      await this.assertRewardItemsAvailable(dropRepository, rewards.items);
       if (rewards.points > 0) {
         user.point = (user.point || 0) + rewards.points;
         await userRepository.save(user);
@@ -126,6 +129,23 @@ export class RedeemService {
           }))
         : [],
     };
+  }
+
+  private async assertRewardItemsAvailable(
+    dropRepository: Repository<DropItem>,
+    items: RedeemRewardItem[],
+  ) {
+    for (const item of items) {
+      const dropItem = await dropRepository.findOne({
+        where: { id: item.itemId },
+      });
+      if (!dropItem) {
+        throw new Error(`奖励物品不存在: ${item.itemId}`);
+      }
+      if (dropItem.disabled) {
+        throw new Error(`奖励物品已禁用: ${dropItem.drop_name}`);
+      }
+    }
   }
 
   private normalizeCode(code: string): string {

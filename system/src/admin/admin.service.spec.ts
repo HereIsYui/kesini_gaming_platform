@@ -101,7 +101,7 @@ describe("AdminService", () => {
     );
   });
 
-  it("后台选项会按轻量结构返回卡池、卡片和掉落物", async () => {
+  it("后台选项会按轻量结构返回卡池、卡片和物品", async () => {
     const poolRepository = createRepository({
       find: jest.fn().mockResolvedValue([
         { id: 1, pool_name: "常驻池", card_type: 0 },
@@ -114,7 +114,7 @@ describe("AdminService", () => {
     });
     const dropRepository = createRepository({
       find: jest.fn().mockResolvedValue([
-        { id: 20, drop_name: "测试碎片", drop_type: 0 },
+        { id: 20, drop_name: "测试碎片", drop_type: 0, disabled: false },
       ]),
     });
     const service = createService({
@@ -126,7 +126,16 @@ describe("AdminService", () => {
     await expect(service.getOptions()).resolves.toEqual({
       pools: [{ label: "常驻池", value: 1, type: 0 }],
       cards: [{ label: "测试卡", value: 10, rarity: "SSR", pool: 1 }],
-      dropItems: [{ label: "测试碎片", value: 20, type: 0 }],
+      dropItems: [
+        {
+          label: "测试碎片 · 卡片碎片",
+          value: 20,
+          type: 0,
+          typeLabel: "卡片碎片",
+          usageLabel: "用于卡片合成和分解产出",
+          disabled: false,
+        },
+      ],
     });
     expect(poolRepository.find).toHaveBeenCalledWith({
       order: { id: "DESC" },
@@ -166,7 +175,12 @@ describe("AdminService", () => {
     await expect(service.getUser(1)).resolves.toBe(user);
     await expect(service.getPool(2)).resolves.toBe(pool);
     await expect(service.getCard(3)).resolves.toBe(card);
-    await expect(service.getDropItem(4)).resolves.toBe(dropItem);
+    await expect(service.getDropItem(4)).resolves.toEqual({
+      ...dropItem,
+      disabled: false,
+      typeLabel: "其他",
+      usageLabel: "预留类型，需结合业务说明使用",
+    });
     expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
     expect(poolRepository.findOne).toHaveBeenCalledWith({ where: { id: 2 } });
     expect(cardRepository.findOne).toHaveBeenCalledWith({ where: { id: 3 } });
@@ -187,6 +201,57 @@ describe("AdminService", () => {
         },
       }),
     );
+  });
+
+  it("创建物品会校验类型并标准化用途参数", async () => {
+    const dropRepository = createRepository();
+    const service = createService({ drop: dropRepository });
+
+    await service.createDropItem({
+      drop_name: " SSR碎片 ",
+      drop_type: 0,
+      drop_item_type: 9,
+      drop_item_value: 99,
+    } as any);
+
+    expect(dropRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        drop_name: "SSR碎片",
+        drop_type: 0,
+        drop_item_type: 0,
+        drop_item_value: 0,
+        disabled: false,
+      }),
+    );
+    await expect(
+      service.createDropItem({ drop_name: "坏物品", drop_type: 99 } as any),
+    ).rejects.toThrow("物品类型无效");
+    await expect(
+      service.createDropItem({ drop_name: "   ", drop_type: 0 } as any),
+    ).rejects.toThrow("物品名称不能为空");
+  });
+
+  it("被引用的物品删除时改为禁用", async () => {
+    const item = { id: 7, drop_name: "通用碎片", drop_type: 0, disabled: false };
+    const dropRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(item),
+    });
+    const inventoryRepository = createRepository({
+      count: jest.fn().mockResolvedValue(1),
+    });
+    const service = createService({
+      drop: dropRepository,
+      inventory: inventoryRepository,
+    });
+
+    await expect(service.deleteDropItem(7)).resolves.toEqual({
+      deleted: false,
+      disabled: true,
+    });
+    expect(dropRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ disabled: true }),
+    );
+    expect(dropRepository.delete).not.toHaveBeenCalled();
   });
 
   it("更新抽卡配置会委托配置服务校验和保存", async () => {
@@ -220,7 +285,15 @@ describe("AdminService", () => {
 
   it("创建兑换码会标准化码值和奖励", async () => {
     const redeemCodeRepository = createRepository();
-    const service = createService({ redeemCode: redeemCodeRepository });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 1, drop_name: "测试道具", disabled: false },
+      ]),
+    });
+    const service = createService({
+      redeemCode: redeemCodeRepository,
+      drop: dropRepository,
+    });
 
     await service.createRedeemCode({
       code: " welcome ",
@@ -242,5 +315,22 @@ describe("AdminService", () => {
         },
       }),
     );
+  });
+
+  it("兑换码奖励不能选择已禁用物品", async () => {
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 1, drop_name: "旧道具", disabled: true },
+      ]),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await expect(
+      service.createRedeemCode({
+        code: "OLD",
+        name: "旧道具礼包",
+        rewards: { points: 0, items: [{ itemId: 1, num: 1 }] },
+      } as any),
+    ).rejects.toThrow("奖励物品已禁用");
   });
 });

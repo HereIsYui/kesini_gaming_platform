@@ -175,6 +175,10 @@ class DropItemDto {
   @Type(() => Number)
   @IsNumber()
   drop_item_value?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  disabled?: boolean;
 }
 
 class UserPatchDto {
@@ -425,7 +429,7 @@ export class AdminController {
   async listDropItems(@Query() query: PageDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.listDropItems(query),
-      "获取掉落物列表成功",
+      "获取物品列表成功",
     );
   }
 
@@ -435,7 +439,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.getDropItem(id),
-      "获取掉落物详情成功",
+      "获取物品详情成功",
     );
   }
 
@@ -443,7 +447,7 @@ export class AdminController {
   async createDropItem(@Body() body: DropItemDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.createDropItem(body),
-      "创建掉落物成功",
+      "创建物品成功",
     );
   }
 
@@ -454,7 +458,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.updateDropItem(id, body),
-      "更新掉落物成功",
+      "更新物品成功",
     );
   }
 
@@ -464,7 +468,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.deleteDropItem(id),
-      "删除掉落物成功",
+      "删除物品成功",
     );
   }
 

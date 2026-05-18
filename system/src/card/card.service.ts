@@ -872,7 +872,7 @@ export class CardService {
     const configuredIds = this.parseDropItemIds(card.drop_item);
     if (configuredIds.length > 0) {
       const configuredItems = await dropRepository.find({
-        where: { id: In(configuredIds), drop_type: 0 },
+        where: { id: In(configuredIds), drop_type: 0, disabled: false },
       });
       if (configuredItems.length > 0) {
         return configuredItems[0];
@@ -880,7 +880,7 @@ export class CardService {
     }
 
     const fragmentItem = await dropRepository.findOne({
-      where: { drop_type: 0 },
+      where: { drop_type: 0, disabled: false },
     });
     if (!fragmentItem) {
       throw new Error("卡片碎片物品不存在");

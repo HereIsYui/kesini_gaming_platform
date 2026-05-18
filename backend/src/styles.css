@@ -1082,6 +1082,10 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.full-width {
+  grid-column: 1 / -1;
+}
+
 .form-field > span {
   color: var(--foreground);
   font-size: 13px;
@@ -1138,6 +1142,32 @@ textarea {
 
 .reward-editor {
   margin: 0 16px 16px;
+}
+
+.item-template-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.item-hint,
+.form-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--card) 92%, var(--muted));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.form-note {
+  margin-top: 10px;
 }
 
 .reward-items {
