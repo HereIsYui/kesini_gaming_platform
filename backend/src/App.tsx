@@ -20,7 +20,15 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   clearToken,
   getApiBase,
@@ -30,9 +38,16 @@ import {
   setToken,
   toQuery,
 } from "./api";
-import type { DashboardData, FieldConfig, PageResult } from "./types";
+import type {
+  AdminMeResponse,
+  DashboardData,
+  FieldConfig,
+  LoginResponse,
+  PageResult,
+} from "./types";
 
 type Theme = "light" | "dark";
+const handledOpenidCallbacks = new Set<string>();
 
 const navItems = [
   { key: "dashboard", label: "总览", icon: Gauge },
@@ -107,7 +122,8 @@ const historyFields: FieldConfig[] = [
 
 export function App() {
   const [token, setLocalToken] = useState(getToken());
-  const [admin, setAdmin] = useState<Record<string, unknown> | null>(null);
+  const [admin, setAdmin] = useState<AdminMeResponse | null>(null);
+  const [authError, setAuthError] = useState("");
   const [active, setActive] = useState(
     window.location.hash.replace("#", "") || "dashboard",
   );
@@ -125,13 +141,28 @@ export function App() {
       setAdmin(null);
       return;
     }
-    request<Record<string, unknown>>("/admin/me")
-      .then(setAdmin)
-      .catch(() => {
+    setAuthError("");
+    request<AdminMeResponse>("/admin/me")
+      .then((data) => {
+        if (data.user?.is_admin !== true) {
+          throw new Error("当前账号没有后台管理权限");
+        }
+        setAdmin(data);
+      })
+      .catch((err) => {
         clearToken();
+        setAdmin(null);
         setLocalToken("");
+        setAuthError(
+          err instanceof Error ? err.message : "当前账号没有后台管理权限",
+        );
       });
   }, [token]);
+
+  const handleLogin = useCallback((nextToken: string) => {
+    setAuthError("");
+    setLocalToken(nextToken);
+  }, []);
 
   function switchPage(key: string) {
     setActive(key);
@@ -139,7 +170,22 @@ export function App() {
   }
 
   if (!token) {
-    return <LoginPage onLogin={(nextToken) => setLocalToken(nextToken)} />;
+    return <LoginPage initialError={authError} onLogin={handleLogin} />;
+  }
+
+  if (!admin) {
+    return (
+      <main className="login-screen">
+        <section className="login-panel">
+          <div className="brand-mark large">
+            <Shield size={28} />
+          </div>
+          <span className="eyebrow">权限校验</span>
+          <h1>正在验证后台权限</h1>
+          <p>正在确认当前账号是否具备后台管理权限。</p>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -285,33 +331,62 @@ export function App() {
   );
 }
 
-function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
+function LoginPage({
+  initialError,
+  onLogin,
+}: {
+  initialError?: string;
+  onLogin: (token: string) => void;
+}) {
   const [apiBase, setApiBaseState] = useState(getApiBase());
   const [manualToken, setManualToken] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError || "");
+  const handledCallbackRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (!params.has("openid.mode")) {
       return;
     }
+    const callbackKey = window.location.search;
+    if (handledCallbackRef.current || handledOpenidCallbacks.has(callbackKey)) {
+      return;
+    }
+    handledCallbackRef.current = true;
+    handledOpenidCallbacks.add(callbackKey);
 
     const callbackData: Record<string, string> = {};
     params.forEach((value, key) => {
       callbackData[key] = value;
     });
+    const clearCallbackUrl = () => {
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${window.location.hash}`,
+      );
+    };
+
     setLoading(true);
-    request<{ token: string }>("/apis/login", {
+    request<LoginResponse>("/apis/login", {
       method: "POST",
       body: JSON.stringify(callbackData),
     })
       .then((data) => {
+        if (data.user?.is_admin !== true) {
+          clearToken();
+          throw new Error("当前账号没有后台管理权限");
+        }
         setToken(data.token);
-        window.history.replaceState({}, "", window.location.pathname);
+        clearCallbackUrl();
         onLogin(data.token);
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        clearToken();
+        clearCallbackUrl();
+        setError(err instanceof Error ? err.message : "登录失败");
+      })
       .finally(() => setLoading(false));
   }, [onLogin]);
 
@@ -390,7 +465,7 @@ function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
   );
 }
 
-function Dashboard({ admin }: { admin: Record<string, unknown> | null }) {
+function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
 

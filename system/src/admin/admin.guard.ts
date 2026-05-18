@@ -7,14 +7,12 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { ConfigurationService } from "src/config/configuration.service";
 import { User } from "src/entity/user.entity";
 
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
-    private readonly configService: ConfigurationService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,9 +28,7 @@ export class AdminGuard implements CanActivate {
       throw new UnauthorizedException("用户不存在");
     }
 
-    const isAdmin =
-      user.is_admin === true || this.configService.adminUids.includes(uid);
-    if (!isAdmin) {
+    if (user.is_admin !== true) {
       throw new ForbiddenException("缺少后台管理权限");
     }
 

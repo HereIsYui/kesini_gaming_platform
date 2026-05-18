@@ -33,8 +33,10 @@ BASE_URL=http://localhost:3000 # 基础URL
 ```bash
 JWT_SECRET=your-secret-key   # JWT密钥（生产环境必须配置）
 JWT_EXPIRES_IN=7d           # JWT过期时间
-ADMIN_UIDS=123456,789012    # 后台管理员UID白名单
+ADMIN_UIDS=123456,789012    # 保留配置，不作为后台管理权限放行依据
 ```
+
+后台管理权限以用户表 `is_admin=true` 为准。
 
 ### MySQL数据库配置
 

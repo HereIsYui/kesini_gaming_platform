@@ -11,6 +11,22 @@ export interface PageResult<T> {
   pageSize: number;
 }
 
+export interface AdminUser {
+  uid: string;
+  is_admin: boolean;
+  [key: string]: unknown;
+}
+
+export interface LoginResponse {
+  user: AdminUser;
+  token: string;
+}
+
+export interface AdminMeResponse {
+  user: AdminUser | null;
+  isAdmin: boolean;
+}
+
 export interface DashboardData {
   counters: {
     userCount: number;

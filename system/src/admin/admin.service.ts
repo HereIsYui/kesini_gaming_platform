@@ -48,7 +48,7 @@ export class AdminService {
     const user = await this.userRepository.findOne({ where: { uid } });
     return {
       user,
-      adminByEnv: this.configService.adminUids.includes(uid),
+      isAdmin: user?.is_admin === true,
     };
   }
 

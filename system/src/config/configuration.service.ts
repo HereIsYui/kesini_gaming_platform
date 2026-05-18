@@ -41,7 +41,7 @@ export class ConfigurationService {
     };
   }
 
-  // 后台管理员白名单
+  // 管理员UID配置保留展示，后台权限只以用户 is_admin 字段为准
   get adminUids(): string[] {
     return (process.env.ADMIN_UIDS || "")
       .split(",")
