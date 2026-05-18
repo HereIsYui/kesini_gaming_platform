@@ -18,6 +18,7 @@ import {
   WandSparkles,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import {
   clearToken,
   getApiBase,
@@ -57,25 +58,27 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "result", label: "结果", icon: Ticket },
-  { key: "collection", label: "收藏", icon: Boxes },
+  { key: "bag", label: "背包", icon: Boxes },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
+const DRAW_RESULTS_KEY = "kesini_website_last_results";
 
 const apiBase = ref(getApiBase());
+const route = useRoute();
+const router = useRouter();
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
-const activeSection = ref<SectionKey>("draw");
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
 const exchangeItems = ref<ExchangeShopItem[]>([]);
-const lastResults = ref<GachaResult[]>([]);
+const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
 const cardPage = ref(1);
@@ -96,6 +99,11 @@ const busy = reactive({
 let feedbackTimer: number | undefined;
 
 const isAuthed = computed(() => Boolean(token.value));
+const activeSection = computed<SectionKey>(() => {
+  return sectionItems.some((item) => item.key === route.name)
+    ? (route.name as SectionKey)
+    : "draw";
+});
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
 );
@@ -145,6 +153,24 @@ function notify(type: FeedbackType, text: string) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
+}
+
+function getStoredDrawResults(): GachaResult[] {
+  const raw = localStorage.getItem(DRAW_RESULTS_KEY);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    localStorage.removeItem(DRAW_RESULTS_KEY);
+    return [];
+  }
+}
+
+function setStoredDrawResults(results: GachaResult[]) {
+  localStorage.setItem(DRAW_RESULTS_KEY, JSON.stringify(results));
 }
 
 function saveApiBase() {
@@ -227,6 +253,7 @@ function logout() {
   userCards.value = null;
   exchangeItems.value = [];
   lastResults.value = [];
+  localStorage.removeItem(DRAW_RESULTS_KEY);
   notify("info", "已退出登录");
 }
 
@@ -337,7 +364,8 @@ async function performDraw(mode: "once" | "ten") {
       body: JSON.stringify(body),
     });
     lastResults.value = Array.isArray(data) ? data : [data];
-    activeSection.value = "result";
+    setStoredDrawResults(lastResults.value);
+    await router.push({ name: "result" });
     notify("success", `${lastResults.value.length} 次抽取完成`);
     await loadPrivateData();
   } catch (error) {
@@ -430,15 +458,6 @@ async function claimExchange(item: ExchangeShopItem) {
   } finally {
     busy.shop = false;
   }
-}
-
-function switchSection(key: SectionKey) {
-  activeSection.value = key;
-  window.setTimeout(() => {
-    document
-      .querySelector(`[data-section="${key}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 30);
 }
 
 function changeCardPage(delta: number) {
@@ -534,25 +553,24 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
     </div>
 
     <header class="topbar">
-      <button class="brand" type="button" @click="switchSection('draw')">
+      <RouterLink class="brand" :to="{ name: 'draw' }">
         <span class="brand-mark"><Sparkles :size="20" /></span>
         <span>
           <strong>Kesini 抽卡站</strong>
           <small>星穹调度台</small>
         </span>
-      </button>
+      </RouterLink>
 
       <nav class="desktop-nav" aria-label="页面导航">
-        <button
+        <RouterLink
           v-for="item in sectionItems"
           :key="item.key"
-          type="button"
+          :to="{ name: item.key }"
           :class="{ active: activeSection === item.key }"
-          @click="switchSection(item.key)"
         >
           <component :is="item.icon" :size="16" />
           {{ item.label }}
-        </button>
+        </RouterLink>
       </nav>
 
       <div class="top-actions">
@@ -568,7 +586,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
     </header>
 
     <main class="page">
-      <section class="hero-grid" data-section="draw">
+      <section v-if="activeSection === 'draw'" class="hero-grid" data-section="draw">
         <div class="panel draw-panel">
           <div class="panel-heading">
             <div>
@@ -690,7 +708,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </aside>
       </section>
 
-      <section class="panel result-panel" data-section="result">
+      <section v-if="activeSection === 'result'" class="panel result-panel" data-section="result">
         <div class="section-head">
           <div>
             <p class="eyebrow">抽取结果</p>
@@ -732,12 +750,12 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </div>
       </section>
 
-      <section v-show="activeSection === 'collection'" class="collection-grid" data-section="collection">
+      <section v-if="activeSection === 'bag'" class="collection-grid" data-section="bag">
         <div class="panel collection-panel">
           <div class="section-head">
             <div>
-              <p class="eyebrow">我的收藏</p>
-              <h2>已拥有卡片</h2>
+              <p class="eyebrow">玩家背包</p>
+              <h2>卡片与物品</h2>
             </div>
             <div class="filter-row">
               <select v-model="rarityFilter" @change="cardPage = 1; loadUserCards()">
@@ -754,7 +772,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
 
           <div v-if="!isAuthed" class="empty-state">
             <UserRound :size="30" />
-            <strong>登录后查看收藏</strong>
+            <strong>登录后查看背包</strong>
             <span>你的卡片、背包和抽卡统计会在登录后加载。</span>
           </div>
           <div v-else-if="busy.assets" class="skeleton-grid">
@@ -816,7 +834,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </aside>
       </section>
 
-      <section v-show="activeSection === 'collection'" class="panel catalog-panel">
+      <section v-if="activeSection === 'bag'" class="panel catalog-panel">
         <div class="section-head">
           <div>
             <p class="eyebrow">卡池图鉴</p>
@@ -846,7 +864,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </div>
       </section>
 
-      <section v-show="activeSection === 'redeem'" class="redeem-grid" data-section="redeem">
+      <section v-if="activeSection === 'redeem'" class="redeem-grid" data-section="redeem">
         <div class="panel redeem-panel">
           <div class="section-head">
             <div>
@@ -934,7 +952,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </div>
       </section>
 
-      <section v-show="activeSection === 'draw'" class="panel recent-panel">
+      <section v-if="activeSection === 'draw'" class="panel recent-panel">
         <div class="section-head">
           <div>
             <p class="eyebrow">最近记录</p>
@@ -954,16 +972,15 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
     </main>
 
     <nav class="mobile-nav" aria-label="移动端导航">
-      <button
+      <RouterLink
         v-for="item in sectionItems"
         :key="item.key"
-        type="button"
+        :to="{ name: item.key }"
         :class="{ active: activeSection === item.key }"
-        @click="switchSection(item.key)"
       >
         <component :is="item.icon" :size="18" />
         <span>{{ item.label }}</span>
-      </button>
+      </RouterLink>
     </nav>
 
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">

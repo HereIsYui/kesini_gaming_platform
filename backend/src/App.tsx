@@ -197,10 +197,11 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
     { key: "card_name", label: "卡片名称", placeholder: "例如：星辉少女" },
     {
       key: "card_level",
-      label: "稀有度",
-      type: "select",
+      label: "可出现稀有度",
+      type: "multiSelect",
       options: rarityOptions,
-      helper: "卡片可出现稀有度。多稀有度卡片可后续在详情中维护为逗号格式。",
+      fullWidth: true,
+      helper: "可多选，保存时会按 N/R/SR/SSR/UR 顺序写入配置。",
     },
     { key: "pool", label: "所属卡池", type: "select", options: poolOptions },
     {
@@ -1176,7 +1177,11 @@ function EditModal({
       (result, field) => {
         const value = getValue(initial, field.key) ?? "";
         result[field.key] =
-          field.key === "drop_item" ? normalizeDropItemSelectValue(value) : value;
+          field.type === "multiSelect"
+            ? parseMultiSelectValue(value)
+            : field.key === "drop_item"
+              ? normalizeDropItemSelectValue(value)
+              : value;
         return result;
       },
       {} as Record<string, any>,
@@ -1190,7 +1195,7 @@ function EditModal({
     setLoading(true);
     setError("");
     try {
-      await onSubmit(values);
+      await onSubmit(serializeFormValues(fields, values));
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
       setLoading(false);
@@ -1233,6 +1238,36 @@ function EditModal({
                       })
                     }
                   />
+                ) : field.type === "multiSelect" ? (
+                  <div className="checkbox-grid" role="group" aria-label={field.label}>
+                    {(fieldOptions || []).map((option) => {
+                      const selected = Array.isArray(values[field.key])
+                        ? values[field.key].map(String)
+                        : [];
+                      const optionValue = String(option.value);
+                      return (
+                        <label className="check-option" key={optionValue}>
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(optionValue)}
+                            disabled={option.disabled}
+                            onChange={(event) =>
+                              setValues({
+                                ...values,
+                                [field.key]: toggleMultiSelectValue(
+                                  selected,
+                                  optionValue,
+                                  event.target.checked,
+                                  field,
+                                ),
+                              })
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 ) : shouldRenderSelect ? (
                   <select
                     value={String(values[field.key] ?? "")}
@@ -3249,6 +3284,53 @@ function normalizeDropItemSelectValue(value: unknown) {
     .split(";")[0]
     .split(",")[0]
     .trim();
+}
+
+function parseMultiSelectValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map(String).filter(Boolean);
+  }
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function toggleMultiSelectValue(
+  current: string[],
+  value: string,
+  checked: boolean,
+  field: FieldConfig,
+) {
+  const selected = new Set(current);
+  if (checked) {
+    selected.add(value);
+  } else {
+    selected.delete(value);
+  }
+  const orderedOptions = (field.options || []).map((option) =>
+    String(option.value),
+  );
+  return orderedOptions.filter((option) => selected.has(option));
+}
+
+function serializeFormValues(
+  fields: FieldConfig[],
+  values: Record<string, any>,
+) {
+  return fields.reduce<Record<string, any>>((result, field) => {
+    const value = values[field.key];
+    if (field.type === "multiSelect") {
+      const selected = Array.isArray(value) ? value.map(String) : [];
+      if (selected.length === 0) {
+        throw new Error(`${field.label}不能为空`);
+      }
+      result[field.key] = selected.join(",");
+    } else {
+      result[field.key] = value;
+    }
+    return result;
+  }, {});
 }
 
 function updateRewardItem(

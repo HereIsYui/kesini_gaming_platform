@@ -1078,6 +1078,34 @@ textarea {
   min-width: 0;
 }
 
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.check-option {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  color: var(--foreground);
+  background: var(--card);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.check-option input {
+  width: 15px;
+  min-height: auto;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
 .form-field.full-width {
   grid-column: 1 / -1;
 }

@@ -40,6 +40,7 @@ const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
   2: { label: "普通道具", usage: "可放入背包，也可作为兑换码奖励" },
   3: { label: "其他", usage: "预留类型，需结合业务说明使用" },
 };
+const CARD_RARITIES = ["N", "R", "SR", "SSR", "UR"];
 
 @Injectable()
 export class AdminService {
@@ -230,10 +231,9 @@ export class AdminService {
 
   async createCard(body: Partial<CardItem>) {
     this.assertRequired(body.card_name, "卡片名称不能为空");
-    this.assertRequired(body.card_level, "卡片稀有度不能为空");
     const card = this.cardRepository.create({
       card_name: body.card_name,
-      card_level: body.card_level,
+      card_level: this.normalizeCardLevels(body.card_level),
       drop_item: body.drop_item || "",
       card_desc: body.card_desc || "",
       card_type: Number(body.card_type || 0),
@@ -244,17 +244,18 @@ export class AdminService {
 
   async updateCard(id: number, body: Partial<CardItem>) {
     const card = await this.mustFind(this.cardRepository, id, "卡片不存在");
-    Object.assign(
-      card,
-      this.pickDefined(body, [
-        "card_name",
-        "card_level",
-        "drop_item",
-        "card_desc",
-        "card_type",
-        "pool",
-      ]),
-    );
+    const updates = this.pickDefined(body, [
+      "card_name",
+      "card_level",
+      "drop_item",
+      "card_desc",
+      "card_type",
+      "pool",
+    ]);
+    if (updates.card_level !== undefined) {
+      updates.card_level = this.normalizeCardLevels(updates.card_level);
+    }
+    Object.assign(card, updates);
     return this.cardRepository.save(card);
   }
 
@@ -888,6 +889,25 @@ export class AdminService {
       drop_item_type: dropType === 2 || dropType === 3 ? itemType : 0,
       drop_item_value: dropType === 2 || dropType === 3 ? itemValue : 0,
     };
+  }
+
+  private normalizeCardLevels(value: unknown): string {
+    const selected = String(value || "")
+      .split(",")
+      .map((level) => level.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (selected.length === 0) {
+      throw new Error("卡片稀有度不能为空");
+    }
+
+    const invalid = selected.find((level) => !CARD_RARITIES.includes(level));
+    if (invalid) {
+      throw new Error(`卡片稀有度不支持: ${invalid}`);
+    }
+
+    const selectedSet = new Set(selected);
+    return CARD_RARITIES.filter((level) => selectedSet.has(level)).join(",");
   }
 
   private decorateNullableDropItem(item: DropItem | null) {

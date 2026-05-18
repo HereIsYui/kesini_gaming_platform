@@ -97,7 +97,7 @@ export interface GachaConfigData {
 export interface FieldConfig {
   key: string;
   label: string;
-  type?: "text" | "number" | "boolean" | "textarea" | "select";
+  type?: "text" | "number" | "boolean" | "textarea" | "select" | "multiSelect";
   options?: SelectOption[];
   helper?: string;
   fullWidth?: boolean;

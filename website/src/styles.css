@@ -193,8 +193,10 @@ option {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  min-height: 44px;
   min-width: 0;
   color: var(--text);
+  text-decoration: none;
   text-align: left;
   background: transparent;
 }
@@ -232,21 +234,23 @@ option {
   gap: 8px;
 }
 
-.desktop-nav button,
-.mobile-nav button {
+.desktop-nav a,
+.mobile-nav a {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 7px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   color: var(--text-muted);
+  text-decoration: none;
   background: transparent;
   padding: 0 14px;
 }
 
-.desktop-nav button.active,
-.mobile-nav button.active {
+.desktop-nav a.active,
+.mobile-nav a.active {
   border-color: var(--border-strong);
   color: var(--text);
   background: rgba(84, 216, 255, 0.13);
@@ -1213,7 +1217,7 @@ h3 {
     backdrop-filter: blur(18px);
   }
 
-  .mobile-nav button {
+  .mobile-nav a {
     min-width: 0;
     flex-direction: column;
     gap: 3px;

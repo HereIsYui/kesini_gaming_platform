@@ -81,6 +81,51 @@ describe("AdminService", () => {
     );
   });
 
+  it("创建卡片会标准化多稀有度配置", async () => {
+    const cardRepository = createRepository();
+    const service = createService({ card: cardRepository });
+
+    await service.createCard({
+      card_name: "多稀有度卡",
+      card_level: "SSR,N,R,N",
+      pool: 1,
+    } as any);
+
+    expect(cardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_name: "多稀有度卡",
+        card_level: "N,R,SSR",
+      }),
+    );
+  });
+
+  it("创建卡片会拒绝空稀有度或非法稀有度", async () => {
+    const service = createService();
+
+    await expect(
+      service.createCard({ card_name: "空稀有度", card_level: "" } as any),
+    ).rejects.toThrow("卡片稀有度不能为空");
+    await expect(
+      service.createCard({ card_name: "非法稀有度", card_level: "SSR,X" } as any),
+    ).rejects.toThrow("卡片稀有度不支持: X");
+  });
+
+  it("更新卡片会标准化多稀有度配置", async () => {
+    const card = { id: 10, card_name: "测试卡", card_level: "N" };
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const service = createService({ card: cardRepository });
+
+    await service.updateCard(10, { card_level: "UR,SR,SR" } as any);
+
+    expect(cardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_level: "SR,UR",
+      }),
+    );
+  });
+
   it("更新用户只保存允许变更的字段", async () => {
     const user = { id: 1, uid: "u1", point: 0, is_admin: false };
     const userRepository = createRepository({
