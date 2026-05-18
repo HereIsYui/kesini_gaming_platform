@@ -97,6 +97,37 @@ export class AdminService {
     };
   }
 
+  async getOptions() {
+    const [pools, cards, dropItems] = await Promise.all([
+      this.poolRepository.find({ order: { id: "DESC" } as any }),
+      this.cardRepository.find({ order: { id: "DESC" } as any }),
+      this.dropRepository.find({ order: { id: "DESC" } as any }),
+    ]);
+
+    return {
+      pools: pools.map((pool) => ({
+        label: pool.pool_name,
+        value: pool.id,
+        type: pool.card_type,
+      })),
+      cards: cards.map((card) => ({
+        label: card.card_name,
+        value: card.id,
+        rarity: card.card_level,
+        pool: card.pool,
+      })),
+      dropItems: dropItems.map((item) => ({
+        label: item.drop_name,
+        value: item.id,
+        type: item.drop_type,
+      })),
+    };
+  }
+
+  async getPool(id: number) {
+    return this.mustFind(this.poolRepository, id, "卡池不存在");
+  }
+
   async listPools(query: PageQuery) {
     const { page, pageSize } = this.normalizePage(query);
     const where = query.keyword
@@ -165,6 +196,10 @@ export class AdminService {
     };
   }
 
+  async getCard(id: number) {
+    return this.mustFind(this.cardRepository, id, "卡片不存在");
+  }
+
   async createCard(body: Partial<CardItem>) {
     this.assertRequired(body.card_name, "卡片名称不能为空");
     this.assertRequired(body.card_level, "卡片稀有度不能为空");
@@ -211,6 +246,10 @@ export class AdminService {
     return this.findAndPage(this.dropRepository, where, page, pageSize);
   }
 
+  async getDropItem(id: number) {
+    return this.mustFind(this.dropRepository, id, "掉落物不存在");
+  }
+
   async createDropItem(body: Partial<DropItem>) {
     this.assertRequired(body.drop_name, "道具名称不能为空");
     const item = this.dropRepository.create({
@@ -253,6 +292,10 @@ export class AdminService {
         ]
       : {};
     return this.findAndPage(this.userRepository, where, page, pageSize);
+  }
+
+  async getUser(id: number) {
+    return this.mustFind(this.userRepository, id, "用户不存在");
   }
 
   async updateUser(id: number, body: Partial<User>) {

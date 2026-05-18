@@ -240,11 +240,29 @@ export class AdminController {
     );
   }
 
+  @Get("options")
+  async options(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getOptions(),
+      "获取后台选项成功",
+    );
+  }
+
   @Get("pools")
   async listPools(@Query() query: PageDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.listPools(query),
       "获取卡池列表成功",
+    );
+  }
+
+  @Get("pools/:id")
+  async getPool(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getPool(id),
+      "获取卡池详情成功",
     );
   }
 
@@ -285,6 +303,16 @@ export class AdminController {
     );
   }
 
+  @Get("cards/:id")
+  async getCard(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getCard(id),
+      "获取卡片详情成功",
+    );
+  }
+
   @Post("cards")
   async createCard(@Body() body: CardDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
@@ -322,6 +350,16 @@ export class AdminController {
     );
   }
 
+  @Get("drop-items/:id")
+  async getDropItem(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getDropItem(id),
+      "获取掉落物详情成功",
+    );
+  }
+
   @Post("drop-items")
   async createDropItem(@Body() body: DropItemDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
@@ -356,6 +394,16 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listUsers(query),
       "获取用户列表成功",
+    );
+  }
+
+  @Get("users/:id")
+  async getUser(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getUser(id),
+      "获取用户详情成功",
     );
   }
 

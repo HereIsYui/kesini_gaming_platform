@@ -3,14 +3,16 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
-  Coins,
   Database,
+  Download,
+  Eye,
   Gauge,
   History,
   Layers,
   LogOut,
   Moon,
   Package,
+  RefreshCw,
   Search,
   Settings,
   Shield,
@@ -20,6 +22,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   FormEvent,
   ReactNode,
@@ -40,10 +43,14 @@ import {
 } from "./api";
 import type {
   AdminMeResponse,
+  AdminOptions,
   DashboardData,
   FieldConfig,
+  GachaConfigData,
+  GachaPoolConfig,
   LoginResponse,
   PageResult,
+  SelectOption,
 } from "./types";
 
 type Theme = "light" | "dark";
@@ -61,30 +68,126 @@ const navItems = [
   { key: "config", label: "配置", icon: Settings },
 ];
 
-const poolFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
-  { key: "pool_name", label: "卡池名称" },
-  { key: "card_desc", label: "描述", type: "textarea" },
-  { key: "card_type", label: "类型", type: "number" },
+const rarityOptions: SelectOption[] = [
+  { label: "N", value: "N" },
+  { label: "R", value: "R" },
+  { label: "SR", value: "SR" },
+  { label: "SSR", value: "SSR" },
+  { label: "UR", value: "UR" },
 ];
 
-const cardFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
-  { key: "card_name", label: "卡片名称" },
-  { key: "card_level", label: "稀有度" },
-  { key: "pool", label: "卡池ID", type: "number" },
-  { key: "card_type", label: "类型", type: "number" },
-  { key: "card_desc", label: "描述", type: "textarea" },
-  { key: "drop_item", label: "掉落配置" },
+const booleanOptions: SelectOption[] = [
+  { label: "否", value: false },
+  { label: "是", value: true },
 ];
+
+const poolTypeOptions: SelectOption[] = [
+  { label: "常驻卡池", value: 0 },
+  { label: "活动卡池", value: 1 },
+  { label: "限定卡池", value: 2 },
+];
+
+const cardTypeOptions: SelectOption[] = [
+  { label: "普通卡", value: 0 },
+  { label: "限定卡", value: 1 },
+  { label: "纪念卡", value: 2 },
+  { label: "活动卡", value: 3 },
+  { label: "隐藏卡", value: 4 },
+];
+
+const dropTypeOptions: SelectOption[] = [
+  { label: "卡片碎片", value: 0 },
+  { label: "积分", value: 1 },
+  { label: "道具", value: 2 },
+  { label: "其他", value: 3 },
+];
+
+const poolFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "pool_name", label: "卡池名称", placeholder: "例如：限定卡池" },
+  {
+    key: "card_desc",
+    label: "描述",
+    type: "textarea",
+    fullWidth: true,
+    placeholder: "填写卡池说明",
+  },
+  {
+    key: "card_type",
+    label: "类型",
+    type: "select",
+    options: poolTypeOptions,
+  },
+];
+
+function createCardFields(options: AdminOptions | null): FieldConfig[] {
+  const poolOptions =
+    options?.pools?.length
+      ? options.pools
+      : [{ label: "默认卡池 #1", value: 1 }];
+
+  return [
+    { key: "id", label: "ID", readonly: true },
+    { key: "card_name", label: "卡片名称", placeholder: "例如：星辉少女" },
+    {
+      key: "card_level",
+      label: "稀有度",
+      type: "select",
+      options: rarityOptions,
+      helper: "卡片可出现稀有度。多稀有度卡片可后续在详情中维护为逗号格式。",
+    },
+    { key: "pool", label: "所属卡池", type: "select", options: poolOptions },
+    {
+      key: "card_type",
+      label: "类型",
+      type: "select",
+      options: cardTypeOptions,
+    },
+    {
+      key: "card_desc",
+      label: "描述",
+      type: "textarea",
+      fullWidth: true,
+      placeholder: "填写卡片说明",
+    },
+    {
+      key: "drop_item",
+      label: "掉落配置",
+      fullWidth: true,
+      placeholder: "item_001,0.3,2;item_002,0.7,1",
+      helper: "保留原有格式：道具ID,概率,最大数量；多项用英文分号分隔。",
+    },
+  ];
+}
 
 const dropFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "drop_name", label: "道具名称" },
-  { key: "drop_desc", label: "描述", type: "textarea" },
-  { key: "drop_type", label: "掉落类型", type: "number" },
-  { key: "drop_item_type", label: "道具类型", type: "number" },
-  { key: "drop_item_value", label: "道具值", type: "number" },
+  { key: "drop_name", label: "道具名称", placeholder: "例如：SSR碎片" },
+  {
+    key: "drop_desc",
+    label: "描述",
+    type: "textarea",
+    fullWidth: true,
+    placeholder: "填写道具说明",
+  },
+  {
+    key: "drop_type",
+    label: "掉落类型",
+    type: "select",
+    options: dropTypeOptions,
+  },
+  {
+    key: "drop_item_type",
+    label: "道具类型",
+    type: "number",
+    helper: "仅 drop_type 为道具时有效。",
+  },
+  {
+    key: "drop_item_value",
+    label: "道具值",
+    type: "number",
+    helper: "非道具类型可用于积分或碎片数值。",
+  },
 ];
 
 const userFields: FieldConfig[] = [
@@ -93,7 +196,12 @@ const userFields: FieldConfig[] = [
   { key: "name", label: "用户名" },
   { key: "nickname", label: "昵称" },
   { key: "point", label: "积分", type: "number" },
-  { key: "is_admin", label: "管理员", type: "boolean" },
+  {
+    key: "is_admin",
+    label: "管理员",
+    type: "select",
+    options: booleanOptions,
+  },
 ];
 
 const inventoryFields: FieldConfig[] = [
@@ -123,6 +231,7 @@ const historyFields: FieldConfig[] = [
 export function App() {
   const [token, setLocalToken] = useState(getToken());
   const [admin, setAdmin] = useState<AdminMeResponse | null>(null);
+  const [adminOptions, setAdminOptions] = useState<AdminOptions | null>(null);
   const [authError, setAuthError] = useState("");
   const [active, setActive] = useState(
     window.location.hash.replace("#", "") || "dashboard",
@@ -158,6 +267,21 @@ export function App() {
         );
       });
   }, [token]);
+
+  useEffect(() => {
+    if (!admin) {
+      setAdminOptions(null);
+      return;
+    }
+    request<AdminOptions>("/admin/options")
+      .then(setAdminOptions)
+      .catch(() => setAdminOptions(null));
+  }, [admin]);
+
+  const cardFields = useMemo(
+    () => createCardFields(adminOptions),
+    [adminOptions],
+  );
 
   const handleLogin = useCallback((nextToken: string) => {
     setAuthError("");
@@ -258,6 +382,7 @@ export function App() {
               endpoint="/admin/users"
               fields={userFields}
               editable
+              detailFetchable
               searchPlaceholder="搜索 UID、用户名或昵称"
             />
           )}
@@ -269,6 +394,7 @@ export function App() {
               editable
               creatable
               deletable
+              detailFetchable
               searchPlaceholder="搜索卡池名称或描述"
             />
           )}
@@ -280,6 +406,7 @@ export function App() {
               editable
               creatable
               deletable
+              detailFetchable
               searchPlaceholder="搜索卡片名称"
               extraFilters={<RarityFilter />}
             />
@@ -292,6 +419,7 @@ export function App() {
               editable
               creatable
               deletable
+              detailFetchable
               searchPlaceholder="搜索道具名称或描述"
             />
           )}
@@ -469,50 +597,77 @@ function LoginPage({
 function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
     request<DashboardData>("/admin/dashboard")
       .then(setData)
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   if (error) {
-    return <StateBox type="error">{error}</StateBox>;
+    return (
+      <Panel
+        title="总览"
+        icon={<Gauge size={18} />}
+        action={<RefreshButton onClick={load} loading={loading} />}
+      >
+        <StateBox type="error">{error}</StateBox>
+      </Panel>
+    );
   }
   if (!data) {
-    return <StateBox>正在加载总览数据...</StateBox>;
+    return (
+      <Panel title="总览" icon={<Gauge size={18} />}>
+        <StateBox>正在加载总览数据...</StateBox>
+      </Panel>
+    );
   }
 
-  const stats = [
-    ["用户", data.counters.userCount, Users],
-    ["卡片", data.counters.cardCount, Sparkles],
-    ["卡池", data.counters.poolCount, Layers],
-    ["总抽数", data.counters.totalDraws, Activity],
+  const stats: Array<{ label: string; value: number; icon: LucideIcon }> = [
+    { label: "用户", value: data.counters.userCount, icon: Users },
+    { label: "卡片", value: data.counters.cardCount, icon: Sparkles },
+    { label: "卡池", value: data.counters.poolCount, icon: Layers },
+    { label: "总抽数", value: data.counters.totalDraws, icon: Activity },
   ];
+  const rarityEntries = Object.entries(data.rarityTotals);
+  const totalRarity = rarityEntries.reduce((sum, [, value]) => sum + value, 0);
   const maxRarity = Math.max(...Object.values(data.rarityTotals), 1);
 
   return (
     <div className="page-stack">
       <div className="stat-grid">
-        {stats.map(([label, value, Icon]) => (
-          <article className="stat-card" key={String(label)}>
-            <div className="stat-icon">
-              <Icon size={20} />
-            </div>
-            <div>
-              <span>{label as string}</span>
-              <strong>{String(value)}</strong>
-            </div>
-          </article>
-        ))}
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <article className="stat-card" key={stat.label}>
+              <div className="stat-icon">
+                <Icon size={20} />
+              </div>
+              <div>
+                <span>{stat.label}</span>
+                <strong>{String(stat.value)}</strong>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       <div className="dashboard-grid">
         <Panel title="稀有度分布" icon={<Sparkles size={18} />}>
           <div className="rarity-bars">
-            {Object.entries(data.rarityTotals).map(([rarity, value]) => (
+            {rarityEntries.map(([rarity, value]) => (
               <div className="rarity-row" key={rarity}>
-                <span>{rarity}</span>
+                <span>
+                  <Badge>{rarity}</Badge>
+                </span>
                 <div>
                   <i
                     style={{
@@ -520,26 +675,57 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
                     }}
                   />
                 </div>
-                <strong>{value}</strong>
+                <strong>
+                  {value}
+                  <small>
+                    {totalRarity
+                      ? `${((value / totalRarity) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </strong>
               </div>
             ))}
           </div>
         </Panel>
 
-        <Panel title="最近抽卡" icon={<History size={18} />}>
-          <div className="activity-list">
-            {data.recentHistories.map((history, index) => (
-              <div key={String(history.id || index)}>
-                <span>UID {String(history.uid || "-")}</span>
-                <strong>{String(history.count || 0)} 抽</strong>
-              </div>
-            ))}
-          </div>
+        <Panel
+          title="最近抽卡"
+          icon={<History size={18} />}
+          action={<RefreshButton onClick={load} loading={loading} />}
+        >
+          {data.recentHistories.length ? (
+            <div className="activity-table">
+              {data.recentHistories.map((history, index) => (
+                <div key={String(history.id || index)}>
+                  <span className="mono">UID {String(history.uid || "-")}</span>
+                  <strong>{String(history.count || 0)} 抽</strong>
+                  <span>{summarizeRarities(String(history.card_levels || ""))}</span>
+                  <time>{formatDate(history.createdAt)}</time>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <StateBox>暂无抽卡记录</StateBox>
+          )}
         </Panel>
       </div>
 
       <Panel title="当前管理员" icon={<Shield size={18} />}>
-        <pre className="code-block">{JSON.stringify(admin, null, 2)}</pre>
+        <div className="admin-card">
+          <div className="admin-avatar">
+            {String(admin?.user?.nickname || admin?.user?.name || "管").slice(
+              0,
+              1,
+            )}
+          </div>
+          <DescriptionList
+            items={[
+              ["UID", admin?.user?.uid || "-"],
+              ["昵称", admin?.user?.nickname || admin?.user?.name || "-"],
+              ["管理员状态", admin?.user?.is_admin ? "已授权" : "未授权"],
+            ]}
+          />
+        </div>
       </Panel>
     </div>
   );
@@ -552,6 +738,7 @@ function AdminTable({
   editable,
   creatable,
   deletable,
+  detailFetchable,
   searchPlaceholder,
   keywordParam = "keyword",
   extraFilters,
@@ -562,6 +749,7 @@ function AdminTable({
   editable?: boolean;
   creatable?: boolean;
   deletable?: boolean;
+  detailFetchable?: boolean;
   searchPlaceholder?: string;
   keywordParam?: string;
   extraFilters?: ReactNode;
@@ -574,8 +762,11 @@ function AdminTable({
     null,
   );
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Record<string, any> | null>(null);
   const [creating, setCreating] = useState(false);
+  const [detail, setDetail] = useState<Record<string, any> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const filters = useMemo(
     () => ({
@@ -587,14 +778,18 @@ function AdminTable({
     [page, pageSize, keyword, keywordParam, rarity],
   );
 
-  function load() {
+  const load = useCallback(() => {
     setError("");
+    setLoading(true);
     request<PageResult<Record<string, any>>>(`${endpoint}${toQuery(filters)}`)
       .then(setData)
-      .catch((err) => setError(err.message));
-  }
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [endpoint, filters]);
 
-  useEffect(load, [endpoint, filters]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function saveForm(values: Record<string, any>) {
     const current = editing;
@@ -617,6 +812,28 @@ function AdminTable({
     load();
   }
 
+  async function openDetail(row: Record<string, any>) {
+    setDetail(row);
+    if (!detailFetchable) {
+      return;
+    }
+    setDetailLoading(true);
+    try {
+      const nextDetail = await request<Record<string, any>>(
+        `${endpoint}/${row.id}`,
+      );
+      setDetail(nextDetail);
+    } catch {
+      setDetail(row);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function exportCurrentPage() {
+    exportRowsToCsv(title, rows, fields);
+  }
+
   const rows = data?.list || [];
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total / data.pageSize))
@@ -626,17 +843,6 @@ function AdminTable({
     <Panel
       title={title}
       icon={<Database size={18} />}
-      action={
-        creatable ? (
-          <button
-            className="primary-button compact"
-            type="button"
-            onClick={() => setCreating(true)}
-          >
-            新增
-          </button>
-        ) : null
-      }
     >
       <div className="table-toolbar">
         <label className="search-box">
@@ -666,10 +872,39 @@ function AdminTable({
             <option value="UR">UR</option>
           </select>
         )}
+        <div className="toolbar-actions">
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={load}
+            disabled={loading}
+          >
+            <RefreshCw size={15} />
+            刷新
+          </button>
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={exportCurrentPage}
+            disabled={!rows.length}
+          >
+            <Download size={15} />
+            导出CSV
+          </button>
+          {creatable && (
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={() => setCreating(true)}
+            >
+              新增
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <StateBox type="error">{error}</StateBox>}
-      {!data && !error && <StateBox>正在加载数据...</StateBox>}
+      {loading && !data && !error && <StateBox>正在加载数据...</StateBox>}
       {data && rows.length === 0 && <StateBox>暂无数据</StateBox>}
 
       {rows.length > 0 && (
@@ -680,7 +915,7 @@ function AdminTable({
                 {fields.map((field) => (
                   <th key={field.key}>{field.label}</th>
                 ))}
-                {(editable || deletable) && <th>操作</th>}
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -688,33 +923,45 @@ function AdminTable({
                 <tr key={String(row.id)}>
                   {fields.map((field) => (
                     <td key={field.key} data-label={field.label}>
-                      {formatValue(getValue(row, field.key))}
+                      <span
+                        className="cell-text"
+                        title={formatValue(getValue(row, field.key))}
+                      >
+                        {formatValue(getValue(row, field.key))}
+                      </span>
                     </td>
                   ))}
-                  {(editable || deletable) && (
-                    <td data-label="操作">
-                      <div className="row-actions">
-                        {editable && (
-                          <button
-                            className="secondary-button compact"
-                            type="button"
-                            onClick={() => setEditing(row)}
-                          >
-                            编辑
-                          </button>
-                        )}
-                        {deletable && (
-                          <button
-                            className="danger"
-                            type="button"
-                            onClick={() => deleteItem(row)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  )}
+                  <td data-label="操作">
+                    <div className="row-actions">
+                      <button
+                        className="secondary-button compact icon-text"
+                        type="button"
+                        onClick={() => openDetail(row)}
+                      >
+                        <Eye size={14} />
+                        详情
+                      </button>
+                      {editable && (
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          onClick={() => setEditing(row)}
+                        >
+                          编辑
+                        </button>
+                      )}
+                      {deletable && (
+                        <button
+                          className="danger"
+                          type="button"
+                          aria-label="删除"
+                          onClick={() => deleteItem(row)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -752,6 +999,16 @@ function AdminTable({
             setCreating(false);
           }}
           onSubmit={saveForm}
+        />
+      )}
+
+      {detail && (
+        <DetailDrawer
+          title={`${title}详情`}
+          fields={fields}
+          data={detail}
+          loading={detailLoading}
+          onClose={() => setDetail(null)}
         />
       )}
     </Panel>
@@ -805,46 +1062,71 @@ function EditModal({
           </button>
         </header>
         <div className="form-grid">
-          {fields.map((field) => (
-            <label key={field.key}>
-              {field.label}
-              {field.type === "textarea" ? (
-                <textarea
-                  value={values[field.key] ?? ""}
-                  onChange={(event) =>
-                    setValues({ ...values, [field.key]: event.target.value })
-                  }
-                />
-              ) : field.type === "boolean" ? (
-                <select
-                  value={String(values[field.key] === true)}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      [field.key]: event.target.value === "true",
-                    })
-                  }
-                >
-                  <option value="false">否</option>
-                  <option value="true">是</option>
-                </select>
-              ) : (
-                <input
-                  type={field.type === "number" ? "number" : "text"}
-                  value={values[field.key] ?? ""}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      [field.key]:
-                        field.type === "number"
-                          ? Number(event.target.value)
-                          : event.target.value,
-                    })
-                  }
-                />
-              )}
-            </label>
-          ))}
+          {fields.map((field) => {
+            const fieldOptions =
+              field.type === "boolean" ? booleanOptions : field.options;
+            const fieldClass =
+              field.fullWidth || field.type === "textarea"
+                ? "form-field full-width"
+                : "form-field";
+
+            return (
+              <label className={fieldClass} key={field.key}>
+                <span>{field.label}</span>
+                {field.type === "textarea" ? (
+                  <textarea
+                    value={values[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        [field.key]: event.target.value,
+                      })
+                    }
+                  />
+                ) : fieldOptions?.length ? (
+                  <select
+                    value={String(values[field.key] ?? "")}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        [field.key]: coerceFieldValue(
+                          field,
+                          event.target.value,
+                        ),
+                      })
+                    }
+                  >
+                    <option value="">请选择</option>
+                    {fieldOptions.map((option) => (
+                      <option
+                        key={String(option.value)}
+                        value={String(option.value)}
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={field.type === "number" ? "number" : "text"}
+                    value={values[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        [field.key]: coerceFieldValue(
+                          field,
+                          event.target.value,
+                        ),
+                      })
+                    }
+                  />
+                )}
+                {field.helper && <small>{field.helper}</small>}
+              </label>
+            );
+          })}
         </div>
         {error && <div className="error-box">{error}</div>}
         <footer>
@@ -865,23 +1147,240 @@ function EditModal({
 }
 
 function ConfigPage() {
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [data, setData] = useState<GachaConfigData | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    request<Record<string, unknown>>("/admin/config/gacha")
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<GachaConfigData>("/admin/config/gacha")
       .then(setData)
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const poolEntries = Object.entries(data?.pools || {});
+
   return (
-    <Panel title="系统配置" icon={<Settings size={18} />}>
+    <Panel
+      title="系统配置"
+      icon={<Settings size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+    >
       {error && <StateBox type="error">{error}</StateBox>}
       {!data && !error && <StateBox>正在加载配置...</StateBox>}
-      {data && (
-        <pre className="code-block">{JSON.stringify(data, null, 2)}</pre>
+      {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
+      {data && poolEntries.length > 0 && (
+        <div className="config-grid">
+          {poolEntries.map(([poolKey, config]) => (
+            <GachaConfigCard
+              key={poolKey}
+              poolKey={poolKey}
+              config={config}
+            />
+          ))}
+          <article className="config-card muted">
+            <div className="config-card-header">
+              <div>
+                <span className="eyebrow">保留字段</span>
+                <h3>管理员白名单</h3>
+              </div>
+              <Badge>只读</Badge>
+            </div>
+            <p>
+              当前后台权限以数据库 <code>User.is_admin</code>{" "}
+              为准，环境变量 <code>ADMIN_UIDS</code> 仅保留展示。
+            </p>
+            <div className="tag-list">
+              {data.adminUids?.length ? (
+                data.adminUids.map((uid) => <Badge key={uid}>{uid}</Badge>)
+              ) : (
+                <span className="muted-text">未配置 ADMIN_UIDS</span>
+              )}
+            </div>
+          </article>
+        </div>
       )}
     </Panel>
+  );
+}
+
+function GachaConfigCard({
+  poolKey,
+  config,
+}: {
+  poolKey: string;
+  config: GachaPoolConfig;
+}) {
+  const probabilities = config.rarityProbabilities || {};
+  const probabilityEntries = Object.entries(probabilities);
+  const maxProbability = Math.max(...probabilityEntries.map(([, value]) => value), 1);
+  const upCards = config.upCards;
+  const pity = config.pitySystem;
+
+  return (
+    <article className="config-card">
+      <div className="config-card-header">
+        <div>
+          <span className="eyebrow">卡池 #{config.poolId || poolKey}</span>
+          <h3>{poolNameById(Number(config.poolId || poolKey))}</h3>
+        </div>
+        <Badge>{pity?.enabled === false ? "无保底" : "保底开启"}</Badge>
+      </div>
+
+      <section className="config-section">
+        <h4>稀有度概率</h4>
+        {probabilityEntries.length ? (
+          <div className="probability-list">
+            {probabilityEntries.map(([rarity, value]) => (
+              <div className="probability-row" key={rarity}>
+                <span>{rarity}</span>
+                <div>
+                  <i
+                    style={{
+                      width: `${Math.max(3, (value / maxProbability) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <strong>{formatPercent(value)}</strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted-text">暂无显式概率配置，将使用服务端默认配置。</p>
+        )}
+      </section>
+
+      <section className="config-section">
+        <h4>UP 配置</h4>
+        {upCards ? (
+          <DescriptionList
+            items={[
+              ["状态", upCards.enabled ? "已开启" : "已关闭"],
+              ["UP 概率", formatPercent(upCards.upRate || 0)],
+              [
+                "UP 卡片",
+                upCards.cardIds?.length ? upCards.cardIds.join("、") : "未指定",
+              ],
+            ]}
+          />
+        ) : (
+          <p className="muted-text">未配置 UP 卡，当前卡池按基础概率抽取。</p>
+        )}
+      </section>
+
+      <section className="config-section">
+        <h4>保底配置</h4>
+        {pity ? (
+          <DescriptionList
+            items={[
+              ["状态", pity.enabled ? "已开启" : "已关闭"],
+              [
+                "软保底",
+                pity.softPity
+                  ? `${pity.softPity.count || "-"} 抽保 ${pity.softPity.guaranteedRarity || "-"}`
+                  : "未配置",
+              ],
+              [
+                "硬保底",
+                pity.hardPity
+                  ? `${pity.hardPity.count || "-"} 抽保 ${pity.hardPity.guaranteedRarity || "-"}`
+                  : "未配置",
+              ],
+            ]}
+          />
+        ) : (
+          <p className="muted-text">暂无保底配置。</p>
+        )}
+      </section>
+    </article>
+  );
+}
+
+function DetailDrawer({
+  title,
+  fields,
+  data,
+  loading,
+  onClose,
+}: {
+  title: string;
+  fields: FieldConfig[];
+  data: Record<string, any>;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const items = getDetailItems(data, fields);
+
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <aside
+        className="detail-drawer"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="eyebrow">记录详情</span>
+            <h2>{title}</h2>
+          </div>
+          <button type="button" aria-label="关闭详情" onClick={onClose}>
+            关闭
+          </button>
+        </header>
+        {loading ? (
+          <StateBox>正在读取详情...</StateBox>
+        ) : (
+          <DescriptionList items={items} />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function DescriptionList({
+  items,
+}: {
+  items: Array<[string, unknown]>;
+}) {
+  return (
+    <dl className="description-list">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{formatValue(value)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Badge({ children }: { children: ReactNode }) {
+  return <span className="badge">{children}</span>;
+}
+
+function RefreshButton({
+  onClick,
+  loading,
+}: {
+  onClick: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      className="secondary-button compact icon-text"
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+    >
+      <RefreshCw size={15} />
+      刷新
+    </button>
   );
 }
 
@@ -922,6 +1421,24 @@ function RarityFilter() {
   return null;
 }
 
+function coerceFieldValue(field: FieldConfig, value: string) {
+  const fieldOptions =
+    field.type === "boolean" ? booleanOptions : field.options || [];
+  const matchedOption = fieldOptions.find(
+    (option) => String(option.value) === value,
+  );
+  if (matchedOption) {
+    return matchedOption.value;
+  }
+  if (field.type === "number") {
+    return value === "" ? "" : Number(value);
+  }
+  if (field.type === "boolean") {
+    return value === "true";
+  }
+  return value;
+}
+
 function getValue(row: Record<string, any>, path: string) {
   return path.split(".").reduce((value, key) => value?.[key], row);
 }
@@ -936,11 +1453,123 @@ function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") {
     return "-";
   }
+  if (value instanceof Date) {
+    return value.toLocaleString();
+  }
   if (typeof value === "object") {
-    return JSON.stringify(value);
+    const record = value as Record<string, unknown>;
+    const name =
+      record.name ||
+      record.nickname ||
+      record.uid ||
+      record.card_name ||
+      record.pool_name ||
+      record.drop_name;
+    return name ? String(name) : "已配置";
   }
   if (typeof value === "string" && value.includes("T") && value.endsWith("Z")) {
-    return new Date(value).toLocaleString();
+    return formatDate(value);
   }
   return String(value);
+}
+
+function formatDate(value: unknown) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString();
+}
+
+function formatPercent(value: unknown) {
+  const number = Number(value || 0);
+  return `${(number * 100).toFixed(number < 0.01 && number > 0 ? 2 : 1)}%`;
+}
+
+function summarizeRarities(raw: string) {
+  const counts = raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce<Record<string, number>>((result, rarity) => {
+      result[rarity] = (result[rarity] || 0) + 1;
+      return result;
+    }, {});
+  const summary = Object.entries(counts)
+    .map(([rarity, count]) => `${rarity}x${count}`)
+    .join(" / ");
+  return summary || "-";
+}
+
+function poolNameById(poolId: number) {
+  const names: Record<number, string> = {
+    1: "常驻卡池",
+    2: "限定卡池",
+    3: "新手卡池",
+    4: "活动卡池",
+  };
+  return names[poolId] || `卡池 ${poolId}`;
+}
+
+function getDetailItems(data: Record<string, any>, fields: FieldConfig[]) {
+  const seen = new Set(fields.map((field) => field.key.split(".")[0]));
+  const fieldItems: Array<[string, unknown]> = fields.map((field) => [
+    field.label,
+    getValue(data, field.key),
+  ]);
+  const extraItems: Array<[string, unknown]> = Object.entries(data)
+    .filter(([key, value]) => !seen.has(key) && isDetailValue(value))
+    .map(([key, value]) => [fieldLabel(key), value]);
+  return [...fieldItems, ...extraItems];
+}
+
+function isDetailValue(value: unknown) {
+  return (
+    value === null ||
+    value === undefined ||
+    ["string", "number", "boolean"].includes(typeof value)
+  );
+}
+
+function fieldLabel(key: string) {
+  const labels: Record<string, string> = {
+    createdAt: "创建时间",
+    updatedAt: "更新时间",
+    card_ids: "卡片ID",
+    card_levels: "稀有度",
+    card_uuids: "卡片UUID",
+    delete_flag: "删除状态",
+  };
+  return labels[key] || key;
+}
+
+function exportRowsToCsv(
+  title: string,
+  rows: Record<string, any>[],
+  fields: FieldConfig[],
+) {
+  const headers = fields.map((field) => field.label);
+  const lines = rows.map((row) =>
+    fields
+      .map((field) => escapeCsv(formatValue(getValue(row, field.key))))
+      .join(","),
+  );
+  const csv = [headers.map(escapeCsv).join(","), ...lines].join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${title}-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsv(value: unknown) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
 }

@@ -39,10 +39,52 @@ export interface DashboardData {
   recentHistories: Record<string, unknown>[];
 }
 
+export interface SelectOption {
+  label: string;
+  value: string | number | boolean;
+}
+
+export interface AdminOptions {
+  pools: Array<SelectOption & { type?: number }>;
+  cards: Array<SelectOption & { rarity?: string; pool?: number }>;
+  dropItems: Array<SelectOption & { type?: number }>;
+}
+
+export interface GachaPoolConfig {
+  poolId?: number;
+  rarityProbabilities?: Record<string, number>;
+  upCards?: {
+    enabled?: boolean;
+    cardIds?: number[];
+    upRate?: number;
+  };
+  pitySystem?: {
+    enabled?: boolean;
+    softPity?: {
+      count?: number;
+      guaranteedRarity?: string;
+    };
+    hardPity?: {
+      count?: number;
+      guaranteedRarity?: string;
+    };
+  };
+  [key: string]: unknown;
+}
+
+export interface GachaConfigData {
+  pools?: Record<string, GachaPoolConfig>;
+  adminUids?: string[];
+  [key: string]: unknown;
+}
+
 export interface FieldConfig {
   key: string;
   label: string;
   type?: "text" | "number" | "boolean" | "textarea" | "select";
-  options?: Array<{ label: string; value: string | number | boolean }>;
+  options?: SelectOption[];
+  helper?: string;
+  fullWidth?: boolean;
+  placeholder?: string;
   readonly?: boolean;
 }

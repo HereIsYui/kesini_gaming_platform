@@ -97,4 +97,76 @@ describe("AdminService", () => {
       }),
     );
   });
+
+  it("后台选项会按轻量结构返回卡池、卡片和掉落物", async () => {
+    const poolRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 1, pool_name: "常驻池", card_type: 0 },
+      ]),
+    });
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 10, card_name: "测试卡", card_level: "SSR", pool: 1 },
+      ]),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 20, drop_name: "测试碎片", drop_type: 0 },
+      ]),
+    });
+    const service = createService({
+      pool: poolRepository,
+      card: cardRepository,
+      drop: dropRepository,
+    });
+
+    await expect(service.getOptions()).resolves.toEqual({
+      pools: [{ label: "常驻池", value: 1, type: 0 }],
+      cards: [{ label: "测试卡", value: 10, rarity: "SSR", pool: 1 }],
+      dropItems: [{ label: "测试碎片", value: 20, type: 0 }],
+    });
+    expect(poolRepository.find).toHaveBeenCalledWith({
+      order: { id: "DESC" },
+    });
+    expect(cardRepository.find).toHaveBeenCalledWith({
+      order: { id: "DESC" },
+    });
+    expect(dropRepository.find).toHaveBeenCalledWith({
+      order: { id: "DESC" },
+    });
+  });
+
+  it("详情接口会读取对应仓库记录", async () => {
+    const user = { id: 1, uid: "u1" };
+    const pool = { id: 2, pool_name: "限定池" };
+    const card = { id: 3, card_name: "限定卡" };
+    const dropItem = { id: 4, drop_name: "限定碎片" };
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const poolRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(pool),
+    });
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const dropRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(dropItem),
+    });
+    const service = createService({
+      user: userRepository,
+      pool: poolRepository,
+      card: cardRepository,
+      drop: dropRepository,
+    });
+
+    await expect(service.getUser(1)).resolves.toBe(user);
+    await expect(service.getPool(2)).resolves.toBe(pool);
+    await expect(service.getCard(3)).resolves.toBe(card);
+    await expect(service.getDropItem(4)).resolves.toBe(dropItem);
+    expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(poolRepository.findOne).toHaveBeenCalledWith({ where: { id: 2 } });
+    expect(cardRepository.findOne).toHaveBeenCalledWith({ where: { id: 3 } });
+    expect(dropRepository.findOne).toHaveBeenCalledWith({ where: { id: 4 } });
+  });
 });
