@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "system",
-    "backend"
+    "backend",
+    "website"
   ],
   "scripts": {
     "system:dev": "npm --workspace system run start:dev",
@@ -14,7 +15,10 @@
     "backend:dev": "npm --workspace backend run dev",
     "backend:build": "npm --workspace backend run build",
     "backend:preview": "npm --workspace backend run preview",
-    "build": "npm run system:build && npm run backend:build",
+    "website:dev": "npm --workspace website run dev",
+    "website:build": "npm --workspace website run build",
+    "website:preview": "npm --workspace website run preview",
+    "build": "npm run system:build && npm run backend:build && npm run website:build",
     "test": "npm run system:test",
     "audit:critical": "npm audit --audit-level=critical"
   }
