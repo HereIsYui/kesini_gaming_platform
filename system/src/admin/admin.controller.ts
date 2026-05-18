@@ -15,8 +15,10 @@ import {
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsDateString,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -93,6 +95,18 @@ class PityQueryDto extends PageDto {
   @IsInt()
   @Min(0)
   poolId?: number;
+}
+
+class RedeemUsageQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  codeId?: number;
 }
 
 class PoolDto {
@@ -211,6 +225,71 @@ class PityPatchDto {
   @IsInt()
   @Min(0)
   draws_since_ur?: number;
+}
+
+class GachaConfigPatchDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  rarityProbabilities?: Record<string, number>;
+
+  @IsOptional()
+  @IsObject()
+  upCards?: {
+    enabled: boolean;
+    cardIds: number[];
+    upRate: number;
+  } | null;
+
+  @IsOptional()
+  @IsObject()
+  pitySystem?: {
+    enabled: boolean;
+    softPity?: { count: number; guaranteedRarity: string };
+    hardPity?: { count: number; guaranteedRarity: string };
+  } | null;
+}
+
+class RedeemCodeDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  total_limit?: number;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+  };
 }
 
 interface UserInfo {
@@ -468,11 +547,81 @@ export class AdminController {
     );
   }
 
+  @Get("redeem-codes")
+  async listRedeemCodes(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listRedeemCodes(query),
+      "获取兑换码列表成功",
+    );
+  }
+
+  @Get("redeem-codes/:id")
+  async getRedeemCode(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getRedeemCode(id),
+      "获取兑换码详情成功",
+    );
+  }
+
+  @Post("redeem-codes")
+  async createRedeemCode(
+    @Body() body: RedeemCodeDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.createRedeemCode(body as any),
+      "创建兑换码成功",
+    );
+  }
+
+  @Patch("redeem-codes/:id")
+  async updateRedeemCode(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: RedeemCodeDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateRedeemCode(id, body as any),
+      "更新兑换码成功",
+    );
+  }
+
+  @Delete("redeem-codes/:id")
+  async deleteRedeemCode(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.deleteRedeemCode(id),
+      "删除兑换码成功",
+    );
+  }
+
+  @Get("redeem-usages")
+  async listRedeemUsages(
+    @Query() query: RedeemUsageQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listRedeemUsages(query),
+      "获取兑换记录成功",
+    );
+  }
+
   @Get("config/gacha")
   async getGachaConfig(): Promise<ResponseDto<any>> {
     return ResponseDto.success(
-      this.adminService.getGachaConfig(),
+      await this.adminService.getGachaConfig(),
       "获取抽卡配置成功",
+    );
+  }
+
+  @Patch("config/gacha/:poolId")
+  async updateGachaConfig(
+    @Param("poolId", ParseIntPipe) poolId: number,
+    @Body() body: GachaConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateGachaConfig(poolId, body as any),
+      "更新抽卡配置成功",
     );
   }
 }

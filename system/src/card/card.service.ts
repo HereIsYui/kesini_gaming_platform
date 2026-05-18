@@ -84,7 +84,7 @@ export class CardService {
       throw new Error(`单次最多只能抽取${MAX_DRAW_COUNT}次`);
     }
 
-    const serverConfig = this.resolveServerConfig(poolId);
+    const serverConfig = await this.resolveServerConfig(poolId);
     const effectivePoolId = serverConfig.poolId!;
 
     return this.dataSource.transaction(async (manager) => {
@@ -506,12 +506,14 @@ export class CardService {
     });
   }
 
-  private resolveServerConfig(poolId?: number): GachaConfig {
+  private async resolveServerConfig(poolId?: number): Promise<GachaConfig> {
     if (poolId === undefined || poolId === null || poolId === 0) {
-      return this.gachaConfigService.getDefaultConfig();
+      return this.gachaConfigService.getConfigByPoolId(
+        this.gachaConfigService.getDefaultConfig().poolId!,
+      );
     }
 
-    const config = this.gachaConfigService.getConfigByPoolId(poolId);
+    const config = await this.gachaConfigService.getConfigByPoolId(poolId);
     return {
       ...config,
       poolId,

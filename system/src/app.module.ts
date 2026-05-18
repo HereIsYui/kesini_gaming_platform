@@ -9,11 +9,15 @@ import { UserCard } from "./entity/userCard.entity";
 import { DropItem } from "./entity/drop.entity";
 import { User } from "./entity/user.entity";
 import { UserGachaPity } from "./entity/userGachaPity.entity";
+import { GachaPoolConfig } from "./entity/gachaPoolConfig.entity";
+import { RedeemCode } from "./entity/redeemCode.entity";
+import { RedeemCodeUsage } from "./entity/redeemCodeUsage.entity";
 import { ApisModule } from "./apis/apis.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
 import { ConfigurationService } from "./config/configuration.service";
 import { AdminModule } from "./admin/admin.module";
+import { RedeemModule } from "./redeem/redeem.module";
 
 @Module({
   imports: [
@@ -29,11 +33,15 @@ import { AdminModule } from "./admin/admin.module";
       UserCard,
       User,
       UserGachaPity,
+      GachaPoolConfig,
+      RedeemCode,
+      RedeemCodeUsage,
     ]),
     ConfigurationModule,
     ApisModule,
     CardModule,
     AdminModule,
+    RedeemModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

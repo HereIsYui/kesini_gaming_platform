@@ -27,8 +27,11 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.history || createRepository(),
     repositories.inventory || createRepository(),
     repositories.pity || createRepository(),
+    repositories.redeemCode || createRepository(),
+    repositories.redeemUsage || createRepository(),
     {
-      getAllPoolConfigs: jest.fn(() => ({ 1: { poolId: 1 } })),
+      getAllPoolConfigs: jest.fn(async () => ({ 1: { poolId: 1 } })),
+      savePoolConfig: jest.fn(async (_poolId, config) => config),
     } as any,
     { adminUids: ["admin"] } as any,
   );
@@ -168,5 +171,60 @@ describe("AdminService", () => {
     expect(poolRepository.findOne).toHaveBeenCalledWith({ where: { id: 2 } });
     expect(cardRepository.findOne).toHaveBeenCalledWith({ where: { id: 3 } });
     expect(dropRepository.findOne).toHaveBeenCalledWith({ where: { id: 4 } });
+  });
+
+  it("更新抽卡配置会委托配置服务校验和保存", async () => {
+    const gachaService = {
+      getAllPoolConfigs: jest.fn(),
+      savePoolConfig: jest.fn().mockResolvedValue({ poolId: 2 }),
+    };
+    const service = new AdminService(
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      createRepository(),
+      gachaService as any,
+      { adminUids: [] } as any,
+    );
+
+    await expect(
+      service.updateGachaConfig(2, {
+        rarityProbabilities: { N: 1 },
+      } as any),
+    ).resolves.toEqual({ poolId: 2 });
+    expect(gachaService.savePoolConfig).toHaveBeenCalledWith(2, {
+      rarityProbabilities: { N: 1 },
+    });
+  });
+
+  it("创建兑换码会标准化码值和奖励", async () => {
+    const redeemCodeRepository = createRepository();
+    const service = createService({ redeemCode: redeemCodeRepository });
+
+    await service.createRedeemCode({
+      code: " welcome ",
+      name: "欢迎礼包",
+      rewards: {
+        points: 100,
+        items: [{ itemId: 1, num: 2 }],
+      },
+    } as any);
+
+    expect(redeemCodeRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "WELCOME",
+        name: "欢迎礼包",
+        enabled: true,
+        rewards: {
+          points: 100,
+          items: [{ itemId: 1, num: 2 }],
+        },
+      }),
+    );
   });
 });

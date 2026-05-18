@@ -8,13 +8,18 @@ import {
   ObjectLiteral,
   Repository,
 } from "typeorm";
-import { GachaConfigService } from "src/card/gacha-config.service";
+import {
+  EditableGachaConfig,
+  GachaConfigService,
+} from "src/card/gacha-config.service";
 import { ConfigurationService } from "src/config/configuration.service";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
+import { RedeemCode, RedeemRewards } from "src/entity/redeemCode.entity";
+import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 
@@ -40,6 +45,10 @@ export class AdminService {
     private readonly inventoryRepository: Repository<UserInventory>,
     @InjectRepository(UserGachaPity)
     private readonly pityRepository: Repository<UserGachaPity>,
+    @InjectRepository(RedeemCode)
+    private readonly redeemCodeRepository: Repository<RedeemCode>,
+    @InjectRepository(RedeemCodeUsage)
+    private readonly redeemUsageRepository: Repository<RedeemCodeUsage>,
     private readonly gachaConfigService: GachaConfigService,
     private readonly configService: ConfigurationService,
   ) {}
@@ -409,11 +418,129 @@ export class AdminService {
     return this.pityRepository.save(pity);
   }
 
-  getGachaConfig() {
+  async getGachaConfig() {
     return {
-      pools: this.gachaConfigService.getAllPoolConfigs(),
+      pools: await this.gachaConfigService.getAllPoolConfigs(),
       adminUids: this.configService.adminUids,
     };
+  }
+
+  async updateGachaConfig(poolId: number, body: EditableGachaConfig) {
+    return this.gachaConfigService.savePoolConfig(poolId, body);
+  }
+
+  async listRedeemCodes(query: PageQuery) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where = query.keyword
+      ? [
+          { code: Like(`%${query.keyword.trim().toUpperCase()}%`), delete_flag: false },
+          { name: Like(`%${query.keyword}%`), delete_flag: false },
+        ]
+      : { delete_flag: false };
+    return this.findAndPage(this.redeemCodeRepository, where, page, pageSize);
+  }
+
+  async getRedeemCode(id: number) {
+    const code = await this.mustFind(
+      this.redeemCodeRepository,
+      id,
+      "兑换码不存在",
+    );
+    if (code.delete_flag) {
+      throw new Error("兑换码不存在");
+    }
+    return code;
+  }
+
+  async createRedeemCode(body: Partial<RedeemCode>) {
+    const code = this.normalizeRedeemCode(body.code);
+    this.assertRequired(code, "兑换码不能为空");
+    this.assertRequired(body.name, "兑换码名称不能为空");
+    const existing = await this.redeemCodeRepository.findOne({
+      where: { code },
+    });
+    if (existing && !existing.delete_flag) {
+      throw new Error("兑换码已存在");
+    }
+    const rewards = this.normalizeRewards(body.rewards);
+    const totalLimit = this.normalizeTotalLimit(body.total_limit);
+    const entity = this.redeemCodeRepository.create({
+      code,
+      name: body.name!,
+      description: body.description || "",
+      enabled: body.enabled !== false,
+      total_limit: totalLimit,
+      used_count: 0,
+      starts_at: this.parseOptionalDate(body.starts_at),
+      ends_at: this.parseOptionalDate(body.ends_at),
+      rewards,
+      delete_flag: false,
+    });
+    this.assertRedeemTimeRange(entity.starts_at, entity.ends_at);
+    return this.redeemCodeRepository.save(entity);
+  }
+
+  async updateRedeemCode(id: number, body: Partial<RedeemCode>) {
+    const code = await this.getRedeemCode(id);
+    const nextCode =
+      body.code !== undefined ? this.normalizeRedeemCode(body.code) : code.code;
+    if (!nextCode) {
+      throw new Error("兑换码不能为空");
+    }
+    if (nextCode !== code.code) {
+      const existing = await this.redeemCodeRepository.findOne({
+        where: { code: nextCode },
+      });
+      if (existing && existing.id !== id && !existing.delete_flag) {
+        throw new Error("兑换码已存在");
+      }
+    }
+
+    const next = Object.assign(
+      code,
+      this.pickDefined(body, ["name", "description", "enabled"]),
+    );
+    next.code = nextCode;
+    if (body.total_limit !== undefined) {
+      next.total_limit = this.normalizeTotalLimit(body.total_limit);
+      if (next.total_limit !== null && next.used_count > next.total_limit) {
+        throw new Error("总库存不能小于已兑换数量");
+      }
+    }
+    if (body.starts_at !== undefined) {
+      next.starts_at = this.parseOptionalDate(body.starts_at);
+    }
+    if (body.ends_at !== undefined) {
+      next.ends_at = this.parseOptionalDate(body.ends_at);
+    }
+    if (body.rewards !== undefined) {
+      next.rewards = this.normalizeRewards(body.rewards);
+    }
+    this.assertRequired(next.name, "兑换码名称不能为空");
+    this.assertRedeemTimeRange(next.starts_at, next.ends_at);
+    return this.redeemCodeRepository.save(next);
+  }
+
+  async deleteRedeemCode(id: number) {
+    const code = await this.getRedeemCode(id);
+    code.enabled = false;
+    code.delete_flag = true;
+    await this.redeemCodeRepository.save(code);
+    return { deleted: true };
+  }
+
+  async listRedeemUsages(
+    query: PageQuery & { uid?: string; codeId?: number },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<RedeemCodeUsage> = {};
+    if (query.uid) {
+      where.uid = query.uid;
+    }
+    if (query.codeId !== undefined) {
+      where.code_id = query.codeId;
+    }
+    return this.findAndPage(this.redeemUsageRepository, where, page, pageSize);
   }
 
   private async attachInventoryInfo(result: {
@@ -495,5 +622,66 @@ export class AdminService {
       },
       {} as Record<string, any>,
     );
+  }
+
+  private normalizeRedeemCode(code: unknown): string {
+    return String(code || "")
+      .trim()
+      .toUpperCase();
+  }
+
+  private normalizeRewards(rewards: unknown): RedeemRewards {
+    const value = (rewards || {}) as Partial<RedeemRewards>;
+    const points = Number(value.points || 0);
+    if (!Number.isFinite(points) || points < 0) {
+      throw new Error("奖励积分无效");
+    }
+    const items = Array.isArray(value.items) ? value.items : [];
+    const normalizedItems = items
+      .map((item) => ({
+        itemId: Number(item.itemId),
+        num: Number(item.num),
+      }))
+      .filter((item) => item.itemId > 0 || item.num > 0);
+    normalizedItems.forEach((item) => {
+      if (!Number.isInteger(item.itemId) || item.itemId <= 0) {
+        throw new Error("奖励道具ID无效");
+      }
+      if (!Number.isInteger(item.num) || item.num <= 0) {
+        throw new Error("奖励道具数量无效");
+      }
+    });
+    if (points === 0 && normalizedItems.length === 0) {
+      throw new Error("兑换码奖励不能为空");
+    }
+    return { points, items: normalizedItems };
+  }
+
+  private normalizeTotalLimit(value: unknown): number | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const totalLimit = Number(value);
+    if (!Number.isInteger(totalLimit) || totalLimit <= 0) {
+      throw new Error("总库存必须为正整数");
+    }
+    return totalLimit;
+  }
+
+  private parseOptionalDate(value: unknown): Date | null {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(date.getTime())) {
+      throw new Error("时间格式无效");
+    }
+    return date;
+  }
+
+  private assertRedeemTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() >= end.getTime()) {
+      throw new Error("兑换结束时间必须晚于开始时间");
+    }
   }
 }

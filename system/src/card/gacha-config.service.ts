@@ -1,10 +1,31 @@
 import { Injectable } from "@nestjs/common";
-import { GachaConfig } from "../types/api";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Repository } from "typeorm";
+import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
+import { CardRarity, GachaConfig, PitySystemConfig } from "../types/api";
 import { ConfigurationService } from "../config/configuration.service";
+
+const ALLOWED_RARITIES: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
+
+export type EditableGachaConfig = Omit<GachaConfig, "upCards" | "pitySystem"> & {
+  enabled?: boolean;
+  upCards?: GachaConfig["upCards"] | null;
+  pitySystem?: GachaConfig["pitySystem"] | null;
+};
+
+export interface GachaConfigView extends GachaConfig {
+  enabled: boolean;
+  source: "database" | "env";
+  updatedAt: Date | null;
+}
 
 @Injectable()
 export class GachaConfigService {
-  constructor(private readonly configService: ConfigurationService) {}
+  constructor(
+    private readonly configService: ConfigurationService,
+    @InjectRepository(GachaPoolConfig)
+    private readonly gachaPoolConfigRepository: Repository<GachaPoolConfig>,
+  ) {}
 
   /**
    * 获取标准卡池配置
@@ -64,7 +85,7 @@ export class GachaConfigService {
   /**
    * 根据卡池ID获取配置
    */
-  getConfigByPoolId(poolId: number): GachaConfig {
+  getEnvConfigByPoolId(poolId: number): GachaConfig {
     switch (poolId) {
       case 0: // 常驻卡池
       case 1:
@@ -79,6 +100,26 @@ export class GachaConfigService {
         // 如果是未知的卡池ID，返回默认配置
         return this.getDefaultConfig();
     }
+  }
+
+  /**
+   * 根据卡池ID获取最终生效配置，数据库配置优先于环境变量
+   */
+  async getConfigByPoolId(poolId: number): Promise<GachaConfig> {
+    const normalizedPoolId = poolId === 0 ? this.getDefaultConfig().poolId! : poolId;
+    const envConfig = this.getEnvConfigByPoolId(normalizedPoolId);
+    const dbConfig = await this.gachaPoolConfigRepository.findOne({
+      where: { pool_id: normalizedPoolId },
+    });
+
+    if (!dbConfig?.enabled) {
+      return {
+        ...envConfig,
+        poolId: normalizedPoolId,
+      };
+    }
+
+    return this.toGachaConfig(dbConfig, envConfig);
   }
 
   /**
@@ -98,12 +139,149 @@ export class GachaConfigService {
   /**
    * 获取所有可用的卡池类型及其概率配置
    */
-  getAllPoolConfigs(): Record<number, GachaConfig> {
-    return {
+  async getAllPoolConfigs(): Promise<Record<number, GachaConfigView>> {
+    const envConfigs: Record<number, GachaConfig> = {
       1: this.getStandardPoolConfig(),
       2: this.getLimitedPoolConfig(),
       3: this.getBeginnerPoolConfig(),
       4: this.getEventPoolConfig(),
     };
+    const poolIds = Object.keys(envConfigs).map(Number);
+    const dbConfigs = await this.gachaPoolConfigRepository.find({
+      where: poolIds.length ? { pool_id: In(poolIds) } : {},
+      order: { pool_id: "ASC" },
+    });
+    const dbConfigMap = new Map(
+      dbConfigs.map((config) => [config.pool_id, config]),
+    );
+
+    return poolIds.reduce(
+      (result, poolId) => {
+        const dbConfig = dbConfigMap.get(poolId);
+        const envConfig = envConfigs[poolId];
+        const enabled = dbConfig?.enabled === true;
+        result[poolId] = {
+          ...(enabled ? this.toGachaConfig(dbConfig, envConfig) : envConfig),
+          poolId,
+          enabled,
+          source: enabled ? "database" : "env",
+          updatedAt: dbConfig?.updatedAt || null,
+        };
+        return result;
+      },
+      {} as Record<number, GachaConfigView>,
+    );
+  }
+
+  async savePoolConfig(
+    poolId: number,
+    input: EditableGachaConfig,
+  ): Promise<GachaConfigView> {
+    if (!Number.isInteger(poolId) || poolId <= 0) {
+      throw new Error("卡池ID无效");
+    }
+
+    const envConfig = this.getEnvConfigByPoolId(poolId);
+    const existing = await this.gachaPoolConfigRepository.findOne({
+      where: { pool_id: poolId },
+    });
+    const nextConfig: EditableGachaConfig = {
+      poolId,
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      rarityProbabilities:
+        input.rarityProbabilities ||
+        existing?.rarity_probabilities ||
+        envConfig.rarityProbabilities,
+      upCards:
+        input.upCards === null
+          ? undefined
+          : input.upCards || existing?.up_cards || envConfig.upCards,
+      pitySystem:
+        input.pitySystem === null
+          ? undefined
+          : input.pitySystem || existing?.pity_system || envConfig.pitySystem,
+    };
+
+    this.validateEditableConfig(nextConfig);
+
+    const entity = this.gachaPoolConfigRepository.create({
+      ...(existing || {}),
+      pool_id: poolId,
+      enabled: nextConfig.enabled ?? true,
+      rarity_probabilities: nextConfig.rarityProbabilities!,
+      up_cards: nextConfig.upCards || null,
+      pity_system: nextConfig.pitySystem || null,
+    });
+    const saved = await this.gachaPoolConfigRepository.save(entity);
+    return {
+      ...this.toGachaConfig(saved, envConfig),
+      enabled: saved.enabled,
+      source: saved.enabled ? "database" : "env",
+      updatedAt: saved.updatedAt || null,
+    };
+  }
+
+  validateEditableConfig(config: EditableGachaConfig): void {
+    if (!config.rarityProbabilities) {
+      throw new Error("稀有度概率不能为空");
+    }
+    if (!this.validateProbabilities(config.rarityProbabilities)) {
+      throw new Error("稀有度概率配置无效，概率总和必须为1");
+    }
+    Object.keys(config.rarityProbabilities).forEach((rarity) => {
+      if (!ALLOWED_RARITIES.includes(rarity as CardRarity)) {
+        throw new Error(`稀有度${rarity}不支持`);
+      }
+    });
+
+    if (config.upCards) {
+      const validCards =
+        Array.isArray(config.upCards.cardIds) &&
+        config.upCards.cardIds.every((id) => Number.isInteger(id) && id > 0);
+      const validRate =
+        typeof config.upCards.upRate === "number" &&
+        config.upCards.upRate >= 0 &&
+        config.upCards.upRate <= 1;
+      if (
+        typeof config.upCards.enabled !== "boolean" ||
+        !validCards ||
+        !validRate
+      ) {
+        throw new Error("UP配置无效");
+      }
+    }
+
+    if (config.pitySystem) {
+      this.assertPityConfig(config.pitySystem);
+    }
+  }
+
+  private toGachaConfig(
+    dbConfig: GachaPoolConfig,
+    fallback: GachaConfig,
+  ): GachaConfig {
+    return {
+      poolId: dbConfig.pool_id,
+      rarityProbabilities:
+        dbConfig.rarity_probabilities || fallback.rarityProbabilities,
+      upCards: dbConfig.up_cards || undefined,
+      pitySystem: dbConfig.pity_system || fallback.pitySystem,
+    };
+  }
+
+  private assertPityConfig(config: PitySystemConfig): void {
+    if (typeof config.enabled !== "boolean") {
+      throw new Error("保底启用状态无效");
+    }
+    const rules = [config.softPity, config.hardPity].filter(Boolean);
+    rules.forEach((rule) => {
+      if (
+        !Number.isInteger(rule!.count) ||
+        rule!.count <= 0 ||
+        !ALLOWED_RARITIES.includes(rule!.guaranteedRarity)
+      ) {
+        throw new Error("保底配置无效");
+      }
+    });
   }
 }

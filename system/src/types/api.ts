@@ -22,6 +22,9 @@ export interface GachaConfig {
   // 卡池ID (如果指定，则从该卡池抽取)
   poolId?: number;
 
+  // 数据库配置是否启用，未提供时视为启用默认配置
+  enabled?: boolean;
+
   // 稀有度概率配置 (总和应为1)
   rarityProbabilities?: {
     [rarity: string]: number; // 如 { 'N': 0.5, 'R': 0.3, 'SR': 0.15, 'SSR': 0.045, 'UR': 0.005 }
@@ -36,6 +39,10 @@ export interface GachaConfig {
 
   // 保底配置，只允许服务端生成
   pitySystem?: PitySystemConfig;
+
+  // 后台展示用元信息
+  source?: "database" | "env";
+  updatedAt?: Date | null;
 }
 
 // 抽卡结果

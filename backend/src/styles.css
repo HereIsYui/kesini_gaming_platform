@@ -842,8 +842,17 @@ tbody tr:hover {
   gap: 12px;
 }
 
+.config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .config-card h3,
-.config-section h4 {
+.config-section h4,
+.config-edit h3,
+.reward-editor h3 {
   margin: 0;
   color: var(--foreground);
   letter-spacing: 0;
@@ -922,6 +931,13 @@ tbody tr:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .login-screen {
@@ -1015,6 +1031,10 @@ textarea {
   box-shadow: var(--shadow-md);
 }
 
+.modal.wide {
+  width: min(920px, 100%);
+}
+
 .modal header,
 .modal footer {
   display: flex;
@@ -1050,6 +1070,10 @@ textarea {
   padding: 16px;
 }
 
+.form-grid.no-padding {
+  padding: 0;
+}
+
 .form-field {
   min-width: 0;
 }
@@ -1083,6 +1107,56 @@ textarea {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;
+}
+
+.config-edit,
+.reward-editor {
+  display: grid;
+  gap: 18px;
+  padding: 16px;
+}
+
+.config-edit section,
+.reward-editor {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 92%, var(--muted));
+}
+
+.config-edit section {
+  display: grid;
+  gap: 14px;
+}
+
+.probability-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reward-editor {
+  margin: 0 16px 16px;
+}
+
+.reward-items {
+  display: grid;
+  gap: 10px;
+}
+
+.reward-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.reward-item-row select,
+.reward-item-row input {
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
 }
 
 .drawer-backdrop {
@@ -1305,6 +1379,11 @@ textarea {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .probability-edit-grid,
+  .reward-item-row {
     grid-template-columns: 1fr;
   }
 

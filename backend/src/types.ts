@@ -52,6 +52,7 @@ export interface AdminOptions {
 
 export interface GachaPoolConfig {
   poolId?: number;
+  enabled?: boolean;
   rarityProbabilities?: Record<string, number>;
   upCards?: {
     enabled?: boolean;
@@ -69,6 +70,8 @@ export interface GachaPoolConfig {
       guaranteedRarity?: string;
     };
   };
+  source?: "database" | "env";
+  updatedAt?: string | null;
   [key: string]: unknown;
 }
 
@@ -87,4 +90,25 @@ export interface FieldConfig {
   fullWidth?: boolean;
   placeholder?: string;
   readonly?: boolean;
+}
+
+export interface RedeemRewards {
+  points: number;
+  items: Array<{ itemId: number; num: number }>;
+}
+
+export interface RedeemCodeRecord {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  total_limit?: number | null;
+  used_count: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  rewards: RedeemRewards;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
 }

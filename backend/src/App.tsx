@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   Gauge,
+  Gift,
   History,
   Layers,
   LogOut,
@@ -26,6 +27,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   FormEvent,
   ReactNode,
+  Dispatch,
+  SetStateAction,
   useCallback,
   useEffect,
   useMemo,
@@ -50,10 +53,16 @@ import type {
   GachaPoolConfig,
   LoginResponse,
   PageResult,
+  RedeemCodeRecord,
+  RedeemRewards,
   SelectOption,
 } from "./types";
 
 type Theme = "light" | "dark";
+type GachaFormState = GachaPoolConfig & {
+  poolId: number;
+  rarityProbabilities: Record<string, number>;
+};
 const handledOpenidCallbacks = new Set<string>();
 
 const navItems = [
@@ -65,6 +74,7 @@ const navItems = [
   { key: "histories", label: "历史", icon: History },
   { key: "inventories", label: "背包", icon: Boxes },
   { key: "pity", label: "保底", icon: Ticket },
+  { key: "redeem-codes", label: "兑换码", icon: Gift },
   { key: "config", label: "配置", icon: Settings },
 ];
 
@@ -226,6 +236,26 @@ const historyFields: FieldConfig[] = [
   { key: "count", label: "抽数", readonly: true },
   { key: "card_levels", label: "稀有度", readonly: true },
   { key: "createdAt", label: "时间", readonly: true },
+];
+
+const redeemUsageFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "code", label: "兑换码", readonly: true },
+  { key: "uid", label: "UID", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
+  { key: "createdAt", label: "领取时间", readonly: true },
+];
+
+const redeemCodeFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "code", label: "兑换码", readonly: true },
+  { key: "name", label: "名称", readonly: true },
+  { key: "enabled", label: "状态", readonly: true },
+  { key: "used_count", label: "已兑换", readonly: true },
+  { key: "total_limit", label: "总库存", readonly: true },
+  { key: "rewards", label: "奖励", readonly: true },
+  { key: "starts_at", label: "开始时间", readonly: true },
+  { key: "ends_at", label: "结束时间", readonly: true },
 ];
 
 export function App() {
@@ -452,6 +482,9 @@ export function App() {
               searchPlaceholder="按 UID 查询"
               keywordParam="uid"
             />
+          )}
+          {active === "redeem-codes" && (
+            <RedeemCodesPage options={adminOptions} />
           )}
           {active === "config" && <ConfigPage />}
         </section>
@@ -1146,10 +1179,470 @@ function EditModal({
   );
 }
 
+function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [keyword, setKeyword] = useState("");
+  const [data, setData] = useState<PageResult<RedeemCodeRecord> | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<RedeemCodeRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [detail, setDetail] = useState<RedeemCodeRecord | null>(null);
+
+  const filters = useMemo(
+    () => ({ page, pageSize, keyword }),
+    [page, pageSize, keyword],
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<PageResult<RedeemCodeRecord>>(
+      `/admin/redeem-codes${toQuery(filters)}`,
+    )
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = data?.list || [];
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+
+  async function saveRedeemCode(values: Partial<RedeemCodeRecord>) {
+    const current = editing;
+    await request(
+      current ? `/admin/redeem-codes/${current.id}` : "/admin/redeem-codes",
+      {
+        method: current ? "PATCH" : "POST",
+        body: JSON.stringify(values),
+      },
+    );
+    setEditing(null);
+    setCreating(false);
+    load();
+  }
+
+  async function deleteRedeemCode(row: RedeemCodeRecord) {
+    if (!window.confirm(`确认停用并删除兑换码 ${row.code}？`)) {
+      return;
+    }
+    await request(`/admin/redeem-codes/${row.id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="page-stack">
+      <Panel title="兑换码管理" icon={<Gift size={18} />}>
+        <div className="table-toolbar">
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={keyword}
+              onChange={(event) => {
+                setPage(1);
+                setKeyword(event.target.value);
+              }}
+              placeholder="搜索兑换码或名称"
+            />
+          </label>
+          <div className="toolbar-actions">
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw size={15} />
+              刷新
+            </button>
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={() => exportRowsToCsv("兑换码", rows, redeemCodeFields)}
+              disabled={!rows.length}
+            >
+              <Download size={15} />
+              导出CSV
+            </button>
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={() => setCreating(true)}
+            >
+              新增
+            </button>
+          </div>
+        </div>
+
+        {error && <StateBox type="error">{error}</StateBox>}
+        {loading && !data && !error && <StateBox>正在加载兑换码...</StateBox>}
+        {data && rows.length === 0 && <StateBox>暂无兑换码</StateBox>}
+
+        {rows.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>兑换码</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>库存</th>
+                  <th>奖励</th>
+                  <th>有效期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td data-label="兑换码">
+                      <span className="cell-text mono">{row.code}</span>
+                    </td>
+                    <td data-label="名称">
+                      <span className="cell-text">{row.name}</span>
+                    </td>
+                    <td data-label="状态">
+                      <Badge>{row.enabled ? "启用" : "停用"}</Badge>
+                    </td>
+                    <td data-label="库存">
+                      {row.used_count || 0} / {row.total_limit || "不限"}
+                    </td>
+                    <td data-label="奖励">
+                      <span className="cell-text">{formatRewards(row.rewards)}</span>
+                    </td>
+                    <td data-label="有效期">
+                      <span className="cell-text">
+                        {formatDateRange(row.starts_at, row.ends_at)}
+                      </span>
+                    </td>
+                    <td data-label="操作">
+                      <div className="row-actions">
+                        <button
+                          className="secondary-button compact icon-text"
+                          type="button"
+                          onClick={() => setDetail(row)}
+                        >
+                          <Eye size={14} />
+                          详情
+                        </button>
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          onClick={() => setEditing(row)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          aria-label="删除"
+                          onClick={() => deleteRedeemCode(row)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="pagination">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            type="button"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span>
+            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+            type="button"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {(creating || editing) && (
+          <RedeemCodeModal
+            initial={editing || null}
+            itemOptions={options?.dropItems || []}
+            onCancel={() => {
+              setCreating(false);
+              setEditing(null);
+            }}
+            onSubmit={saveRedeemCode}
+          />
+        )}
+
+        {detail && (
+          <DetailDrawer
+            title="兑换码详情"
+            fields={redeemCodeFields}
+            data={detail}
+            loading={false}
+            onClose={() => setDetail(null)}
+          />
+        )}
+      </Panel>
+
+      <AdminTable
+        title="兑换记录"
+        endpoint="/admin/redeem-usages"
+        fields={redeemUsageFields}
+        searchPlaceholder="按 UID 查询"
+        keywordParam="uid"
+      />
+    </div>
+  );
+}
+
+function RedeemCodeModal({
+  initial,
+  itemOptions,
+  onCancel,
+  onSubmit,
+}: {
+  initial: RedeemCodeRecord | null;
+  itemOptions: SelectOption[];
+  onCancel: () => void;
+  onSubmit: (values: Partial<RedeemCodeRecord>) => Promise<void>;
+}) {
+  const [values, setValues] = useState(() => createRedeemFormState(initial));
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await onSubmit({
+        ...values,
+        starts_at: fromDateTimeLocal(values.starts_at),
+        ends_at: fromDateTimeLocal(values.ends_at),
+        total_limit: values.total_limit === "" ? null : Number(values.total_limit),
+      } as Partial<RedeemCodeRecord>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal wide" onSubmit={submit}>
+        <header>
+          <div>
+            <span className="eyebrow">兑换码</span>
+            <h2>{initial ? "编辑兑换码" : "新增兑换码"}</h2>
+          </div>
+          <button type="button" onClick={onCancel}>
+            关闭
+          </button>
+        </header>
+        <div className="form-grid">
+          <label className="form-field">
+            <span>兑换码</span>
+            <input
+              value={values.code}
+              placeholder="WELCOME2026"
+              onChange={(event) =>
+                setValues({ ...values, code: event.target.value.toUpperCase() })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>名称</span>
+            <input
+              value={values.name}
+              placeholder="欢迎礼包"
+              onChange={(event) =>
+                setValues({ ...values, name: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>状态</span>
+            <select
+              value={String(values.enabled)}
+              onChange={(event) =>
+                setValues({ ...values, enabled: event.target.value === "true" })
+              }
+            >
+              <option value="true">启用</option>
+              <option value="false">停用</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>总库存</span>
+            <input
+              type="number"
+              min="1"
+              value={values.total_limit}
+              placeholder="留空表示不限"
+              onChange={(event) =>
+                setValues({ ...values, total_limit: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>开始时间</span>
+            <input
+              type="datetime-local"
+              value={values.starts_at}
+              onChange={(event) =>
+                setValues({ ...values, starts_at: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field">
+            <span>结束时间</span>
+            <input
+              type="datetime-local"
+              value={values.ends_at}
+              onChange={(event) =>
+                setValues({ ...values, ends_at: event.target.value })
+              }
+            />
+          </label>
+          <label className="form-field full-width">
+            <span>描述</span>
+            <textarea
+              value={values.description}
+              placeholder="面向运营和客服的备注"
+              onChange={(event) =>
+                setValues({ ...values, description: event.target.value })
+              }
+            />
+          </label>
+        </div>
+        <div className="reward-editor">
+          <div className="section-title-row">
+            <h3>奖励内容</h3>
+            <Badge>{formatRewards(values.rewards)}</Badge>
+          </div>
+          <label className="form-field">
+            <span>奖励积分</span>
+            <input
+              type="number"
+              min="0"
+              value={values.rewards.points}
+              onChange={(event) =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    points: Number(event.target.value),
+                  },
+                })
+              }
+            />
+          </label>
+          <div className="reward-items">
+            {values.rewards.items.map((item, index) => (
+              <div className="reward-item-row" key={index}>
+                <select
+                  value={item.itemId || ""}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        itemId: Number(event.target.value),
+                      }),
+                    })
+                  }
+                >
+                  <option value="">选择道具</option>
+                  {itemOptions.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.num}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        num: Number(event.target.value),
+                      }),
+                    })
+                  }
+                />
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={() =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        items: values.rewards.items.filter((_, i) => i !== index),
+                      },
+                    })
+                  }
+                >
+                  移除
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={() =>
+              setValues({
+                ...values,
+                rewards: {
+                  ...values.rewards,
+                  items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                },
+              })
+            }
+          >
+            添加道具奖励
+          </button>
+        </div>
+        {error && <div className="error-box">{error}</div>}
+        <footer>
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button
+            className="primary-button compact"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "保存中..." : "保存兑换码"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function ConfigPage() {
   const [data, setData] = useState<GachaConfigData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<{
+    poolKey: string;
+    config: GachaPoolConfig;
+  } | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1167,55 +1660,75 @@ function ConfigPage() {
   const poolEntries = Object.entries(data?.pools || {});
 
   return (
-    <Panel
-      title="系统配置"
-      icon={<Settings size={18} />}
-      action={<RefreshButton onClick={load} loading={loading} />}
-    >
-      {error && <StateBox type="error">{error}</StateBox>}
-      {!data && !error && <StateBox>正在加载配置...</StateBox>}
-      {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
-      {data && poolEntries.length > 0 && (
-        <div className="config-grid">
-          {poolEntries.map(([poolKey, config]) => (
-            <GachaConfigCard
-              key={poolKey}
-              poolKey={poolKey}
-              config={config}
-            />
-          ))}
-          <article className="config-card muted">
-            <div className="config-card-header">
-              <div>
-                <span className="eyebrow">保留字段</span>
-                <h3>管理员白名单</h3>
+    <>
+      <Panel
+        title="系统配置"
+        icon={<Settings size={18} />}
+        action={<RefreshButton onClick={load} loading={loading} />}
+      >
+        {error && <StateBox type="error">{error}</StateBox>}
+        {!data && !error && <StateBox>正在加载配置...</StateBox>}
+        {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
+        {data && poolEntries.length > 0 && (
+          <div className="config-grid">
+            {poolEntries.map(([poolKey, config]) => (
+              <GachaConfigCard
+                key={poolKey}
+                poolKey={poolKey}
+                config={config}
+                onEdit={() => setEditing({ poolKey, config })}
+              />
+            ))}
+            <article className="config-card muted">
+              <div className="config-card-header">
+                <div>
+                  <span className="eyebrow">保留字段</span>
+                  <h3>管理员白名单</h3>
+                </div>
+                <Badge>只读</Badge>
               </div>
-              <Badge>只读</Badge>
-            </div>
-            <p>
-              当前后台权限以数据库 <code>User.is_admin</code>{" "}
-              为准，环境变量 <code>ADMIN_UIDS</code> 仅保留展示。
-            </p>
-            <div className="tag-list">
-              {data.adminUids?.length ? (
-                data.adminUids.map((uid) => <Badge key={uid}>{uid}</Badge>)
-              ) : (
-                <span className="muted-text">未配置 ADMIN_UIDS</span>
-              )}
-            </div>
-          </article>
-        </div>
+              <p>
+                当前后台权限以数据库 <code>User.is_admin</code>{" "}
+                为准，环境变量 <code>ADMIN_UIDS</code> 仅保留展示。
+              </p>
+              <div className="tag-list">
+                {data.adminUids?.length ? (
+                  data.adminUids.map((uid) => <Badge key={uid}>{uid}</Badge>)
+                ) : (
+                  <span className="muted-text">未配置 ADMIN_UIDS</span>
+                )}
+              </div>
+            </article>
+          </div>
+        )}
+      </Panel>
+      {editing && (
+        <GachaConfigModal
+          poolKey={editing.poolKey}
+          config={editing.config}
+          onCancel={() => setEditing(null)}
+          onSubmit={async (poolId, values) => {
+            await request(`/admin/config/gacha/${poolId}`, {
+              method: "PATCH",
+              body: JSON.stringify(values),
+            });
+            setEditing(null);
+            load();
+          }}
+        />
       )}
-    </Panel>
+    </>
   );
 }
 
 function GachaConfigCard({
   poolKey,
   config,
+  onEdit,
 }: {
   poolKey: string;
   config: GachaPoolConfig;
+  onEdit?: () => void;
 }) {
   const probabilities = config.rarityProbabilities || {};
   const probabilityEntries = Object.entries(probabilities);
@@ -1227,10 +1740,24 @@ function GachaConfigCard({
     <article className="config-card">
       <div className="config-card-header">
         <div>
-          <span className="eyebrow">卡池 #{config.poolId || poolKey}</span>
+          <span className="eyebrow">
+            卡池 #{config.poolId || poolKey} ·{" "}
+            {config.source === "database" ? "数据库配置" : "环境默认"}
+          </span>
           <h3>{poolNameById(Number(config.poolId || poolKey))}</h3>
         </div>
-        <Badge>{pity?.enabled === false ? "无保底" : "保底开启"}</Badge>
+        <div className="config-actions">
+          <Badge>{config.enabled === false ? "配置未启用" : "配置生效"}</Badge>
+          {onEdit && (
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={onEdit}
+            >
+              编辑
+            </button>
+          )}
+        </div>
       </div>
 
       <section className="config-section">
@@ -1292,6 +1819,7 @@ function GachaConfigCard({
                   ? `${pity.hardPity.count || "-"} 抽保 ${pity.hardPity.guaranteedRarity || "-"}`
                   : "未配置",
               ],
+              ["更新时间", config.updatedAt ? formatDate(config.updatedAt) : "-"],
             ]}
           />
         ) : (
@@ -1299,6 +1827,259 @@ function GachaConfigCard({
         )}
       </section>
     </article>
+  );
+}
+
+function GachaConfigModal({
+  poolKey,
+  config,
+  onCancel,
+  onSubmit,
+}: {
+  poolKey: string;
+  config: GachaPoolConfig;
+  onCancel: () => void;
+  onSubmit: (poolId: number, values: GachaPoolConfig) => Promise<void>;
+}) {
+  const [values, setValues] = useState<GachaFormState>(() =>
+    createGachaFormState(poolKey, config),
+  );
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const probabilityTotal = rarityOptions.reduce(
+    (sum, option) => sum + Number(values.rarityProbabilities[String(option.value)] || 0),
+    0,
+  );
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await onSubmit(values.poolId, values);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="modal wide" onSubmit={submit}>
+        <header>
+          <div>
+            <span className="eyebrow">抽卡配置</span>
+            <h2>编辑 {poolNameById(values.poolId)}</h2>
+          </div>
+          <button type="button" onClick={onCancel}>
+            关闭
+          </button>
+        </header>
+        <div className="config-edit">
+          <section>
+            <div className="section-title-row">
+              <h3>生效与概率</h3>
+              <Badge>合计 {probabilityTotal.toFixed(4)}</Badge>
+            </div>
+            <label className="form-field">
+              <span>启用数据库配置</span>
+              <select
+                value={String(values.enabled !== false)}
+                onChange={(event) =>
+                  setValues({ ...values, enabled: event.target.value === "true" })
+                }
+              >
+                <option value="true">启用</option>
+                <option value="false">关闭并回退环境默认</option>
+              </select>
+            </label>
+            <div className="probability-edit-grid">
+              {rarityOptions.map((option) => {
+                const rarity = String(option.value);
+                return (
+                  <label className="form-field" key={rarity}>
+                    <span>{rarity} 概率</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.0001"
+                      value={values.rarityProbabilities[rarity] ?? 0}
+                      onChange={(event) =>
+                        setValues({
+                          ...values,
+                          rarityProbabilities: {
+                            ...values.rarityProbabilities,
+                            [rarity]: Number(event.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+          <section>
+            <h3>UP 配置</h3>
+            <div className="form-grid no-padding">
+              <label className="form-field">
+                <span>UP 状态</span>
+                <select
+                  value={String(values.upCards?.enabled === true)}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      upCards: {
+                        enabled: event.target.value === "true",
+                        cardIds: values.upCards?.cardIds || [],
+                        upRate: values.upCards?.upRate || 0,
+                      },
+                    })
+                  }
+                >
+                  <option value="false">关闭</option>
+                  <option value="true">开启</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>UP 概率</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.0001"
+                  value={values.upCards?.upRate || 0}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      upCards: {
+                        enabled: values.upCards?.enabled === true,
+                        cardIds: values.upCards?.cardIds || [],
+                        upRate: Number(event.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label className="form-field full-width">
+                <span>UP 卡片ID</span>
+                <input
+                  value={(values.upCards?.cardIds || []).join(",")}
+                  placeholder="多个卡片ID用英文逗号分隔"
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      upCards: {
+                        enabled: values.upCards?.enabled === true,
+                        cardIds: parseNumberList(event.target.value),
+                        upRate: values.upCards?.upRate || 0,
+                      },
+                    })
+                  }
+                />
+              </label>
+            </div>
+          </section>
+          <section>
+            <h3>保底配置</h3>
+            <div className="form-grid no-padding">
+              <label className="form-field">
+                <span>保底状态</span>
+                <select
+                  value={String(values.pitySystem?.enabled !== false)}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      pitySystem: {
+                        ...(values.pitySystem || {}),
+                        enabled: event.target.value === "true",
+                      },
+                    })
+                  }
+                >
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+              </label>
+              <label className="form-field">
+                <span>软保底次数</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={values.pitySystem?.softPity?.count || 10}
+                  onChange={(event) =>
+                    setPityRule(setValues, values, "softPity", {
+                      count: Number(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label className="form-field">
+                <span>软保底稀有度</span>
+                <select
+                  value={values.pitySystem?.softPity?.guaranteedRarity || "SR"}
+                  onChange={(event) =>
+                    setPityRule(setValues, values, "softPity", {
+                      guaranteedRarity: event.target.value,
+                    })
+                  }
+                >
+                  {rarityOptions.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-field">
+                <span>硬保底次数</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={values.pitySystem?.hardPity?.count || 90}
+                  onChange={(event) =>
+                    setPityRule(setValues, values, "hardPity", {
+                      count: Number(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label className="form-field">
+                <span>硬保底稀有度</span>
+                <select
+                  value={values.pitySystem?.hardPity?.guaranteedRarity || "SSR"}
+                  onChange={(event) =>
+                    setPityRule(setValues, values, "hardPity", {
+                      guaranteedRarity: event.target.value,
+                    })
+                  }
+                >
+                  {rarityOptions.map((option) => (
+                    <option key={String(option.value)} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+        </div>
+        {error && <div className="error-box">{error}</div>}
+        <footer>
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button
+            className="primary-button compact"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "保存中..." : "保存配置"}
+          </button>
+        </footer>
+      </form>
+    </div>
   );
 }
 
@@ -1421,6 +2202,108 @@ function RarityFilter() {
   return null;
 }
 
+function createRedeemFormState(initial: RedeemCodeRecord | null) {
+  return {
+    code: initial?.code || "",
+    name: initial?.name || "",
+    description: initial?.description || "",
+    enabled: initial?.enabled !== false,
+    total_limit:
+      initial?.total_limit === null || initial?.total_limit === undefined
+        ? ""
+        : String(initial.total_limit),
+    starts_at: toDateTimeLocal(initial?.starts_at),
+    ends_at: toDateTimeLocal(initial?.ends_at),
+    rewards: {
+      points: Number(initial?.rewards?.points || 0),
+      items: Array.isArray(initial?.rewards?.items)
+        ? initial!.rewards.items.map((item) => ({
+            itemId: Number(item.itemId),
+            num: Number(item.num),
+          }))
+        : [],
+    },
+  };
+}
+
+function updateRewardItem(
+  rewards: RedeemRewards,
+  index: number,
+  patch: Partial<{ itemId: number; num: number }>,
+): RedeemRewards {
+  return {
+    ...rewards,
+    items: rewards.items.map((item, currentIndex) =>
+      currentIndex === index ? { ...item, ...patch } : item,
+    ),
+  };
+}
+
+function createGachaFormState(
+  poolKey: string,
+  config: GachaPoolConfig,
+): GachaFormState {
+  const poolId = Number(config.poolId || poolKey);
+  return {
+    poolId,
+    enabled: config.enabled !== false,
+    rarityProbabilities: {
+      N: Number(config.rarityProbabilities?.N ?? 0.5),
+      R: Number(config.rarityProbabilities?.R ?? 0.3),
+      SR: Number(config.rarityProbabilities?.SR ?? 0.15),
+      SSR: Number(config.rarityProbabilities?.SSR ?? 0.045),
+      UR: Number(config.rarityProbabilities?.UR ?? 0.005),
+    },
+    upCards: {
+      enabled: config.upCards?.enabled === true,
+      cardIds: config.upCards?.cardIds || [],
+      upRate: Number(config.upCards?.upRate || 0),
+    },
+    pitySystem: {
+      enabled: config.pitySystem?.enabled !== false,
+      softPity: {
+        count: Number(config.pitySystem?.softPity?.count || 10),
+        guaranteedRarity:
+          config.pitySystem?.softPity?.guaranteedRarity || "SR",
+      },
+      hardPity: {
+        count: Number(config.pitySystem?.hardPity?.count || 90),
+        guaranteedRarity:
+          config.pitySystem?.hardPity?.guaranteedRarity || "SSR",
+      },
+    },
+  };
+}
+
+function parseNumberList(value: string) {
+  return value
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0);
+}
+
+function setPityRule(
+  setValues: Dispatch<SetStateAction<GachaFormState>>,
+  values: GachaFormState,
+  key: "softPity" | "hardPity",
+  patch: Record<string, string | number>,
+) {
+  const currentRule = values.pitySystem?.[key] || {
+    count: key === "softPity" ? 10 : 90,
+    guaranteedRarity: key === "softPity" ? "SR" : "SSR",
+  };
+  setValues({
+    ...values,
+    pitySystem: {
+      ...(values.pitySystem || { enabled: true }),
+      [key]: {
+        ...currentRule,
+        ...patch,
+      },
+    },
+  });
+}
+
 function coerceFieldValue(field: FieldConfig, value: string) {
   const fieldOptions =
     field.type === "boolean" ? booleanOptions : field.options || [];
@@ -1457,6 +2340,9 @@ function formatValue(value: unknown) {
     return value.toLocaleString();
   }
   if (typeof value === "object") {
+    if (isRewards(value)) {
+      return formatRewards(value);
+    }
     const record = value as Record<string, unknown>;
     const name =
       record.name ||
@@ -1473,6 +2359,33 @@ function formatValue(value: unknown) {
   return String(value);
 }
 
+function isRewards(value: unknown): value is RedeemRewards {
+  const record = value as RedeemRewards | undefined;
+  return Boolean(record && ("points" in record || "items" in record));
+}
+
+function formatRewards(rewards: RedeemRewards | undefined) {
+  if (!rewards) {
+    return "-";
+  }
+  const parts: string[] = [];
+  if (Number(rewards.points || 0) > 0) {
+    parts.push(`积分 ${rewards.points}`);
+  }
+  const items = Array.isArray(rewards.items) ? rewards.items : [];
+  if (items.length) {
+    parts.push(`道具 ${items.length} 项`);
+  }
+  return parts.join("，") || "未配置";
+}
+
+function formatDateRange(start?: unknown, end?: unknown) {
+  if (!start && !end) {
+    return "不限时间";
+  }
+  return `${formatDate(start) || "-"} 至 ${formatDate(end) || "-"}`;
+}
+
 function formatDate(value: unknown) {
   if (!value) {
     return "-";
@@ -1482,6 +2395,22 @@ function formatDate(value: unknown) {
     return String(value);
   }
   return date.toLocaleString();
+}
+
+function toDateTimeLocal(value: unknown) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const timezoneOffset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value: string) {
+  return value ? new Date(value).toISOString() : null;
 }
 
 function formatPercent(value: unknown) {

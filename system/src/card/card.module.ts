@@ -10,6 +10,7 @@ import { UserHistory } from "src/entity/history.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { GachaConfigService } from "./gacha-config.service";
 
@@ -24,6 +25,7 @@ import { GachaConfigService } from "./gacha-config.service";
       DropItem,
       UserInventory,
       UserGachaPity,
+      GachaPoolConfig,
     ]),
     AuthModule,
   ],

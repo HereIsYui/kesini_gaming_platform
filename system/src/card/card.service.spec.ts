@@ -28,7 +28,7 @@ describe("CardService 抽卡核心规则", () => {
           hardPity: { count: 90, guaranteedRarity: "SSR" },
         },
       })),
-      getConfigByPoolId: jest.fn((poolId: number) => ({
+      getConfigByPoolId: jest.fn(async (poolId: number) => ({
         poolId,
         rarityProbabilities: {
           N: 0.5,
