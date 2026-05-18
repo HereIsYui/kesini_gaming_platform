@@ -1,4 +1,4 @@
-// common/utils/redis.util.ts
+// Redis 工具类
 import { Injectable, Logger } from "@nestjs/common";
 import Redis from "ioredis";
 import { ConfigurationService } from "src/config/configuration.service";
@@ -6,16 +6,26 @@ import { ConfigurationService } from "src/config/configuration.service";
 @Injectable()
 export class RedisUtil {
   private readonly logger = new Logger(RedisUtil.name);
-  private redisClient: Redis;
+  private redisClient?: Redis;
 
-  constructor(private readonly configService: ConfigurationService) {
-    this.initRedis();
+  constructor(private readonly configService: ConfigurationService) {}
+
+  /**
+   * 获取已创建的 Redis 客户端。
+   */
+  private getClient(): Redis | undefined {
+    return this.redisClient;
   }
 
   /**
-   * 初始化 Redis 连接
+   * 按需创建 Redis 客户端，避免应用启动时建立连接。
    */
-  private initRedis(): void {
+  private ensureClient(): Redis {
+    const currentClient = this.getClient();
+    if (currentClient) {
+      return currentClient;
+    }
+
     const redisConfig = this.configService.redisConfig;
     this.redisClient = new Redis({
       host: redisConfig.host,
@@ -23,16 +33,19 @@ export class RedisUtil {
       password: redisConfig.password,
       db: 0,
       keepAlive: 1,
+      lazyConnect: true,
     });
 
     // 基本事件监听
     this.redisClient.on("connect", () => {
-      this.logger.log("Redis connected");
+      this.logger.log("Redis connected on first use");
     });
 
     this.redisClient.on("error", (err) => {
       this.logger.error(`Redis error: ${err.message}`);
     });
+
+    return this.redisClient;
   }
 
   /**
@@ -44,13 +57,14 @@ export class RedisUtil {
   async set(key: string, value: any, ttl?: number): Promise<boolean> {
     try {
       key = key.toUpperCase();
+      const redisClient = this.ensureClient();
       const serializedValue =
         typeof value === "object" ? JSON.stringify(value) : String(value);
 
       if (ttl) {
-        await this.redisClient.set(key, serializedValue, "EX", ttl);
+        await redisClient.set(key, serializedValue, "EX", ttl);
       } else {
-        await this.redisClient.set(key, serializedValue);
+        await redisClient.set(key, serializedValue);
       }
 
       return true;
@@ -67,7 +81,8 @@ export class RedisUtil {
   async get<T = any>(key: string): Promise<T | null> {
     try {
       key = key.toUpperCase();
-      const value = await this.redisClient.get(key);
+      const redisClient = this.ensureClient();
+      const value = await redisClient.get(key);
       if (value === null) return null;
 
       try {
@@ -87,7 +102,9 @@ export class RedisUtil {
    */
   async gets<T = any>(keys: string[]): Promise<Record<string, T | null>> {
     try {
-      const values = await this.redisClient.mget(...keys);
+      const redisClient = this.ensureClient();
+      const normalizedKeys = keys.map((key) => key.toUpperCase());
+      const values = await redisClient.mget(...normalizedKeys);
       const result: Record<string, T | null> = {};
 
       keys.forEach((key, index) => {
@@ -116,7 +133,9 @@ export class RedisUtil {
    */
   async del(key: string): Promise<boolean> {
     try {
-      const result = await this.redisClient.del(key);
+      key = key.toUpperCase();
+      const redisClient = this.ensureClient();
+      const result = await redisClient.del(key);
       return result > 0;
     } catch (error) {
       this.logger.error(`Redis del error for key ${key}: ${error.message}`);
@@ -129,7 +148,8 @@ export class RedisUtil {
    */
   async ping(): Promise<boolean> {
     try {
-      await this.redisClient.ping();
+      const redisClient = this.ensureClient();
+      await redisClient.ping();
       return true;
     } catch {
       return false;

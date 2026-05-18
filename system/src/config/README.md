@@ -52,6 +52,8 @@ DB_RETRY_ATTEMPTS=10        # 重试次数
 
 ### Redis配置
 
+Redis 是预留缓存能力，应用启动时不会主动连接。只有业务代码调用 Redis 工具方法时，才会按需创建客户端并发起连接。
+
 ```bash
 REDIS_HOST=127.0.0.1       # Redis主机
 REDIS_PORT=6379            # Redis端口
