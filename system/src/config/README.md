@@ -9,7 +9,9 @@
 ### 环境变量文件
 
 - `.env.example` - 配置模板文件
-- `.env.dev` - 开发环境配置文件
+- `.env` - 默认本地配置文件
+- `.env.${NODE_ENV}` / `.env.dev` / `.env.prod` - 可选环境配置文件
+- `ENV_FILE` - 可显式指定环境配置文件路径
 
 ### 配置服务
 
@@ -161,8 +163,9 @@ const allConfigs = this.gachaConfigService.getAllPoolConfigs();
    - 卡片ID必须存在于数据库中
 
 3. **环境隔离**:
-   - 开发环境使用`.env.dev`
-   - 生产环境使用独立的环境变量
+   - 本地默认使用 `system/.env`
+   - 可通过 `ENV_FILE` 指定配置文件，或按 `NODE_ENV` 自动读取 `.env.${NODE_ENV}`
+   - 生产环境使用独立的环境变量或 `.env.prod`
    - 不要将敏感配置提交到版本控制
 
 ## 配置热更新

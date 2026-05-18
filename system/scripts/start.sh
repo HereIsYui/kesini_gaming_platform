@@ -1,28 +1,30 @@
 #!/bin/bash
 
 # 启动脚本
-# 根据NODE_ENV选择对应的环境文件
+# 默认读取 system/.env，可通过 ENV_FILE 指定其他配置文件
 
+set -e
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV=${NODE_ENV:-development}
 
+cd "$APP_DIR"
 echo "Starting application in $ENV mode..."
 
-# 复制对应的环境文件
-if [ "$ENV" = "production" ]; then
-    if [ -f ".env.prod" ]; then
-        cp .env.prod .env
-        echo "Using .env.prod configuration"
-    else
-        echo "Warning: .env.prod not found, using default .env.dev"
-        cp .env.dev .env
-    fi
-elif [ "$ENV" = "development" ]; then
-    cp .env.dev .env
-    echo "Using .env.dev configuration"
+if [ -n "$ENV_FILE" ]; then
+    echo "Using $ENV_FILE configuration"
+elif [ -f ".env.$ENV" ]; then
+    export ENV_FILE=".env.$ENV"
+    echo "Using $ENV_FILE configuration"
+elif [ "$ENV" = "production" ] && [ -f ".env.prod" ]; then
+    export ENV_FILE=".env.prod"
+    echo "Using $ENV_FILE configuration"
+elif [ "$ENV" = "development" ] && [ -f ".env.dev" ]; then
+    export ENV_FILE=".env.dev"
+    echo "Using $ENV_FILE configuration"
 else
-    echo "Unknown environment: $ENV"
-    echo "Supported environments: development, production"
-    exit 1
+    export ENV_FILE=".env"
+    echo "Using .env configuration"
 fi
 
 # 启动应用
