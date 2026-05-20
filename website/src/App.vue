@@ -58,6 +58,7 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
+  { key: "synthesize", label: "合成", icon: WandSparkles },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
@@ -543,6 +544,17 @@ function highestRarity(levels?: string) {
   )[0] || "N";
 }
 
+function synthesisCostLabel(levels?: string) {
+  const rarity = highestRarity(levels);
+  const costs: Record<string, number> = {
+    N: 80,
+    R: 160,
+    SR: 320,
+    SSR: 1000,
+  };
+  return rarity === "UR" ? "UR 不可合成" : `${costs[rarity] || "-"} 碎片`;
+}
+
 function poolTypeLabel(type?: number) {
   return ["常驻", "活动", "限定"][Number(type || 0)] || "卡池";
 }
@@ -806,15 +818,21 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             <span>去抽卡区试试手气，或调整筛选条件。</span>
           </div>
           <div v-else class="owned-grid">
-            <article v-for="card in userCards.list" :key="card.uuid" class="owned-card" :class="rarityClass(card.cardLevel)">
-              <div>
-                <span class="rarity-badge">{{ card.cardLevel }}</span>
-                <h3>{{ card.cardName }}</h3>
-                <p>{{ card.cardDesc || "暂无介绍" }}</p>
-              </div>
-              <div class="owned-meta">
-                <span>{{ poolTypeLabel(pools.find((pool) => pool.id === card.poolId)?.card_type) }}</span>
-                <span>{{ formatDate(card.obtainedAt) }}</span>
+            <article v-for="(card, index) in userCards.list" :key="card.uuid" class="result-card owned-card" :class="rarityClass(card.cardLevel)" :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }">
+              <div class="card-face">
+                <div class="result-card-top">
+                  <span class="rarity-badge">{{ card.cardLevel }}</span>
+                  <span class="card-type-pill">{{ cardTypeLabel(card.cardType) }}</span>
+                </div>
+                <div class="card-sigil"></div>
+                <div class="card-content">
+                  <h3>{{ card.cardName }}</h3>
+                  <p>{{ card.cardDesc || "暂无介绍" }}</p>
+                  <div class="tag-row">
+                    <span>{{ poolTypeLabel(pools.find((pool) => pool.id === card.poolId)?.card_type) }}</span>
+                    <span>{{ formatDate(card.obtainedAt) }}</span>
+                  </div>
+                </div>
               </div>
               <button class="danger-action" type="button" :disabled="card.cardLevel === 'UR'" @click="decomposeCard(card)">
                 分解
@@ -856,31 +874,69 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </aside>
       </section>
 
-      <section v-if="activeSection === 'bag'" class="panel catalog-panel">
+      <section v-if="activeSection === 'synthesize'" class="panel catalog-panel synthesize-panel" data-section="synthesize">
         <div class="section-head">
           <div>
-            <p class="eyebrow">卡池图鉴</p>
-            <h2>碎片合成入口</h2>
+            <p class="eyebrow">碎片合成</p>
+            <h2>选择目标卡片</h2>
           </div>
-          <span class="hint-text">合成消耗由服务端按稀有度计算</span>
+          <div class="filter-row">
+            <select v-model="activePoolId">
+              <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
+            </select>
+          </div>
         </div>
+
+        <div class="synthesis-overview">
+          <article>
+            <small>当前卡池</small>
+            <strong>{{ selectedPool?.pool_name || "未选择" }}</strong>
+          </article>
+          <article>
+            <small>可合成卡片</small>
+            <strong>{{ poolCards.filter((card) => highestRarity(card.card_level) !== 'UR').length }}</strong>
+          </article>
+          <article>
+            <small>合成规则</small>
+            <strong>N/R/SR/SSR</strong>
+          </article>
+        </div>
+
         <div v-if="poolCards.length === 0" class="empty-state">
           <Package :size="30" />
           <strong>当前卡池暂无卡片</strong>
           <span>切换卡池后可查看可合成卡片。</span>
         </div>
-        <div v-else class="catalog-grid">
-          <article v-for="card in poolCards" :key="card.id" class="catalog-card" :class="rarityClass(highestRarity(card.card_level))">
-            <span class="rarity-badge">{{ highestRarity(card.card_level) }}</span>
-            <h3>{{ card.card_name }}</h3>
-            <p>{{ card.card_desc || "暂无介绍" }}</p>
+        <div v-else class="catalog-grid synthesis-grid">
+          <article
+            v-for="(card, index) in poolCards"
+            :key="card.id"
+            class="result-card synthesis-card"
+            :class="rarityClass(highestRarity(card.card_level))"
+            :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
+          >
+            <div class="card-face">
+              <div class="result-card-top">
+                <span class="rarity-badge">{{ highestRarity(card.card_level) }}</span>
+                <span class="card-type-pill">{{ cardTypeLabel(card.card_type) }}</span>
+              </div>
+              <div class="card-sigil"></div>
+              <div class="card-content">
+                <h3>{{ card.card_name }}</h3>
+                <p>{{ card.card_desc || "暂无介绍" }}</p>
+                <div class="tag-row">
+                  <span>{{ synthesisCostLabel(card.card_level) }}</span>
+                  <span>#{{ card.id }}</span>
+                </div>
+              </div>
+            </div>
             <button
               class="secondary-action"
               type="button"
-              :disabled="highestRarity(card.card_level) === 'UR'"
+              :disabled="busy.assets || highestRarity(card.card_level) === 'UR'"
               @click="synthesizeCard(card)"
             >
-              合成
+              {{ highestRarity(card.card_level) === 'UR' ? '不可合成' : '碎片合成' }}
             </button>
           </article>
         </div>
