@@ -295,11 +295,17 @@ export class CardService {
     page = Math.max(1, page);
     pageSize = Math.min(100, Math.max(1, pageSize));
 
+    const user = await this.userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    const dropItems = await this.getUserDropItems(user.id);
+
     const normalizedRarity = rarity ? this.normalizeRarity(rarity) : undefined;
     const poolCardIds =
       poolId === undefined ? undefined : await this.getCardIdsByPool(poolId);
     if (poolCardIds !== undefined && poolCardIds.length === 0) {
-      return this.emptyUserCardsResult(page, pageSize);
+      return this.emptyUserCardsResult(page, pageSize, dropItems);
     }
 
     const baseWhere: any = {
@@ -313,14 +319,14 @@ export class CardService {
       poolCardIds,
     );
     if (whereConditions.length === 0) {
-      return this.emptyUserCardsResult(page, pageSize);
+      return this.emptyUserCardsResult(page, pageSize, dropItems);
     }
 
     const total = await this.userCardRepository.count({
       where: whereConditions,
     });
     if (total === 0) {
-      return this.emptyUserCardsResult(page, pageSize);
+      return this.emptyUserCardsResult(page, pageSize, dropItems);
     }
 
     const userCards = await this.userCardRepository.find({
@@ -332,36 +338,6 @@ export class CardService {
     const cardIds = [...new Set(userCards.map((uc) => parseInt(uc.card_id)))];
     const cards = await this.cardRepository.find({
       where: { id: In(cardIds) },
-    });
-    const user = await this.userRepository.findOne({ where: { uid } });
-    if (!user) {
-      throw new Error("用户不存在");
-    }
-
-    const userInventories = await this.inventoryRepository.find({
-      where: { user_id: user.id },
-    });
-    const dropItems =
-      userInventories.length > 0
-        ? await this.dropRepository.find({
-            where: { id: In(userInventories.map((inv) => inv.item_id)) },
-          })
-        : [];
-    const itemInfoMap = new Map();
-
-    dropItems.forEach((item) => {
-      const inventory = userInventories.find((inv) => inv.item_id === item.id);
-      if (inventory) {
-        itemInfoMap.set(item.id, {
-          id: item.id,
-          name: item.drop_name,
-          desc: item.drop_desc,
-          type: item.drop_type,
-          itemType: item.drop_item_type,
-          itemValue: item.drop_item_value,
-          num: inventory.num,
-        });
-      }
     });
 
     const list = userCards
@@ -389,7 +365,7 @@ export class CardService {
 
     return {
       list,
-      dropItems: Array.from(itemInfoMap.values()),
+      dropItems,
       total,
       page,
       pageSize,
@@ -880,6 +856,36 @@ export class CardService {
       .map((card) => card.id);
   }
 
+  private async getUserDropItems(userId: number): Promise<any[]> {
+    const userInventories = await this.inventoryRepository.find({
+      where: { user_id: userId },
+    });
+    const dropItems =
+      userInventories.length > 0
+        ? await this.dropRepository.find({
+            where: { id: In(userInventories.map((inv) => inv.item_id)) },
+          })
+        : [];
+    const itemInfoMap = new Map();
+
+    dropItems.forEach((item) => {
+      const inventory = userInventories.find((inv) => inv.item_id === item.id);
+      if (inventory) {
+        itemInfoMap.set(item.id, {
+          id: item.id,
+          name: item.drop_name,
+          desc: item.drop_desc,
+          type: item.drop_type,
+          itemType: item.drop_item_type,
+          itemValue: item.drop_item_value,
+          num: inventory.num,
+        });
+      }
+    });
+
+    return Array.from(itemInfoMap.values());
+  }
+
   private normalizeRarity(rarity: string): CardRarity {
     const normalized = rarity.trim().toUpperCase();
     if (!RARITY_ORDER.includes(normalized as CardRarity)) {
@@ -926,10 +932,14 @@ export class CardService {
     user.card_count_ur = user.card_count_ur || 0;
   }
 
-  private emptyUserCardsResult(page: number, pageSize: number) {
+  private emptyUserCardsResult(
+    page: number,
+    pageSize: number,
+    dropItems: any[] = [],
+  ) {
     return {
       list: [],
-      dropItems: [],
+      dropItems,
       total: 0,
       page,
       pageSize,

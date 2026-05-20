@@ -302,14 +302,42 @@ describe("CardService 背包筛选", () => {
     const userRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
     });
+    const userInventories = [
+      {
+        id: 1,
+        user_id: 1,
+        item_id: 10,
+        num: 5,
+      },
+    ];
+    const dropItems = [
+      {
+        id: 10,
+        drop_name: "测试碎片",
+        drop_desc: "用于测试库存",
+        drop_type: 0,
+        drop_item_type: 1,
+        drop_item_value: 0,
+      },
+    ];
+    const dropRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(dropItems, options?.where),
+      ),
+    });
+    const inventoryRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(userInventories, options?.where),
+      ),
+    });
     const service = new CardService(
       cardRepository as any,
       createRepository() as any,
       userRepository as any,
       userCardRepository as any,
       createRepository() as any,
-      createRepository({ find: jest.fn().mockResolvedValue([]) }) as any,
-      createRepository({ find: jest.fn().mockResolvedValue([]) }) as any,
+      dropRepository as any,
+      inventoryRepository as any,
       createRepository() as any,
       {} as any,
       {} as any,
@@ -353,6 +381,21 @@ describe("CardService 背包筛选", () => {
 
     expect(result.total).toBe(0);
     expect(result.list).toEqual([]);
+  });
+
+  it("筛选不到卡片时仍应返回背包物品库存", async () => {
+    const { service } = createListService();
+
+    const result = await service.getUserCards("u1", "UR", 1, 1, 20);
+
+    expect(result.list).toEqual([]);
+    expect(result.dropItems).toEqual([
+      expect.objectContaining({
+        id: 10,
+        name: "测试碎片",
+        num: 5,
+      }),
+    ]);
   });
 
   it("旧数据没有实际等级时按卡片最高稀有度兜底筛选", async () => {
