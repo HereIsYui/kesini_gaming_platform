@@ -912,22 +912,28 @@ h3 {
 
 .owned-grid {
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 12px;
+  gap: 18px 16px;
 }
 
 .owned-card,
 .synthesis-card {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
   min-height: 0;
+  border: 1px solid rgba(196, 220, 255, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
 .owned-card .card-face,
 .synthesis-card .card-face {
   grid-template-rows: auto minmax(58px, 1fr) auto;
+  width: 100%;
   height: auto;
-  min-height: 214px;
+  min-height: 202px;
   aspect-ratio: 5 / 6;
   padding: 12px;
 }
@@ -977,7 +983,10 @@ h3 {
 .owned-card .danger-action,
 .synthesis-card .secondary-action {
   width: 100%;
+  justify-self: stretch;
+  align-self: stretch;
   min-height: 44px;
+  border-radius: calc(var(--radius) - 2px);
   padding: 0 10px;
 }
 
@@ -1033,7 +1042,7 @@ h3 {
 
 .catalog-grid {
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 12px;
+  gap: 18px 16px;
 }
 
 .synthesize-panel {
@@ -1600,12 +1609,12 @@ h3 {
   .owned-grid,
   .catalog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 14px 12px;
   }
 
   .owned-card .card-face,
   .synthesis-card .card-face {
-    min-height: 204px;
+    min-height: 192px;
     padding: 10px;
   }
 
