@@ -65,6 +65,13 @@ const sectionItems = [
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
 type DrawPhase = "idle" | "charging" | "burst";
+type SynthesisCard = {
+  card: CardItem;
+  rarity: CardRarity;
+  key: string;
+  costLabel: string;
+  disabled: boolean;
+};
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 
 const apiBase = ref(getApiBase());
@@ -114,6 +121,20 @@ const selectedDrawCosts = computed(
 );
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
+);
+const synthesisCards = computed<SynthesisCard[]>(() =>
+  poolCards.value.flatMap((card) =>
+    parseCardRarities(card.card_level).map((rarity) => ({
+      card,
+      rarity,
+      key: `${card.id}-${rarity}`,
+      costLabel: synthesisCostLabel(rarity),
+      disabled: rarity === "UR",
+    })),
+  ),
+);
+const synthesisAvailableCount = computed(
+  () => synthesisCards.value.filter((item) => !item.disabled).length,
 );
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bestResult = computed(() => {
@@ -423,21 +444,29 @@ function closeResultModal() {
   resultModalOpen.value = false;
 }
 
-async function synthesizeCard(card: CardItem) {
+async function synthesizeCard(item: SynthesisCard) {
   if (!isAuthed.value) {
     notify("error", "请先登录后再合成卡片");
     return;
   }
-  if (!window.confirm(`确认消耗碎片合成「${card.card_name}」吗？`)) {
+  if (item.disabled) {
+    notify("error", "UR 卡片不能通过碎片合成");
+    return;
+  }
+  if (
+    !window.confirm(
+      `确认消耗${item.costLabel}合成「${item.card.card_name}」${item.rarity} 吗？`,
+    )
+  ) {
     return;
   }
   busy.assets = true;
   try {
     await request("/card/synthesize", {
       method: "POST",
-      body: JSON.stringify({ card_id: card.id }),
+      body: JSON.stringify({ card_id: item.card.id, rarity: item.rarity }),
     });
-    notify("success", "合成成功");
+    notify("success", `${item.rarity} 合成成功`);
     await loadPrivateData();
   } catch (error) {
     notify("error", getErrorMessage(error));
@@ -534,25 +563,24 @@ function rarityClass(value?: string) {
   return `rarity-${normalizeRarity(value).toLowerCase()}`;
 }
 
-function highestRarity(levels?: string) {
-  const candidates = String(levels || "N")
+function parseCardRarities(levels?: string): CardRarity[] {
+  return String(levels || "N")
     .split(",")
     .map((item) => item.trim())
-    .filter(Boolean);
-  return candidates.sort(
-    (a, b) => (rarityRank[b] || 0) - (rarityRank[a] || 0),
-  )[0] || "N";
+    .filter((item): item is CardRarity =>
+      rarityOrder.includes(item as CardRarity),
+    );
 }
 
-function synthesisCostLabel(levels?: string) {
-  const rarity = highestRarity(levels);
+function synthesisCostLabel(rarity?: string) {
+  const normalized = normalizeRarity(rarity);
   const costs: Record<string, number> = {
     N: 80,
     R: 160,
     SR: 320,
     SSR: 1000,
   };
-  return rarity === "UR" ? "UR 不可合成" : `${costs[rarity] || "-"} 碎片`;
+  return normalized === "UR" ? "UR 不可合成" : `${costs[normalized]} 碎片`;
 }
 
 function poolTypeLabel(type?: number) {
@@ -894,11 +922,11 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
           </article>
           <article>
             <small>可合成卡片</small>
-            <strong>{{ poolCards.filter((card) => highestRarity(card.card_level) !== 'UR').length }}</strong>
+            <strong>{{ synthesisAvailableCount }}</strong>
           </article>
           <article>
-            <small>合成规则</small>
-            <strong>N/R/SR/SSR</strong>
+            <small>展示方式</small>
+            <strong>按稀有度展开</strong>
           </article>
         </div>
 
@@ -909,34 +937,34 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
         </div>
         <div v-else class="catalog-grid synthesis-grid">
           <article
-            v-for="(card, index) in poolCards"
-            :key="card.id"
+            v-for="(item, index) in synthesisCards"
+            :key="item.key"
             class="result-card synthesis-card"
-            :class="rarityClass(highestRarity(card.card_level))"
+            :class="rarityClass(item.rarity)"
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
             <div class="card-face">
               <div class="result-card-top">
-                <span class="rarity-badge">{{ highestRarity(card.card_level) }}</span>
-                <span class="card-type-pill">{{ cardTypeLabel(card.card_type) }}</span>
+                <span class="rarity-badge">{{ item.rarity }}</span>
+                <span class="card-type-pill">{{ cardTypeLabel(item.card.card_type) }}</span>
               </div>
               <div class="card-sigil"></div>
               <div class="card-content">
-                <h3>{{ card.card_name }}</h3>
-                <p>{{ card.card_desc || "暂无介绍" }}</p>
+                <h3>{{ item.card.card_name }}</h3>
+                <p>{{ item.card.card_desc || "暂无介绍" }}</p>
                 <div class="tag-row">
-                  <span>{{ synthesisCostLabel(card.card_level) }}</span>
-                  <span>#{{ card.id }}</span>
+                  <span>{{ item.costLabel }}</span>
+                  <span>#{{ item.card.id }}</span>
                 </div>
               </div>
             </div>
             <button
               class="secondary-action"
               type="button"
-              :disabled="busy.assets || highestRarity(card.card_level) === 'UR'"
-              @click="synthesizeCard(card)"
+              :disabled="busy.assets || item.disabled"
+              @click="synthesizeCard(item)"
             >
-              {{ highestRarity(card.card_level) === 'UR' ? '不可合成' : '碎片合成' }}
+              {{ item.disabled ? '不可合成' : '碎片合成' }}
             </button>
           </article>
         </div>

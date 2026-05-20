@@ -376,7 +376,7 @@ export class CardService {
   /**
    * 合成卡片
    */
-  async synthesizeCard(uid: string, cardId: number) {
+  async synthesizeCard(uid: string, cardId: number, targetRarity?: string) {
     return this.dataSource.transaction(async (manager) => {
       const cardRepository = manager.getRepository(CardItem);
       const inventoryRepository = manager.getRepository(UserInventory);
@@ -387,7 +387,7 @@ export class CardService {
         throw new Error("卡片不存在");
       }
 
-      const rarity = this.getHighestRarity(card.card_level);
+      const rarity = this.resolveSynthesisRarity(card, targetRarity);
       if (rarity === "UR") {
         throw new Error("不能合成UR卡片");
       }
@@ -424,6 +424,7 @@ export class CardService {
       return {
         data: {
           card_name: card.card_name,
+          card_level: rarity,
           fragments_used: requiredFragments,
           card_uuid: userCard.card_uuid,
         },
@@ -643,6 +644,21 @@ export class CardService {
 
   private cardSupportsRarity(card: CardItem, rarity: CardRarity): boolean {
     return this.parseCardLevels(card.card_level).includes(rarity);
+  }
+
+  private resolveSynthesisRarity(
+    card: CardItem,
+    targetRarity?: string,
+  ): CardRarity {
+    if (!targetRarity) {
+      return this.getHighestRarity(card.card_level);
+    }
+
+    const rarity = this.normalizeRarity(targetRarity);
+    if (!this.cardSupportsRarity(card, rarity)) {
+      throw new Error("卡片不支持该稀有度");
+    }
+    return rarity;
   }
 
   private getHighestRarity(cardLevel: string): CardRarity {

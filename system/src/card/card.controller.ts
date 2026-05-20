@@ -48,6 +48,10 @@ export class SynthesizeCardDto {
   @IsInt()
   @Min(1)
   card_id: number;
+
+  @IsOptional()
+  @IsIn(["N", "R", "SR", "SSR", "UR"])
+  rarity?: string;
 }
 
 export class DecomposeCardDto {
@@ -316,6 +320,7 @@ export class CardController {
       const result = await this.cardService.synthesizeCard(
         user.uid,
         body.card_id,
+        body.rarity,
       );
       return ResponseDto.success(result.data, result.msg || "合成成功");
     } catch (error) {

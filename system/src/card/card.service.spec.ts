@@ -5,8 +5,10 @@ jest.mock("uuid", () => ({
 import { ArgumentMetadata, ValidationPipe } from "@nestjs/common";
 import { CardService } from "./card.service";
 import { GachaConfigService } from "./gacha-config.service";
-import { DrawCardDto, DrawMultipleDto } from "./card.controller";
+import { DrawCardDto, DrawMultipleDto, SynthesizeCardDto } from "./card.controller";
 import { CardItem } from "src/entity/card.entity";
+import { DropItem } from "src/entity/drop.entity";
+import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
@@ -255,6 +257,26 @@ describe("CardController 入参安全", () => {
     await expect(pipe.transform({ poolId: 1, count: 10 }, metadata)).resolves
       .toEqual(expect.objectContaining({ count: 10 }));
   });
+
+  it("合成请求只允许合法目标稀有度", async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    const metadata: ArgumentMetadata = {
+      type: "body",
+      metatype: SynthesizeCardDto,
+      data: "",
+    };
+
+    await expect(
+      pipe.transform({ card_id: 1, rarity: "SSR" }, metadata),
+    ).resolves.toEqual(expect.objectContaining({ card_id: 1, rarity: "SSR" }));
+    await expect(
+      pipe.transform({ card_id: 1, rarity: "LR" }, metadata),
+    ).rejects.toThrow();
+  });
 });
 
 describe("CardService 背包筛选", () => {
@@ -501,6 +523,177 @@ describe("CardService 背包筛选", () => {
 
     await expect(service.getUserCards("u1", "X", undefined, 1, 20)).rejects.toThrow(
       "稀有度参数无效",
+    );
+  });
+});
+
+describe("CardService 碎片合成", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createSynthesisService(
+    cardPatch: Partial<CardItem> = {},
+    inventoryPatch: Partial<UserInventory> = {},
+  ) {
+    const card = {
+      id: 1,
+      card_name: "多稀有度卡",
+      card_level: "N,R,SR,SSR",
+      drop_item: "",
+      card_desc: "测试",
+      card_type: 0,
+      pool: 1,
+      ...cardPatch,
+    } as CardItem;
+    const fragment = {
+      id: 5,
+      drop_name: "通用碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    } as DropItem;
+    const inventory = {
+      id: 1,
+      user_id: 1,
+      item_id: 5,
+      num: 1000,
+      ...inventoryPatch,
+    } as UserInventory;
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? fragment : null,
+      ),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
+    });
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(inventory),
+    });
+    const userCardRepository = createRepository();
+    const repositories = new Map<any, any>([
+      [CardItem, cardRepository],
+      [DropItem, dropRepository],
+      [User, userRepository],
+      [UserInventory, inventoryRepository],
+      [UserCard, userCardRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const service = new CardService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      dataSource as any,
+    );
+
+    return {
+      service,
+      inventoryRepository,
+      userCardRepository,
+    };
+  }
+
+  it("指定 N 合成时扣 80 碎片并发 N 卡", async () => {
+    const { service, inventoryRepository, userCardRepository } =
+      createSynthesisService();
+
+    const result = await service.synthesizeCard("u1", 1, "N");
+
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ num: 920 }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_id: "1", card_level: "N" }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        card_level: "N",
+        fragments_used: 80,
+      }),
+    );
+  });
+
+  it("指定 SR 合成时扣 320 碎片并发 SR 卡", async () => {
+    const { service, inventoryRepository, userCardRepository } =
+      createSynthesisService();
+
+    const result = await service.synthesizeCard("u1", 1, "SR");
+
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ num: 680 }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_id: "1", card_level: "SR" }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        card_level: "SR",
+        fragments_used: 320,
+      }),
+    );
+  });
+
+  it("提交卡片不支持的稀有度会拒绝", async () => {
+    const { service, userCardRepository } = createSynthesisService({
+      card_level: "N,R",
+    });
+
+    await expect(service.synthesizeCard("u1", 1, "SSR")).rejects.toThrow(
+      "卡片不支持该稀有度",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("提交 UR 仍不可合成", async () => {
+    const { service, userCardRepository } = createSynthesisService({
+      card_level: "N,UR",
+    });
+
+    await expect(service.synthesizeCard("u1", 1, "UR")).rejects.toThrow(
+      "不能合成UR卡片",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("不传目标稀有度时保持旧逻辑使用最高稀有度", async () => {
+    const { service, inventoryRepository, userCardRepository } =
+      createSynthesisService({ card_level: "N,R,SR" });
+
+    const result = await service.synthesizeCard("u1", 1);
+
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ num: 680 }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_id: "1", card_level: "SR" }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        card_level: "SR",
+        fragments_used: 320,
+      }),
     );
   });
 });
