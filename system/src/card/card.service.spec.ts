@@ -527,6 +527,150 @@ describe("CardService 背包筛选", () => {
   });
 });
 
+describe("CardService 排行榜", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      count: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createLeaderboardService(
+    overrides: {
+      users?: Partial<User>[];
+      cards?: Partial<CardItem>[];
+      userCards?: Partial<UserCard>[];
+    } = {},
+  ) {
+    const users = (overrides.users || [
+      { id: 1, uid: "a", name: "a", nickname: "阿尔法", avatar: "a.png" },
+      { id: 2, uid: "b", name: "b", nickname: "贝塔", avatar: "b.png" },
+      { id: 3, uid: "c", name: "c", nickname: "伽马", avatar: "c.png" },
+      { id: 4, uid: "d", name: "d", nickname: "德尔塔", avatar: "d.png" },
+    ]) as User[];
+    const cards = (overrides.cards || [
+      { id: 1, card_name: "多等级卡", card_level: "N,R", pool: 1 },
+      { id: 2, card_name: "SSR卡", card_level: "SSR", pool: 1 },
+      { id: 3, card_name: "UR卡", card_level: "UR", pool: 2 },
+      { id: 4, card_name: "高等级卡", card_level: "SR,SSR", pool: 2 },
+    ]) as CardItem[];
+    const userCards = (overrides.userCards || [
+      { id: 1, uid: "a", card_id: "1", card_level: "N", delete_flag: false },
+      { id: 2, uid: "a", card_id: "1", card_level: "R", delete_flag: false },
+      { id: 3, uid: "a", card_id: "2", card_level: "SSR", delete_flag: false },
+      { id: 4, uid: "a", card_id: "3", card_level: "UR", delete_flag: false },
+      { id: 5, uid: "a", card_id: "3", card_level: "UR", delete_flag: true },
+      { id: 6, uid: "b", card_id: "1", card_level: "N", delete_flag: false },
+      { id: 7, uid: "b", card_id: "2", card_level: null, delete_flag: false },
+      { id: 8, uid: "c", card_id: "3", card_level: "UR", delete_flag: false },
+      { id: 9, uid: "c", card_id: "4", card_level: "SR", delete_flag: false },
+      { id: 10, uid: "c", card_id: "4", card_level: "SSR", delete_flag: false },
+    ]) as UserCard[];
+
+    const service = new CardService(
+      createRepository({ find: jest.fn().mockResolvedValue(cards) }) as any,
+      createRepository() as any,
+      createRepository({ find: jest.fn().mockResolvedValue(users) }) as any,
+      createRepository({
+        find: jest
+          .fn()
+          .mockResolvedValue(userCards.filter((card) => !card.delete_flag)),
+      }) as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      {} as any,
+      {} as any,
+    );
+
+    return { service };
+  }
+
+  it("当前收藏口径不统计已分解卡片", async () => {
+    const { service } = createLeaderboardService();
+
+    const result = await service.getLeaderboard("a", 10);
+
+    expect(result.rankings.totalCards.me).toEqual(
+      expect.objectContaining({ uid: "a", value: 4 }),
+    );
+    expect(result.rankings.urCards.me).toEqual(
+      expect.objectContaining({ uid: "a", value: 1 }),
+    );
+  });
+
+  it("SSR 和 UR 榜单按实际稀有度统计，旧空等级按最高稀有度兜底", async () => {
+    const { service } = createLeaderboardService();
+
+    const result = await service.getLeaderboard("b", 10);
+
+    expect(result.rankings.ssrCards.me).toEqual(
+      expect.objectContaining({ uid: "b", value: 1 }),
+    );
+    expect(result.rankings.ssrCards.list.slice(0, 3)).toEqual([
+      expect.objectContaining({ uid: "a", rank: 1, value: 1 }),
+      expect.objectContaining({ uid: "b", rank: 1, value: 1 }),
+      expect.objectContaining({ uid: "c", rank: 1, value: 1 }),
+    ]);
+  });
+
+  it("集齐卡池按卡片和稀有度版本完整判断", async () => {
+    const { service } = createLeaderboardService();
+
+    const result = await service.getLeaderboard("c", 10);
+
+    expect(result.rankings.completedPools.me).toEqual(
+      expect.objectContaining({ uid: "c", value: 1 }),
+    );
+    expect(result.rankings.completedPools.list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ uid: "a", value: 1 }),
+        expect.objectContaining({ uid: "b", value: 0 }),
+      ]),
+    );
+  });
+
+  it("当前用户不在榜单截断范围内时仍返回真实排名", async () => {
+    const { service } = createLeaderboardService();
+
+    const result = await service.getLeaderboard("d", 2);
+
+    expect(result.rankings.totalCards.list.map((entry) => entry.uid)).toEqual([
+      "a",
+      "c",
+    ]);
+    expect(result.rankings.totalCards.me).toEqual(
+      expect.objectContaining({ uid: "d", rank: 4, value: 0 }),
+    );
+  });
+
+  it("limit 超过 100 时会按 100 截断", async () => {
+    const users = Array.from({ length: 120 }, (_, index) => ({
+      id: index + 1,
+      uid: `u${String(index).padStart(3, "0")}`,
+      name: `用户${index}`,
+      nickname: `用户${index}`,
+      avatar: "",
+    }));
+    const { service } = createLeaderboardService({
+      users,
+      cards: [],
+      userCards: [],
+    });
+
+    const result = await service.getLeaderboard("u119", 150);
+
+    expect(result.rankings.totalCards.list).toHaveLength(100);
+    expect(result.rankings.totalCards.me).toEqual(
+      expect.objectContaining({ uid: "u119", value: 0 }),
+    );
+  });
+});
+
 describe("CardService 碎片合成", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {

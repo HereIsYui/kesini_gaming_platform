@@ -160,3 +160,27 @@ export interface ExchangeClaimResponse {
   costs: ExchangeCostItem[];
   rewards: RedeemRewards;
 }
+
+export type LeaderboardMetric =
+  | "totalCards"
+  | "ssrCards"
+  | "urCards"
+  | "completedPools";
+
+export interface LeaderboardEntry {
+  rank: number;
+  uid: string;
+  nickname: string;
+  avatar: string;
+  value: number;
+}
+
+export interface LeaderboardBoard {
+  list: LeaderboardEntry[];
+  me: LeaderboardEntry | null;
+}
+
+export interface LeaderboardResponse {
+  generatedAt: string;
+  rankings: Record<LeaderboardMetric, LeaderboardBoard>;
+}

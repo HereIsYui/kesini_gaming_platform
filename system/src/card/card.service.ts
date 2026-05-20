@@ -16,6 +16,9 @@ import {
   DrawCosts,
   GachaConfig,
   GachaResult,
+  LeaderboardBoard,
+  LeaderboardEntry,
+  LeaderboardResponse,
   PitySystemConfig,
 } from "src/types/api";
 import { GachaConfigService } from "./gacha-config.service";
@@ -25,6 +28,12 @@ const ALLOWED_DRAW_COUNTS = [1, 10];
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
+type LeaderboardMetricKey =
+  | "totalCards"
+  | "ssrCards"
+  | "urCards"
+  | "completedPools";
+type LeaderboardMetrics = Record<LeaderboardMetricKey, number>;
 
 @Injectable()
 export class CardService {
@@ -234,6 +243,105 @@ export class CardService {
         details: h.card_details || [],
         createdAt: h.createdAt,
       })),
+    };
+  }
+
+  /**
+   * 获取玩家排行榜
+   */
+  async getLeaderboard(
+    uid: string,
+    limit: number = 50,
+  ): Promise<LeaderboardResponse> {
+    const normalizedLimit = this.normalizeLeaderboardLimit(limit);
+    const [users, cards, userCards] = await Promise.all([
+      this.userRepository.find(),
+      this.cardRepository.find(),
+      this.userCardRepository.find({ where: { delete_flag: false } }),
+    ]);
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const userMap = new Map(users.map((user) => [user.uid, user]));
+    const metricsByUid = new Map<string, LeaderboardMetrics>();
+    const ownedVersionsByUid = new Map<string, Map<number, Set<string>>>();
+
+    users.forEach((user) => {
+      metricsByUid.set(user.uid, this.createEmptyLeaderboardMetrics());
+    });
+    if (uid && !metricsByUid.has(uid)) {
+      metricsByUid.set(uid, this.createEmptyLeaderboardMetrics());
+    }
+
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card || !userCard.uid) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        return;
+      }
+
+      const metrics = this.ensureLeaderboardMetrics(
+        metricsByUid,
+        userCard.uid,
+      );
+      metrics.totalCards += 1;
+      if (rarity === "SSR") {
+        metrics.ssrCards += 1;
+      }
+      if (rarity === "UR") {
+        metrics.urCards += 1;
+      }
+
+      const poolVersions = this.ensurePoolVersionSet(
+        ownedVersionsByUid,
+        userCard.uid,
+        card.pool,
+      );
+      poolVersions.add(this.createPoolVersionKey(card.id, rarity));
+    });
+
+    const requiredVersionsByPool = this.buildRequiredPoolVersionMap(cards);
+    metricsByUid.forEach((metrics, ownerUid) => {
+      const ownerPools = ownedVersionsByUid.get(ownerUid);
+      metrics.completedPools = this.countCompletedPools(
+        requiredVersionsByPool,
+        ownerPools,
+      );
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      rankings: {
+        totalCards: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "totalCards",
+          normalizedLimit,
+        ),
+        ssrCards: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "ssrCards",
+          normalizedLimit,
+        ),
+        urCards: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "urCards",
+          normalizedLimit,
+        ),
+        completedPools: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "completedPools",
+          normalizedLimit,
+        ),
+      },
     };
   }
 
@@ -900,6 +1008,166 @@ export class CardService {
     });
 
     return Array.from(itemInfoMap.values());
+  }
+
+  private normalizeLeaderboardLimit(limit: number): number {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return 50;
+    }
+    return Math.min(100, limit);
+  }
+
+  private createEmptyLeaderboardMetrics(): LeaderboardMetrics {
+    return {
+      totalCards: 0,
+      ssrCards: 0,
+      urCards: 0,
+      completedPools: 0,
+    };
+  }
+
+  private ensureLeaderboardMetrics(
+    metricsByUid: Map<string, LeaderboardMetrics>,
+    uid: string,
+  ): LeaderboardMetrics {
+    let metrics = metricsByUid.get(uid);
+    if (!metrics) {
+      metrics = this.createEmptyLeaderboardMetrics();
+      metricsByUid.set(uid, metrics);
+    }
+    return metrics;
+  }
+
+  private ensurePoolVersionSet(
+    ownedVersionsByUid: Map<string, Map<number, Set<string>>>,
+    uid: string,
+    poolId: number,
+  ): Set<string> {
+    let poolMap = ownedVersionsByUid.get(uid);
+    if (!poolMap) {
+      poolMap = new Map<number, Set<string>>();
+      ownedVersionsByUid.set(uid, poolMap);
+    }
+
+    let versions = poolMap.get(poolId);
+    if (!versions) {
+      versions = new Set<string>();
+      poolMap.set(poolId, versions);
+    }
+    return versions;
+  }
+
+  private getEffectiveUserCardRarity(
+    userCard: UserCard,
+    card: CardItem,
+  ): CardRarity | null {
+    try {
+      return userCard.card_level
+        ? this.normalizeRarity(userCard.card_level)
+        : this.getHighestRarity(card.card_level);
+    } catch {
+      return null;
+    }
+  }
+
+  private buildRequiredPoolVersionMap(
+    cards: CardItem[],
+  ): Map<number, Set<string>> {
+    const requiredVersionsByPool = new Map<number, Set<string>>();
+    cards.forEach((card) => {
+      const levels = this.parseCardLevels(card.card_level);
+      if (levels.length === 0) {
+        return;
+      }
+      let versions = requiredVersionsByPool.get(card.pool);
+      if (!versions) {
+        versions = new Set<string>();
+        requiredVersionsByPool.set(card.pool, versions);
+      }
+      levels.forEach((rarity) => {
+        versions.add(this.createPoolVersionKey(card.id, rarity));
+      });
+    });
+    return requiredVersionsByPool;
+  }
+
+  private countCompletedPools(
+    requiredVersionsByPool: Map<number, Set<string>>,
+    ownerPools?: Map<number, Set<string>>,
+  ): number {
+    if (!ownerPools) {
+      return 0;
+    }
+
+    let completed = 0;
+    requiredVersionsByPool.forEach((requiredVersions, poolId) => {
+      const ownedVersions = ownerPools.get(poolId);
+      if (
+        ownedVersions &&
+        Array.from(requiredVersions).every((version) =>
+          ownedVersions.has(version),
+        )
+      ) {
+        completed += 1;
+      }
+    });
+    return completed;
+  }
+
+  private createPoolVersionKey(cardId: number, rarity: CardRarity): string {
+    return `${cardId}:${rarity}`;
+  }
+
+  private createLeaderboardBoard(
+    metricsByUid: Map<string, LeaderboardMetrics>,
+    userMap: Map<string, User>,
+    currentUid: string,
+    metric: LeaderboardMetricKey,
+    limit: number,
+  ): LeaderboardBoard {
+    const entries = Array.from(metricsByUid.entries())
+      .map(([uid, metrics]) =>
+        this.createLeaderboardEntry(uid, metrics[metric], userMap.get(uid)),
+      )
+      .sort((a, b) => b.value - a.value || a.uid.localeCompare(b.uid));
+    const rankedEntries = this.assignLeaderboardRanks(entries);
+
+    return {
+      list: rankedEntries.slice(0, limit),
+      me: rankedEntries.find((entry) => entry.uid === currentUid) || null,
+    };
+  }
+
+  private createLeaderboardEntry(
+    uid: string,
+    value: number,
+    user?: User,
+  ): LeaderboardEntry {
+    return {
+      rank: 0,
+      uid,
+      nickname: user?.nickname || user?.name || uid,
+      avatar: user?.avatar || "",
+      value,
+    };
+  }
+
+  private assignLeaderboardRanks(
+    entries: LeaderboardEntry[],
+  ): LeaderboardEntry[] {
+    let previousValue: number | undefined;
+    let currentRank = 0;
+
+    return entries.map((entry, index) => {
+      if (previousValue === undefined || entry.value !== previousValue) {
+        currentRank = index + 1;
+        previousValue = entry.value;
+      }
+      return {
+        ...entry,
+        rank: currentRank,
+      };
+    });
   }
 
   private normalizeRarity(rarity: string): CardRarity {

@@ -9,6 +9,7 @@ import {
 
 @Entity()
 @Index("IDX_user_card_owner", ["uid", "delete_flag", "card_id"])
+@Index("IDX_user_card_leaderboard", ["delete_flag", "card_level", "uid"])
 @Index("IDX_user_card_uuid", ["card_uuid"], { unique: true })
 export class UserCard {
   @PrimaryGeneratedColumn()

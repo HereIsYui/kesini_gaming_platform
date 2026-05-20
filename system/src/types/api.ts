@@ -79,3 +79,26 @@ export interface UserGachaStats {
     UR: number;
   };
 }
+
+export interface LeaderboardEntry {
+  rank: number;
+  uid: string;
+  nickname: string;
+  avatar: string;
+  value: number;
+}
+
+export interface LeaderboardBoard {
+  list: LeaderboardEntry[];
+  me: LeaderboardEntry | null;
+}
+
+export interface LeaderboardResponse {
+  generatedAt: string;
+  rankings: {
+    totalCards: LeaderboardBoard;
+    ssrCards: LeaderboardBoard;
+    urCards: LeaderboardBoard;
+    completedPools: LeaderboardBoard;
+  };
+}

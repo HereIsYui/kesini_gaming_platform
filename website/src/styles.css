@@ -1181,6 +1181,255 @@ h3 {
   color: var(--text-muted);
 }
 
+.leaderboard-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.leaderboard-content {
+  display: grid;
+  gap: 16px;
+}
+
+.leaderboard-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.leaderboard-tabs button {
+  display: grid;
+  min-height: 72px;
+  align-content: center;
+  justify-items: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 12px;
+  text-align: left;
+}
+
+.leaderboard-tabs button.active {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: rgba(84, 216, 255, 0.13);
+}
+
+.leaderboard-tabs strong {
+  margin-bottom: 4px;
+  color: inherit;
+}
+
+.leaderboard-tabs span,
+.leaderboard-time {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.my-rank-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, auto)) 1fr;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(150, 242, 255, 0.24);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(84, 216, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    var(--surface-muted);
+  padding: 14px;
+}
+
+.my-rank-card small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.my-rank-card strong {
+  color: var(--text);
+  font-size: 20px;
+}
+
+.my-rank-card > span {
+  justify-self: end;
+  color: var(--text-muted);
+}
+
+.leaderboard-board {
+  display: grid;
+  gap: 14px;
+}
+
+.podium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.podium-card,
+.leaderboard-list article {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.podium-card {
+  position: relative;
+  display: grid;
+  min-height: 210px;
+  justify-items: center;
+  align-content: center;
+  overflow: hidden;
+  padding: 18px;
+  text-align: center;
+}
+
+.podium-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, currentColor, transparent 58%);
+  opacity: 0.16;
+}
+
+.podium-card.rank-1 {
+  color: var(--gold);
+}
+
+.podium-card.rank-2 {
+  color: #96f2ff;
+}
+
+.podium-card.rank-3 {
+  color: #84ffd1;
+}
+
+.rank-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.podium-card img,
+.avatar-fallback {
+  width: 58px;
+  height: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.avatar-fallback.small {
+  width: 38px;
+  height: 38px;
+  font-size: 13px;
+}
+
+.podium-card h3,
+.podium-card p,
+.podium-card strong,
+.podium-card img,
+.podium-card .avatar-fallback {
+  position: relative;
+  z-index: 1;
+}
+
+.podium-card h3 {
+  max-width: 100%;
+  margin: 12px 0 3px;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-card p {
+  max-width: 100%;
+  margin: 0 0 10px;
+  overflow: hidden;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-card strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 9px;
+}
+
+.leaderboard-list article {
+  display: grid;
+  grid-template-columns: 58px 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+}
+
+.leaderboard-list article.mine {
+  border-color: var(--border-strong);
+  background: rgba(84, 216, 255, 0.1);
+}
+
+.leaderboard-list b {
+  color: var(--text);
+}
+
+.leaderboard-list img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.leaderboard-list strong,
+.leaderboard-list span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-list span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.leaderboard-list em {
+  color: var(--primary-strong);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.leaderboard-time {
+  margin: 0;
+  text-align: right;
+}
+
+.leaderboard-skeleton span {
+  min-height: 112px;
+}
+
 .empty-state,
 .empty-mini,
 .empty-inline {
@@ -1522,6 +1771,7 @@ h3 {
   .collection-panel,
   .inventory-panel,
   .catalog-panel,
+  .leaderboard-panel,
   .redeem-panel,
   .shop-panel,
   .recent-panel {
@@ -1631,6 +1881,28 @@ h3 {
     font-size: 11px;
   }
 
+  .leaderboard-tabs,
+  .podium-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .my-rank-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .my-rank-card > span {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .leaderboard-list article {
+    grid-template-columns: 46px 34px minmax(0, 1fr);
+  }
+
+  .leaderboard-list em {
+    grid-column: 3;
+  }
+
   .recent-list article {
     grid-template-columns: 1fr;
   }
@@ -1656,7 +1928,7 @@ h3 {
     bottom: 10px;
     left: 10px;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1670,8 +1942,8 @@ h3 {
     min-width: 0;
     flex-direction: column;
     gap: 3px;
-    padding: 5px 2px;
-    font-size: 12px;
+    padding: 5px 1px;
+    font-size: 11px;
   }
 }
 

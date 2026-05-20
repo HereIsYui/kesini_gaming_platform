@@ -14,6 +14,7 @@ import {
   Sparkles,
   Store,
   Ticket,
+  Trophy,
   UserRound,
   WandSparkles,
 } from "@lucide/vue";
@@ -37,6 +38,9 @@ import type {
   ExchangeShopItem,
   GachaResult,
   InventoryItem,
+  LeaderboardEntry,
+  LeaderboardMetric,
+  LeaderboardResponse,
   LoginResponse,
   LoginUrlResponse,
   PoolInfo,
@@ -59,8 +63,31 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "synthesize", label: "合成", icon: WandSparkles },
+  { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
+
+const leaderboardTabs: Array<{
+  key: LeaderboardMetric;
+  label: string;
+  hint: string;
+  unit: string;
+}> = [
+  {
+    key: "totalCards",
+    label: "卡片总数",
+    hint: "当前收藏卡片数量",
+    unit: "张",
+  },
+  { key: "ssrCards", label: "SSR 数量", hint: "当前 SSR 收藏", unit: "张" },
+  { key: "urCards", label: "UR 数量", hint: "当前 UR 收藏", unit: "张" },
+  {
+    key: "completedPools",
+    label: "集齐卡池",
+    hint: "按稀有度版本完整集齐",
+    unit: "个",
+  },
+];
 
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
@@ -84,6 +111,9 @@ const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
+const leaderboard = ref<LeaderboardResponse | null>(null);
+const leaderboardError = ref("");
+const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
 const exchangeItems = ref<ExchangeShopItem[]>([]);
 const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
@@ -102,6 +132,7 @@ const busy = reactive({
   auth: false,
   drawing: false,
   assets: false,
+  leaderboard: false,
   shop: false,
   redeem: false,
 });
@@ -144,6 +175,20 @@ const filteredSynthesisCards = computed<SynthesisCard[]>(() => {
 });
 const synthesisAvailableCount = computed(
   () => filteredSynthesisCards.value.filter((item) => !item.disabled).length,
+);
+const activeLeaderboardTab = computed(
+  () =>
+    leaderboardTabs.find((item) => item.key === activeLeaderboardMetric.value) ||
+    leaderboardTabs[0],
+);
+const activeLeaderboardBoard = computed(
+  () => leaderboard.value?.rankings[activeLeaderboardMetric.value] || null,
+);
+const podiumEntries = computed<LeaderboardEntry[]>(() =>
+  activeLeaderboardBoard.value?.list.slice(0, 3) || [],
+);
+const leaderboardRows = computed<LeaderboardEntry[]>(() =>
+  activeLeaderboardBoard.value?.list.slice(3) || [],
 );
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bestResult = computed(() => {
@@ -310,6 +355,8 @@ function logout() {
   currentUser.value = null;
   stats.value = null;
   userCards.value = null;
+  leaderboard.value = null;
+  leaderboardError.value = "";
   exchangeItems.value = [];
   lastResults.value = [];
   resultModalOpen.value = false;
@@ -354,6 +401,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadUserCards(),
+    loadLeaderboard(),
     loadExchangeItems(),
   ]);
   const failed = results.filter((item) => item.status === "rejected");
@@ -383,6 +431,24 @@ async function loadUserCards() {
     );
   } finally {
     busy.assets = false;
+  }
+}
+
+async function loadLeaderboard() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.leaderboard = true;
+  leaderboardError.value = "";
+  try {
+    leaderboard.value = await request<LeaderboardResponse>(
+      "/card/leaderboard?limit=50",
+    );
+  } catch (error) {
+    leaderboardError.value = getErrorMessage(error);
+    throw error;
+  } finally {
+    busy.leaderboard = false;
   }
 }
 
@@ -638,6 +704,18 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
     .map((item) => `${item.itemName || `物品 ${item.itemId}`} x${item.num}`)
     .join("，");
 }
+
+function leaderboardInitial(entry: LeaderboardEntry) {
+  return (entry.nickname || entry.uid || "?").slice(0, 1).toUpperCase();
+}
+
+function formatLeaderboardValue(value?: number) {
+  return `${value || 0}${activeLeaderboardTab.value.unit}`;
+}
+
+function leaderboardRankLabel(rank?: number) {
+  return rank ? `#${rank}` : "未上榜";
+}
 </script>
 
 <template>
@@ -670,8 +748,8 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
       </nav>
 
       <div class="top-actions">
-        <button class="icon-button" type="button" :disabled="busy.public || busy.assets" @click="refreshAll">
-          <RefreshCw :size="17" :class="{ spin: busy.public || busy.assets }" />
+        <button class="icon-button" type="button" :disabled="busy.public || busy.assets || busy.leaderboard" @click="refreshAll">
+          <RefreshCw :size="17" :class="{ spin: busy.public || busy.assets || busy.leaderboard }" />
           <span>刷新</span>
         </button>
         <button v-if="isAuthed" class="icon-button ghost" type="button" @click="logout">
@@ -988,6 +1066,104 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
               {{ item.disabled ? '不可合成' : '碎片合成' }}
             </button>
           </article>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'leaderboard'" class="panel leaderboard-panel" data-section="leaderboard">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">玩家排行</p>
+            <h2>收藏榜单</h2>
+          </div>
+          <button class="secondary-action" type="button" :disabled="busy.leaderboard" @click="loadLeaderboard">
+            <RefreshCw :size="16" :class="{ spin: busy.leaderboard }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <Trophy :size="30" />
+          <strong>登录后查看排行榜</strong>
+          <span>排行榜按当前收藏统计，分解后的卡片不会计入排名。</span>
+        </div>
+        <div v-else-if="busy.leaderboard && !leaderboard" class="skeleton-grid leaderboard-skeleton">
+          <span v-for="item in 6" :key="item"></span>
+        </div>
+        <div v-else-if="leaderboardError" class="empty-state">
+          <Trophy :size="30" />
+          <strong>排行榜加载失败</strong>
+          <span>{{ leaderboardError }}</span>
+          <button class="secondary-action" type="button" @click="loadLeaderboard">重新加载</button>
+        </div>
+        <div v-else class="leaderboard-content">
+          <div class="leaderboard-tabs" role="tablist" aria-label="排行榜类型">
+            <button
+              v-for="tab in leaderboardTabs"
+              :key="tab.key"
+              type="button"
+              :class="{ active: activeLeaderboardMetric === tab.key }"
+              @click="activeLeaderboardMetric = tab.key"
+            >
+              <strong>{{ tab.label }}</strong>
+              <span>{{ tab.hint }}</span>
+            </button>
+          </div>
+
+          <div v-if="activeLeaderboardBoard?.me" class="my-rank-card">
+            <div>
+              <small>我的排名</small>
+              <strong>{{ leaderboardRankLabel(activeLeaderboardBoard.me.rank) }}</strong>
+            </div>
+            <div>
+              <small>{{ activeLeaderboardTab.label }}</small>
+              <strong>{{ formatLeaderboardValue(activeLeaderboardBoard.me.value) }}</strong>
+            </div>
+            <span>{{ activeLeaderboardTab.hint }}</span>
+          </div>
+
+          <div v-if="!activeLeaderboardBoard?.list.length" class="empty-state">
+            <Trophy :size="30" />
+            <strong>暂无排行榜数据</strong>
+            <span>玩家开始收集卡片后会在这里出现。</span>
+          </div>
+          <div v-else class="leaderboard-board">
+            <div class="podium-grid">
+              <article
+                v-for="entry in podiumEntries"
+                :key="`podium-${activeLeaderboardMetric}-${entry.uid}`"
+                class="podium-card"
+                :class="`rank-${entry.rank}`"
+              >
+                <span class="rank-badge">{{ leaderboardRankLabel(entry.rank) }}</span>
+                <img v-if="entry.avatar" :src="entry.avatar" :alt="entry.nickname" />
+                <span v-else class="avatar-fallback">{{ leaderboardInitial(entry) }}</span>
+                <h3>{{ entry.nickname || entry.uid }}</h3>
+                <p>{{ entry.uid }}</p>
+                <strong>{{ formatLeaderboardValue(entry.value) }}</strong>
+              </article>
+            </div>
+
+            <div v-if="leaderboardRows.length" class="leaderboard-list">
+              <article
+                v-for="entry in leaderboardRows"
+                :key="`${activeLeaderboardMetric}-${entry.uid}`"
+                :class="{ mine: entry.uid === activeLeaderboardBoard?.me?.uid }"
+              >
+                <b>{{ leaderboardRankLabel(entry.rank) }}</b>
+                <img v-if="entry.avatar" :src="entry.avatar" :alt="entry.nickname" />
+                <span v-else class="avatar-fallback small">{{ leaderboardInitial(entry) }}</span>
+                <div>
+                  <strong>{{ entry.nickname || entry.uid }}</strong>
+                  <span>{{ entry.uid }}</span>
+                </div>
+                <em>{{ formatLeaderboardValue(entry.value) }}</em>
+              </article>
+            </div>
+          </div>
+
+          <p class="leaderboard-time">
+            更新时间：{{ formatDate(leaderboard?.generatedAt) }}
+          </p>
         </div>
       </section>
 

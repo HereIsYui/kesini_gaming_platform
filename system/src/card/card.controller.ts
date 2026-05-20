@@ -15,7 +15,7 @@ import { CardService } from "./card.service";
 import { ResponseDto } from "src/common/dto/response.dto";
 import { TransformInterceptor } from "src/common/interceptors/transform.interceptor";
 import { HttpExceptionFilter } from "src/common/filters/http-exception.filter";
-import type { GachaResult } from "src/types/api";
+import type { GachaResult, LeaderboardResponse } from "src/types/api";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { GetUser } from "src/auth/get-user.decorator";
 import {
@@ -178,6 +178,31 @@ export class CardController {
       return ResponseDto.success(stats, "获取统计成功");
     } catch (error) {
       return ResponseDto.error(error.message || "获取统计失败");
+    }
+  }
+
+  /**
+   * 获取玩家排行榜
+   * GET /card/leaderboard?limit=50
+   */
+  @Get("leaderboard")
+  @UseGuards(JwtAuthGuard)
+  async getLeaderboard(
+    @GetUser() user: UserInfo,
+    @Query("limit") limit?: string,
+  ): Promise<ResponseDto<LeaderboardResponse | null>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const leaderboard = await this.cardService.getLeaderboard(
+        user.uid,
+        this.parseOptionalInt(limit, "limit", 1) || 50,
+      );
+      return ResponseDto.success(leaderboard, "获取排行榜成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取排行榜失败");
     }
   }
 
