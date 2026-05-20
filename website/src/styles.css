@@ -1216,8 +1216,20 @@ h3 {
 
 .modal-result-grid.single {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   overflow: auto;
+}
+
+.modal-result-grid.single .result-card.featured {
+  width: min(380px, 86vw);
+  min-height: 0;
+  aspect-ratio: 3 / 4;
+}
+
+.modal-result-grid.single .result-card.featured .card-face {
+  height: 100%;
+  min-height: 0;
 }
 
 .result-modal-actions {
@@ -1445,6 +1457,15 @@ h3 {
   .result-card.featured .card-face {
     width: min(320px, 100%);
     min-height: 410px;
+  }
+
+  .modal-result-grid.single .result-card.featured {
+    width: min(320px, 100%);
+    min-height: 0;
+  }
+
+  .modal-result-grid.single .result-card.featured .card-face {
+    min-height: 0;
   }
 
   .owned-grid,
