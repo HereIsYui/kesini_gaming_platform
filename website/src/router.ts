@@ -7,7 +7,7 @@ const PageShell = {
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/draw" },
   { path: "/draw", name: "draw", component: PageShell },
-  { path: "/result", name: "result", component: PageShell },
+  { path: "/result", redirect: "/draw" },
   { path: "/bag", name: "bag", component: PageShell },
   { path: "/redeem", name: "redeem", component: PageShell },
   { path: "/:pathMatch(.*)*", redirect: "/draw" },

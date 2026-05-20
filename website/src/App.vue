@@ -18,7 +18,7 @@ import {
   WandSparkles,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import {
   clearToken,
   getApiBase,
@@ -57,18 +57,17 @@ const rarityRank: Record<string, number> = {
 
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
-  { key: "result", label: "结果", icon: Ticket },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
+type DrawPhase = "idle" | "charging" | "burst";
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 
 const apiBase = ref(getApiBase());
 const route = useRoute();
-const router = useRouter();
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -86,6 +85,8 @@ const redeemCode = ref("");
 const exchangeCounts = reactive<Record<number, number>>({});
 const feedback = ref<{ type: FeedbackType; text: string } | null>(null);
 const callbackBusy = ref(false);
+const resultModalOpen = ref(false);
+const drawPhase = ref<DrawPhase>("idle");
 
 const busy = reactive({
   public: false,
@@ -130,6 +131,29 @@ const resultSummary = computed(() => {
   });
   return counts;
 });
+const drawPhaseText = computed(() => {
+  if (drawPhase.value === "charging") {
+    return "星轨正在充能，信号汇聚中";
+  }
+  if (drawPhase.value === "burst") {
+    return "星门已开启，结果解析中";
+  }
+  return bestResult.value
+    ? `${bestResult.value.rarity} 级信号已锁定`
+    : "选择卡池并登录后开始抽取";
+});
+const resultModalTitle = computed(() =>
+  lastResults.value.length > 1 ? "十连回响" : "星轨回应",
+);
+const resultModalSubtitle = computed(() => {
+  if (lastResults.value.length === 0) {
+    return "暂无抽卡结果";
+  }
+  const best = bestResult.value;
+  return best
+    ? `${lastResults.value.length} 次抽取完成，最高稀有度 ${best.rarity}`
+    : `${lastResults.value.length} 次抽取完成`;
+});
 
 onMounted(async () => {
   await handleOpenIdCallback();
@@ -171,6 +195,10 @@ function getStoredDrawResults(): GachaResult[] {
 
 function setStoredDrawResults(results: GachaResult[]) {
   localStorage.setItem(DRAW_RESULTS_KEY, JSON.stringify(results));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function saveApiBase() {
@@ -253,6 +281,7 @@ function logout() {
   userCards.value = null;
   exchangeItems.value = [];
   lastResults.value = [];
+  resultModalOpen.value = false;
   localStorage.removeItem(DRAW_RESULTS_KEY);
   notify("info", "已退出登录");
 }
@@ -357,7 +386,9 @@ async function performDraw(mode: "once" | "ten") {
     poolId: activePoolId.value || undefined,
   };
 
+  resultModalOpen.value = false;
   busy.drawing = true;
+  drawPhase.value = "charging";
   try {
     const data = await request<GachaResult | GachaResult[]>(endpoint, {
       method: "POST",
@@ -365,14 +396,30 @@ async function performDraw(mode: "once" | "ten") {
     });
     lastResults.value = Array.isArray(data) ? data : [data];
     setStoredDrawResults(lastResults.value);
-    await router.push({ name: "result" });
+    drawPhase.value = "burst";
+    await delay(360);
+    resultModalOpen.value = true;
     notify("success", `${lastResults.value.length} 次抽取完成`);
     await loadPrivateData();
   } catch (error) {
+    resultModalOpen.value = false;
     notify("error", getErrorMessage(error));
   } finally {
     busy.drawing = false;
+    drawPhase.value = "idle";
   }
+}
+
+function openLastResults() {
+  if (lastResults.value.length === 0) {
+    notify("info", "暂无可查看的抽卡结果");
+    return;
+  }
+  resultModalOpen.value = true;
+}
+
+function closeResultModal() {
+  resultModalOpen.value = false;
 }
 
 async function synthesizeCard(card: CardItem) {
@@ -620,12 +667,20 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
           </div>
 
           <div class="summon-stage">
-            <div class="summon-core" :class="{ drawing: busy.drawing }">
+            <div
+              class="summon-core"
+              :class="{
+                drawing: busy.drawing,
+                'summon-charging': drawPhase === 'charging',
+                'summon-burst': drawPhase === 'burst',
+              }"
+            >
               <div class="orbit orbit-one"></div>
               <div class="orbit orbit-two"></div>
+              <div class="summon-flare"></div>
               <WandSparkles :size="44" />
               <strong>{{ bestResult?.cardName || "星轨待命" }}</strong>
-              <span>{{ bestResult ? `${bestResult.rarity} 级信号已锁定` : "选择卡池并登录后开始抽取" }}</span>
+              <span>{{ drawPhaseText }}</span>
             </div>
 
             <div class="draw-actions">
@@ -650,6 +705,15 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
               <button class="primary-action golden" type="button" :disabled="busy.drawing" @click="performDraw('ten')">
                 <Ticket :size="18" />
                 十连 · {{ selectedDrawCosts.ten }}
+              </button>
+              <button
+                class="secondary-action wide"
+                type="button"
+                :disabled="busy.drawing || lastResults.length === 0"
+                @click="openLastResults"
+              >
+                <Sparkles :size="18" />
+                查看上次结果
               </button>
             </div>
           </div>
@@ -706,48 +770,6 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             </div>
           </div>
         </aside>
-      </section>
-
-      <section v-if="activeSection === 'result'" class="panel result-panel" data-section="result">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">抽取结果</p>
-            <h2>星轨回响</h2>
-          </div>
-          <div class="rarity-summary">
-            <span v-for="rarity in rarityOrder" :key="rarity" :class="['summary-pill', rarityClass(rarity)]">
-              {{ rarity }} {{ resultSummary[rarity] }}
-            </span>
-          </div>
-        </div>
-
-        <div v-if="lastResults.length === 0" class="empty-state">
-          <Sparkles :size="30" />
-          <strong>还没有抽卡结果</strong>
-          <span>完成单抽或十连后，结果会在这里以卡片网格展示。</span>
-        </div>
-
-        <div v-else class="result-grid">
-          <article
-            v-for="(card, index) in lastResults"
-            :key="`${card.userCardUuid}-${index}`"
-            class="result-card"
-            :class="rarityClass(card.rarity)"
-            :style="{ '--delay': `${Math.min(index * 36, 420)}ms` }"
-          >
-            <div class="card-face">
-              <span class="rarity-badge">{{ card.rarity }}</span>
-              <div class="card-orb"></div>
-              <h3>{{ card.cardName }}</h3>
-              <p>{{ card.cardDesc || "暂无卡片介绍" }}</p>
-              <div class="tag-row">
-                <span v-if="card.isUp">UP</span>
-                <span v-if="card.isPity">保底</span>
-                <span>{{ cardTypeLabel(card.cardType) }}</span>
-              </div>
-            </div>
-          </article>
-        </div>
       </section>
 
       <section v-if="activeSection === 'bag'" class="collection-grid" data-section="bag">
@@ -986,5 +1008,83 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
       {{ feedback.text }}
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="resultModalOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeResultModal"
+      >
+        <section
+          class="result-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="抽卡结果"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">抽取结果</p>
+              <h2>{{ resultModalTitle }}</h2>
+              <span>{{ resultModalSubtitle }}</span>
+            </div>
+            <button class="modal-close" type="button" aria-label="关闭抽卡结果" @click="closeResultModal">
+              关闭
+            </button>
+          </header>
+
+          <div class="result-modal-summary">
+            <span v-for="rarity in rarityOrder" :key="rarity" :class="['summary-pill', rarityClass(rarity)]">
+              {{ rarity }} {{ resultSummary[rarity] }}
+            </span>
+          </div>
+
+          <div
+            v-if="lastResults.length"
+            class="result-grid modal-result-grid"
+            :class="{ single: lastResults.length === 1 }"
+          >
+            <article
+              v-for="(card, index) in lastResults"
+              :key="`${card.userCardUuid}-${index}`"
+              class="result-card"
+              :class="[rarityClass(card.rarity), { featured: lastResults.length === 1 }]"
+              :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
+            >
+              <div class="card-face">
+                <div class="result-card-top">
+                  <span class="rarity-badge">{{ card.rarity }}</span>
+                  <span class="card-type-pill">{{ cardTypeLabel(card.cardType) }}</span>
+                </div>
+                <div class="card-sigil"></div>
+                <div class="card-content">
+                  <h3>{{ card.cardName }}</h3>
+                  <p>{{ card.cardDesc || "暂无卡片介绍" }}</p>
+                  <div class="tag-row">
+                    <span v-if="card.isUp">UP</span>
+                    <span v-if="card.isPity">保底</span>
+                    <span>#{card.cardId}</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <footer class="result-modal-actions">
+            <button class="secondary-action" type="button" @click="closeResultModal">
+              收起结果
+            </button>
+            <button class="primary-action" type="button" :disabled="busy.drawing" @click="performDraw('once')">
+              <Sparkles :size="18" />
+              继续单抽
+            </button>
+            <button class="primary-action golden" type="button" :disabled="busy.drawing" @click="performDraw('ten')">
+              <Ticket :size="18" />
+              再来十连
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
