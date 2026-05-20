@@ -152,3 +152,13 @@ export interface ExchangeShopItemRecord {
   updatedAt?: string;
   [key: string]: unknown;
 }
+
+export interface TradeConfigRecord {
+  id?: number;
+  enabled: boolean;
+  fee_rate: number;
+  min_price: number;
+  max_price: number;
+  createdAt?: string;
+  updatedAt?: string;
+}

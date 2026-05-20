@@ -12,6 +12,9 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { RedeemCode } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
+import { TradeConfig } from "src/entity/tradeConfig.entity";
+import { TradeListing } from "src/entity/tradeListing.entity";
+import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { AdminController } from "./admin.controller";
@@ -33,6 +36,9 @@ import { AdminService } from "./admin.service";
       RedeemCodeUsage,
       ExchangeShopItem,
       ExchangeShopUsage,
+      TradeListing,
+      TradeRecord,
+      TradeConfig,
     ]),
     AuthModule,
   ],

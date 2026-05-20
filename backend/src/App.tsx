@@ -22,6 +22,7 @@ import {
   Sun,
   Ticket,
   Trash2,
+  Handshake,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -59,6 +60,7 @@ import type {
   RedeemCodeRecord,
   RedeemRewards,
   SelectOption,
+  TradeConfigRecord,
 } from "./types";
 
 type Theme = "light" | "dark";
@@ -79,6 +81,7 @@ const navItems = [
   { key: "pity", label: "保底", icon: Ticket },
   { key: "redeem-codes", label: "兑换码", icon: Gift },
   { key: "exchange-shop", label: "兑换商店", icon: Store },
+  { key: "trade", label: "交易管理", icon: Handshake },
   { key: "config", label: "配置", icon: Settings },
 ];
 
@@ -339,6 +342,34 @@ const exchangeUsageFields: FieldConfig[] = [
   { key: "createdAt", label: "兑换时间", readonly: true },
 ];
 
+const tradeListingFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "status", label: "状态", readonly: true },
+  { key: "cardName", label: "卡片", readonly: true },
+  { key: "card_level", label: "稀有度", readonly: true },
+  { key: "card_uuid", label: "卡片UUID", readonly: true },
+  { key: "seller_uid", label: "卖家UID", readonly: true },
+  { key: "buyer_uid", label: "买家UID", readonly: true },
+  { key: "price", label: "价格", readonly: true },
+  { key: "fee_rate", label: "手续费率", readonly: true },
+  { key: "sellerIncome", label: "卖家实收", readonly: true },
+  { key: "createdAt", label: "上架时间", readonly: true },
+];
+
+const tradeRecordFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "listing_id", label: "挂单ID", readonly: true },
+  { key: "cardName", label: "卡片", readonly: true },
+  { key: "card_level", label: "稀有度", readonly: true },
+  { key: "card_uuid", label: "卡片UUID", readonly: true },
+  { key: "seller_uid", label: "卖家UID", readonly: true },
+  { key: "buyer_uid", label: "买家UID", readonly: true },
+  { key: "price", label: "成交价", readonly: true },
+  { key: "fee_amount", label: "手续费", readonly: true },
+  { key: "seller_income", label: "卖家实收", readonly: true },
+  { key: "createdAt", label: "成交时间", readonly: true },
+];
+
 export function App() {
   const [token, setLocalToken] = useState(getToken());
   const [admin, setAdmin] = useState<AdminMeResponse | null>(null);
@@ -578,6 +609,7 @@ export function App() {
           {active === "exchange-shop" && (
             <ExchangeShopPage options={adminOptions} />
           )}
+          {active === "trade" && <TradeAdminPage />}
           {active === "config" && <ConfigPage options={adminOptions} />}
         </section>
       </main>
@@ -2610,6 +2642,168 @@ function ExchangeShopModal({
         </footer>
       </form>
     </div>
+  );
+}
+
+function TradeAdminPage() {
+  return (
+    <div className="page-stack">
+      <TradeConfigPanel />
+      <AdminTable
+        title="交易挂单"
+        endpoint="/admin/trade-listings"
+        fields={tradeListingFields}
+        deletable
+        detailFetchable
+        searchPlaceholder="按卡片 UUID 查询"
+      />
+      <AdminTable
+        title="交易记录"
+        endpoint="/admin/trade-records"
+        fields={tradeRecordFields}
+        detailFetchable
+        searchPlaceholder="按 UID 查询"
+        keywordParam="uid"
+      />
+    </div>
+  );
+}
+
+function TradeConfigPanel() {
+  const [config, setConfig] = useState<TradeConfigRecord | null>(null);
+  const [values, setValues] = useState<TradeConfigRecord>({
+    enabled: true,
+    fee_rate: 0,
+    min_price: 1,
+    max_price: 999999,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<TradeConfigRecord>("/admin/config/trade")
+      .then((data) => {
+        setConfig(data);
+        setValues({
+          ...data,
+          fee_rate: Number(data.fee_rate || 0),
+          min_price: Number(data.min_price || 1),
+          max_price: Number(data.max_price || 999999),
+        });
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const next = await request<TradeConfigRecord>("/admin/config/trade", {
+        method: "PATCH",
+        body: JSON.stringify({
+          enabled: values.enabled,
+          fee_rate: Number(values.fee_rate || 0),
+          min_price: Number(values.min_price || 1),
+          max_price: Number(values.max_price || 999999),
+        }),
+      });
+      setConfig(next);
+      setValues(next);
+      setNotice("交易配置已保存");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="交易配置"
+      icon={<Handshake size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+    >
+      <form className="inline-config-form" onSubmit={submit}>
+        <label className="form-field">
+          <span>交易状态</span>
+          <select
+            value={String(values.enabled)}
+            onChange={(event) =>
+              setValues({ ...values, enabled: event.target.value === "true" })
+            }
+          >
+            <option value="true">开启</option>
+            <option value="false">关闭</option>
+          </select>
+        </label>
+        <label className="form-field">
+          <span>手续费率</span>
+          <input
+            type="number"
+            min="0"
+            max="1"
+            step="0.0001"
+            value={values.fee_rate}
+            onChange={(event) =>
+              setValues({ ...values, fee_rate: Number(event.target.value) })
+            }
+          />
+          <small>0.05 表示 5%，成交时按挂单创建时的费率结算。</small>
+        </label>
+        <label className="form-field">
+          <span>最低价格</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={values.min_price}
+            onChange={(event) =>
+              setValues({ ...values, min_price: Number(event.target.value) })
+            }
+          />
+        </label>
+        <label className="form-field">
+          <span>最高价格</span>
+          <input
+            type="number"
+            min="1"
+            max="999999"
+            step="1"
+            value={values.max_price}
+            onChange={(event) =>
+              setValues({ ...values, max_price: Number(event.target.value) })
+            }
+          />
+        </label>
+        <div className="inline-config-actions">
+          <DescriptionList
+            items={[
+              ["当前状态", config?.enabled === false ? "关闭" : "开启"],
+              ["当前手续费", `${formatPercent(config?.fee_rate || 0)}`],
+              [
+                "当前价格范围",
+                `${config?.min_price || 1} - ${config?.max_price || 999999}`,
+              ],
+            ]}
+          />
+          <button className="primary-button compact" type="submit" disabled={loading}>
+            {loading ? "保存中..." : "保存交易配置"}
+          </button>
+        </div>
+      </form>
+      {error && <div className="error-box">{error}</div>}
+      {notice && <div className="success-box">{notice}</div>}
+    </Panel>
   );
 }
 

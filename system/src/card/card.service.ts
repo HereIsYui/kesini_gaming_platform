@@ -11,6 +11,7 @@ import { UserHistory } from "src/entity/history.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { TradeListing } from "src/entity/tradeListing.entity";
 import {
   CardRarity,
   DrawCosts,
@@ -447,6 +448,12 @@ export class CardService {
     const cards = await this.cardRepository.find({
       where: { id: In(cardIds) },
     });
+    const activeListings = await this.findActiveListingsByCardUuids(
+      userCards.map((userCard) => userCard.card_uuid),
+    );
+    const activeListingMap = new Map(
+      activeListings.map((listing) => [listing.card_uuid, listing]),
+    );
 
     const list = userCards
       .map((userCard) => {
@@ -454,6 +461,7 @@ export class CardService {
         if (!card) {
           return null;
         }
+        const activeListing = activeListingMap.get(userCard.card_uuid);
 
         return {
           id: userCard.id,
@@ -466,6 +474,9 @@ export class CardService {
           poolId: card.pool,
           canSell: userCard.can_sell,
           canLottery: userCard.can_lottery,
+          isListed: Boolean(activeListing),
+          tradeListingId: activeListing?.id || null,
+          tradePrice: activeListing?.price || null,
           obtainedAt: userCard.createdAt,
         };
       })
@@ -555,6 +566,13 @@ export class CardService {
 
       if (!userCard) {
         throw new Error("用户没有这张卡片");
+      }
+      const activeListing = await manager.getRepository(TradeListing).findOne({
+        where: { card_uuid: cardUuid, status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (activeListing) {
+        throw new Error("交易中的卡片不能分解");
       }
 
       const card = await manager.getRepository(CardItem).findOne({
@@ -1008,6 +1026,26 @@ export class CardService {
     });
 
     return Array.from(itemInfoMap.values());
+  }
+
+  private async findActiveListingsByCardUuids(
+    cardUuids: string[],
+  ): Promise<TradeListing[]> {
+    const uniqueCardUuids = [...new Set(cardUuids.filter(Boolean))];
+    if (uniqueCardUuids.length === 0) {
+      return [];
+    }
+    try {
+      const repository = this.dataSource?.getRepository?.(TradeListing);
+      if (!repository) {
+        return [];
+      }
+      return repository.find({
+        where: { card_uuid: In(uniqueCardUuids), status: "active" },
+      });
+    } catch {
+      return [];
+    }
   }
 
   private normalizeLeaderboardLimit(limit: number): number {

@@ -17,6 +17,7 @@ import {
   IsBoolean,
   IsArray,
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -120,6 +121,59 @@ class ExchangeUsageQueryDto extends PageDto {
   @IsInt()
   @Min(1)
   itemId?: number;
+}
+
+class TradeListingQueryDto extends PageDto {
+  @IsOptional()
+  @IsIn(["active", "sold", "cancelled"])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerUid?: string;
+
+  @IsOptional()
+  @IsString()
+  buyerUid?: string;
+
+  @IsOptional()
+  @IsString()
+  rarity?: string;
+}
+
+class TradeRecordQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  listingId?: number;
+}
+
+class TradeConfigPatchDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  fee_rate?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  min_price?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  max_price?: number;
 }
 
 class PoolDto {
@@ -754,6 +808,74 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listExchangeUsages(query),
       "获取兑换商店记录成功",
+    );
+  }
+
+  @Get("trade-listings")
+  async listTradeListings(
+    @Query() query: TradeListingQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listTradeListings(query),
+      "获取交易挂单成功",
+    );
+  }
+
+  @Get("trade-listings/:id")
+  async getTradeListing(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getTradeListing(id),
+      "获取交易挂单详情成功",
+    );
+  }
+
+  @Delete("trade-listings/:id")
+  async cancelTradeListing(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.cancelTradeListing(id),
+      "取消交易挂单成功",
+    );
+  }
+
+  @Get("trade-records")
+  async listTradeRecords(
+    @Query() query: TradeRecordQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listTradeRecords(query),
+      "获取交易记录成功",
+    );
+  }
+
+  @Get("trade-records/:id")
+  async getTradeRecord(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getTradeRecord(id),
+      "获取交易记录详情成功",
+    );
+  }
+
+  @Get("config/trade")
+  async getTradeConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getTradeConfig(),
+      "获取交易配置成功",
+    );
+  }
+
+  @Patch("config/trade")
+  async updateTradeConfig(
+    @Body() body: TradeConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateTradeConfig(body as any),
+      "更新交易配置成功",
     );
   }
 

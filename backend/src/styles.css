@@ -354,6 +354,25 @@ select:focus-visible {
   gap: 16px;
 }
 
+.inline-config-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.inline-config-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.inline-config-actions .description-list {
+  padding: 0;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

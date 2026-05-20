@@ -91,6 +91,9 @@ export interface UserCardRecord {
   poolId: number;
   canSell: boolean;
   canLottery: boolean;
+  isListed?: boolean;
+  tradeListingId?: number | null;
+  tradePrice?: number | null;
   obtainedAt: string;
 }
 
@@ -183,4 +186,58 @@ export interface LeaderboardBoard {
 export interface LeaderboardResponse {
   generatedAt: string;
   rankings: Record<LeaderboardMetric, LeaderboardBoard>;
+}
+
+export interface TradeConfig {
+  enabled: boolean;
+  feeRate: number;
+  minPrice: number;
+  maxPrice: number;
+}
+
+export interface TradeListing {
+  id: number;
+  cardId: number;
+  cardName: string;
+  cardDesc?: string;
+  cardType: number;
+  cardLevel: CardRarity | string;
+  poolId?: number;
+  poolName?: string;
+  price: number;
+  feeRate: number;
+  feeAmount: number;
+  sellerIncome: number;
+  status: "active" | "sold" | "cancelled";
+  isMine?: boolean;
+  cardUuid?: string;
+  createdAt?: string;
+  soldAt?: string | null;
+  cancelledAt?: string | null;
+}
+
+export interface TradeRecord {
+  id: number;
+  listingId: number;
+  role: "seller" | "buyer";
+  cardUuid: string;
+  cardId: number;
+  cardName: string;
+  cardLevel: CardRarity | string;
+  poolId?: number;
+  poolName?: string;
+  price: number;
+  feeRate: number;
+  feeAmount: number;
+  sellerIncome: number;
+  createdAt?: string;
+}
+
+export interface TradePageResponse<T> {
+  list: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  config?: TradeConfig;
 }

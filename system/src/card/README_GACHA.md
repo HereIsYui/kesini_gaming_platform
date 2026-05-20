@@ -139,6 +139,52 @@ Authorization: Bearer <token>
 
 UR 卡不能分解。删除用户卡和增加碎片在同一个事务里完成。
 
+## 交易市场接口
+
+交易使用用户积分，前台市场匿名展示卖家，后台保留真实 UID 便于审计。卡片成交后仅变更持有人，`card_uuid` 保持不变。
+
+```http
+GET /trade/listings?page=1&pageSize=20&rarity=SSR&poolId=1&sort=priceAsc
+Authorization: Bearer <token>
+```
+
+返回匿名市场挂单，不包含卖家 UID、昵称或头像。支持按稀有度、卡池、价格区间和价格排序筛选。
+
+```http
+POST /trade/listings
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "cardUuid": "550e8400-e29b-41d4-a716-446655440000",
+  "price": 100
+}
+```
+
+挂售后卡片会被锁定，不能分解或重复挂售。价格必须在后台交易配置范围内。
+
+```http
+POST /trade/listings/:id/buy
+Authorization: Bearer <token>
+```
+
+购买会在事务内完成扣买家积分、给卖家实收积分、转移卡片和写成交记录。不能购买自己的挂单。
+
+```http
+DELETE /trade/listings/:id
+Authorization: Bearer <token>
+```
+
+取消自己的交易中挂单。
+
+```http
+GET /trade/my-listings
+GET /trade/my-records
+Authorization: Bearer <token>
+```
+
+分别返回我的挂售和我的成交记录。成交记录只标注买入/卖出，对方仍匿名。
+
 ## 服务端配置
 
 概率、UP 和保底都通过环境变量配置：

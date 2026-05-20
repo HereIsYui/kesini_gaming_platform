@@ -14,6 +14,9 @@ import { RedeemCode } from "./entity/redeemCode.entity";
 import { RedeemCodeUsage } from "./entity/redeemCodeUsage.entity";
 import { ExchangeShopItem } from "./entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "./entity/exchangeShopUsage.entity";
+import { TradeConfig } from "./entity/tradeConfig.entity";
+import { TradeListing } from "./entity/tradeListing.entity";
+import { TradeRecord } from "./entity/tradeRecord.entity";
 import { ApisModule } from "./apis/apis.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
@@ -21,6 +24,7 @@ import { ConfigurationService } from "./config/configuration.service";
 import { AdminModule } from "./admin/admin.module";
 import { RedeemModule } from "./redeem/redeem.module";
 import { ExchangeModule } from "./exchange/exchange.module";
+import { TradeModule } from "./trade/trade.module";
 
 @Module({
   imports: [
@@ -41,6 +45,9 @@ import { ExchangeModule } from "./exchange/exchange.module";
       RedeemCodeUsage,
       ExchangeShopItem,
       ExchangeShopUsage,
+      TradeListing,
+      TradeRecord,
+      TradeConfig,
     ]),
     ConfigurationModule,
     ApisModule,
@@ -48,6 +55,7 @@ import { ExchangeModule } from "./exchange/exchange.module";
     AdminModule,
     RedeemModule,
     ExchangeModule,
+    TradeModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   Between,
@@ -26,6 +26,9 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { RedeemCode, RedeemRewards } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
+import { TradeConfig } from "src/entity/tradeConfig.entity";
+import { TradeListing } from "src/entity/tradeListing.entity";
+import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 
@@ -69,6 +72,15 @@ export class AdminService {
     private readonly exchangeUsageRepository: Repository<ExchangeShopUsage>,
     private readonly gachaConfigService: GachaConfigService,
     private readonly configService: ConfigurationService,
+    @Optional()
+    @InjectRepository(TradeListing)
+    private readonly tradeListingRepository?: Repository<TradeListing>,
+    @Optional()
+    @InjectRepository(TradeRecord)
+    private readonly tradeRecordRepository?: Repository<TradeRecord>,
+    @Optional()
+    @InjectRepository(TradeConfig)
+    private readonly tradeConfigRepository?: Repository<TradeConfig>,
   ) {}
 
   async getMe(uid: string) {
@@ -759,6 +771,134 @@ export class AdminService {
     return this.findAndPage(this.exchangeUsageRepository, where, page, pageSize);
   }
 
+  async listTradeListings(
+    query: PageQuery & {
+      status?: string;
+      sellerUid?: string;
+      buyerUid?: string;
+      rarity?: string;
+    },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<TradeListing> = {};
+    if (query.status) {
+      where.status = query.status as any;
+    }
+    if (query.sellerUid) {
+      where.seller_uid = query.sellerUid;
+    }
+    if (query.buyerUid) {
+      where.buyer_uid = query.buyerUid;
+    }
+    if (query.rarity) {
+      where.card_level = query.rarity.trim().toUpperCase();
+    }
+    if (query.keyword) {
+      where.card_uuid = Like(`%${query.keyword}%`);
+    }
+    const result = await this.findAndPage(
+      this.mustTradeListingRepository(),
+      where,
+      page,
+      pageSize,
+    );
+    return {
+      ...result,
+      list: await this.attachTradeListingInfo(result.list),
+    };
+  }
+
+  async getTradeListing(id: number) {
+    const listing = await this.mustFind(
+      this.mustTradeListingRepository(),
+      id,
+      "交易挂单不存在",
+    );
+    return (await this.attachTradeListingInfo([listing]))[0];
+  }
+
+  async cancelTradeListing(id: number) {
+    const listing = await this.getTradeListing(id);
+    if (listing.status !== "active") {
+      throw new Error("只能取消交易中的挂单");
+    }
+    const repository = this.mustTradeListingRepository();
+    const entity = await this.mustFind(repository, id, "交易挂单不存在");
+    entity.status = "cancelled";
+    entity.cancelled_at = new Date();
+    await repository.save(entity);
+    return { cancelled: true };
+  }
+
+  async listTradeRecords(
+    query: PageQuery & { uid?: string; listingId?: number },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<TradeRecord> = {};
+    if (query.listingId !== undefined) {
+      where.listing_id = query.listingId;
+    }
+    if (query.uid) {
+      const keyword = query.uid;
+      const result = await this.findAndPage(
+        this.mustTradeRecordRepository(),
+        [
+          { ...where, seller_uid: keyword },
+          { ...where, buyer_uid: keyword },
+        ],
+        page,
+        pageSize,
+      );
+      return {
+        ...result,
+        list: await this.attachTradeRecordInfo(result.list),
+      };
+    }
+    const result = await this.findAndPage(
+      this.mustTradeRecordRepository(),
+      where,
+      page,
+      pageSize,
+    );
+    return {
+      ...result,
+      list: await this.attachTradeRecordInfo(result.list),
+    };
+  }
+
+  async getTradeRecord(id: number) {
+    const record = await this.mustFind(
+      this.mustTradeRecordRepository(),
+      id,
+      "交易记录不存在",
+    );
+    return (await this.attachTradeRecordInfo([record]))[0];
+  }
+
+  async getTradeConfig() {
+    return this.ensureTradeConfig();
+  }
+
+  async updateTradeConfig(body: Partial<TradeConfig>) {
+    const repository = this.mustTradeConfigRepository();
+    const config = await this.ensureTradeConfig();
+    Object.assign(config, {
+      enabled: body.enabled === undefined ? config.enabled : body.enabled === true,
+      fee_rate:
+        body.fee_rate === undefined ? config.fee_rate : Number(body.fee_rate),
+      min_price:
+        body.min_price === undefined
+          ? config.min_price
+          : Number(body.min_price),
+      max_price:
+        body.max_price === undefined
+          ? config.max_price
+          : Number(body.max_price),
+    });
+    this.assertTradeConfig(config);
+    return repository.save(config);
+  }
+
   private async attachInventoryInfo(result: {
     list: UserInventory[];
     total: number;
@@ -787,6 +927,108 @@ export class AdminService {
           ) || null,
       })),
     };
+  }
+
+  private async attachTradeListingInfo(list: TradeListing[]) {
+    if (list.length === 0) {
+      return [];
+    }
+    const cardIds = [...new Set(list.map((item) => item.card_id))];
+    const cards = await this.cardRepository.find({
+      where: { id: In(cardIds) },
+    });
+    const poolIds = [...new Set(cards.map((card) => card.pool))];
+    const pools = poolIds.length
+      ? await this.poolRepository.find({ where: { id: In(poolIds) } })
+      : [];
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const poolMap = new Map(pools.map((pool) => [pool.id, pool]));
+    return list.map((listing) => {
+      const card = cardMap.get(listing.card_id);
+      const pool = card ? poolMap.get(card.pool) : null;
+      const feeAmount = Math.floor(
+        Number(listing.price || 0) * Number(listing.fee_rate || 0),
+      );
+      return {
+        ...listing,
+        cardName: card?.card_name || `卡片#${listing.card_id}`,
+        cardDesc: card?.card_desc || "",
+        cardType: card?.card_type || 0,
+        poolId: card?.pool || null,
+        poolName: pool?.pool_name || "",
+        feeAmount,
+        sellerIncome: Number(listing.price || 0) - feeAmount,
+      };
+    });
+  }
+
+  private async attachTradeRecordInfo(list: TradeRecord[]) {
+    return list.map((record) => ({
+      ...record,
+      cardName: record.card_snapshot?.cardName || `卡片#${record.card_id}`,
+      cardDesc: record.card_snapshot?.cardDesc || "",
+      cardType: record.card_snapshot?.cardType || 0,
+      poolId: record.card_snapshot?.poolId || null,
+      poolName: record.card_snapshot?.poolName || "",
+    }));
+  }
+
+  private async ensureTradeConfig() {
+    const repository = this.mustTradeConfigRepository();
+    let config = await repository.findOne({ where: { id: 1 } });
+    if (!config) {
+      config = repository.create({
+        id: 1,
+        enabled: true,
+        fee_rate: 0,
+        min_price: 1,
+        max_price: 999999,
+      });
+      config = await repository.save(config);
+    }
+    config.enabled = config.enabled !== false;
+    config.fee_rate = Number(config.fee_rate || 0);
+    config.min_price = Number(config.min_price || 1);
+    config.max_price = Number(config.max_price || 999999);
+    this.assertTradeConfig(config);
+    return config;
+  }
+
+  private assertTradeConfig(config: TradeConfig) {
+    if (!Number.isFinite(config.fee_rate) || config.fee_rate < 0 || config.fee_rate > 1) {
+      throw new Error("交易手续费率必须在0-1之间");
+    }
+    if (!Number.isInteger(config.min_price) || config.min_price < 1) {
+      throw new Error("最低交易价格必须为正整数");
+    }
+    if (
+      !Number.isInteger(config.max_price) ||
+      config.max_price < config.min_price ||
+      config.max_price > 999999
+    ) {
+      throw new Error("最高交易价格必须大于等于最低价格且不超过999999");
+    }
+  }
+
+  private mustTradeListingRepository() {
+    if (!this.tradeListingRepository) {
+      throw new Error("交易挂单仓库未初始化");
+    }
+    return this.tradeListingRepository;
+  }
+
+  private mustTradeRecordRepository() {
+    if (!this.tradeRecordRepository) {
+      throw new Error("交易记录仓库未初始化");
+    }
+    return this.tradeRecordRepository;
+  }
+
+  private mustTradeConfigRepository() {
+    if (!this.tradeConfigRepository) {
+      throw new Error("交易配置仓库未初始化");
+    }
+    return this.tradeConfigRepository;
   }
 
   private normalizePage(query: PageQuery) {

@@ -11,6 +11,7 @@ import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
+import { TradeListing } from "src/entity/tradeListing.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { GachaConfigService } from "./gacha-config.service";
 
@@ -26,6 +27,7 @@ import { GachaConfigService } from "./gacha-config.service";
       UserInventory,
       UserGachaPity,
       GachaPoolConfig,
+      TradeListing,
     ]),
     AuthModule,
   ],

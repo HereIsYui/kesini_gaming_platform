@@ -361,6 +361,7 @@ option {
 .inventory-panel,
 .catalog-panel,
 .leaderboard-panel,
+.trade-panel,
 .redeem-panel,
 .shop-panel,
 .recent-panel {
@@ -982,6 +983,7 @@ h3 {
 }
 
 .owned-card .danger-action,
+.owned-card .secondary-action,
 .synthesis-card .secondary-action {
   width: 100%;
   justify-self: stretch;
@@ -989,6 +991,12 @@ h3 {
   min-height: 44px;
   border-radius: calc(var(--radius) - 2px);
   padding: 0 10px;
+}
+
+.card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .catalog-card {
@@ -1185,6 +1193,236 @@ h3 {
 .leaderboard-panel {
   display: grid;
   gap: 18px;
+}
+
+.trade-panel {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.trade-content {
+  display: grid;
+  gap: 16px;
+}
+
+.trade-config-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.trade-config-strip article {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 13px;
+}
+
+.trade-config-strip small {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.trade-config-strip strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.trade-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trade-tabs button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0 16px;
+}
+
+.trade-tabs button.active {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: rgba(84, 216, 255, 0.13);
+}
+
+.trade-section {
+  display: grid;
+  gap: 14px;
+}
+
+.trade-filter-row {
+  justify-content: flex-start;
+}
+
+.trade-filter-row input {
+  width: 128px;
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.trade-card {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  min-height: 206px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.trade-card-art {
+  position: relative;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 50% 28%, currentColor, transparent 48%),
+    rgba(255, 255, 255, 0.05);
+  padding: 12px;
+}
+
+.trade-card-art::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  opacity: 0.18;
+  transform: rotate(-18deg);
+}
+
+.trade-card-art > * {
+  position: relative;
+  z-index: 1;
+}
+
+.trade-card-art strong,
+.trade-card-art small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trade-card-art strong {
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.trade-card-art small {
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.trade-card-body {
+  display: grid;
+  gap: 10px;
+  align-content: space-between;
+  min-width: 0;
+  padding: 13px;
+}
+
+.trade-card-body p {
+  display: -webkit-box;
+  min-height: 42px;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--text-muted);
+}
+
+.trade-card-body dl,
+.trade-list dl,
+.trade-listing-body dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.trade-card-body dl div,
+.trade-listing-body dl div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.trade-card-body dt,
+.trade-listing-body dt {
+  color: var(--text-soft);
+}
+
+.trade-card-body dd,
+.trade-listing-body dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.trade-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trade-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 12px;
+}
+
+.trade-list strong,
+.trade-list span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-list span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.trade-list b {
+  color: var(--primary-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-listing-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 44px);
+  overflow: hidden;
+  border: 1px solid rgba(150, 242, 255, 0.26);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.58);
+  animation: modal-enter 220ms ease-out both;
+}
+
+.trade-listing-body {
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  padding: 18px 20px;
 }
 
 .leaderboard-content {
@@ -1773,6 +2011,7 @@ h3 {
   .inventory-panel,
   .catalog-panel,
   .leaderboard-panel,
+  .trade-panel,
   .redeem-panel,
   .shop-panel,
   .recent-panel {
@@ -1883,8 +2122,26 @@ h3 {
   }
 
   .leaderboard-tabs,
-  .podium-grid {
+  .podium-grid,
+  .trade-config-strip {
     grid-template-columns: 1fr;
+  }
+
+  .trade-grid,
+  .trade-card,
+  .trade-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-card-art {
+    min-height: 124px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .trade-filter-row input,
+  .trade-filter-row select {
+    width: 100%;
   }
 
   .my-rank-card {
@@ -1928,8 +2185,8 @@ h3 {
     right: 10px;
     bottom: 10px;
     left: 10px;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
     gap: 6px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1937,10 +2194,16 @@ h3 {
     box-shadow: var(--shadow);
     padding: 7px;
     backdrop-filter: blur(18px);
+    scrollbar-width: none;
+  }
+
+  .mobile-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .mobile-nav a {
-    min-width: 0;
+    min-width: 62px;
+    flex: 0 0 62px;
     flex-direction: column;
     gap: 3px;
     padding: 5px 1px;

@@ -45,6 +45,10 @@ import type {
   LoginUrlResponse,
   PoolInfo,
   RedeemClaimResponse,
+  TradeConfig,
+  TradeListing,
+  TradePageResponse,
+  TradeRecord,
   UserCardsResponse,
   UserGachaStats,
   UserProfile,
@@ -64,6 +68,7 @@ const sectionItems = [
   { key: "bag", label: "背包", icon: Boxes },
   { key: "synthesize", label: "合成", icon: WandSparkles },
   { key: "leaderboard", label: "排行", icon: Trophy },
+  { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
@@ -115,11 +120,31 @@ const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
 const exchangeItems = ref<ExchangeShopItem[]>([]);
+const tradeListings = ref<TradeListing[]>([]);
+const myTradeListings = ref<TradeListing[]>([]);
+const tradeRecords = ref<TradeRecord[]>([]);
+const tradeConfig = ref<TradeConfig>({
+  enabled: true,
+  feeRate: 0,
+  minPrice: 1,
+  maxPrice: 999999,
+});
 const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
 const synthesisRarityFilter = ref<CardRarity | "">("");
 const cardPage = ref(1);
+const tradePage = ref(1);
+const myTradePage = ref(1);
+const tradeRecordPage = ref(1);
+const tradeTab = ref<"market" | "mine" | "records">("market");
+const tradeRarityFilter = ref<CardRarity | "">("");
+const tradePoolFilter = ref<number | "">("");
+const tradeSort = ref("newest");
+const tradeMinPrice = ref("");
+const tradeMaxPrice = ref("");
+const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const listingPrice = ref("");
 const redeemCode = ref("");
 const exchangeCounts = reactive<Record<number, number>>({});
 const feedback = ref<{ type: FeedbackType; text: string } | null>(null);
@@ -135,6 +160,7 @@ const busy = reactive({
   leaderboard: false,
   shop: false,
   redeem: false,
+  trade: false,
 });
 
 let feedbackTimer: number | undefined;
@@ -191,6 +217,17 @@ const leaderboardRows = computed<LeaderboardEntry[]>(() =>
   activeLeaderboardBoard.value?.list.slice(3) || [],
 );
 const totalPages = computed(() => userCards.value?.totalPages || 1);
+const tradeTotalPages = ref(1);
+const myTradeTotalPages = ref(1);
+const tradeRecordTotalPages = ref(1);
+const listingFeePreview = computed(() => {
+  const price = Math.max(0, Number(listingPrice.value || 0));
+  const feeAmount = Math.floor(price * Number(tradeConfig.value.feeRate || 0));
+  return {
+    feeAmount,
+    sellerIncome: Math.max(0, price - feeAmount),
+  };
+});
 const bestResult = computed(() => {
   return [...lastResults.value].sort(
     (a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0),
@@ -358,6 +395,9 @@ function logout() {
   leaderboard.value = null;
   leaderboardError.value = "";
   exchangeItems.value = [];
+  tradeListings.value = [];
+  myTradeListings.value = [];
+  tradeRecords.value = [];
   lastResults.value = [];
   resultModalOpen.value = false;
   localStorage.removeItem(DRAW_RESULTS_KEY);
@@ -403,6 +443,7 @@ async function loadPrivateData() {
     loadUserCards(),
     loadLeaderboard(),
     loadExchangeItems(),
+    loadTradeData(),
   ]);
   const failed = results.filter((item) => item.status === "rejected");
   if (failed.length === results.length) {
@@ -462,6 +503,68 @@ async function loadExchangeItems() {
   } finally {
     busy.shop = false;
   }
+}
+
+async function loadTradeData() {
+  if (!isAuthed.value) {
+    return;
+  }
+  await Promise.all([loadTradeListings(), loadMyTradeListings(), loadTradeRecords()]);
+}
+
+async function loadTradeListings() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.trade = true;
+  try {
+    const data = await request<TradePageResponse<TradeListing>>(
+      `/trade/listings${toQuery({
+        page: tradePage.value,
+        pageSize: 12,
+        rarity: tradeRarityFilter.value,
+        poolId: tradePoolFilter.value,
+        sort: tradeSort.value,
+        minPrice: tradeMinPrice.value,
+        maxPrice: tradeMaxPrice.value,
+      })}`,
+    );
+    tradeListings.value = data.list || [];
+    tradeTotalPages.value = data.totalPages || 1;
+    if (data.config) {
+      tradeConfig.value = data.config;
+    }
+  } finally {
+    busy.trade = false;
+  }
+}
+
+async function loadMyTradeListings() {
+  if (!isAuthed.value) {
+    return;
+  }
+  const data = await request<TradePageResponse<TradeListing>>(
+    `/trade/my-listings${toQuery({
+      page: myTradePage.value,
+      pageSize: 8,
+    })}`,
+  );
+  myTradeListings.value = data.list || [];
+  myTradeTotalPages.value = data.totalPages || 1;
+}
+
+async function loadTradeRecords() {
+  if (!isAuthed.value) {
+    return;
+  }
+  const data = await request<TradePageResponse<TradeRecord>>(
+    `/trade/my-records${toQuery({
+      page: tradeRecordPage.value,
+      pageSize: 8,
+    })}`,
+  );
+  tradeRecords.value = data.list || [];
+  tradeRecordTotalPages.value = data.totalPages || 1;
 }
 
 async function refreshAll() {
@@ -569,6 +672,96 @@ async function decomposeCard(card: { uuid: string; cardName: string }) {
   }
 }
 
+function openTradeListingModal(card: UserCardsResponse["list"][number]) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再挂售卡片");
+    return;
+  }
+  if (card.isListed) {
+    notify("info", "这张卡片已经在交易中");
+    return;
+  }
+  if (!card.canSell) {
+    notify("error", "这张卡片不可交易");
+    return;
+  }
+  listingTarget.value = card;
+  listingPrice.value = String(tradeConfig.value.minPrice || 1);
+}
+
+function closeTradeListingModal() {
+  listingTarget.value = null;
+  listingPrice.value = "";
+}
+
+async function createTradeListing() {
+  if (!listingTarget.value) {
+    return;
+  }
+  const price = Number(listingPrice.value);
+  if (!Number.isInteger(price)) {
+    notify("error", "交易价格必须为整数");
+    return;
+  }
+  busy.trade = true;
+  try {
+    await request("/trade/listings", {
+      method: "POST",
+      body: JSON.stringify({
+        cardUuid: listingTarget.value.uuid,
+        price,
+      }),
+    });
+    notify("success", "挂售成功，卡片已锁定在交易市场");
+    closeTradeListingModal();
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.trade = false;
+  }
+}
+
+async function cancelTradeListing(listing: TradeListing) {
+  if (!window.confirm(`确认取消「${listing.cardName}」的挂售吗？`)) {
+    return;
+  }
+  busy.trade = true;
+  try {
+    await request(`/trade/listings/${listing.id}`, { method: "DELETE" });
+    notify("success", "挂单已取消");
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.trade = false;
+  }
+}
+
+async function buyTradeListing(listing: TradeListing) {
+  if (listing.isMine) {
+    notify("info", "不能购买自己的挂单");
+    return;
+  }
+  if (
+    !window.confirm(
+      `确认花费 ${listing.price} 积分购买「${listing.cardName}」${listing.cardLevel} 吗？`,
+    )
+  ) {
+    return;
+  }
+  busy.trade = true;
+  try {
+    await request(`/trade/listings/${listing.id}/buy`, { method: "POST" });
+    notify("success", "购买成功，卡片已进入背包");
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.trade = false;
+  }
+}
+
 async function claimRedeemCode() {
   const code = redeemCode.value.trim();
   if (!code) {
@@ -621,6 +814,33 @@ function changeCardPage(delta: number) {
   void loadUserCards();
 }
 
+function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
+  if (kind === "market") {
+    const next = Math.min(Math.max(1, tradePage.value + delta), tradeTotalPages.value);
+    if (next !== tradePage.value) {
+      tradePage.value = next;
+      void loadTradeListings();
+    }
+    return;
+  }
+  if (kind === "mine") {
+    const next = Math.min(Math.max(1, myTradePage.value + delta), myTradeTotalPages.value);
+    if (next !== myTradePage.value) {
+      myTradePage.value = next;
+      void loadMyTradeListings();
+    }
+    return;
+  }
+  const next = Math.min(
+    Math.max(1, tradeRecordPage.value + delta),
+    tradeRecordTotalPages.value,
+  );
+  if (next !== tradeRecordPage.value) {
+    tradeRecordPage.value = next;
+    void loadTradeRecords();
+  }
+}
+
 function resetCardFilters() {
   rarityFilter.value = "";
   poolFilter.value = "";
@@ -668,6 +888,23 @@ function cardTypeLabel(type?: number) {
 
 function itemTypeLabel(type?: number) {
   return ["卡片碎片", "虚拟积分", "普通道具", "其他"][Number(type || 0)] || "物品";
+}
+
+function tradeStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    active: "交易中",
+    sold: "已成交",
+    cancelled: "已取消",
+  };
+  return labels[String(status || "")] || "未知";
+}
+
+function tradeRoleLabel(role?: string) {
+  return role === "seller" ? "卖出" : "买入";
+}
+
+function formatPercent(value?: number) {
+  return `${(Number(value || 0) * 100).toFixed(2)}%`;
 }
 
 function formatDate(value?: string | null) {
@@ -946,12 +1183,23 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="tag-row">
                     <span>{{ poolTypeLabel(pools.find((pool) => pool.id === card.poolId)?.card_type) }}</span>
                     <span>{{ formatDate(card.obtainedAt) }}</span>
+                    <span v-if="card.isListed">交易中 · {{ card.tradePrice }}积分</span>
                   </div>
                 </div>
               </div>
-              <button class="danger-action" type="button" :disabled="card.cardLevel === 'UR'" @click="decomposeCard(card)">
-                分解
-              </button>
+              <div class="card-actions">
+                <button
+                  class="secondary-action"
+                  type="button"
+                  :disabled="card.isListed || !card.canSell"
+                  @click="openTradeListingModal(card)"
+                >
+                  {{ card.isListed ? '已挂售' : '挂售' }}
+                </button>
+                <button class="danger-action" type="button" :disabled="card.cardLevel === 'UR' || card.isListed" @click="decomposeCard(card)">
+                  分解
+                </button>
+              </div>
             </article>
           </div>
 
@@ -1066,6 +1314,170 @@ function leaderboardRankLabel(rank?: number) {
               {{ item.disabled ? '不可合成' : '碎片合成' }}
             </button>
           </article>
+        </div>
+      </section>
+
+      <section v-if="activeSection === 'trade'" class="panel trade-panel" data-section="trade">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">匿名交易</p>
+            <h2>卡片交易市场</h2>
+          </div>
+          <button class="secondary-action" type="button" :disabled="busy.trade" @click="loadTradeData">
+            <RefreshCw :size="16" :class="{ spin: busy.trade }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <Store :size="30" />
+          <strong>登录后进入交易市场</strong>
+          <span>市场匿名展示，成交后卡片 UUID 保持不变。</span>
+        </div>
+        <div v-else class="trade-content">
+          <div class="trade-config-strip">
+            <article>
+              <small>交易状态</small>
+              <strong>{{ tradeConfig.enabled ? '已开启' : '已关闭' }}</strong>
+            </article>
+            <article>
+              <small>手续费</small>
+              <strong>{{ formatPercent(tradeConfig.feeRate) }}</strong>
+            </article>
+            <article>
+              <small>价格范围</small>
+              <strong>{{ tradeConfig.minPrice }} - {{ tradeConfig.maxPrice }}</strong>
+            </article>
+            <article>
+              <small>我的积分</small>
+              <strong>{{ stats?.point || 0 }}</strong>
+            </article>
+          </div>
+
+          <div class="trade-tabs" role="tablist" aria-label="交易分区">
+            <button type="button" :class="{ active: tradeTab === 'market' }" @click="tradeTab = 'market'">市场</button>
+            <button type="button" :class="{ active: tradeTab === 'mine' }" @click="tradeTab = 'mine'">我的挂售</button>
+            <button type="button" :class="{ active: tradeTab === 'records' }" @click="tradeTab = 'records'">成交记录</button>
+          </div>
+
+          <div v-if="tradeTab === 'market'" class="trade-section">
+            <div class="filter-row trade-filter-row">
+              <select v-model="tradeRarityFilter" @change="tradePage = 1; loadTradeListings()">
+                <option value="">全部稀有度</option>
+                <option v-for="rarity in rarityOrder" :key="rarity" :value="rarity">{{ rarity }}</option>
+              </select>
+              <select v-model="tradePoolFilter" @change="tradePage = 1; loadTradeListings()">
+                <option value="">全部卡池</option>
+                <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
+              </select>
+              <select v-model="tradeSort" @change="tradePage = 1; loadTradeListings()">
+                <option value="newest">最新上架</option>
+                <option value="priceAsc">价格从低到高</option>
+                <option value="priceDesc">价格从高到低</option>
+              </select>
+              <input v-model="tradeMinPrice" type="number" min="0" placeholder="最低价" @change="tradePage = 1; loadTradeListings()" />
+              <input v-model="tradeMaxPrice" type="number" min="0" placeholder="最高价" @change="tradePage = 1; loadTradeListings()" />
+            </div>
+
+            <div v-if="busy.trade && tradeListings.length === 0" class="skeleton-grid">
+              <span v-for="item in 6" :key="item"></span>
+            </div>
+            <div v-else-if="tradeListings.length === 0" class="empty-state">
+              <Store :size="30" />
+              <strong>暂无在售卡片</strong>
+              <span>可以从背包选择卡片挂售，市场不会展示卖家身份。</span>
+            </div>
+            <div v-else class="trade-grid">
+              <article v-for="listing in tradeListings" :key="listing.id" class="trade-card" :class="rarityClass(listing.cardLevel)">
+                <div class="trade-card-art">
+                  <span class="rarity-badge">{{ listing.cardLevel }}</span>
+                  <strong>{{ listing.cardName }}</strong>
+                  <small>{{ listing.poolName || '未知卡池' }}</small>
+                </div>
+                <div class="trade-card-body">
+                  <p>{{ listing.cardDesc || "暂无介绍" }}</p>
+                  <dl>
+                    <div>
+                      <dt>价格</dt>
+                      <dd>{{ listing.price }} 积分</dd>
+                    </div>
+                    <div>
+                      <dt>卖家</dt>
+                      <dd>匿名玩家</dd>
+                    </div>
+                    <div>
+                      <dt>上架</dt>
+                      <dd>{{ formatDate(listing.createdAt) }}</dd>
+                    </div>
+                  </dl>
+                  <button class="primary-action wide" type="button" :disabled="busy.trade || listing.isMine || !tradeConfig.enabled" @click="buyTradeListing(listing)">
+                    {{ listing.isMine ? '自己的挂单' : '购买' }}
+                  </button>
+                </div>
+              </article>
+            </div>
+            <div class="pager">
+              <button type="button" :disabled="tradePage <= 1" @click="changeTradePage('market', -1)">
+                <ChevronLeft :size="16" />
+                上一页
+              </button>
+              <span>第 {{ tradePage }} / {{ tradeTotalPages }} 页</span>
+              <button type="button" :disabled="tradePage >= tradeTotalPages" @click="changeTradePage('market', 1)">
+                下一页
+                <ChevronRight :size="16" />
+              </button>
+            </div>
+          </div>
+
+          <div v-if="tradeTab === 'mine'" class="trade-section">
+            <div v-if="myTradeListings.length === 0" class="empty-state">
+              <Store :size="30" />
+              <strong>暂无我的挂售</strong>
+              <span>从背包卡片点击“挂售”即可上架。</span>
+            </div>
+            <div v-else class="trade-list">
+              <article v-for="listing in myTradeListings" :key="listing.id">
+                <div>
+                  <strong>{{ listing.cardName }} · {{ listing.cardLevel }}</strong>
+                  <span>{{ listing.cardUuid }} · {{ listing.poolName || '未知卡池' }}</span>
+                </div>
+                <b>{{ listing.price }} 积分</b>
+                <span>{{ tradeStatusLabel(listing.status) }}</span>
+                <button class="secondary-action" type="button" :disabled="busy.trade || listing.status !== 'active'" @click="cancelTradeListing(listing)">
+                  取消挂售
+                </button>
+              </article>
+            </div>
+            <div class="pager">
+              <button type="button" :disabled="myTradePage <= 1" @click="changeTradePage('mine', -1)">上一页</button>
+              <span>第 {{ myTradePage }} / {{ myTradeTotalPages }} 页</span>
+              <button type="button" :disabled="myTradePage >= myTradeTotalPages" @click="changeTradePage('mine', 1)">下一页</button>
+            </div>
+          </div>
+
+          <div v-if="tradeTab === 'records'" class="trade-section">
+            <div v-if="tradeRecords.length === 0" class="empty-state">
+              <History :size="30" />
+              <strong>暂无成交记录</strong>
+              <span>买入或卖出卡片后会在这里看到记录，对方身份保持匿名。</span>
+            </div>
+            <div v-else class="trade-list">
+              <article v-for="record in tradeRecords" :key="record.id">
+                <div>
+                  <strong>{{ tradeRoleLabel(record.role) }} · {{ record.cardName }} · {{ record.cardLevel }}</strong>
+                  <span>{{ record.cardUuid }} · {{ record.poolName || '未知卡池' }}</span>
+                </div>
+                <b>{{ record.price }} 积分</b>
+                <span v-if="record.role === 'seller'">实收 {{ record.sellerIncome }}，手续费 {{ record.feeAmount }}</span>
+                <span v-else>成交 {{ formatDate(record.createdAt) }}</span>
+              </article>
+            </div>
+            <div class="pager">
+              <button type="button" :disabled="tradeRecordPage <= 1" @click="changeTradePage('records', -1)">上一页</button>
+              <span>第 {{ tradeRecordPage }} / {{ tradeRecordTotalPages }} 页</span>
+              <button type="button" :disabled="tradeRecordPage >= tradeRecordTotalPages" @click="changeTradePage('records', 1)">下一页</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1289,6 +1701,63 @@ function leaderboardRankLabel(rank?: number) {
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
       {{ feedback.text }}
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="listingTarget"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeTradeListingModal"
+      >
+        <section class="trade-listing-modal" role="dialog" aria-modal="true" aria-label="挂售卡片">
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡片挂售</p>
+              <h2>{{ listingTarget.cardName }}</h2>
+              <span>{{ listingTarget.cardLevel }} · UUID {{ listingTarget.uuid }}</span>
+            </div>
+            <button class="modal-close" type="button" @click="closeTradeListingModal">关闭</button>
+          </header>
+          <div class="trade-listing-body">
+            <label class="redeem-input">
+              <span>挂售价格</span>
+              <input
+                v-model="listingPrice"
+                type="number"
+                :min="tradeConfig.minPrice"
+                :max="tradeConfig.maxPrice"
+                step="1"
+                placeholder="输入积分价格"
+              />
+            </label>
+            <dl>
+              <div>
+                <dt>价格范围</dt>
+                <dd>{{ tradeConfig.minPrice }} - {{ tradeConfig.maxPrice }}</dd>
+              </div>
+              <div>
+                <dt>手续费</dt>
+                <dd>{{ formatPercent(tradeConfig.feeRate) }} · 预计 {{ listingFeePreview.feeAmount }} 积分</dd>
+              </div>
+              <div>
+                <dt>预计实收</dt>
+                <dd>{{ listingFeePreview.sellerIncome }} 积分</dd>
+              </div>
+              <div>
+                <dt>交易说明</dt>
+                <dd>挂售后卡片会被锁定，取消或成交前不能分解。</dd>
+              </div>
+            </dl>
+          </div>
+          <footer class="result-modal-actions">
+            <button class="secondary-action" type="button" @click="closeTradeListingModal">取消</button>
+            <button class="primary-action" type="button" :disabled="busy.trade || !tradeConfig.enabled" @click="createTradeListing">
+              确认挂售
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
