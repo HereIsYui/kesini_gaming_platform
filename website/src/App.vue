@@ -1063,7 +1063,7 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
                   <div class="tag-row">
                     <span v-if="card.isUp">UP</span>
                     <span v-if="card.isPity">保底</span>
-                    <span>#{card.cardId}</span>
+                    <span>#{{ card.cardId }}</span>
                   </div>
                 </div>
               </div>
