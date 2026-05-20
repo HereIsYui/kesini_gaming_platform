@@ -277,6 +277,13 @@ class GachaConfigPatchDto {
   };
 }
 
+class GachaConfigCopyDto {
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  targetPoolIds: number[];
+}
+
 class RedeemCodeDto {
   @IsOptional()
   @IsString()
@@ -756,6 +763,17 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateGachaConfig(poolId, body as any),
       "更新抽卡配置成功",
+    );
+  }
+
+  @Post("config/gacha/:poolId/copy")
+  async copyGachaConfig(
+    @Param("poolId", ParseIntPipe) poolId: number,
+    @Body() body: GachaConfigCopyDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.copyGachaConfig(poolId, body.targetPoolIds),
+      "复制抽卡配置成功",
     );
   }
 }

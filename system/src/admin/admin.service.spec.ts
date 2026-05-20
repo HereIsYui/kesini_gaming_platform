@@ -19,6 +19,22 @@ function createRepository(overrides: Record<string, any> = {}) {
 }
 
 function createService(repositories: Record<string, any> = {}) {
+  const gachaService =
+    repositories.gachaService || {
+      getAllPoolConfigs: jest.fn(async () => ({ 1: { poolId: 1 } })),
+      getPoolConfigsByPoolIds: jest.fn(async () => ({ 1: { poolId: 1 } })),
+      getEnvConfigByPoolId: jest.fn((poolId: number) => ({
+        poolId,
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 10, ten: 100 },
+      })),
+      getConfigByPoolId: jest.fn(async (poolId: number) => ({
+        poolId,
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 10, ten: 100 },
+      })),
+      savePoolConfig: jest.fn(async (_poolId, config) => config),
+    };
   return new AdminService(
     repositories.user || createRepository(),
     repositories.card || createRepository(),
@@ -31,10 +47,7 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.redeemUsage || createRepository(),
     repositories.exchangeItem || createRepository(),
     repositories.exchangeUsage || createRepository(),
-    {
-      getAllPoolConfigs: jest.fn(async () => ({ 1: { poolId: 1 } })),
-      savePoolConfig: jest.fn(async (_poolId, config) => config),
-    } as any,
+    gachaService as any,
     { adminUids: ["admin"] } as any,
   );
 }
@@ -330,6 +343,89 @@ describe("AdminService", () => {
     expect(gachaService.savePoolConfig).toHaveBeenCalledWith(2, {
       rarityProbabilities: { N: 1 },
     });
+  });
+
+  it("获取抽卡配置会同时返回环境默认配置", async () => {
+    const poolRepository = createRepository({
+      find: jest.fn().mockResolvedValue([{ id: 2, pool_name: "限定卡池" }]),
+    });
+    const gachaService = {
+      getPoolConfigsByPoolIds: jest.fn().mockResolvedValue({
+        2: { poolId: 2, source: "database" },
+      }),
+      getEnvConfigByPoolId: jest.fn().mockReturnValue({
+        poolId: 2,
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 10, ten: 100 },
+      }),
+    };
+    const service = createService({
+      pool: poolRepository,
+      gachaService,
+    });
+
+    await expect(service.getGachaConfig()).resolves.toEqual(
+      expect.objectContaining({
+        pools: { 2: { poolId: 2, source: "database" } },
+        defaults: {
+          "2": expect.objectContaining({
+            poolId: 2,
+            source: "env",
+            enabled: false,
+          }),
+        },
+        poolNames: { "2": "限定卡池" },
+      }),
+    );
+    expect(gachaService.getPoolConfigsByPoolIds).toHaveBeenCalledWith([2]);
+    expect(gachaService.getEnvConfigByPoolId).toHaveBeenCalledWith(2);
+  });
+
+  it("复制抽卡配置会保存到选中的目标卡池", async () => {
+    const poolRepository = createRepository({
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 1, pool_name: "源卡池" },
+          { id: 2, pool_name: "目标A" },
+          { id: 3, pool_name: "目标B" },
+        ]),
+    });
+    const gachaService = {
+      getConfigByPoolId: jest.fn().mockResolvedValue({
+        poolId: 1,
+        rarityProbabilities: { N: 1 },
+        upCards: { enabled: true, cardIds: [10], upRate: 0.5 },
+        pitySystem: { enabled: false },
+        drawCosts: { once: 12, ten: 100 },
+      }),
+      savePoolConfig: jest.fn(async (poolId, config) => ({
+        poolId,
+        ...config,
+      })),
+    };
+    const service = createService({
+      pool: poolRepository,
+      gachaService,
+    });
+
+    await expect(service.copyGachaConfig(1, [2, 3, 2])).resolves.toEqual(
+      expect.objectContaining({
+        sourcePoolId: 1,
+        targetPoolIds: [2, 3],
+      }),
+    );
+    expect(gachaService.getConfigByPoolId).toHaveBeenCalledWith(1);
+    expect(gachaService.savePoolConfig).toHaveBeenCalledTimes(2);
+    expect(gachaService.savePoolConfig).toHaveBeenCalledWith(
+      2,
+      expect.objectContaining({
+        enabled: true,
+        rarityProbabilities: { N: 1 },
+        upCards: { enabled: true, cardIds: [10], upRate: 0.5 },
+        drawCosts: { once: 12, ten: 100 },
+      }),
+    );
   });
 
   it("创建兑换码会标准化码值和奖励", async () => {

@@ -10,6 +10,7 @@ import {
 } from "typeorm";
 import {
   EditableGachaConfig,
+  GachaConfigView,
   GachaConfigService,
 } from "src/card/gacha-config.service";
 import { ConfigurationService } from "src/config/configuration.service";
@@ -448,9 +449,20 @@ export class AdminService {
     const pools = await this.poolRepository.find({
       order: { id: "ASC" },
     });
+    const poolIds = pools.map((pool) => pool.id);
     return {
-      pools: await this.gachaConfigService.getPoolConfigsByPoolIds(
-        pools.map((pool) => pool.id),
+      pools: await this.gachaConfigService.getPoolConfigsByPoolIds(poolIds),
+      defaults: Object.fromEntries(
+        poolIds.map((poolId) => [
+          String(poolId),
+          {
+            ...this.gachaConfigService.getEnvConfigByPoolId(poolId),
+            poolId,
+            enabled: false,
+            source: "env",
+            updatedAt: null,
+          },
+        ]),
       ),
       poolNames: Object.fromEntries(
         pools.map((pool) => [String(pool.id), pool.pool_name]),
@@ -461,6 +473,68 @@ export class AdminService {
 
   async updateGachaConfig(poolId: number, body: EditableGachaConfig) {
     return this.gachaConfigService.savePoolConfig(poolId, body);
+  }
+
+  async copyGachaConfig(poolId: number, targetPoolIds: number[]) {
+    const normalizedTargetIds = [
+      ...new Set(
+        (targetPoolIds || [])
+          .map((targetPoolId) => Number(targetPoolId))
+          .filter(
+            (targetPoolId) =>
+              Number.isInteger(targetPoolId) &&
+              targetPoolId > 0 &&
+              targetPoolId !== poolId,
+          ),
+      ),
+    ];
+
+    if (!Number.isInteger(poolId) || poolId <= 0) {
+      throw new Error("源卡池ID无效");
+    }
+    if (normalizedTargetIds.length === 0) {
+      throw new Error("请选择要复制到的目标卡池");
+    }
+
+    const expectedPoolIds = [poolId, ...normalizedTargetIds];
+    const pools = await this.poolRepository.find({
+      where: { id: In(expectedPoolIds) } as any,
+    });
+    const existingPoolIds = new Set(pools.map((pool) => pool.id));
+    if (!existingPoolIds.has(poolId)) {
+      throw new Error("源卡池不存在");
+    }
+    const missingPoolIds = expectedPoolIds.filter(
+      (currentPoolId) => !existingPoolIds.has(currentPoolId),
+    );
+    if (missingPoolIds.length > 0) {
+      throw new Error(`目标卡池不存在: ${missingPoolIds.join(",")}`);
+    }
+
+    const sourceConfig = await this.gachaConfigService.getConfigByPoolId(poolId);
+    const nextConfig: EditableGachaConfig = {
+      poolId,
+      enabled: true,
+      rarityProbabilities: sourceConfig.rarityProbabilities,
+      upCards: sourceConfig.upCards || null,
+      pitySystem: sourceConfig.pitySystem || null,
+      drawCosts: sourceConfig.drawCosts,
+    };
+    const list: GachaConfigView[] = [];
+    for (const targetPoolId of normalizedTargetIds) {
+      list.push(
+        await this.gachaConfigService.savePoolConfig(targetPoolId, {
+          ...nextConfig,
+          poolId: targetPoolId,
+        }),
+      );
+    }
+
+    return {
+      sourcePoolId: poolId,
+      targetPoolIds: normalizedTargetIds,
+      list,
+    };
   }
 
   async listRedeemCodes(query: PageQuery) {

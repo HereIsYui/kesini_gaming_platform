@@ -89,6 +89,7 @@ export interface GachaPoolConfig {
 
 export interface GachaConfigData {
   pools?: Record<string, GachaPoolConfig>;
+  defaults?: Record<string, GachaPoolConfig>;
   poolNames?: Record<string, string>;
   adminUids?: string[];
   [key: string]: unknown;

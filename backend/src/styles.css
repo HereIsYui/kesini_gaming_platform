@@ -779,6 +779,17 @@ tbody tr:hover {
   color: var(--destructive);
 }
 
+.success-box {
+  margin: 0 16px 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--success) 34%, var(--border));
+  border-radius: var(--radius);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 9%, var(--card));
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .description-list {
   display: grid;
   gap: 0;
@@ -930,6 +941,256 @@ tbody tr:hover {
 .tag-list {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+.config-workbench {
+  padding: 0;
+}
+
+.config-table {
+  min-width: 1040px;
+}
+
+.config-pool-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.config-pool-cell strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.config-pool-cell span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.config-ok,
+.config-warning {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.config-ok {
+  color: var(--success);
+}
+
+.config-warning {
+  color: var(--warning);
+}
+
+.config-admin-note {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 92%, var(--muted));
+}
+
+.config-admin-note strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--foreground);
+}
+
+.config-admin-note p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+}
+
+.modal-header-actions,
+.template-row,
+.selected-up-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-header-actions {
+  justify-content: flex-end;
+}
+
+.gacha-modal {
+  width: min(1020px, 100%);
+}
+
+.config-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--popover);
+}
+
+.config-tabs button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.config-tabs button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.config-tabs button.active {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+  color: var(--primary);
+  background: var(--primary-muted);
+}
+
+.config-edit-workspace {
+  min-height: 420px;
+}
+
+.template-row {
+  align-items: center;
+}
+
+.probability-field input {
+  font-variant-numeric: tabular-nums;
+}
+
+.probability-total {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.probability-total span,
+.probability-total small {
+  color: var(--muted-foreground);
+  font-weight: 700;
+}
+
+.probability-total strong {
+  color: var(--foreground);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.probability-total.ok {
+  border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.probability-total.warning {
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--border));
+}
+
+.up-card-picker,
+.copy-config-box {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.compact-toolbar {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.selected-up-cards {
+  min-height: 32px;
+  align-items: center;
+}
+
+.up-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.up-card-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 95%, var(--muted));
+}
+
+.up-card-option input {
+  width: 16px;
+  height: 16px;
+  min-height: auto;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.up-card-option span {
+  min-width: 0;
+}
+
+.up-card-option strong,
+.up-card-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.up-card-option strong {
+  color: var(--foreground);
+}
+
+.up-card-option small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pity-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pity-rule-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.pity-rule-card h4,
+.copy-config-box h3 {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.copy-target-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1360,6 +1621,10 @@ textarea {
     min-width: 0;
   }
 
+  .config-table {
+    min-width: 0;
+  }
+
   thead {
     display: none;
   }
@@ -1414,13 +1679,27 @@ textarea {
   }
 
   .probability-edit-grid,
-  .reward-item-row {
+  .reward-item-row,
+  .up-card-list,
+  .pity-rule-grid,
+  .copy-target-grid,
+  .probability-total {
     grid-template-columns: 1fr;
   }
 
   .config-grid {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+
+  .config-admin-note,
+  .section-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .config-tabs {
+    padding: 10px 12px;
   }
 
   .activity-table div {

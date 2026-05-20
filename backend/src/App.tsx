@@ -560,7 +560,7 @@ export function App() {
           {active === "exchange-shop" && (
             <ExchangeShopPage options={adminOptions} />
           )}
-          {active === "config" && <ConfigPage />}
+          {active === "config" && <ConfigPage options={adminOptions} />}
         </section>
       </main>
     </div>
@@ -2545,10 +2545,12 @@ function ExchangeShopModal({
   );
 }
 
-function ConfigPage() {
+function ConfigPage({ options }: { options: AdminOptions | null }) {
   const [data, setData] = useState<GachaConfigData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [keyword, setKeyword] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [editing, setEditing] = useState<{
     poolKey: string;
     config: GachaPoolConfig;
@@ -2567,49 +2569,171 @@ function ConfigPage() {
     load();
   }, [load]);
 
-  const poolEntries = Object.entries(data?.pools || {});
+  const poolEntries = Object.entries(data?.pools || {}).sort(
+    ([left], [right]) => Number(left) - Number(right),
+  );
+  const filteredPoolEntries = poolEntries.filter(([poolKey, config]) => {
+    const poolName = data?.poolNames?.[poolKey] || poolNameById(Number(poolKey));
+    const query = keyword.trim().toLowerCase();
+    const matchesKeyword =
+      !query || `${poolKey} ${poolName}`.toLowerCase().includes(query);
+    const matchesSource =
+      sourceFilter === "all" ||
+      (sourceFilter === "database" && config.source === "database") ||
+      (sourceFilter === "env" && config.source !== "database");
+    return matchesKeyword && matchesSource;
+  });
 
   return (
     <>
       <Panel
-        title="系统配置"
+        title="卡池配置工作台"
         icon={<Settings size={18} />}
         action={<RefreshButton onClick={load} loading={loading} />}
       >
+        <div className="table-toolbar">
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="搜索卡池名称或 ID"
+            />
+          </label>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+          >
+            <option value="all">全部配置来源</option>
+            <option value="database">只看数据库配置</option>
+            <option value="env">只看环境默认</option>
+          </select>
+          <div className="toolbar-actions">
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={load}
+              disabled={loading}
+            >
+              <RefreshCw size={15} />
+              刷新
+            </button>
+          </div>
+        </div>
         {error && <StateBox type="error">{error}</StateBox>}
         {!data && !error && <StateBox>正在加载配置...</StateBox>}
         {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
-        {data && poolEntries.length > 0 && (
-          <div className="config-grid">
-            {poolEntries.map(([poolKey, config]) => (
-              <GachaConfigCard
-                key={poolKey}
-                poolKey={poolKey}
-                config={config}
-                poolName={data.poolNames?.[poolKey]}
-                onEdit={() => setEditing({ poolKey, config })}
-              />
-            ))}
-            <article className="config-card muted">
-              <div className="config-card-header">
-                <div>
-                  <span className="eyebrow">保留字段</span>
-                  <h3>管理员白名单</h3>
-                </div>
-                <Badge>只读</Badge>
-              </div>
+        {data && poolEntries.length > 0 && filteredPoolEntries.length === 0 && (
+          <StateBox>没有符合筛选条件的卡池配置</StateBox>
+        )}
+        {data && filteredPoolEntries.length > 0 && (
+          <div className="table-wrap config-workbench">
+            <table className="config-table">
+              <thead>
+                <tr>
+                  <th>卡池</th>
+                  <th>配置来源</th>
+                  <th>积分消耗</th>
+                  <th>概率合计</th>
+                  <th>UP 状态</th>
+                  <th>保底摘要</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPoolEntries.map(([poolKey, config]) => {
+                  const drawCosts = config.drawCosts || { once: 10, ten: 100 };
+                  const probabilityTotal = getProbabilityTotal(
+                    config.rarityProbabilities,
+                  );
+                  const sourceText =
+                    config.source === "database" && config.enabled !== false
+                      ? "数据库配置"
+                      : "环境默认";
+                  return (
+                    <tr key={poolKey}>
+                      <td data-label="卡池">
+                        <div className="config-pool-cell">
+                          <strong>
+                            {data.poolNames?.[poolKey] ||
+                              poolNameById(Number(poolKey))}
+                          </strong>
+                          <span>#{config.poolId || poolKey}</span>
+                        </div>
+                      </td>
+                      <td data-label="配置来源">
+                        <Badge>{sourceText}</Badge>
+                      </td>
+                      <td data-label="积分消耗">
+                        <span className="cell-text">
+                          单抽 {drawCosts.once ?? 10} / 十连{" "}
+                          {drawCosts.ten ?? 100}
+                        </span>
+                      </td>
+                      <td data-label="概率合计">
+                        <span
+                          className={
+                            Math.abs(probabilityTotal - 1) < 0.0001
+                              ? "config-ok"
+                              : "config-warning"
+                          }
+                        >
+                          {(probabilityTotal * 100).toFixed(2)}%
+                        </span>
+                      </td>
+                      <td data-label="UP 状态">
+                        <span
+                          className="cell-text"
+                          title={summarizeUpConfig(config.upCards)}
+                        >
+                          {summarizeUpConfig(config.upCards)}
+                        </span>
+                      </td>
+                      <td data-label="保底摘要">
+                        <span
+                          className="cell-text"
+                          title={summarizePityConfig(config.pitySystem)}
+                        >
+                          {summarizePityConfig(config.pitySystem)}
+                        </span>
+                      </td>
+                      <td data-label="更新时间">
+                        {config.updatedAt ? formatDate(config.updatedAt) : "-"}
+                      </td>
+                      <td data-label="操作">
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          onClick={() => setEditing({ poolKey, config })}
+                        >
+                          编辑
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {data && (
+          <div className="config-admin-note">
+            <div>
+              <span className="eyebrow">保留字段</span>
+              <strong>管理员白名单</strong>
               <p>
                 当前后台权限以数据库 <code>User.is_admin</code>{" "}
                 为准，环境变量 <code>ADMIN_UIDS</code> 仅保留展示。
               </p>
-              <div className="tag-list">
-                {data.adminUids?.length ? (
-                  data.adminUids.map((uid) => <Badge key={uid}>{uid}</Badge>)
-                ) : (
-                  <span className="muted-text">未配置 ADMIN_UIDS</span>
-                )}
-              </div>
-            </article>
+            </div>
+            <div className="tag-list">
+              {data.adminUids?.length ? (
+                data.adminUids.map((uid) => <Badge key={uid}>{uid}</Badge>)
+              ) : (
+                <span className="muted-text">未配置 ADMIN_UIDS</span>
+              )}
+            </div>
           </div>
         )}
       </Panel>
@@ -2617,7 +2741,11 @@ function ConfigPage() {
         <GachaConfigModal
           poolKey={editing.poolKey}
           config={editing.config}
+          defaultConfig={data?.defaults?.[editing.poolKey]}
           poolName={data?.poolNames?.[editing.poolKey]}
+          options={options}
+          allPools={poolEntries}
+          poolNames={data?.poolNames || {}}
           onCancel={() => setEditing(null)}
           onSubmit={async (poolId, values) => {
             await request(`/admin/config/gacha/${poolId}`, {
@@ -2627,161 +2755,206 @@ function ConfigPage() {
             setEditing(null);
             load();
           }}
+          onCopy={async (poolId, targetPoolIds) => {
+            await request(`/admin/config/gacha/${poolId}/copy`, {
+              method: "POST",
+              body: JSON.stringify({ targetPoolIds }),
+            });
+            load();
+          }}
         />
       )}
     </>
   );
 }
 
-function GachaConfigCard({
-  poolKey,
-  config,
-  poolName,
-  onEdit,
-}: {
-  poolKey: string;
-  config: GachaPoolConfig;
-  poolName?: string;
-  onEdit?: () => void;
-}) {
-  const probabilities = config.rarityProbabilities || {};
-  const probabilityEntries = Object.entries(probabilities);
-  const maxProbability = Math.max(...probabilityEntries.map(([, value]) => value), 1);
-  const upCards = config.upCards;
-  const pity = config.pitySystem;
-  const drawCosts = config.drawCosts || { once: 10, ten: 100 };
-
-  return (
-    <article className="config-card">
-      <div className="config-card-header">
-        <div>
-          <span className="eyebrow">
-            卡池 #{config.poolId || poolKey} ·{" "}
-            {config.source === "database" ? "数据库配置" : "环境默认"}
-          </span>
-          <h3>{poolName || poolNameById(Number(config.poolId || poolKey))}</h3>
-        </div>
-        <div className="config-actions">
-          <Badge>{config.enabled === false ? "配置未启用" : "配置生效"}</Badge>
-          {onEdit && (
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={onEdit}
-            >
-              编辑
-            </button>
-          )}
-        </div>
-      </div>
-
-      <section className="config-section">
-        <h4>积分消耗</h4>
-        <DescriptionList
-          items={[
-            ["单抽", `${drawCosts.once ?? 10} 积分`],
-            ["十连", `${drawCosts.ten ?? 100} 积分`],
-          ]}
-        />
-      </section>
-
-      <section className="config-section">
-        <h4>稀有度概率</h4>
-        {probabilityEntries.length ? (
-          <div className="probability-list">
-            {probabilityEntries.map(([rarity, value]) => (
-              <div className="probability-row" key={rarity}>
-                <span>{rarity}</span>
-                <div>
-                  <i
-                    style={{
-                      width: `${Math.max(3, (value / maxProbability) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <strong>{formatPercent(value)}</strong>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="muted-text">暂无显式概率配置，将使用服务端默认配置。</p>
-        )}
-      </section>
-
-      <section className="config-section">
-        <h4>UP 配置</h4>
-        {upCards ? (
-          <DescriptionList
-            items={[
-              ["状态", upCards.enabled ? "已开启" : "已关闭"],
-              ["UP 概率", formatPercent(upCards.upRate || 0)],
-              [
-                "UP 卡片",
-                upCards.cardIds?.length ? upCards.cardIds.join("、") : "未指定",
-              ],
-            ]}
-          />
-        ) : (
-          <p className="muted-text">未配置 UP 卡，当前卡池按基础概率抽取。</p>
-        )}
-      </section>
-
-      <section className="config-section">
-        <h4>保底配置</h4>
-        {pity ? (
-          <DescriptionList
-            items={[
-              ["状态", pity.enabled ? "已开启" : "已关闭"],
-              [
-                "软保底",
-                pity.softPity
-                  ? `${pity.softPity.count || "-"} 抽保 ${pity.softPity.guaranteedRarity || "-"}`
-                  : "未配置",
-              ],
-              [
-                "硬保底",
-                pity.hardPity
-                  ? `${pity.hardPity.count || "-"} 抽保 ${pity.hardPity.guaranteedRarity || "-"}`
-                  : "未配置",
-              ],
-              ["更新时间", config.updatedAt ? formatDate(config.updatedAt) : "-"],
-            ]}
-          />
-        ) : (
-          <p className="muted-text">暂无保底配置。</p>
-        )}
-      </section>
-    </article>
-  );
-}
-
 function GachaConfigModal({
   poolKey,
   config,
+  defaultConfig,
   poolName,
+  options,
+  allPools,
+  poolNames,
   onCancel,
   onSubmit,
+  onCopy,
 }: {
   poolKey: string;
   config: GachaPoolConfig;
+  defaultConfig?: GachaPoolConfig;
   poolName?: string;
+  options: AdminOptions | null;
+  allPools: Array<[string, GachaPoolConfig]>;
+  poolNames: Record<string, string>;
   onCancel: () => void;
   onSubmit: (poolId: number, values: GachaPoolConfig) => Promise<void>;
+  onCopy: (poolId: number, targetPoolIds: number[]) => Promise<void>;
 }) {
   const [values, setValues] = useState<GachaFormState>(() =>
     createGachaFormState(poolKey, config),
   );
+  const [activeTab, setActiveTab] = useState("base");
+  const [upKeyword, setUpKeyword] = useState("");
+  const [upRarity, setUpRarity] = useState("");
+  const [copyTargets, setCopyTargets] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  const probabilityTotal = rarityOptions.reduce(
-    (sum, option) => sum + Number(values.rarityProbabilities[String(option.value)] || 0),
-    0,
+  const [copyLoading, setCopyLoading] = useState(false);
+  const currentDefault = defaultConfig || config;
+  const probabilityTotal = getProbabilityTotal(values.rarityProbabilities);
+  const probabilityPercentTotal = probabilityTotal * 100;
+  const probabilityIsValid = Math.abs(probabilityTotal - 1) < 0.0001;
+  const poolCardOptions = (options?.cards || []).filter(
+    (card) => Number(card.pool) === values.poolId,
   );
+  const filteredUpCards = poolCardOptions.filter((card) => {
+    const matchesKeyword =
+      !upKeyword.trim() ||
+      String(card.label || "")
+        .toLowerCase()
+        .includes(upKeyword.trim().toLowerCase());
+    const matchesRarity =
+      !upRarity || String(card.rarity || "").split(",").includes(upRarity);
+    return matchesKeyword && matchesRarity;
+  });
+  const selectedUpCards = poolCardOptions.filter((card) =>
+    (values.upCards?.cardIds || []).includes(Number(card.value)),
+  );
+  const selectedKnownUpCardIds = new Set(
+    selectedUpCards.map((card) => Number(card.value)),
+  );
+  const selectedUnknownUpCardIds = (values.upCards?.cardIds || []).filter(
+    (cardId) => !selectedKnownUpCardIds.has(cardId),
+  );
+  const otherPools = allPools.filter(([targetPoolKey]) => targetPoolKey !== poolKey);
+  const configTabs = [
+    { key: "base", label: "基础价格" },
+    { key: "probability", label: "稀有度概率" },
+    { key: "up", label: "UP 配置" },
+    { key: "pity", label: "保底配置" },
+    { key: "preview", label: "保存预览" },
+  ];
+
+  function setProbabilityFromPercent(rarity: string, percent: number) {
+    setValues({
+      ...values,
+      rarityProbabilities: {
+        ...values.rarityProbabilities,
+        [rarity]: Number.isFinite(percent) ? percent / 100 : 0,
+      },
+    });
+  }
+
+  function applyProbabilityTemplate(probabilities: Record<string, number>) {
+    setValues({
+      ...values,
+      rarityProbabilities: normalizeRarityProbabilities(probabilities),
+    });
+  }
+
+  function normalizeCurrentProbabilities() {
+    if (probabilityTotal <= 0) {
+      setError("当前概率合计为 0，无法自动归一化");
+      return;
+    }
+    setError("");
+    applyProbabilityTemplate(
+      Object.fromEntries(
+        rarityOptions.map((option) => {
+          const rarity = String(option.value);
+          return [
+            rarity,
+            Number(values.rarityProbabilities[rarity] || 0) / probabilityTotal,
+          ];
+        }),
+      ),
+    );
+  }
+
+  function fillFromDefault() {
+    setValues({
+      ...createGachaFormState(poolKey, currentDefault),
+      enabled: true,
+    });
+    setError("");
+    setNotice("已填入环境默认配置，保存后将作为数据库配置生效。");
+  }
+
+  function toggleUpCard(cardId: number, checked: boolean) {
+    const selected = new Set(values.upCards?.cardIds || []);
+    if (checked) {
+      selected.add(cardId);
+    } else {
+      selected.delete(cardId);
+    }
+    setValues({
+      ...values,
+      upCards: {
+        enabled: values.upCards?.enabled === true,
+        upRate: Number(values.upCards?.upRate || 0),
+        cardIds: Array.from(selected).sort((left, right) => left - right),
+      },
+    });
+  }
+
+  function toggleCopyTarget(poolId: string, checked: boolean) {
+    const selected = new Set(copyTargets);
+    if (checked) {
+      selected.add(poolId);
+    } else {
+      selected.delete(poolId);
+    }
+    setCopyTargets(Array.from(selected));
+  }
+
+  function validateForm() {
+    if (!probabilityIsValid) {
+      return `稀有度概率合计必须为 100%，当前为 ${probabilityPercentTotal.toFixed(2)}%`;
+    }
+    if (
+      rarityOptions.some(
+        (option) => Number(values.rarityProbabilities[String(option.value)] || 0) < 0,
+      )
+    ) {
+      return "稀有度概率不能小于 0";
+    }
+    const once = Number(values.drawCosts?.once);
+    const ten = Number(values.drawCosts?.ten);
+    if (!Number.isInteger(once) || once <= 0 || !Number.isInteger(ten) || ten <= 0) {
+      return "单抽和十连消耗必须为正整数";
+    }
+    const upRate = Number(values.upCards?.upRate || 0);
+    if (values.upCards?.enabled && (upRate < 0 || upRate > 1)) {
+      return "UP 概率必须在 0% 到 100% 之间";
+    }
+    if (values.upCards?.enabled && !values.upCards.cardIds?.length) {
+      return "开启 UP 时至少选择一张 UP 卡片";
+    }
+    if (values.pitySystem?.enabled !== false) {
+      const softCount = Number(values.pitySystem?.softPity?.count || 0);
+      const hardCount = Number(values.pitySystem?.hardPity?.count || 0);
+      if (!Number.isInteger(softCount) || softCount <= 0) {
+        return "软保底次数必须为正整数";
+      }
+      if (!Number.isInteger(hardCount) || hardCount <= 0) {
+        return "硬保底次数必须为正整数";
+      }
+    }
+    return "";
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true);
     setError("");
+    setNotice("");
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setLoading(true);
     try {
       await onSubmit(values.poolId, values);
     } catch (err) {
@@ -2790,168 +2963,338 @@ function GachaConfigModal({
     }
   }
 
+  async function copyConfigToTargets() {
+    setError("");
+    setNotice("");
+    const targetPoolIds = copyTargets.map(Number).filter((poolId) => poolId > 0);
+    if (targetPoolIds.length === 0) {
+      setError("请选择要复制到的目标卡池");
+      return;
+    }
+    if (
+      !window.confirm(
+        `确认把当前生效配置复制到 ${targetPoolIds.length} 个卡池？目标卡池的数据库配置会被覆盖。`,
+      )
+    ) {
+      return;
+    }
+    setCopyLoading(true);
+    try {
+      await onCopy(values.poolId, targetPoolIds);
+      setCopyTargets([]);
+      setNotice(
+        `已复制到：${targetPoolIds
+          .map((targetPoolId) => poolNames[String(targetPoolId)] || poolNameById(targetPoolId))
+          .join("、")}`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "复制失败");
+    } finally {
+      setCopyLoading(false);
+    }
+  }
+
   return (
     <div className="modal-backdrop">
-      <form className="modal wide" onSubmit={submit}>
+      <form className="modal wide gacha-modal" onSubmit={submit}>
         <header>
           <div>
             <span className="eyebrow">抽卡配置</span>
             <h2>编辑 {poolName || poolNameById(values.poolId)}</h2>
           </div>
-          <button type="button" onClick={onCancel}>
-            关闭
-          </button>
+          <div className="modal-header-actions">
+            <button type="button" onClick={fillFromDefault}>
+              从环境默认填充
+            </button>
+            <button type="button" onClick={onCancel}>
+              关闭
+            </button>
+          </div>
         </header>
-        <div className="config-edit">
-          <section>
-            <div className="section-title-row">
-              <h3>生效与概率</h3>
-              <Badge>合计 {probabilityTotal.toFixed(4)}</Badge>
-            </div>
-            <label className="form-field">
-              <span>启用数据库配置</span>
-              <select
-                value={String(values.enabled !== false)}
-                onChange={(event) =>
-                  setValues({ ...values, enabled: event.target.value === "true" })
-                }
-              >
-                <option value="true">启用</option>
-                <option value="false">关闭并回退环境默认</option>
-              </select>
-            </label>
-            <div className="probability-edit-grid">
-              {rarityOptions.map((option) => {
-                const rarity = String(option.value);
-                return (
-                  <label className="form-field" key={rarity}>
-                    <span>{rarity} 概率</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.0001"
-                      value={values.rarityProbabilities[rarity] ?? 0}
-                      onChange={(event) =>
-                        setValues({
-                          ...values,
-                          rarityProbabilities: {
-                            ...values.rarityProbabilities,
-                            [rarity]: Number(event.target.value),
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-          <section>
-            <h3>积分消耗</h3>
-            <div className="form-grid no-padding">
+        <div className="config-tabs" role="tablist" aria-label="抽卡配置分区">
+          {configTabs.map((tab) => (
+            <button
+              key={tab.key}
+              className={activeTab === tab.key ? "active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="config-edit config-edit-workspace">
+          {activeTab === "base" && (
+            <section>
+              <div className="section-title-row">
+                <h3>基础价格</h3>
+                <Badge>{values.enabled === false ? "回退环境默认" : "数据库配置"}</Badge>
+              </div>
               <label className="form-field">
-                <span>单抽消耗</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={values.drawCosts?.once || 10}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      drawCosts: {
-                        once: Number(event.target.value),
-                        ten: values.drawCosts?.ten || 100,
-                      },
-                    })
-                  }
-                />
-              </label>
-              <label className="form-field">
-                <span>十连消耗</span>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={values.drawCosts?.ten || 100}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      drawCosts: {
-                        once: values.drawCosts?.once || 10,
-                        ten: Number(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </label>
-            </div>
-          </section>
-          <section>
-            <h3>UP 配置</h3>
-            <div className="form-grid no-padding">
-              <label className="form-field">
-                <span>UP 状态</span>
+                <span>启用数据库配置</span>
                 <select
-                  value={String(values.upCards?.enabled === true)}
+                  value={String(values.enabled !== false)}
                   onChange={(event) =>
-                    setValues({
-                      ...values,
-                      upCards: {
-                        enabled: event.target.value === "true",
-                        cardIds: values.upCards?.cardIds || [],
-                        upRate: values.upCards?.upRate || 0,
-                      },
-                    })
+                    setValues({ ...values, enabled: event.target.value === "true" })
                   }
                 >
-                  <option value="false">关闭</option>
-                  <option value="true">开启</option>
+                  <option value="true">启用</option>
+                  <option value="false">关闭并回退环境默认</option>
                 </select>
               </label>
-              <label className="form-field">
-                <span>UP 概率</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.0001"
-                  value={values.upCards?.upRate || 0}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      upCards: {
-                        enabled: values.upCards?.enabled === true,
-                        cardIds: values.upCards?.cardIds || [],
-                        upRate: Number(event.target.value),
-                      },
+              <div className="form-grid no-padding">
+                <label className="form-field">
+                  <span>单抽消耗</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={values.drawCosts?.once || 10}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        drawCosts: {
+                          once: Number(event.target.value),
+                          ten: values.drawCosts?.ten || 100,
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="form-field">
+                  <span>十连消耗</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={values.drawCosts?.ten || 100}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        drawCosts: {
+                          once: values.drawCosts?.once || 10,
+                          ten: Number(event.target.value),
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <DescriptionList
+                items={[
+                  ["环境默认单抽", `${currentDefault.drawCosts?.once ?? 10} 积分`],
+                  ["环境默认十连", `${currentDefault.drawCosts?.ten ?? 100} 积分`],
+                  [
+                    "当前配置来源",
+                    config.source === "database" && config.enabled !== false
+                      ? "数据库配置"
+                      : "环境默认",
+                  ],
+                ]}
+              />
+            </section>
+          )}
+
+          {activeTab === "probability" && (
+            <section>
+              <div className="section-title-row">
+                <h3>稀有度概率</h3>
+                <Badge>
+                  合计 {probabilityPercentTotal.toFixed(2)}%
+                  {probabilityIsValid ? "" : "，需调整到 100%"}
+                </Badge>
+              </div>
+              <div className="template-row">
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={fillFromDefault}
+                >
+                  环境默认
+                </button>
+                {probabilityTemplates.map((template) => (
+                  <button
+                    className="secondary-button compact"
+                    type="button"
+                    key={template.label}
+                    onClick={() => applyProbabilityTemplate(template.values)}
+                  >
+                    {template.label}
+                  </button>
+                ))}
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={normalizeCurrentProbabilities}
+                >
+                  自动归一化
+                </button>
+              </div>
+              <div className="probability-edit-grid">
+                {rarityOptions.map((option) => {
+                  const rarity = String(option.value);
+                  const value = Number(values.rarityProbabilities[rarity] || 0);
+                  return (
+                    <label className="form-field probability-field" key={rarity}>
+                      <span>{rarity} 概率</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={Number((value * 100).toFixed(4))}
+                        onChange={(event) =>
+                          setProbabilityFromPercent(rarity, Number(event.target.value))
+                        }
+                      />
+                      <small>保存为 {value.toFixed(6)}</small>
+                    </label>
+                  );
+                })}
+              </div>
+              <div
+                className={
+                  probabilityIsValid
+                    ? "probability-total ok"
+                    : "probability-total warning"
+                }
+              >
+                <span>当前合计</span>
+                <strong>{probabilityPercentTotal.toFixed(2)}%</strong>
+                <small>
+                  {probabilityIsValid
+                    ? "概率配置有效"
+                    : `还差 ${(100 - probabilityPercentTotal).toFixed(2)}%`}
+                </small>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "up" && (
+            <section>
+              <div className="section-title-row">
+                <h3>UP 配置</h3>
+                <Badge>{values.upCards?.enabled ? "已开启" : "已关闭"}</Badge>
+              </div>
+              <div className="form-grid no-padding">
+                <label className="form-field">
+                  <span>UP 状态</span>
+                  <select
+                    value={String(values.upCards?.enabled === true)}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        upCards: {
+                          enabled: event.target.value === "true",
+                          cardIds: values.upCards?.cardIds || [],
+                          upRate: values.upCards?.upRate || 0,
+                        },
+                      })
+                    }
+                  >
+                    <option value="false">关闭</option>
+                    <option value="true">开启</option>
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>UP 概率（百分比）</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={Number(((values.upCards?.upRate || 0) * 100).toFixed(4))}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        upCards: {
+                          enabled: values.upCards?.enabled === true,
+                          cardIds: values.upCards?.cardIds || [],
+                          upRate: Number(event.target.value) / 100,
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="up-card-picker">
+                <div className="table-toolbar compact-toolbar">
+                  <label className="search-box">
+                    <Search size={16} />
+                    <input
+                      value={upKeyword}
+                      onChange={(event) => setUpKeyword(event.target.value)}
+                      placeholder="搜索当前卡池卡片"
+                    />
+                  </label>
+                  <select
+                    value={upRarity}
+                    onChange={(event) => setUpRarity(event.target.value)}
+                  >
+                    <option value="">全部稀有度</option>
+                    {rarityOptions.map((option) => (
+                      <option key={String(option.value)} value={String(option.value)}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="selected-up-cards">
+                  {selectedUpCards.length || selectedUnknownUpCardIds.length ? (
+                    <>
+                      {selectedUpCards.map((card) => (
+                        <Badge key={String(card.value)}>
+                          {card.label} · {card.rarity || "-"} · #{String(card.value)}
+                        </Badge>
+                      ))}
+                      {selectedUnknownUpCardIds.map((cardId) => (
+                        <Badge key={cardId}>未知卡片 #{cardId}</Badge>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="muted-text">暂未选择 UP 卡片</span>
+                  )}
+                </div>
+                <div className="up-card-list">
+                  {filteredUpCards.length ? (
+                    filteredUpCards.map((card) => {
+                      const cardId = Number(card.value);
+                      return (
+                        <label className="up-card-option" key={String(card.value)}>
+                          <input
+                            type="checkbox"
+                            checked={(values.upCards?.cardIds || []).includes(cardId)}
+                            onChange={(event) =>
+                              toggleUpCard(cardId, event.target.checked)
+                            }
+                          />
+                          <span>
+                            <strong>{card.label}</strong>
+                            <small>
+                              {card.rarity || "-"} · ID {String(card.value)}
+                            </small>
+                          </span>
+                        </label>
+                      );
                     })
-                  }
-                />
-              </label>
-              <label className="form-field full-width">
-                <span>UP 卡片ID</span>
-                <input
-                  value={(values.upCards?.cardIds || []).join(",")}
-                  placeholder="多个卡片ID用英文逗号分隔"
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      upCards: {
-                        enabled: values.upCards?.enabled === true,
-                        cardIds: parseNumberList(event.target.value),
-                        upRate: values.upCards?.upRate || 0,
-                      },
-                    })
-                  }
-                />
-              </label>
-            </div>
-          </section>
-          <section>
-            <h3>保底配置</h3>
-            <div className="form-grid no-padding">
+                  ) : (
+                    <StateBox>当前筛选下没有可选卡片</StateBox>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "pity" && (
+            <section>
+              <div className="section-title-row">
+                <h3>保底配置</h3>
+                <Badge>
+                  {values.pitySystem?.enabled !== false ? "已开启" : "已关闭"}
+                </Badge>
+              </div>
               <label className="form-field">
                 <span>保底状态</span>
                 <select
@@ -2970,70 +3313,164 @@ function GachaConfigModal({
                   <option value="false">关闭</option>
                 </select>
               </label>
-              <label className="form-field">
-                <span>软保底次数</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={values.pitySystem?.softPity?.count || 10}
-                  onChange={(event) =>
-                    setPityRule(setValues, values, "softPity", {
-                      count: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label className="form-field">
-                <span>软保底稀有度</span>
-                <select
-                  value={values.pitySystem?.softPity?.guaranteedRarity || "SR"}
-                  onChange={(event) =>
-                    setPityRule(setValues, values, "softPity", {
-                      guaranteedRarity: event.target.value,
-                    })
-                  }
-                >
-                  {rarityOptions.map((option) => (
-                    <option key={String(option.value)} value={String(option.value)}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-field">
-                <span>硬保底次数</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={values.pitySystem?.hardPity?.count || 90}
-                  onChange={(event) =>
-                    setPityRule(setValues, values, "hardPity", {
-                      count: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label className="form-field">
-                <span>硬保底稀有度</span>
-                <select
-                  value={values.pitySystem?.hardPity?.guaranteedRarity || "SSR"}
-                  onChange={(event) =>
-                    setPityRule(setValues, values, "hardPity", {
-                      guaranteedRarity: event.target.value,
-                    })
-                  }
-                >
-                  {rarityOptions.map((option) => (
-                    <option key={String(option.value)} value={String(option.value)}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </section>
+              {values.pitySystem?.enabled === false ? (
+                <StateBox>保底已关闭，抽卡时只按基础概率和 UP 配置计算。</StateBox>
+              ) : (
+                <div className="pity-rule-grid">
+                  <div className="pity-rule-card">
+                    <h4>软保底</h4>
+                    <div className="form-grid no-padding">
+                      <label className="form-field">
+                        <span>触发次数</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={values.pitySystem?.softPity?.count || 10}
+                          onChange={(event) =>
+                            setPityRule(setValues, values, "softPity", {
+                              count: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>保底稀有度</span>
+                        <select
+                          value={
+                            values.pitySystem?.softPity?.guaranteedRarity || "SR"
+                          }
+                          onChange={(event) =>
+                            setPityRule(setValues, values, "softPity", {
+                              guaranteedRarity: event.target.value,
+                            })
+                          }
+                        >
+                          {rarityOptions.map((option) => (
+                            <option
+                              key={String(option.value)}
+                              value={String(option.value)}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="pity-rule-card">
+                    <h4>硬保底</h4>
+                    <div className="form-grid no-padding">
+                      <label className="form-field">
+                        <span>触发次数</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={values.pitySystem?.hardPity?.count || 90}
+                          onChange={(event) =>
+                            setPityRule(setValues, values, "hardPity", {
+                              count: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>保底稀有度</span>
+                        <select
+                          value={
+                            values.pitySystem?.hardPity?.guaranteedRarity || "SSR"
+                          }
+                          onChange={(event) =>
+                            setPityRule(setValues, values, "hardPity", {
+                              guaranteedRarity: event.target.value,
+                            })
+                          }
+                        >
+                          {rarityOptions.map((option) => (
+                            <option
+                              key={String(option.value)}
+                              value={String(option.value)}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeTab === "preview" && (
+            <section>
+              <div className="section-title-row">
+                <h3>保存预览</h3>
+                <Badge>{probabilityIsValid ? "可保存" : "需修正"}</Badge>
+              </div>
+              <DescriptionList
+                items={[
+                  [
+                    "保存效果",
+                    values.enabled === false
+                      ? "关闭数据库配置，抽卡回退环境默认"
+                      : "保存为数据库配置，并立即覆盖当前卡池抽卡配置",
+                  ],
+                  [
+                    "积分消耗",
+                    `单抽 ${values.drawCosts?.once || 10}，十连 ${
+                      values.drawCosts?.ten || 100
+                    }`,
+                  ],
+                  ["概率合计", `${probabilityPercentTotal.toFixed(2)}%`],
+                  ["UP 配置", summarizeUpConfig(values.upCards)],
+                  ["保底配置", summarizePityConfig(values.pitySystem)],
+                ]}
+              />
+              <div className="copy-config-box">
+                <div className="section-title-row">
+                  <div>
+                    <h3>复制到其他卡池</h3>
+                    <p className="muted-text">
+                      复制的是服务器当前已生效配置，不包含未保存修改，目标卡池数据库配置会被覆盖。
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-button compact"
+                    type="button"
+                    onClick={copyConfigToTargets}
+                    disabled={copyLoading || copyTargets.length === 0}
+                  >
+                    {copyLoading ? "复制中..." : "复制配置"}
+                  </button>
+                </div>
+                <div className="copy-target-grid">
+                  {otherPools.length ? (
+                    otherPools.map(([targetPoolKey]) => (
+                      <label className="check-option" key={targetPoolKey}>
+                        <input
+                          type="checkbox"
+                          checked={copyTargets.includes(targetPoolKey)}
+                          onChange={(event) =>
+                            toggleCopyTarget(targetPoolKey, event.target.checked)
+                          }
+                        />
+                        <span>
+                          {poolNames[targetPoolKey] ||
+                            poolNameById(Number(targetPoolKey))}
+                        </span>
+                      </label>
+                    ))
+                  ) : (
+                    <span className="muted-text">暂无其他卡池可复制</span>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
         </div>
         {error && <div className="error-box">{error}</div>}
+        {notice && <div className="success-box">{notice}</div>}
         <footer>
           <button className="secondary-button" type="button" onClick={onCancel}>
             取消
@@ -3277,6 +3714,71 @@ function groupItemOptions(
   return otherOptions.length
     ? [...groups, { label: "其他物品", options: otherOptions }]
     : groups;
+}
+
+const probabilityTemplates: Array<{
+  label: string;
+  values: Record<string, number>;
+}> = [
+  {
+    label: "均衡模板",
+    values: { N: 0.4, R: 0.3, SR: 0.2, SSR: 0.08, UR: 0.02 },
+  },
+  {
+    label: "保守高稀有",
+    values: { N: 0.52, R: 0.3, SR: 0.14, SSR: 0.035, UR: 0.005 },
+  },
+  {
+    label: "活动高稀有",
+    values: { N: 0.36, R: 0.32, SR: 0.22, SSR: 0.08, UR: 0.02 },
+  },
+  {
+    label: "全稀有铺开",
+    values: { N: 0.2, R: 0.2, SR: 0.2, SSR: 0.2, UR: 0.2 },
+  },
+];
+
+function getProbabilityTotal(probabilities?: Record<string, number>) {
+  return rarityOptions.reduce(
+    (sum, option) => sum + Number(probabilities?.[String(option.value)] || 0),
+    0,
+  );
+}
+
+function normalizeRarityProbabilities(probabilities: Record<string, number>) {
+  return Object.fromEntries(
+    rarityOptions.map((option) => {
+      const rarity = String(option.value);
+      return [rarity, Number(probabilities[rarity] || 0)];
+    }),
+  );
+}
+
+function summarizeUpConfig(upCards?: GachaPoolConfig["upCards"]) {
+  if (!upCards || upCards.enabled !== true) {
+    return "未开启";
+  }
+  const cardCount = upCards.cardIds?.length || 0;
+  return `已开启 · ${formatPercent(upCards.upRate || 0)} · ${
+    cardCount ? `${cardCount} 张卡` : "未选卡"
+  }`;
+}
+
+function summarizePityConfig(pitySystem?: GachaPoolConfig["pitySystem"]) {
+  if (!pitySystem || pitySystem.enabled === false) {
+    return "未开启";
+  }
+  const soft = pitySystem.softPity
+    ? `软 ${pitySystem.softPity.count || "-"} 抽保 ${
+        pitySystem.softPity.guaranteedRarity || "-"
+      }`
+    : "软保底未配";
+  const hard = pitySystem.hardPity
+    ? `硬 ${pitySystem.hardPity.count || "-"} 抽保 ${
+        pitySystem.hardPity.guaranteedRarity || "-"
+      }`
+    : "硬保底未配";
+  return `${soft} / ${hard}`;
 }
 
 function normalizeDropItemSelectValue(value: unknown) {
