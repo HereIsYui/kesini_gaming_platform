@@ -1,7 +1,7 @@
 import { randomInt } from "crypto";
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, EntityManager, In, Repository } from "typeorm";
+import { DataSource, EntityManager, In, IsNull, Repository } from "typeorm";
 import { v4 as uuidv4 } from "uuid";
 import { CardItem } from "src/entity/card.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -295,18 +295,25 @@ export class CardService {
     page = Math.max(1, page);
     pageSize = Math.min(100, Math.max(1, pageSize));
 
-    const whereConditions: any = {
+    const normalizedRarity = rarity ? this.normalizeRarity(rarity) : undefined;
+    const poolCardIds =
+      poolId === undefined ? undefined : await this.getCardIdsByPool(poolId);
+    if (poolCardIds !== undefined && poolCardIds.length === 0) {
+      return this.emptyUserCardsResult(page, pageSize);
+    }
+
+    const baseWhere: any = {
       uid,
       delete_flag: false,
     };
 
-    const filteredCardIds = await this.getFilteredCardIds(rarity, poolId);
-    if ((rarity || poolId !== undefined) && filteredCardIds.length === 0) {
+    const whereConditions = await this.buildUserCardWhereConditions(
+      baseWhere,
+      normalizedRarity,
+      poolCardIds,
+    );
+    if (whereConditions.length === 0) {
       return this.emptyUserCardsResult(page, pageSize);
-    }
-
-    if (filteredCardIds.length > 0) {
-      whereConditions.card_id = In(filteredCardIds.map((id) => id.toString()));
     }
 
     const total = await this.userCardRepository.count({
@@ -814,26 +821,62 @@ export class CardService {
     await repository.save(userCardHistory);
   }
 
-  private async getFilteredCardIds(
-    rarity?: string,
-    poolId?: number,
-  ): Promise<number[]> {
-    if (!rarity && poolId === undefined) {
-      return [];
+  private async buildUserCardWhereConditions(
+    baseWhere: any,
+    rarity?: CardRarity,
+    poolCardIds?: number[],
+  ): Promise<any[]> {
+    const applyPoolFilter = (condition: any, cardIds?: number[]) => {
+      if (cardIds !== undefined) {
+        condition.card_id = In(cardIds.map((id) => id.toString()));
+      }
+      return condition;
+    };
+
+    if (!rarity) {
+      return [applyPoolFilter({ ...baseWhere }, poolCardIds)];
     }
 
-    const normalizedRarity = rarity ? this.normalizeRarity(rarity) : undefined;
+    const conditions = [
+      applyPoolFilter({ ...baseWhere, card_level: rarity }, poolCardIds),
+    ];
+    const fallbackCardIds = await this.getFallbackCardIdsByRarity(
+      rarity,
+      poolCardIds,
+    );
+
+    if (fallbackCardIds.length > 0) {
+      conditions.push(
+        applyPoolFilter(
+          { ...baseWhere, card_level: IsNull() },
+          fallbackCardIds,
+        ),
+        applyPoolFilter({ ...baseWhere, card_level: "" }, fallbackCardIds),
+      );
+    }
+
+    return conditions;
+  }
+
+  private async getCardIdsByPool(poolId: number): Promise<number[]> {
+    const cards = await this.cardRepository.find({
+      where: { pool: this.resolvePoolId(poolId) },
+    });
+    return cards.map((card) => card.id);
+  }
+
+  private async getFallbackCardIdsByRarity(
+    rarity: CardRarity,
+    poolCardIds?: number[],
+  ): Promise<number[]> {
     const cards = await this.cardRepository.find(
-      poolId === undefined
+      poolCardIds === undefined
         ? {}
-        : { where: { pool: this.resolvePoolId(poolId) } },
+        : { where: { id: In(poolCardIds) } },
     );
 
     return cards
-      .filter(
-        (card) =>
-          !normalizedRarity || this.cardSupportsRarity(card, normalizedRarity),
-      )
+      .filter((card) => this.getHighestRarity(card.card_level) === rarity)
       .map((card) => card.id);
   }
 

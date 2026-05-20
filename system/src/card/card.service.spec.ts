@@ -183,6 +183,211 @@ describe("CardController 入参安全", () => {
   });
 });
 
+describe("CardService 背包筛选", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      count: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function getFindOperatorInfo(value: any) {
+    return {
+      type: value?._type || value?.type,
+      value: value?._value ?? value?.value,
+    };
+  }
+
+  function matchesValue(actual: any, expected: any) {
+    const operator = getFindOperatorInfo(expected);
+    if (operator.type === "in") {
+      return operator.value.includes(actual);
+    }
+    if (operator.type === "isNull") {
+      return actual === null || actual === undefined;
+    }
+    return actual === expected;
+  }
+
+  function filterByWhere<T extends Record<string, any>>(
+    rows: T[],
+    where?: Record<string, any> | Array<Record<string, any>>,
+  ) {
+    if (!where) {
+      return rows;
+    }
+    const conditions = Array.isArray(where) ? where : [where];
+    return rows.filter((row) =>
+      conditions.some((condition) =>
+        Object.entries(condition).every(([key, expected]) =>
+          matchesValue(row[key], expected),
+        ),
+      ),
+    );
+  }
+
+  function createListService(customUserCards: Partial<UserCard>[] = []) {
+    const cards = [
+      {
+        id: 1,
+        card_name: "多稀有度卡",
+        card_level: "N,R,SR,SSR",
+        card_desc: "测试",
+        card_type: 0,
+        pool: 1,
+      },
+      {
+        id: 2,
+        card_name: "隐藏卡",
+        card_level: "UR",
+        card_desc: "测试",
+        card_type: 0,
+        pool: 2,
+      },
+    ] as CardItem[];
+    const userCards = [
+      {
+        id: 1,
+        uid: "u1",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "n-card",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-01"),
+      },
+      {
+        id: 2,
+        uid: "u1",
+        card_id: "1",
+        card_level: "SSR",
+        card_uuid: "ssr-card",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-02"),
+      },
+      {
+        id: 3,
+        uid: "u1",
+        card_id: "2",
+        card_level: "UR",
+        card_uuid: "ur-card",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-03"),
+      },
+      ...customUserCards,
+    ] as UserCard[];
+
+    const cardRepository = createRepository({
+      find: jest.fn(async (options?: any) => filterByWhere(cards, options?.where)),
+    });
+    const userCardRepository = createRepository({
+      count: jest.fn(async (options?: any) =>
+        filterByWhere(userCards, options?.where).length,
+      ),
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(userCards, options?.where)
+          .sort((a, b) => b.id - a.id)
+          .slice(options?.skip || 0, (options?.skip || 0) + options?.take),
+      ),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
+    });
+    const service = new CardService(
+      cardRepository as any,
+      createRepository() as any,
+      userRepository as any,
+      userCardRepository as any,
+      createRepository() as any,
+      createRepository({ find: jest.fn().mockResolvedValue([]) }) as any,
+      createRepository({ find: jest.fn().mockResolvedValue([]) }) as any,
+      createRepository() as any,
+      {} as any,
+      {} as any,
+    );
+
+    return { service };
+  }
+
+  it("按稀有度筛选应匹配用户实际获得等级", async () => {
+    const { service } = createListService();
+
+    const result = await service.getUserCards("u1", "SSR", undefined, 1, 20);
+
+    expect(result.total).toBe(1);
+    expect(result.list).toEqual([
+      expect.objectContaining({
+        uuid: "ssr-card",
+        cardLevel: "SSR",
+      }),
+    ]);
+  });
+
+  it("筛选 N 不应返回同一张多稀有度卡的 SSR 用户卡", async () => {
+    const { service } = createListService();
+
+    const result = await service.getUserCards("u1", "N", undefined, 1, 20);
+
+    expect(result.total).toBe(1);
+    expect(result.list[0]).toEqual(
+      expect.objectContaining({
+        uuid: "n-card",
+        cardLevel: "N",
+      }),
+    );
+  });
+
+  it("稀有度和卡池组合筛选应同时生效", async () => {
+    const { service } = createListService();
+
+    const result = await service.getUserCards("u1", "UR", 1, 1, 20);
+
+    expect(result.total).toBe(0);
+    expect(result.list).toEqual([]);
+  });
+
+  it("旧数据没有实际等级时按卡片最高稀有度兜底筛选", async () => {
+    const { service } = createListService([
+      {
+        id: 4,
+        uid: "u1",
+        card_id: "1",
+        card_level: null,
+        card_uuid: "legacy-card",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-04"),
+      },
+    ]);
+
+    const result = await service.getUserCards("u1", "SSR", undefined, 1, 20);
+
+    expect(result.total).toBe(2);
+    expect(result.list.map((card) => card.uuid)).toEqual([
+      "legacy-card",
+      "ssr-card",
+    ]);
+  });
+
+  it("非法稀有度仍会被拒绝", async () => {
+    const { service } = createListService();
+
+    await expect(service.getUserCards("u1", "X", undefined, 1, 20)).rejects.toThrow(
+      "稀有度参数无效",
+    );
+  });
+});
+
 describe("CardService 抽卡积分扣除", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {
