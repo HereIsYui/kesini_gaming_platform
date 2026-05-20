@@ -88,6 +88,7 @@ const exchangeItems = ref<ExchangeShopItem[]>([]);
 const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
+const synthesisRarityFilter = ref<CardRarity | "">("");
 const cardPage = ref(1);
 const redeemCode = ref("");
 const exchangeCounts = reactive<Record<number, number>>({});
@@ -133,8 +134,16 @@ const synthesisCards = computed<SynthesisCard[]>(() =>
     })),
   ),
 );
+const filteredSynthesisCards = computed<SynthesisCard[]>(() => {
+  if (!synthesisRarityFilter.value) {
+    return synthesisCards.value;
+  }
+  return synthesisCards.value.filter(
+    (item) => item.rarity === synthesisRarityFilter.value,
+  );
+});
 const synthesisAvailableCount = computed(
-  () => synthesisCards.value.filter((item) => !item.disabled).length,
+  () => filteredSynthesisCards.value.filter((item) => !item.disabled).length,
 );
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bestResult = computed(() => {
@@ -912,6 +921,13 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             <select v-model="activePoolId">
               <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
             </select>
+            <select v-model="synthesisRarityFilter">
+              <option value="">全部稀有度</option>
+              <option v-for="rarity in rarityOrder" :key="rarity" :value="rarity">{{ rarity }}</option>
+            </select>
+            <button class="secondary-action" type="button" @click="synthesisRarityFilter = ''">
+              重置
+            </button>
           </div>
         </div>
 
@@ -921,12 +937,12 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
             <strong>{{ selectedPool?.pool_name || "未选择" }}</strong>
           </article>
           <article>
-            <small>可合成卡片</small>
+            <small>筛选后可合成</small>
             <strong>{{ synthesisAvailableCount }}</strong>
           </article>
           <article>
-            <small>展示方式</small>
-            <strong>按稀有度展开</strong>
+            <small>当前稀有度</small>
+            <strong>{{ synthesisRarityFilter || "全部" }}</strong>
           </article>
         </div>
 
@@ -935,9 +951,14 @@ function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: num
           <strong>当前卡池暂无卡片</strong>
           <span>切换卡池后可查看可合成卡片。</span>
         </div>
+        <div v-else-if="filteredSynthesisCards.length === 0" class="empty-state">
+          <Package :size="30" />
+          <strong>暂无该稀有度版本</strong>
+          <span>当前卡池没有 {{ synthesisRarityFilter }} 稀有度的可展示卡片。</span>
+        </div>
         <div v-else class="catalog-grid synthesis-grid">
           <article
-            v-for="(item, index) in synthesisCards"
+            v-for="(item, index) in filteredSynthesisCards"
             :key="item.key"
             class="result-card synthesis-card"
             :class="rarityClass(item.rarity)"
