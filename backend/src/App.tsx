@@ -2748,9 +2748,11 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
           poolNames={data?.poolNames || {}}
           onCancel={() => setEditing(null)}
           onSubmit={async (poolId, values) => {
+            const { poolId: _poolId, source: _source, updatedAt: _updatedAt, ...payload } =
+              values;
             await request(`/admin/config/gacha/${poolId}`, {
               method: "PATCH",
-              body: JSON.stringify(values),
+              body: JSON.stringify(payload),
             });
             setEditing(null);
             load();

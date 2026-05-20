@@ -246,6 +246,12 @@ class PityPatchDto {
 
 class GachaConfigPatchDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  poolId?: number;
+
+  @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 
