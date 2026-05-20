@@ -194,8 +194,10 @@ describe("AdminService", () => {
           typeLabel: "卡片碎片",
           usageLabel: "用于卡片合成和分解产出",
           disabled: false,
+          defaultFragment: false,
         },
       ],
+      defaultFragmentItem: null,
     });
     expect(poolRepository.find).toHaveBeenCalledWith({
       order: { id: "DESC" },
@@ -238,6 +240,7 @@ describe("AdminService", () => {
     await expect(service.getDropItem(4)).resolves.toEqual({
       ...dropItem,
       disabled: false,
+      default_fragment: false,
       typeLabel: "其他",
       usageLabel: "预留类型，需结合业务说明使用",
     });
@@ -281,6 +284,7 @@ describe("AdminService", () => {
         drop_item_type: 0,
         drop_item_value: 0,
         disabled: false,
+        default_fragment: false,
       }),
     );
     await expect(
@@ -289,6 +293,91 @@ describe("AdminService", () => {
     await expect(
       service.createDropItem({ drop_name: "   ", drop_type: 0 } as any),
     ).rejects.toThrow("物品名称不能为空");
+  });
+
+  it("设置默认碎片会清除其他默认碎片", async () => {
+    const oldDefault = {
+      id: 1,
+      drop_name: "旧默认碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    };
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([oldDefault]),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await service.createDropItem({
+      drop_name: "新默认碎片",
+      drop_type: 0,
+      default_fragment: true,
+    } as any);
+
+    expect(dropRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 1,
+        default_fragment: false,
+      }),
+    ]);
+    expect(dropRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        drop_name: "新默认碎片",
+        default_fragment: true,
+      }),
+    );
+  });
+
+  it("非碎片物品不能设为默认分解碎片", async () => {
+    const service = createService();
+
+    await expect(
+      service.createDropItem({
+        drop_name: "兑换券",
+        drop_type: 2,
+        default_fragment: true,
+      } as any),
+    ).rejects.toThrow("只有卡片碎片可以设为默认分解碎片");
+  });
+
+  it("更新默认碎片时只保留当前物品为默认", async () => {
+    const item = {
+      id: 2,
+      drop_name: "当前碎片",
+      drop_desc: "",
+      drop_type: 0,
+      drop_item_type: 0,
+      drop_item_value: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const oldDefault = {
+      id: 1,
+      drop_name: "旧默认碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    };
+    const dropRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(item),
+      find: jest.fn().mockResolvedValue([oldDefault]),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await service.updateDropItem(2, { default_fragment: true } as any);
+
+    expect(dropRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 1,
+        default_fragment: false,
+      }),
+    ]);
+    expect(dropRepository.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 2,
+        default_fragment: true,
+      }),
+    );
   });
 
   it("被引用的物品删除时改为禁用", async () => {

@@ -962,6 +962,13 @@ export class CardService {
       }
     }
 
+    const defaultFragmentItem = await dropRepository.findOne({
+      where: { drop_type: 0, disabled: false, default_fragment: true },
+    });
+    if (defaultFragmentItem) {
+      return defaultFragmentItem;
+    }
+
     const fragmentItem = await dropRepository.findOne({
       where: { drop_type: 0, disabled: false },
     });

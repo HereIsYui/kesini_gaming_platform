@@ -54,8 +54,10 @@ export interface AdminOptions {
       typeLabel?: string;
       usageLabel?: string;
       disabled?: boolean;
+      defaultFragment?: boolean;
     }
   >;
+  defaultFragmentItem?: SelectOption | null;
 }
 
 export interface GachaPoolConfig {

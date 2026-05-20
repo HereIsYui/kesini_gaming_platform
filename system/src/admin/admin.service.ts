@@ -130,6 +130,12 @@ export class AdminService {
       this.cardRepository.find({ order: { id: "DESC" } as any }),
       this.dropRepository.find({ order: { id: "DESC" } as any }),
     ]);
+    const defaultFragmentItem = dropItems.find(
+      (item) =>
+        item.drop_type === 0 &&
+        item.default_fragment === true &&
+        item.disabled !== true,
+    );
 
     return {
       pools: pools.map((pool) => ({
@@ -150,7 +156,14 @@ export class AdminService {
         typeLabel: this.getDropTypeMeta(item.drop_type).label,
         usageLabel: this.getDropTypeMeta(item.drop_type).usage,
         disabled: item.disabled === true,
+        defaultFragment: item.default_fragment === true,
       })),
+      defaultFragmentItem: defaultFragmentItem
+        ? {
+            label: defaultFragmentItem.drop_name,
+            value: defaultFragmentItem.id,
+          }
+        : null,
     };
   }
 
@@ -293,9 +306,15 @@ export class AdminService {
 
   async createDropItem(body: Partial<DropItem>) {
     const normalized = this.normalizeDropItemInput(body);
+    const disabled = body.disabled === true;
+    await this.prepareDefaultFragment(
+      { ...normalized, disabled },
+      body.default_fragment === true,
+    );
     const item = this.dropRepository.create({
       ...normalized,
-      disabled: body.disabled === true,
+      disabled,
+      default_fragment: body.default_fragment === true,
     });
     return this.dropRepository.save(item);
   }
@@ -303,7 +322,22 @@ export class AdminService {
   async updateDropItem(id: number, body: Partial<DropItem>) {
     const item = await this.mustFind(this.dropRepository, id, "物品不存在");
     const normalized = this.normalizeDropItemInput({ ...item, ...body });
-    Object.assign(item, normalized, this.pickDefined(body, ["disabled"]));
+    const disabled =
+      body.disabled === undefined ? item.disabled === true : body.disabled === true;
+    const defaultFragment =
+      disabled || normalized.drop_type !== 0
+        ? false
+        : body.default_fragment === undefined
+          ? item.default_fragment === true
+          : body.default_fragment === true;
+    await this.prepareDefaultFragment(
+      { ...normalized, disabled },
+      defaultFragment,
+      id,
+    );
+    Object.assign(item, normalized, this.pickDefined(body, ["disabled"]), {
+      default_fragment: defaultFragment,
+    });
     return this.dropRepository.save(item);
   }
 
@@ -965,6 +999,35 @@ export class AdminService {
     };
   }
 
+  private async prepareDefaultFragment(
+    item: { drop_type: number; disabled?: boolean },
+    defaultFragment: boolean,
+    exceptId?: number,
+  ) {
+    if (!defaultFragment) {
+      return;
+    }
+    if (item.drop_type !== 0) {
+      throw new Error("只有卡片碎片可以设为默认分解碎片");
+    }
+    if (item.disabled === true) {
+      throw new Error("默认分解碎片不能禁用");
+    }
+
+    const existingDefaults = await this.dropRepository.find({
+      where: { default_fragment: true } as any,
+    });
+    const needClear = existingDefaults.filter((existing) => existing.id !== exceptId);
+    if (needClear.length > 0) {
+      await this.dropRepository.save(
+        needClear.map((existing) => ({
+          ...existing,
+          default_fragment: false,
+        })),
+      );
+    }
+  }
+
   private normalizeCardLevels(value: unknown): string {
     const selected = String(value || "")
       .split(",")
@@ -995,6 +1058,7 @@ export class AdminService {
       typeLabel: meta.label,
       usageLabel: meta.usage,
       disabled: item.disabled === true,
+      default_fragment: item.default_fragment === true,
     };
   }
 

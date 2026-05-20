@@ -192,6 +192,10 @@ class DropItemDto {
   @IsOptional()
   @IsBoolean()
   disabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  default_fragment?: boolean;
 }
 
 class UserPatchDto {

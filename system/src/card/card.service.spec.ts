@@ -135,6 +135,80 @@ describe("CardService 抽卡核心规则", () => {
   it("SSR 合成碎片数量不能被 R 的包含关系误判", () => {
     expect((service as any).getRequiredFragments("SSR")).toBe(1000);
   });
+
+  it("未配置卡片碎片时优先使用全局默认碎片", async () => {
+    const defaultFragment = {
+      id: 2,
+      drop_name: "默认碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    };
+    const dropRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? defaultFragment : null,
+      ),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(dropRepository),
+    };
+
+    await expect(
+      (service as any).findFragmentItem(manager, {
+        drop_item: "",
+      } as CardItem),
+    ).resolves.toBe(defaultFragment);
+  });
+
+  it("卡片单独配置碎片时优先使用卡片配置", async () => {
+    const configuredFragment = {
+      id: 9,
+      drop_name: "专属碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const dropRepository = {
+      find: jest.fn().mockResolvedValue([configuredFragment]),
+      findOne: jest.fn(),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(dropRepository),
+    };
+
+    await expect(
+      (service as any).findFragmentItem(manager, {
+        drop_item: "9",
+      } as CardItem),
+    ).resolves.toBe(configuredFragment);
+    expect(dropRepository.findOne).not.toHaveBeenCalled();
+  });
+
+  it("禁用的默认碎片不会作为默认配置使用", async () => {
+    const fallbackFragment = {
+      id: 3,
+      drop_name: "备用碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const dropRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? null : fallbackFragment,
+      ),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(dropRepository),
+    };
+
+    await expect(
+      (service as any).findFragmentItem(manager, {
+        drop_item: "",
+      } as CardItem),
+    ).resolves.toBe(fallbackFragment);
+  });
 });
 
 describe("CardController 入参安全", () => {

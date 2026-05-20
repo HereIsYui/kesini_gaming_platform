@@ -125,6 +125,7 @@ const itemTemplates = [
       drop_desc: "用于卡片合成和分解产出的通用碎片。",
       drop_item_type: 0,
       drop_item_value: 0,
+      default_fragment: false,
     },
   },
   ...rarityOptions
@@ -137,6 +138,7 @@ const itemTemplates = [
         drop_desc: `用于 ${option.label} 稀有度卡片的合成和分解产出。`,
         drop_item_type: 0,
         drop_item_value: 0,
+        default_fragment: false,
       },
     })),
   {
@@ -147,6 +149,7 @@ const itemTemplates = [
       drop_desc: "可放入背包的活动兑换类道具。",
       drop_item_type: 1,
       drop_item_value: 0,
+      default_fragment: false,
     },
   },
   {
@@ -157,6 +160,7 @@ const itemTemplates = [
       drop_desc: "可用于活动玩法或兑换码奖励的普通道具。",
       drop_item_type: 2,
       drop_item_value: 0,
+      default_fragment: false,
     },
   },
 ];
@@ -191,6 +195,17 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
         ...item,
         value: String(item.value),
       })) || [];
+  const defaultFragmentLabel = options?.defaultFragmentItem?.label
+    ? `使用默认碎片（当前：${options.defaultFragmentItem.label}）`
+    : "使用默认碎片（未设置）";
+  const fragmentSelectOptions = [
+    {
+      label: defaultFragmentLabel,
+      value: "",
+      disabled: !options?.defaultFragmentItem,
+    },
+    ...fragmentOptions,
+  ];
 
   return [
     { key: "id", label: "ID", readonly: true },
@@ -221,10 +236,12 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
       key: "drop_item",
       label: "分解产出碎片",
       type: "select",
-      options: fragmentOptions,
+      options: fragmentSelectOptions,
       fullWidth: true,
       helper:
-        "选择卡片合成/分解使用的碎片物品。消耗规则：N=80、R=160、SR=320、SSR=1000，UR不可合成/分解。",
+        options?.defaultFragmentItem
+          ? "留空时使用全局默认碎片；也可以为这张卡单独指定碎片。消耗规则：N=80、R=160、SR=320、SSR=1000，UR不可合成/分解。"
+          : "还没有设置全局默认碎片，请先到物品管理把一个卡片碎片设为默认，或为这张卡单独指定碎片。",
     },
   ];
 }
@@ -235,6 +252,7 @@ const dropFields: FieldConfig[] = [
   { key: "typeLabel", label: "物品类型", readonly: true },
   { key: "usageLabel", label: "用途说明", readonly: true },
   { key: "drop_desc", label: "物品说明", readonly: true },
+  { key: "default_fragment", label: "默认碎片", readonly: true },
   { key: "disabled", label: "禁用", readonly: true },
 ];
 
@@ -1224,6 +1242,53 @@ function EditModal({
                 ? "form-field full-width"
                 : "form-field";
 
+            if (field.type === "multiSelect") {
+              return (
+                <div className={fieldClass} key={field.key}>
+                  <span>{field.label}</span>
+                  <div
+                    className="rarity-segment-grid"
+                    role="group"
+                    aria-label={field.label}
+                  >
+                    {(fieldOptions || []).map((option) => {
+                      const selected = Array.isArray(values[field.key])
+                        ? values[field.key].map(String)
+                        : [];
+                      const optionValue = String(option.value);
+                      const isSelected = selected.includes(optionValue);
+                      return (
+                        <button
+                          className={`rarity-segment rarity-${optionValue.toLowerCase()}${isSelected ? " selected" : ""}`}
+                          type="button"
+                          key={optionValue}
+                          aria-pressed={isSelected}
+                          disabled={option.disabled}
+                          onClick={() =>
+                            setValues({
+                              ...values,
+                              [field.key]: toggleMultiSelectValue(
+                                selected,
+                                optionValue,
+                                !isSelected,
+                                field,
+                              ),
+                            })
+                          }
+                        >
+                          <span className="rarity-check" aria-hidden="true">
+                            {isSelected ? "✓" : ""}
+                          </span>
+                          <span>{option.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {field.helper && <small>{field.helper}</small>}
+                </div>
+              );
+            }
+
             return (
               <label className={fieldClass} key={field.key}>
                 <span>{field.label}</span>
@@ -1238,36 +1303,6 @@ function EditModal({
                       })
                     }
                   />
-                ) : field.type === "multiSelect" ? (
-                  <div className="checkbox-grid" role="group" aria-label={field.label}>
-                    {(fieldOptions || []).map((option) => {
-                      const selected = Array.isArray(values[field.key])
-                        ? values[field.key].map(String)
-                        : [];
-                      const optionValue = String(option.value);
-                      return (
-                        <label className="check-option" key={optionValue}>
-                          <input
-                            type="checkbox"
-                            checked={selected.includes(optionValue)}
-                            disabled={option.disabled}
-                            onChange={(event) =>
-                              setValues({
-                                ...values,
-                                [field.key]: toggleMultiSelectValue(
-                                  selected,
-                                  optionValue,
-                                  event.target.checked,
-                                  field,
-                                ),
-                              })
-                            }
-                          />
-                          <span>{option.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
                 ) : shouldRenderSelect ? (
                   <select
                     value={String(values[field.key] ?? "")}
@@ -1281,9 +1316,11 @@ function EditModal({
                       })
                     }
                   >
-                    <option value="">
-                      {fieldOptions?.length ? "请选择" : "暂无可选项"}
-                    </option>
+                    {!(fieldOptions || []).some((option) => String(option.value) === "") && (
+                      <option value="">
+                        {fieldOptions?.length ? "请选择" : "暂无可选项"}
+                      </option>
+                    )}
                     {(fieldOptions || []).map((option) => (
                       <option
                         key={String(option.value)}
@@ -1294,18 +1331,26 @@ function EditModal({
                       </option>
                     ))}
                   </select>
-                ) : (
+                ) : field.type === "number" ? (
                   <input
-                    type={field.type === "number" ? "number" : "text"}
+                    type="number"
                     value={values[field.key] ?? ""}
                     placeholder={field.placeholder}
                     onChange={(event) =>
                       setValues({
                         ...values,
-                        [field.key]: coerceFieldValue(
-                          field,
-                          event.target.value,
-                        ),
+                        [field.key]: Number(event.target.value),
+                      })
+                    }
+                  />
+                ) : (
+                  <input
+                    value={values[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        [field.key]: event.target.value,
                       })
                     }
                   />
@@ -1358,6 +1403,7 @@ function ItemModal({
         drop_type: currentType,
         drop_item_type: showUsageParams ? Number(values.drop_item_type || 0) : 0,
         drop_item_value: showUsageParams ? Number(values.drop_item_value || 0) : 0,
+        default_fragment: currentType === 0 && values.default_fragment === true,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -1415,6 +1461,10 @@ function ItemModal({
                   drop_type: Number(event.target.value),
                   drop_item_type: 0,
                   drop_item_value: 0,
+                  default_fragment:
+                    Number(event.target.value) === 0
+                      ? values.default_fragment
+                      : false,
                 })
               }
             >
@@ -1429,6 +1479,24 @@ function ItemModal({
             <Badge>{getDropTypeLabel(currentType)}</Badge>
             <span>{getDropTypeUsage(currentType)}</span>
           </div>
+          {currentType === 0 && (
+            <label className="form-field full-width switch-field">
+              <span>
+                <strong>默认分解碎片</strong>
+                <small>卡片未单独选择碎片时，合成和分解会使用这个物品。</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={values.default_fragment === true}
+                onChange={(event) =>
+                  setValues({
+                    ...values,
+                    default_fragment: event.target.checked,
+                  })
+                }
+              />
+            </label>
+          )}
           <label className="form-field full-width">
             <span>物品说明</span>
             <textarea
@@ -3675,6 +3743,7 @@ function createItemFormState(initial: Record<string, any>) {
     drop_item_type: Number(initial.drop_item_type || 0),
     drop_item_value: Number(initial.drop_item_value || 0),
     disabled: initial.disabled === true,
+    default_fragment: initial.default_fragment === true,
   };
 }
 

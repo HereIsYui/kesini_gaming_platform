@@ -32,6 +32,10 @@ export class DropItem {
   @Column({ default: false })
   disabled: boolean;
 
+  // 全局默认卡片碎片，卡片未单独配置分解产出时使用
+  @Column({ default: false })
+  default_fragment: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }
