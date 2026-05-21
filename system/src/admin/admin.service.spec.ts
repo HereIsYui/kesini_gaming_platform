@@ -49,6 +49,13 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.exchangeUsage || createRepository(),
     gachaService as any,
     { adminUids: ["admin"] } as any,
+    repositories.tradeListing,
+    repositories.tradeRecord,
+    repositories.tradeConfig,
+    repositories.rechargeConfig,
+    repositories.rechargeRecord,
+    repositories.launchActivityConfig,
+    repositories.launchActivityClaim,
   );
 }
 
@@ -564,6 +571,74 @@ describe("AdminService", () => {
         code: "OLD",
         name: "旧道具礼包",
         rewards: { points: 0, items: [{ itemId: 1, num: 1 }] },
+      } as any),
+    ).rejects.toThrow("奖励物品已禁用");
+  });
+
+  it("后台开服活动配置会保存奖励和活动批次", async () => {
+    const configRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        enabled: false,
+        activity_key: "launch-old",
+        name: "旧活动",
+        description: "",
+        starts_at: null,
+        ends_at: null,
+        rewards: { points: 10, items: [] },
+      }),
+    });
+    const service = createService({
+      launchActivityConfig: configRepository,
+      drop: createRepository(),
+    });
+
+    await service.updateLaunchActivityConfig({
+      enabled: true,
+      activity_key: "launch-new",
+      name: "开服福利",
+      rewards: { points: 100, items: [] },
+    } as any);
+
+    expect(configRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        activity_key: "launch-new",
+        name: "开服福利",
+        rewards: { points: 100, items: [] },
+      }),
+    );
+  });
+
+  it("后台开服活动配置会拒绝非法批次和禁用奖励物品", async () => {
+    const configRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        enabled: true,
+        activity_key: "launch-old",
+        name: "开服福利",
+        description: "",
+        starts_at: null,
+        ends_at: null,
+        rewards: { points: 10, items: [] },
+      }),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 2, drop_name: "禁用道具", disabled: true },
+      ]),
+    });
+    const service = createService({
+      launchActivityConfig: configRepository,
+      drop: dropRepository,
+    });
+
+    await expect(
+      service.updateLaunchActivityConfig({ activity_key: "中文批次" } as any),
+    ).rejects.toThrow("活动批次只能包含字母");
+    await expect(
+      service.updateLaunchActivityConfig({
+        rewards: { points: 0, items: [{ itemId: 2, num: 1 }] },
       } as any),
     ).rejects.toThrow("奖励物品已禁用");
   });

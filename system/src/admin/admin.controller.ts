@@ -230,6 +230,49 @@ class RechargeConfigPatchDto {
   memo_template?: string;
 }
 
+class LaunchActivityClaimQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @IsString()
+  activityKey?: string;
+}
+
+class LaunchActivityConfigPatchDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  activity_key?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+  };
+}
+
 class PoolDto {
   @IsOptional()
   @IsString()
@@ -948,6 +991,34 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateRechargeConfig(body as any),
       "更新充值配置成功",
+    );
+  }
+
+  @Get("config/launch-activity")
+  async getLaunchActivityConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getLaunchActivityConfig(),
+      "获取开服活动配置成功",
+    );
+  }
+
+  @Patch("config/launch-activity")
+  async updateLaunchActivityConfig(
+    @Body() body: LaunchActivityConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateLaunchActivityConfig(body as any),
+      "更新开服活动配置成功",
+    );
+  }
+
+  @Get("launch-activity-claims")
+  async listLaunchActivityClaims(
+    @Query() query: LaunchActivityClaimQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listLaunchActivityClaims(query),
+      "获取开服活动领取记录成功",
     );
   }
 

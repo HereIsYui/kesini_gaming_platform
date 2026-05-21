@@ -820,6 +820,42 @@ h3 {
   opacity: 0.48;
 }
 
+.launch-activity-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(255, 211, 106, 0.3);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 211, 106, 0.16), transparent 38%),
+    rgba(255, 255, 255, 0.055);
+  padding: 12px;
+}
+
+.launch-activity-callout div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.launch-activity-callout span,
+.launch-activity-callout small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launch-activity-callout strong {
+  overflow: hidden;
+  color: #ffe6a3;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .recharge-modal-body dl div:nth-child(2) dd,
 .recharge-modal-body dl div:nth-child(3) dd {
   color: #ffe6a3;
@@ -1705,6 +1741,73 @@ h3 {
   gap: 14px;
   overflow: auto;
   padding: 18px 20px;
+}
+
+.launch-activity-modal {
+  width: min(620px, 100%);
+}
+
+.launch-activity-body {
+  gap: 16px;
+}
+
+.launch-activity-desc {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.launch-reward-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(255, 211, 106, 0.26);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 80% 18%, rgba(255, 211, 106, 0.18), transparent 34%),
+    rgba(255, 255, 255, 0.055);
+  padding: 16px;
+}
+
+.launch-reward-card span,
+.launch-reward-card small {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.launch-reward-card strong {
+  color: #ffe6a3;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.launch-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.launch-reward-grid article {
+  display: grid;
+  gap: 6px;
+  min-height: 74px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.launch-reward-grid span {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launch-reward-grid strong {
+  color: var(--text);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
 .pool-detail-modal {
@@ -2662,6 +2765,15 @@ h3 {
 
   .point-card-head {
     align-items: flex-start;
+  }
+
+  .launch-activity-callout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .launch-activity-callout .secondary-action {
+    width: 100%;
   }
 
   .recharge-trigger {

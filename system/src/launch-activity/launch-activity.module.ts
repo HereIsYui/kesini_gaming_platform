@@ -3,18 +3,18 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
-import { RedeemCode } from "src/entity/redeemCode.entity";
-import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
+import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
+import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
 import { User } from "src/entity/user.entity";
 import { RewardModule } from "src/reward/reward.module";
-import { RedeemController } from "./redeem.controller";
-import { RedeemService } from "./redeem.service";
+import { LaunchActivityController } from "./launch-activity.controller";
+import { LaunchActivityService } from "./launch-activity.service";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      RedeemCode,
-      RedeemCodeUsage,
+      LaunchActivityConfig,
+      LaunchActivityClaim,
       User,
       UserInventory,
       DropItem,
@@ -22,8 +22,7 @@ import { RedeemService } from "./redeem.service";
     AuthModule,
     RewardModule,
   ],
-  controllers: [RedeemController],
-  providers: [RedeemService],
-  exports: [RedeemService],
+  controllers: [LaunchActivityController],
+  providers: [LaunchActivityService],
 })
-export class RedeemModule {}
+export class LaunchActivityModule {}

@@ -86,6 +86,8 @@ import type {
   FieldConfig,
   GachaConfigData,
   GachaPoolConfig,
+  LaunchActivityClaimRecord,
+  LaunchActivityConfigRecord,
   LoginResponse,
   PageResult,
   RedeemCodeRecord,
@@ -114,6 +116,8 @@ type PageKey =
   | "redeem-usages"
   | "exchange-shop"
   | "exchange-usages"
+  | "launch-activity-config"
+  | "launch-activity-claims"
   | "trade-config"
   | "trade-listings"
   | "trade-records"
@@ -150,6 +154,8 @@ const pageKeys: PageKey[] = [
   "redeem-usages",
   "exchange-shop",
   "exchange-usages",
+  "launch-activity-config",
+  "launch-activity-claims",
   "trade-config",
   "trade-listings",
   "trade-records",
@@ -428,6 +434,15 @@ const exchangeUsageFields: FieldConfig[] = [
   { key: "cost_snapshot", label: "消耗快照", readonly: true },
   { key: "reward_snapshot", label: "奖励快照", readonly: true },
   { key: "createdAt", label: "兑换时间", readonly: true },
+];
+
+const launchActivityClaimFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "activity_key", label: "活动批次", readonly: true },
+  { key: "activity_name", label: "活动名称", readonly: true },
+  { key: "uid", label: "UID", readonly: true },
+  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "createdAt", label: "领取时间", readonly: true },
 ];
 
 const tradeListingFields: FieldConfig[] = [
@@ -796,6 +811,22 @@ export function App() {
         group: "运营工具",
         icon: History,
         render: () => <ExchangeUsagesPage />,
+      },
+      {
+        key: "launch-activity-config",
+        label: "开服活动",
+        description: "配置登录可领取的开服福利、活动批次和奖励内容。",
+        group: "运营工具",
+        icon: Gift,
+        render: () => <LaunchActivityConfigPanel options={adminOptions} />,
+      },
+      {
+        key: "launch-activity-claims",
+        label: "活动领取记录",
+        description: "查看玩家开服福利领取批次、时间和奖励快照。",
+        group: "运营工具",
+        icon: History,
+        render: () => <LaunchActivityClaimsPage />,
       },
       {
         key: "trade-config",
@@ -2659,6 +2690,426 @@ function ExchangeUsagesPage() {
       searchPlaceholder="按 UID 查询"
       keywordParam="uid"
     />
+  );
+}
+
+function LaunchActivityConfigPanel({
+  options,
+}: {
+  options: AdminOptions | null;
+}) {
+  const [config, setConfig] = useState<LaunchActivityConfigRecord | null>(null);
+  const [values, setValues] = useState<LaunchActivityConfigRecord>(() =>
+    createLaunchActivityFormState(null),
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const rewardGroups = groupItemOptions(
+    options?.dropItems || [],
+    (option) => option.type !== 1,
+  );
+  const rewardSelectOptions = rewardGroups.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({
+      label: option.label,
+      value: String(option.value),
+      disabled: option.disabled,
+    })),
+  }));
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<LaunchActivityConfigRecord>("/admin/config/launch-activity")
+      .then((data) => {
+        setConfig(data);
+        setValues(createLaunchActivityFormState(data));
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function submit() {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const next = await request<LaunchActivityConfigRecord>(
+        "/admin/config/launch-activity",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            enabled: values.enabled,
+            activity_key: values.activity_key,
+            name: values.name,
+            description: values.description || "",
+            starts_at: fromDateTimeLocal(String(values.starts_at || "")),
+            ends_at: fromDateTimeLocal(String(values.ends_at || "")),
+            rewards: values.rewards,
+          }),
+        },
+      );
+      setConfig(next);
+      setValues(createLaunchActivityFormState(next));
+      setNotice("开服活动配置已保存");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="开服活动配置"
+      icon={<Gift size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+    >
+      <Space direction="vertical" size={16} className="full-width">
+        <Alert
+          type="info"
+          showIcon
+          message="活动批次用于控制是否可重复领取"
+          description="修改活动批次会视为新一期活动，已经领取旧批次的玩家可以再次领取新批次。"
+        />
+        <Card size="small" className="form-section-card" title="活动规则">
+          <Form layout="vertical" className="form-grid antd-form-grid">
+            <Form.Item className="form-field" label="活动状态">
+              <Select
+                value={values.enabled ? "true" : "false"}
+                onChange={(value) =>
+                  setValues({ ...values, enabled: value === "true" })
+                }
+                options={[
+                  { label: "关闭", value: "false" },
+                  { label: "开启", value: "true" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              className="form-field"
+              label="活动批次"
+              extra="只允许字母、数字、下划线和中划线。"
+            >
+              <Input
+                value={values.activity_key}
+                placeholder="launch-2026"
+                onChange={(event) =>
+                  setValues({ ...values, activity_key: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="活动名称">
+              <Input
+                value={values.name}
+                placeholder="开服福利"
+                onChange={(event) =>
+                  setValues({ ...values, name: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="开始时间">
+              <Input
+                type="datetime-local"
+                value={String(values.starts_at || "")}
+                onChange={(event) =>
+                  setValues({ ...values, starts_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="结束时间">
+              <Input
+                type="datetime-local"
+                value={String(values.ends_at || "")}
+                onChange={(event) =>
+                  setValues({ ...values, ends_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field full-width" label="活动说明">
+              <Input.TextArea
+                value={values.description || ""}
+                placeholder="展示给玩家看的活动说明"
+                autoSize={{ minRows: 3, maxRows: 6 }}
+                onChange={(event) =>
+                  setValues({ ...values, description: event.target.value })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
+
+        <Card
+          size="small"
+          className="form-section-card"
+          title="领取奖励"
+          extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
+        >
+          <Space direction="vertical" size={12} className="full-width">
+            <Form layout="vertical" className="single-field-form">
+              <Form.Item label="奖励积分">
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  step={1}
+                  value={values.rewards.points}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        points: Number(value || 0),
+                      },
+                    })
+                  }
+                />
+              </Form.Item>
+            </Form>
+            {values.rewards.items.map((item, index) => (
+              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+                <Select
+                  className="reward-item-select"
+                  value={item.itemId ? String(item.itemId) : undefined}
+                  placeholder="选择奖励物品"
+                  options={rewardSelectOptions}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        itemId: Number(value),
+                      }),
+                    })
+                  }
+                />
+                <InputNumber
+                  className="reward-num-input"
+                  min={1}
+                  value={item.num}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        num: Number(value || 1),
+                      }),
+                    })
+                  }
+                />
+                <Button
+                  onClick={() =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        items: values.rewards.items.filter((_, i) => i !== index),
+                      },
+                    })
+                  }
+                >
+                  移除
+                </Button>
+              </Space>
+            ))}
+            <Typography.Text type="secondary">
+              奖励支持积分和背包物品，不直接发卡；虚拟积分物品不会出现在物品选择中。
+            </Typography.Text>
+            <Button
+              onClick={() =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                  },
+                })
+              }
+            >
+              添加物品奖励
+            </Button>
+          </Space>
+        </Card>
+
+        <Card size="small" className="form-section-card" title="当前生效配置">
+          <div className="config-summary-row">
+            <DescriptionList
+              items={[
+                ["当前状态", config?.enabled ? "开启" : "关闭"],
+                ["活动批次", config?.activity_key || "-"],
+                ["活动名称", config?.name || "-"],
+                ["有效期", formatDateRange(config?.starts_at, config?.ends_at)],
+                ["奖励", formatRewards(config?.rewards)],
+              ]}
+            />
+            <Button type="primary" loading={loading} onClick={submit}>
+              保存开服活动配置
+            </Button>
+          </div>
+        </Card>
+        {error && <Alert type="error" message={error} showIcon />}
+        {notice && <Alert type="success" message={notice} showIcon />}
+      </Space>
+    </Panel>
+  );
+}
+
+function LaunchActivityClaimsPage() {
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [uid, setUid] = useState("");
+  const [activityKey, setActivityKey] = useState("");
+  const [data, setData] =
+    useState<PageResult<LaunchActivityClaimRecord> | null>(null);
+  const [detail, setDetail] = useState<LaunchActivityClaimRecord | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const filters = useMemo(
+    () => ({ page, pageSize, uid, activityKey }),
+    [page, pageSize, uid, activityKey],
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<PageResult<LaunchActivityClaimRecord>>(
+      `/admin/launch-activity-claims${toQuery(filters)}`,
+    )
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = data?.list || [];
+  const columns: TableColumnsType<LaunchActivityClaimRecord> = [
+    {
+      title: "活动批次",
+      dataIndex: "activity_key",
+      ellipsis: true,
+      render: (value) => (
+        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+      ),
+    },
+    {
+      title: "活动名称",
+      dataIndex: "activity_name",
+      ellipsis: true,
+    },
+    {
+      title: "UID",
+      dataIndex: "uid",
+      ellipsis: true,
+      render: (value) => (
+        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+      ),
+    },
+    {
+      title: "奖励",
+      dataIndex: "reward_snapshot",
+      ellipsis: true,
+      render: (rewards) => formatRewards(rewards),
+    },
+    {
+      title: "领取时间",
+      dataIndex: "createdAt",
+      width: 190,
+      render: formatDate,
+    },
+    {
+      title: "操作",
+      width: 110,
+      fixed: "right",
+      render: (_, row) => (
+        <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+          详情
+        </Button>
+      ),
+    },
+  ];
+
+  function resetFilters() {
+    setPage(1);
+    setUid("");
+    setActivityKey("");
+  }
+
+  return (
+    <Panel
+      title="活动领取记录"
+      icon={<History size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+      className="table-panel"
+    >
+      <Space className="table-toolbar" wrap>
+        <Input
+          className="toolbar-search compact"
+          prefix={<Search size={16} />}
+          allowClear
+          value={uid}
+          onChange={(event) => {
+            setPage(1);
+            setUid(event.target.value);
+          }}
+          placeholder="搜索 UID"
+        />
+        <Input
+          className="toolbar-control"
+          allowClear
+          value={activityKey}
+          onChange={(event) => {
+            setPage(1);
+            setActivityKey(event.target.value);
+          }}
+          placeholder="活动批次"
+        />
+        <Space className="toolbar-actions" wrap>
+          <Button onClick={resetFilters}>重置</Button>
+          <Button
+            icon={<Download size={15} />}
+            onClick={() =>
+              exportRowsToCsv("活动领取记录", rows, launchActivityClaimFields)
+            }
+            disabled={!rows.length}
+          >
+            导出CSV
+          </Button>
+        </Space>
+      </Space>
+      {error && <StateBox type="error">{error}</StateBox>}
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无活动领取记录" />,
+        }}
+      />
+      {detail && (
+        <DetailModal
+          title="活动领取详情"
+          fields={launchActivityClaimFields}
+          data={detail}
+          loading={false}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </Panel>
   );
 }
 
@@ -4684,6 +5135,31 @@ function createExchangeFormState(initial: ExchangeShopItemRecord | null) {
           }))
         : [],
     },
+  };
+}
+
+function createLaunchActivityFormState(
+  initial: LaunchActivityConfigRecord | null,
+): LaunchActivityConfigRecord {
+  return {
+    id: initial?.id,
+    enabled: initial?.enabled === true,
+    activity_key: initial?.activity_key || "launch-2026",
+    name: initial?.name || "开服福利",
+    description: initial?.description || "登录后可领取一次的开服福利。",
+    starts_at: toDateTimeLocal(initial?.starts_at),
+    ends_at: toDateTimeLocal(initial?.ends_at),
+    rewards: {
+      points: Number(initial?.rewards?.points || 0),
+      items: Array.isArray(initial?.rewards?.items)
+        ? initial!.rewards.items.map((item) => ({
+            itemId: Number(item.itemId),
+            num: Number(item.num),
+          }))
+        : [],
+    },
+    createdAt: initial?.createdAt,
+    updatedAt: initial?.updatedAt,
   };
 }
 

@@ -23,6 +23,8 @@ import {
 import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
+import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
+import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { RedeemCode, RedeemRewards } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
@@ -52,6 +54,9 @@ const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
 const CARD_RARITIES = ["N", "R", "SR", "SSR", "UR"];
 const DEFAULT_RECHARGE_MEMO_TEMPLATE =
   "抽卡平台充值，兑换本地积分 {amount}";
+const DEFAULT_LAUNCH_ACTIVITY_KEY = "launch-2026";
+const DEFAULT_LAUNCH_ACTIVITY_NAME = "开服福利";
+const DEFAULT_LAUNCH_ACTIVITY_DESCRIPTION = "登录后可领取一次的开服福利。";
 const RECHARGE_STATUSES: RechargeRecordStatus[] = [
   "pending",
   "success",
@@ -100,6 +105,12 @@ export class AdminService {
     @Optional()
     @InjectRepository(RechargeRecord)
     private readonly rechargeRecordRepository?: Repository<RechargeRecord>,
+    @Optional()
+    @InjectRepository(LaunchActivityConfig)
+    private readonly launchActivityConfigRepository?: Repository<LaunchActivityConfig>,
+    @Optional()
+    @InjectRepository(LaunchActivityClaim)
+    private readonly launchActivityClaimRepository?: Repository<LaunchActivityClaim>,
   ) {}
 
   async getMe(uid: string) {
@@ -1011,6 +1022,68 @@ export class AdminService {
     };
   }
 
+  async getLaunchActivityConfig() {
+    const config = await this.ensureLaunchActivityConfig();
+    return this.toLaunchActivityConfigView(config);
+  }
+
+  async updateLaunchActivityConfig(body: Partial<LaunchActivityConfig>) {
+    const repository = this.mustLaunchActivityConfigRepository();
+    const config = await this.ensureLaunchActivityConfig();
+    const next = Object.assign(config, {
+      enabled:
+        body.enabled === undefined ? config.enabled : body.enabled === true,
+      activity_key:
+        body.activity_key === undefined
+          ? config.activity_key
+          : this.normalizeActivityKey(body.activity_key),
+      name:
+        body.name === undefined
+          ? config.name
+          : String(body.name || "").trim() || DEFAULT_LAUNCH_ACTIVITY_NAME,
+      description:
+        body.description === undefined
+          ? config.description
+          : String(body.description || "").trim(),
+      starts_at:
+        body.starts_at === undefined
+          ? config.starts_at || null
+          : this.parseOptionalDate(body.starts_at),
+      ends_at:
+        body.ends_at === undefined
+          ? config.ends_at || null
+          : this.parseOptionalDate(body.ends_at),
+      rewards:
+        body.rewards === undefined
+          ? config.rewards
+          : await this.normalizeRewards(
+              body.rewards,
+              "开服福利奖励不能为空",
+            ),
+    });
+    this.assertLaunchActivityConfig(next);
+    return this.toLaunchActivityConfigView(await repository.save(next));
+  }
+
+  async listLaunchActivityClaims(
+    query: PageQuery & { uid?: string; activityKey?: string },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<LaunchActivityClaim> = {};
+    if (query.uid) {
+      where.uid = Like(`%${query.uid}%`);
+    }
+    if (query.activityKey) {
+      where.activity_key = Like(`%${query.activityKey}%`);
+    }
+    return this.findAndPage(
+      this.mustLaunchActivityClaimRepository(),
+      where,
+      page,
+      pageSize,
+    );
+  }
+
   private async attachInventoryInfo(result: {
     list: UserInventory[];
     total: number;
@@ -1140,6 +1213,36 @@ export class AdminService {
     return config;
   }
 
+  private async ensureLaunchActivityConfig() {
+    const repository = this.mustLaunchActivityConfigRepository();
+    let config = await repository.findOne({ where: { id: 1 } });
+    if (!config) {
+      config = repository.create({
+        id: 1,
+        enabled: false,
+        activity_key: DEFAULT_LAUNCH_ACTIVITY_KEY,
+        name: DEFAULT_LAUNCH_ACTIVITY_NAME,
+        description: DEFAULT_LAUNCH_ACTIVITY_DESCRIPTION,
+        starts_at: null,
+        ends_at: null,
+        rewards: { points: 100, items: [] },
+      });
+      config = await repository.save(config);
+    }
+    config.enabled = config.enabled === true;
+    config.activity_key = this.normalizeActivityKey(config.activity_key);
+    config.name = String(config.name || "").trim() || DEFAULT_LAUNCH_ACTIVITY_NAME;
+    config.description = String(config.description || "").trim();
+    config.starts_at = config.starts_at || null;
+    config.ends_at = config.ends_at || null;
+    config.rewards = await this.normalizeRewards(
+      config.rewards,
+      "开服福利奖励不能为空",
+    );
+    this.assertLaunchActivityConfig(config);
+    return config;
+  }
+
   private assertTradeConfig(config: TradeConfig) {
     if (!Number.isFinite(config.fee_rate) || config.fee_rate < 0 || config.fee_rate > 1) {
       throw new Error("交易手续费率必须在0-1之间");
@@ -1178,6 +1281,18 @@ export class AdminService {
     }
   }
 
+  private assertLaunchActivityConfig(config: LaunchActivityConfig) {
+    this.normalizeActivityKey(config.activity_key);
+    if (!String(config.name || "").trim()) {
+      throw new Error("活动名称不能为空");
+    }
+    if (config.starts_at && config.ends_at) {
+      if (config.starts_at.getTime() > config.ends_at.getTime()) {
+        throw new Error("活动开始时间不能晚于结束时间");
+      }
+    }
+  }
+
   private toRechargeConfigView(config: RechargeConfig) {
     const key = String(config.gold_finger_key || "").trim();
     return {
@@ -1189,6 +1304,21 @@ export class AdminService {
       memo_template: config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE,
       hasGoldFingerKey: Boolean(key),
       maskedGoldFingerKey: this.maskSecret(key),
+      createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
+    };
+  }
+
+  private toLaunchActivityConfigView(config: LaunchActivityConfig) {
+    return {
+      id: config.id,
+      enabled: config.enabled === true,
+      activity_key: config.activity_key,
+      name: config.name,
+      description: config.description,
+      starts_at: config.starts_at,
+      ends_at: config.ends_at,
+      rewards: config.rewards,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -1257,6 +1387,20 @@ export class AdminService {
     return this.rechargeRecordRepository;
   }
 
+  private mustLaunchActivityConfigRepository() {
+    if (!this.launchActivityConfigRepository) {
+      throw new Error("开服活动配置仓库未初始化");
+    }
+    return this.launchActivityConfigRepository;
+  }
+
+  private mustLaunchActivityClaimRepository() {
+    if (!this.launchActivityClaimRepository) {
+      throw new Error("开服活动领取记录仓库未初始化");
+    }
+    return this.launchActivityClaimRepository;
+  }
+
   private normalizePage(query: PageQuery) {
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
@@ -1317,7 +1461,10 @@ export class AdminService {
       .toUpperCase();
   }
 
-  private async normalizeRewards(rewards: unknown): Promise<RedeemRewards> {
+  private async normalizeRewards(
+    rewards: unknown,
+    emptyMessage = "兑换码奖励不能为空",
+  ): Promise<RedeemRewards> {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isFinite(points) || points < 0) {
@@ -1339,7 +1486,7 @@ export class AdminService {
       }
     });
     if (points === 0 && normalizedItems.length === 0) {
-      throw new Error("兑换码奖励不能为空");
+      throw new Error(emptyMessage);
     }
     await this.assertRewardItemsAvailable(
       normalizedItems.map((item) => item.itemId),
@@ -1559,6 +1706,17 @@ export class AdminService {
     });
   }
 
+  private normalizeActivityKey(value: unknown) {
+    const key = String(value || "").trim();
+    if (!key) {
+      throw new Error("活动批次不能为空");
+    }
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(key)) {
+      throw new Error("活动批次只能包含字母、数字、下划线和中划线，且不超过64位");
+    }
+    return key;
+  }
+
   private async assertExchangeItemsAvailable(itemIds: number[], label: string) {
     const uniqueItemIds = [...new Set(itemIds)];
     if (uniqueItemIds.length === 0) {
@@ -1583,7 +1741,7 @@ export class AdminService {
   }
 
   private async isDropItemReferenced(itemId: number): Promise<boolean> {
-    const [inventoryCount, cards, redeemCodes, exchangeItems] =
+    const [inventoryCount, cards, redeemCodes, exchangeItems, launchConfigs] =
       await Promise.all([
         this.inventoryRepository.count({ where: { item_id: itemId } }),
         this.cardRepository.find({
@@ -1595,6 +1753,9 @@ export class AdminService {
         this.exchangeItemRepository.find({
           where: { delete_flag: false },
         }),
+        this.launchActivityConfigRepository
+          ? this.launchActivityConfigRepository.find()
+          : Promise.resolve([] as LaunchActivityConfig[]),
       ]);
 
     if (inventoryCount > 0) {
@@ -1616,6 +1777,11 @@ export class AdminService {
       exchangeItems.some((item) =>
         [...(item.costs || []), ...(item.rewards?.items || [])].some(
           (entry) => Number(entry.itemId) === itemId,
+        ),
+      ) ||
+      launchConfigs.some((config) =>
+        (config.rewards?.items || []).some(
+          (item) => Number(item.itemId) === itemId,
         ),
       )
     );

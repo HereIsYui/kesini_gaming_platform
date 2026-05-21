@@ -3,6 +3,7 @@ import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { RewardService } from "src/reward/reward.service";
 import { RedeemService } from "./redeem.service";
 
 function createRepository(overrides: Record<string, any> = {}) {
@@ -22,7 +23,7 @@ function createService(repositories: Map<any, any>) {
     transaction: jest.fn((callback) => callback(manager)),
   };
   return {
-    service: new RedeemService(dataSource as any),
+    service: new RedeemService(dataSource as any, new RewardService()),
     dataSource,
   };
 }

@@ -39,6 +39,8 @@ import type {
   ExchangeShopItem,
   GachaResult,
   InventoryItem,
+  LaunchActivityClaimResponse,
+  LaunchActivityCurrentResponse,
   LeaderboardEntry,
   LeaderboardMetric,
   LeaderboardResponse,
@@ -125,6 +127,9 @@ const poolDetailCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
+const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
+const launchActivityModalOpen = ref(false);
+const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
@@ -173,6 +178,7 @@ const busy = reactive({
   redeem: false,
   trade: false,
   recharge: false,
+  launchActivity: false,
 });
 
 let feedbackTimer: number | undefined;
@@ -195,6 +201,13 @@ const playerInitial = computed(() =>
 );
 const playerUidLabel = computed(() =>
   currentUser.value?.uid ? `UID ${currentUser.value.uid}` : "身份已验证",
+);
+const launchActivityInfo = computed(() => launchActivity.value?.activity || null);
+const hasLaunchActivityReward = computed(
+  () =>
+    Boolean(isAuthed.value) &&
+    launchActivity.value?.available === true &&
+    Boolean(launchActivityInfo.value),
 );
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
@@ -468,6 +481,9 @@ function logout() {
   currentUser.value = null;
   stats.value = null;
   userCards.value = null;
+  launchActivity.value = null;
+  launchActivityModalOpen.value = false;
+  launchActivityDismissedKey.value = "";
   leaderboard.value = null;
   leaderboardError.value = "";
   exchangeItems.value = [];
@@ -550,6 +566,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadUserCards(),
+    loadLaunchActivity(),
     loadLeaderboard(),
     loadExchangeItems(),
     loadTradeData(),
@@ -581,6 +598,28 @@ async function loadUserCards() {
     );
   } finally {
     busy.assets = false;
+  }
+}
+
+async function loadLaunchActivity() {
+  if (!isAuthed.value) {
+    return;
+  }
+  try {
+    const data = await request<LaunchActivityCurrentResponse>(
+      "/launch-activity/current",
+    );
+    launchActivity.value = data;
+    const activityKey = data.activity?.activityKey || "";
+    if (
+      data.available &&
+      activityKey &&
+      launchActivityDismissedKey.value !== activityKey
+    ) {
+      launchActivityModalOpen.value = true;
+    }
+  } catch {
+    launchActivity.value = null;
   }
 }
 
@@ -707,6 +746,51 @@ function openRechargeModal() {
 function closeRechargeModal() {
   if (!busy.recharge) {
     rechargeModalOpen.value = false;
+  }
+}
+
+function openLaunchActivityModal() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再领取开服福利");
+    return;
+  }
+  if (!hasLaunchActivityReward.value) {
+    notify("info", launchActivity.value?.reason || "当前暂无可领取的开服福利");
+    return;
+  }
+  launchActivityModalOpen.value = true;
+}
+
+function closeLaunchActivityModal() {
+  if (busy.launchActivity) {
+    return;
+  }
+  const activityKey = launchActivityInfo.value?.activityKey || "";
+  if (activityKey) {
+    launchActivityDismissedKey.value = activityKey;
+  }
+  launchActivityModalOpen.value = false;
+}
+
+async function claimLaunchActivity() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再领取开服福利");
+    return;
+  }
+  busy.launchActivity = true;
+  try {
+    const data = await request<LaunchActivityClaimResponse>(
+      "/launch-activity/claim",
+      { method: "POST" },
+    );
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
+    launchActivityModalOpen.value = false;
+    launchActivityDismissedKey.value = data.activityKey;
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.launchActivity = false;
   }
 }
 
@@ -1316,6 +1400,23 @@ function leaderboardRankLabel(rank?: number) {
             <small>
               当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值 {{ rechargeRangeLabel }}
             </small>
+          </div>
+
+          <div v-if="hasLaunchActivityReward" class="launch-activity-callout">
+            <div>
+              <span>开服福利待领取</span>
+              <strong>{{ launchActivityInfo?.name || "开服福利" }}</strong>
+              <small>{{ formatRewards(launchActivityInfo?.rewards) }}</small>
+            </div>
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.launchActivity"
+              @click="openLaunchActivityModal"
+            >
+              <Gift :size="15" />
+              领取
+            </button>
           </div>
 
           <div v-if="isAuthed" class="player-metrics">
@@ -2036,6 +2137,84 @@ function leaderboardRankLabel(rank?: number) {
               </section>
             </template>
           </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="launchActivityModalOpen && launchActivityInfo"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeLaunchActivityModal"
+      >
+        <section
+          class="trade-listing-modal launch-activity-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="开服福利"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">开服福利</p>
+              <h2>{{ launchActivityInfo.name }}</h2>
+              <span>
+                {{ formatDate(launchActivityInfo.startsAt) }} 至
+                {{ formatDate(launchActivityInfo.endsAt) }}
+              </span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.launchActivity"
+              @click="closeLaunchActivityModal"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body launch-activity-body">
+            <p class="launch-activity-desc">
+              {{ launchActivityInfo.description || "登录后可领取一次开服福利。" }}
+            </p>
+            <div class="launch-reward-card">
+              <span>本次奖励</span>
+              <strong>{{ formatRewards(launchActivityInfo.rewards) }}</strong>
+              <small>领取后会立即刷新积分和背包库存。</small>
+            </div>
+            <div class="launch-reward-grid">
+              <article v-if="Number(launchActivityInfo.rewards.points || 0) > 0">
+                <span>积分</span>
+                <strong>{{ launchActivityInfo.rewards.points }}</strong>
+              </article>
+              <article
+                v-for="item in launchActivityInfo.rewards.items"
+                :key="`${item.itemId}-${item.num}`"
+              >
+                <span>{{ item.itemName || `物品 ${item.itemId}` }}</span>
+                <strong>x{{ item.num }}</strong>
+              </article>
+            </div>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.launchActivity"
+              @click="closeLaunchActivityModal"
+            >
+              稍后领取
+            </button>
+            <button
+              class="primary-action golden"
+              type="button"
+              :disabled="busy.launchActivity"
+              @click="claimLaunchActivity"
+            >
+              <LoaderCircle v-if="busy.launchActivity" :size="18" class="spin" />
+              <Gift v-else :size="18" />
+              立即领取
+            </button>
+          </footer>
         </section>
       </div>
     </Teleport>

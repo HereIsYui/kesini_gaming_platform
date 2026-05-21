@@ -19,6 +19,8 @@ import { ExchangeShopUsage } from "./entity/exchangeShopUsage.entity";
 import { TradeConfig } from "./entity/tradeConfig.entity";
 import { TradeListing } from "./entity/tradeListing.entity";
 import { TradeRecord } from "./entity/tradeRecord.entity";
+import { LaunchActivityConfig } from "./entity/launchActivityConfig.entity";
+import { LaunchActivityClaim } from "./entity/launchActivityClaim.entity";
 import { ApisModule } from "./apis/apis.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
@@ -28,6 +30,7 @@ import { RedeemModule } from "./redeem/redeem.module";
 import { ExchangeModule } from "./exchange/exchange.module";
 import { TradeModule } from "./trade/trade.module";
 import { RechargeModule } from "./recharge/recharge.module";
+import { LaunchActivityModule } from "./launch-activity/launch-activity.module";
 
 @Module({
   imports: [
@@ -53,6 +56,8 @@ import { RechargeModule } from "./recharge/recharge.module";
       TradeListing,
       TradeRecord,
       TradeConfig,
+      LaunchActivityConfig,
+      LaunchActivityClaim,
     ]),
     ConfigurationModule,
     ApisModule,
@@ -62,6 +67,7 @@ import { RechargeModule } from "./recharge/recharge.module";
     ExchangeModule,
     TradeModule,
     RechargeModule,
+    LaunchActivityModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

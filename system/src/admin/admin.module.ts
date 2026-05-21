@@ -14,6 +14,8 @@ import { RedeemCode } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
+import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
+import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
@@ -38,6 +40,8 @@ import { AdminService } from "./admin.service";
       RedeemCodeUsage,
       RechargeConfig,
       RechargeRecord,
+      LaunchActivityConfig,
+      LaunchActivityClaim,
       ExchangeShopItem,
       ExchangeShopUsage,
       TradeListing,

@@ -194,3 +194,27 @@ export interface RechargeRecord {
   updatedAt?: string;
   [key: string]: unknown;
 }
+
+export interface LaunchActivityConfigRecord {
+  id?: number;
+  enabled: boolean;
+  activity_key: string;
+  name: string;
+  description?: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  rewards: RedeemRewards;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface LaunchActivityClaimRecord {
+  id: number;
+  activity_key: string;
+  activity_name: string;
+  uid: string;
+  reward_snapshot: RedeemRewards;
+  createdAt?: string;
+  [key: string]: unknown;
+}

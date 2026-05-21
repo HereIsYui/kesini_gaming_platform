@@ -133,6 +133,28 @@ export interface RedeemClaimResponse {
   rewards: RedeemRewards;
 }
 
+export interface LaunchActivityInfo {
+  activityKey: string;
+  name: string;
+  description?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  rewards: RedeemRewards;
+}
+
+export interface LaunchActivityCurrentResponse {
+  activity: LaunchActivityInfo | null;
+  available: boolean;
+  claimed: boolean;
+  reason?: string;
+}
+
+export interface LaunchActivityClaimResponse {
+  activityKey: string;
+  name: string;
+  rewards: RedeemRewards;
+}
+
 export interface ExchangeCostItem {
   itemId: number;
   num: number;
