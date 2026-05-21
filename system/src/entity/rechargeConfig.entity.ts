@@ -27,6 +27,10 @@ export class RechargeConfig {
   @Column({ default: 9999 })
   max_amount: number;
 
+  // 兑换比例：1 鱼排积分可兑换多少本地抽卡积分
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 1 })
+  recharge_ratio: number;
+
   // 提交给鱼排接口的备注模板，支持 {amount} 占位
   @Column({ length: 255, default: "抽卡平台充值，兑换本地积分 {amount}" })
   memo_template: string;

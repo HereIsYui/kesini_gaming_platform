@@ -168,6 +168,7 @@ export interface RechargeConfigRecord {
   enabled: boolean;
   min_amount: number;
   max_amount: number;
+  recharge_ratio: number;
   memo_template: string;
   hasGoldFingerKey?: boolean;
   maskedGoldFingerKey?: string;

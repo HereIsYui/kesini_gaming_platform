@@ -38,6 +38,7 @@ function createEnabledConfig(overrides: Partial<RechargeConfig> = {}) {
     gold_finger_key: "gold-key",
     min_amount: 1,
     max_amount: 9999,
+    recharge_ratio: 1,
     memo_template: "抽卡平台充值 {amount}",
     ...overrides,
   };
@@ -206,6 +207,79 @@ describe("RechargeService", () => {
         status: "success",
         point_before: 20,
         point_after: 50,
+      }),
+    );
+  });
+
+  it("按后台充值比例扣鱼排积分并发放本地积分", async () => {
+    const user = { uid: "u1", name: "fish-user", point: 20 };
+    let savedRecord: any = null;
+    const recordRepository = createRepository({
+      create: jest.fn((value) => ({ id: 1, ...value })),
+      findOne: jest.fn(async ({ where }) => {
+        if (where.uid) {
+          return null;
+        }
+        if (where.id === 1) {
+          return savedRecord;
+        }
+        return null;
+      }),
+      save: jest.fn(async (value) => {
+        savedRecord = { ...value, id: value.id || 1 };
+        return savedRecord;
+      }),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+      save: jest.fn(async (value) => value),
+    });
+    mockedAxios.post.mockResolvedValue({
+      data: { code: 0, msg: "ok" },
+    });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(
+              createEnabledConfig({
+                recharge_ratio: 2,
+                memo_template: "扣鱼排 {fishpiCost} 到账 {amount}",
+              }),
+            ),
+          }),
+        ],
+        [RechargeRecord, recordRepository],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.recharge("u1", 30, "request-ratio")).resolves.toEqual({
+      requestId: "request-ratio",
+      amount: 60,
+      fishpiCost: 30,
+      pointBefore: 20,
+      pointAfter: 80,
+    });
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      "https://fishpi.cn/user/edit/points",
+      expect.objectContaining({
+        point: -30,
+        memo: "扣鱼排 30 到账 60",
+      }),
+      expect.anything(),
+    );
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ point: 80 }),
+    );
+    expect(savedRecord).toEqual(
+      expect.objectContaining({
+        amount: 60,
+        fishpi_cost: 30,
+        point_after: 80,
+        status: "success",
       }),
     );
   });

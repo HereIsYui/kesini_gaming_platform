@@ -220,6 +220,12 @@ class RechargeConfigPatchDto {
   max_amount?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.0001)
+  recharge_ratio?: number;
+
+  @IsOptional()
   @IsString()
   memo_template?: string;
 }

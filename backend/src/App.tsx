@@ -3362,6 +3362,7 @@ function RechargeConfigPanel() {
     enabled: false,
     min_amount: 1,
     max_amount: 9999,
+    recharge_ratio: 1,
     memo_template: "抽卡平台充值，兑换本地积分 {amount}",
     gold_finger_key: "",
   });
@@ -3379,6 +3380,7 @@ function RechargeConfigPanel() {
           ...data,
           min_amount: Number(data.min_amount || 1),
           max_amount: Number(data.max_amount || 9999),
+          recharge_ratio: Number(data.recharge_ratio || 1),
           memo_template:
             data.memo_template || "抽卡平台充值，兑换本地积分 {amount}",
           gold_finger_key: "",
@@ -3401,6 +3403,7 @@ function RechargeConfigPanel() {
         enabled: values.enabled,
         min_amount: Number(values.min_amount || 1),
         max_amount: Number(values.max_amount || 9999),
+        recharge_ratio: Number(values.recharge_ratio || 1),
         memo_template: values.memo_template,
       };
       const nextKey = String(values.gold_finger_key || "").trim();
@@ -3430,88 +3433,136 @@ function RechargeConfigPanel() {
       icon={<Coins size={18} />}
       action={<RefreshButton onClick={load} loading={loading} />}
     >
-      <Space direction="vertical" size={16} className="full-width">
-        <Form layout="vertical" className="form-grid antd-form-grid">
-          <Form.Item className="form-field" label="充值状态">
-            <Select
-              value={String(values.enabled)}
-              onChange={(value) =>
-                setValues({ ...values, enabled: value === "true" })
-              }
-              options={[
-                { label: "关闭", value: "false" },
-                { label: "开启", value: "true" },
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width recharge-config-stack"
+      >
+        <div className="recharge-config-layout">
+          <Card
+            size="small"
+            className="form-section-card recharge-rule-card"
+            title="充值规则"
+          >
+            <Form layout="vertical" className="recharge-rule-grid">
+              <Form.Item label="充值状态">
+                <Select
+                  value={String(values.enabled)}
+                  onChange={(value) =>
+                    setValues({ ...values, enabled: value === "true" })
+                  }
+                  options={[
+                    { label: "关闭", value: "false" },
+                    { label: "开启", value: "true" },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item label="单次最低扣除">
+                <InputNumber
+                  className="full-width-control"
+                  min={1}
+                  step={1}
+                  addonAfter="鱼排积分"
+                  value={Number(values.min_amount || 1)}
+                  onChange={(value) =>
+                    setValues({ ...values, min_amount: Number(value || 1) })
+                  }
+                />
+              </Form.Item>
+              <Form.Item label="单次最高扣除">
+                <InputNumber
+                  className="full-width-control"
+                  min={1}
+                  step={1}
+                  addonAfter="鱼排积分"
+                  value={Number(values.max_amount || 9999)}
+                  onChange={(value) =>
+                    setValues({ ...values, max_amount: Number(value || 9999) })
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                label="充值比例"
+                extra="填写 2 表示扣 1 鱼排积分到账 2 本地抽卡积分。"
+              >
+                <InputNumber
+                  className="full-width-control"
+                  min={0.0001}
+                  max={100}
+                  step={0.1}
+                  precision={4}
+                  addonBefore="1 鱼排积分 ="
+                  addonAfter="本地积分"
+                  value={Number(values.recharge_ratio || 1)}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      recharge_ratio: Number(value || 1),
+                    })
+                  }
+                />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Card
+            size="small"
+            className="form-section-card recharge-secret-card"
+            title="鱼排接口"
+          >
+            <Form layout="vertical" className="recharge-secret-grid">
+              <Form.Item
+                label="goldFingerKey"
+                extra="留空保存会保留原密钥，不会明文回显。"
+              >
+                <Input.Password
+                  value={values.gold_finger_key || ""}
+                  placeholder={
+                    config?.hasGoldFingerKey
+                      ? `已配置：${config.maskedGoldFingerKey}`
+                      : "请输入鱼排金手指密钥"
+                  }
+                  onChange={(event) =>
+                    setValues({ ...values, gold_finger_key: event.target.value })
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                label="扣鱼排积分备注模板"
+                extra="可使用 {amount}/{points} 表示本地到账积分，{fishpiCost} 表示扣除鱼排积分。"
+              >
+                <Input
+                  value={values.memo_template}
+                  onChange={(event) =>
+                    setValues({ ...values, memo_template: event.target.value })
+                  }
+                />
+              </Form.Item>
+            </Form>
+          </Card>
+        </div>
+
+        <Card size="small" className="form-section-card" title="当前生效配置">
+          <div className="config-summary-row">
+            <DescriptionList
+              items={[
+                ["当前状态", config?.enabled ? "开启" : "关闭"],
+                ["密钥状态", config?.hasGoldFingerKey ? "已配置" : "未配置"],
+                [
+                  "扣除范围",
+                  `${config?.min_amount || 1} - ${config?.max_amount || 9999} 鱼排积分`,
+                ],
+                [
+                  "兑换比例",
+                  `1 鱼排积分 = ${Number(config?.recharge_ratio || 1)} 本地积分`,
+                ],
               ]}
             />
-          </Form.Item>
-          <Form.Item
-            className="form-field"
-            label="goldFingerKey"
-            extra="留空保存会保留原密钥，不会明文回显。"
-          >
-            <Input.Password
-              value={values.gold_finger_key || ""}
-              placeholder={
-                config?.hasGoldFingerKey
-                  ? `已配置：${config.maskedGoldFingerKey}`
-                  : "请输入鱼排金手指密钥"
-              }
-              onChange={(event) =>
-                setValues({ ...values, gold_finger_key: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="单次最低充值">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              step={1}
-              value={Number(values.min_amount || 1)}
-              onChange={(value) =>
-                setValues({ ...values, min_amount: Number(value || 1) })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="单次最高充值">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              step={1}
-              value={Number(values.max_amount || 9999)}
-              onChange={(value) =>
-                setValues({ ...values, max_amount: Number(value || 9999) })
-              }
-            />
-          </Form.Item>
-          <Form.Item
-            className="form-field full-width"
-            label="扣鱼排积分备注模板"
-            extra={`可使用 {amount} 作为充值数量占位。`}
-          >
-            <Input
-              value={values.memo_template}
-              onChange={(event) =>
-                setValues({ ...values, memo_template: event.target.value })
-              }
-            />
-          </Form.Item>
-        </Form>
-        <div className="config-summary-row">
-          <DescriptionList
-            items={[
-              ["当前状态", config?.enabled ? "开启" : "关闭"],
-              ["密钥状态", config?.hasGoldFingerKey ? "已配置" : "未配置"],
-              [
-                "充值范围",
-                `${config?.min_amount || 1} - ${config?.max_amount || 9999}`,
-              ],
-              ["兑换比例", "1 鱼排积分 = 1 本地积分"],
-            ]}
-          />
-          <Button type="primary" loading={loading} onClick={submit}>
-            保存充值配置
-          </Button>
-        </div>
+            <Button type="primary" loading={loading} onClick={submit}>
+              保存充值配置
+            </Button>
+          </div>
+        </Card>
         {error && <Alert type="error" message={error} showIcon />}
         {notice && <Alert type="success" message={notice} showIcon />}
       </Space>

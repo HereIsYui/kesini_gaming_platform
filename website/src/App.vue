@@ -202,7 +202,19 @@ const rechargeRangeLabel = computed(() => {
   if (!config) {
     return "充值配置同步中";
   }
-  return `${config.minAmount} - ${config.maxAmount} 积分`;
+  return `${config.minAmount} - ${config.maxAmount} 鱼排积分`;
+});
+const rechargeRatioLabel = computed(() => {
+  const ratio = Number(rechargeConfig.value?.ratio || 1);
+  return `1 鱼排积分 = ${ratio} 本地抽卡积分`;
+});
+const rechargeLocalAmount = computed(() => {
+  const amount = Number(rechargeAmount.value || 0);
+  const ratio = Number(rechargeConfig.value?.ratio || 1);
+  if (!Number.isFinite(amount) || !Number.isFinite(ratio)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(amount * ratio));
 });
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
@@ -652,11 +664,11 @@ async function submitRecharge() {
     return;
   }
   if (!Number.isInteger(amount) || amount <= 0) {
-    notify("error", "充值数量必须为正整数");
+    notify("error", "扣除鱼排积分数量必须为正整数");
     return;
   }
   if (amount < config.minAmount || amount > config.maxAmount) {
-    notify("error", `充值数量需在 ${config.minAmount}-${config.maxAmount} 之间`);
+    notify("error", `扣除鱼排积分需在 ${config.minAmount}-${config.maxAmount} 之间`);
     return;
   }
 
@@ -1866,20 +1878,20 @@ function leaderboardRankLabel(rank?: number) {
             <div>
               <p class="eyebrow">积分充值</p>
               <h2>扣鱼排积分换本地积分</h2>
-              <span>1 鱼排积分 = 1 本地抽卡积分</span>
+              <span>{{ rechargeRatioLabel }}</span>
             </div>
             <button class="modal-close" type="button" :disabled="busy.recharge" @click="closeRechargeModal">关闭</button>
           </header>
           <div class="trade-listing-body recharge-modal-body">
             <label class="redeem-input">
-              <span>充值数量</span>
+              <span>扣除鱼排积分</span>
               <input
                 v-model.number="rechargeAmount"
                 type="number"
                 :min="rechargeConfig?.minAmount || 1"
                 :max="rechargeConfig?.maxAmount || 9999"
                 step="1"
-                placeholder="输入要充值的积分"
+                placeholder="输入要扣除的鱼排积分"
                 @keyup.enter="submitRecharge"
               />
             </label>
@@ -1894,7 +1906,7 @@ function leaderboardRankLabel(rank?: number) {
               </div>
               <div>
                 <dt>本地到账积分</dt>
-                <dd>{{ rechargeAmount || 0 }}</dd>
+                <dd>{{ rechargeLocalAmount }}</dd>
               </div>
               <div>
                 <dt>说明</dt>

@@ -946,6 +946,32 @@ select:focus-visible {
   border-color: var(--border);
 }
 
+.recharge-config-stack {
+  display: grid;
+}
+
+.recharge-config-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.92fr);
+  gap: 16px;
+}
+
+.recharge-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px;
+}
+
+.recharge-secret-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.recharge-rule-grid .ant-form-item,
+.recharge-secret-grid .ant-form-item {
+  margin-bottom: 14px;
+}
+
 .antd-reward-row {
   width: 100%;
 }
@@ -1931,6 +1957,11 @@ select:focus-visible {
   }
 
   .config-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recharge-config-layout,
+  .recharge-rule-grid {
     grid-template-columns: 1fr;
   }
 

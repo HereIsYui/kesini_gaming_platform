@@ -34,7 +34,7 @@ export class RechargeRecord {
   @Column()
   amount: number;
 
-  // 从鱼排扣除的积分，首版固定等于 amount
+  // 从鱼排扣除的积分，可能与 amount 按充值比例换算
   @Column()
   fishpi_cost: number;
 

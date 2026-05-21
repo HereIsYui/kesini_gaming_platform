@@ -30,16 +30,17 @@ export class RechargeService {
       enabled: config.enabled === true,
       minAmount: Number(config.min_amount || 1),
       maxAmount: Number(config.max_amount || 9999),
-      ratio: 1,
+      ratio: this.getRechargeRatio(config),
       hasGoldFingerKey: Boolean(String(config.gold_finger_key || "").trim()),
     };
   }
 
   async recharge(uid: string, rawAmount: number, rawRequestId?: string) {
-    const amount = this.normalizeAmount(rawAmount);
+    const fishpiCost = this.normalizeAmount(rawAmount);
     const requestId = this.normalizeRequestId(rawRequestId);
     const config = await this.ensureConfig();
-    this.assertRechargeAvailable(config, amount);
+    this.assertRechargeAvailable(config, fishpiCost);
+    const localAmount = this.calculateLocalAmount(fishpiCost, config);
 
     const userRepository = this.dataSource.getRepository(User);
     const recordRepository = this.dataSource.getRepository(RechargeRecord);
@@ -64,8 +65,8 @@ export class RechargeService {
         uid,
         fishpi_user_name: fishpiUserName,
         request_id: requestId,
-        amount,
-        fishpi_cost: amount,
+        amount: localAmount,
+        fishpi_cost: fishpiCost,
         point_before: user.point || 0,
         point_after: user.point || 0,
         status: "pending",
@@ -79,7 +80,8 @@ export class RechargeService {
       thirdPartyResponse = await this.callFishpiDeduct(
         config,
         fishpiUserName,
-        amount,
+        fishpiCost,
+        localAmount,
       );
     } catch (error) {
       await this.markRecord(pending.id, "failed", {
@@ -91,7 +93,13 @@ export class RechargeService {
 
     try {
       const saved = await this.dataSource.transaction((manager) =>
-        this.applyLocalPoints(manager, pending.id, uid, amount, thirdPartyResponse),
+        this.applyLocalPoints(
+          manager,
+          pending.id,
+          uid,
+          localAmount,
+          thirdPartyResponse,
+        ),
       );
       return this.toRechargeResult(saved);
     } catch (error) {
@@ -113,12 +121,14 @@ export class RechargeService {
         gold_finger_key: "",
         min_amount: 1,
         max_amount: 9999,
+        recharge_ratio: 1,
         memo_template: DEFAULT_MEMO_TEMPLATE,
       });
       config = await repository.save(config);
     }
     config.min_amount = Number(config.min_amount || 1);
     config.max_amount = Number(config.max_amount || 9999);
+    config.recharge_ratio = this.getRechargeRatio(config);
     config.memo_template = config.memo_template || DEFAULT_MEMO_TEMPLATE;
     return config;
   }
@@ -171,13 +181,14 @@ export class RechargeService {
   private async callFishpiDeduct(
     config: RechargeConfig,
     userName: string,
-    amount: number,
+    fishpiCost: number,
+    localAmount: number,
   ) {
     const payload = {
       goldFingerKey: String(config.gold_finger_key || "").trim(),
       userName,
-      point: -amount,
-      memo: this.renderMemo(config.memo_template, amount),
+      point: -fishpiCost,
+      memo: this.renderMemo(config.memo_template, localAmount, fishpiCost),
     };
     try {
       const response = await axios.post(FISHPI_POINTS_ENDPOINT, payload, {
@@ -213,6 +224,9 @@ export class RechargeService {
     if (amount > Number(config.max_amount || 9999)) {
       throw new Error(`充值金额不能大于${config.max_amount}`);
     }
+    if (!Number.isFinite(this.getRechargeRatio(config))) {
+      throw new Error("后台充值比例配置无效");
+    }
   }
 
   private handleExistingRecord(record: RechargeRecord) {
@@ -247,11 +261,28 @@ export class RechargeService {
     return requestId;
   }
 
-  private renderMemo(template: string, amount: number): string {
-    return String(template || DEFAULT_MEMO_TEMPLATE).replace(
-      /\{amount\}/g,
-      String(amount),
-    );
+  private calculateLocalAmount(fishpiCost: number, config: RechargeConfig) {
+    const localAmount = Math.floor(fishpiCost * this.getRechargeRatio(config));
+    if (!Number.isInteger(localAmount) || localAmount < 1) {
+      throw new Error("当前充值比例下本地到账积分不能小于1");
+    }
+    return localAmount;
+  }
+
+  private getRechargeRatio(config: RechargeConfig) {
+    const ratio = Number(config.recharge_ratio || 1);
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  }
+
+  private renderMemo(
+    template: string,
+    localAmount: number,
+    fishpiCost: number,
+  ): string {
+    return String(template || DEFAULT_MEMO_TEMPLATE)
+      .replace(/\{amount\}/g, String(localAmount))
+      .replace(/\{points\}/g, String(localAmount))
+      .replace(/\{fishpiCost\}/g, String(fishpiCost));
   }
 
   private isFishpiSuccess(data: any): boolean {

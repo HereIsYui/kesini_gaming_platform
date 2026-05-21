@@ -937,6 +937,10 @@ export class AdminService {
         body.max_amount === undefined
           ? config.max_amount
           : Number(body.max_amount),
+      recharge_ratio:
+        body.recharge_ratio === undefined
+          ? config.recharge_ratio
+          : Number(body.recharge_ratio),
       memo_template:
         body.memo_template === undefined
           ? config.memo_template
@@ -1122,6 +1126,7 @@ export class AdminService {
         gold_finger_key: "",
         min_amount: 1,
         max_amount: 9999,
+        recharge_ratio: 1,
         memo_template: DEFAULT_RECHARGE_MEMO_TEMPLATE,
       });
       config = await repository.save(config);
@@ -1129,6 +1134,7 @@ export class AdminService {
     config.enabled = config.enabled === true;
     config.min_amount = Number(config.min_amount || 1);
     config.max_amount = Number(config.max_amount || 9999);
+    config.recharge_ratio = Number(config.recharge_ratio || 1);
     config.memo_template = config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE;
     this.assertRechargeConfig(config);
     return config;
@@ -1163,6 +1169,13 @@ export class AdminService {
     if (!String(config.memo_template || "").trim()) {
       throw new Error("充值备注模板不能为空");
     }
+    if (
+      !Number.isFinite(Number(config.recharge_ratio)) ||
+      Number(config.recharge_ratio) <= 0 ||
+      Number(config.recharge_ratio) > 100
+    ) {
+      throw new Error("充值比例必须大于0且不超过100");
+    }
   }
 
   private toRechargeConfigView(config: RechargeConfig) {
@@ -1172,6 +1185,7 @@ export class AdminService {
       enabled: config.enabled === true,
       min_amount: config.min_amount,
       max_amount: config.max_amount,
+      recharge_ratio: Number(config.recharge_ratio || 1),
       memo_template: config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE,
       hasGoldFingerKey: Boolean(key),
       maskedGoldFingerKey: this.maskSecret(key),
