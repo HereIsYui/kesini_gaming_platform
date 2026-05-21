@@ -561,6 +561,9 @@ export function App() {
       token: {
         borderRadius: 8,
         colorPrimary: "#2563eb",
+        controlHeight: 40,
+        controlHeightLG: 44,
+        controlHeightSM: 32,
         fontFamily:
           'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       },
