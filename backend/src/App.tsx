@@ -1,8 +1,6 @@
 import {
   Activity,
   Boxes,
-  ChevronLeft,
-  ChevronRight,
   Coins,
   Database,
   Download,
@@ -61,7 +59,6 @@ import {
 import type { MenuProps, TableColumnsType } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import {
-  FormEvent,
   ReactNode,
   Dispatch,
   SetStateAction,
@@ -114,11 +111,22 @@ type PageKey =
   | "inventories"
   | "pity"
   | "redeem-codes"
+  | "redeem-usages"
   | "exchange-shop"
-  | "trade"
-  | "recharge"
+  | "exchange-usages"
+  | "trade-config"
+  | "trade-listings"
+  | "trade-records"
+  | "recharge-config"
+  | "recharge-records"
   | "gacha-config";
-type NavGroup = "工作台" | "内容配置" | "玩家资产" | "运营工具" | "系统配置";
+type NavGroup =
+  | "工作台"
+  | "内容配置"
+  | "玩家资产"
+  | "运营工具"
+  | "交易与支付"
+  | "系统配置";
 type PageDefinition = {
   key: PageKey;
   label: string;
@@ -139,9 +147,14 @@ const pageKeys: PageKey[] = [
   "inventories",
   "pity",
   "redeem-codes",
+  "redeem-usages",
   "exchange-shop",
-  "trade",
-  "recharge",
+  "exchange-usages",
+  "trade-config",
+  "trade-listings",
+  "trade-records",
+  "recharge-config",
+  "recharge-records",
   "gacha-config",
 ];
 const pageKeySet = new Set<string>(pageKeys);
@@ -150,10 +163,13 @@ const navGroups: NavGroup[] = [
   "内容配置",
   "玩家资产",
   "运营工具",
+  "交易与支付",
   "系统配置",
 ];
 const routeAliases: Record<string, PageKey> = {
   config: "gacha-config",
+  trade: "trade-listings",
+  recharge: "recharge-records",
 };
 const handledOpenidCallbacks = new Set<string>();
 
@@ -752,10 +768,18 @@ export function App() {
       {
         key: "redeem-codes",
         label: "兑换码",
-        description: "创建礼包码，查看领取记录和奖励发放情况。",
+        description: "创建礼包码，维护库存、有效期和奖励发放规则。",
         group: "运营工具",
         icon: Gift,
         render: () => <RedeemCodesPage options={adminOptions} />,
+      },
+      {
+        key: "redeem-usages",
+        label: "兑换记录",
+        description: "查看玩家兑换码领取记录和奖励快照。",
+        group: "运营工具",
+        icon: History,
+        render: () => <RedeemUsagesPage />,
       },
       {
         key: "exchange-shop",
@@ -766,20 +790,52 @@ export function App() {
         render: () => <ExchangeShopPage options={adminOptions} />,
       },
       {
-        key: "trade",
-        label: "交易管理",
-        description: "审计匿名交易挂单、成交记录和交易参数。",
+        key: "exchange-usages",
+        label: "兑换商店记录",
+        description: "查看兑换商店领取记录、消耗和奖励快照。",
         group: "运营工具",
-        icon: Handshake,
-        render: () => <TradeAdminPage />,
+        icon: History,
+        render: () => <ExchangeUsagesPage />,
       },
       {
-        key: "recharge",
-        label: "充值管理",
-        description: "配置鱼排扣分充值，并追踪充值请求状态。",
-        group: "运营工具",
+        key: "trade-config",
+        label: "交易配置",
+        description: "配置交易开关、手续费率和价格区间。",
+        group: "交易与支付",
+        icon: Settings,
+        render: () => <TradeConfigPanel />,
+      },
+      {
+        key: "trade-listings",
+        label: "交易挂单",
+        description: "审计匿名交易挂单状态和卡片流转。",
+        group: "交易与支付",
+        icon: Handshake,
+        render: () => <TradeListingsPage />,
+      },
+      {
+        key: "trade-records",
+        label: "交易记录",
+        description: "查看交易成交记录、手续费和买卖双方审计信息。",
+        group: "交易与支付",
+        icon: History,
+        render: () => <TradeRecordsPage />,
+      },
+      {
+        key: "recharge-config",
+        label: "充值配置",
+        description: "配置鱼排扣分充值开关、范围和 goldFingerKey。",
+        group: "交易与支付",
+        icon: Settings,
+        render: () => <RechargeConfigPanel />,
+      },
+      {
+        key: "recharge-records",
+        label: "充值记录",
+        description: "追踪鱼排扣分充值请求和本地积分入账状态。",
+        group: "交易与支付",
         icon: Coins,
-        render: () => <RechargeAdminPage />,
+        render: () => <RechargeRecordsPage />,
       },
       {
         key: "gacha-config",
@@ -1144,8 +1200,8 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
   const maxRarity = Math.max(...Object.values(data.rarityTotals), 1);
 
   return (
-    <div className="page-stack">
-      <div className="stat-grid">
+    <div className="dashboard-page">
+      <div className="metric-grid">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -1164,14 +1220,18 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
         })}
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-section-grid">
         <Panel title="稀有度分布" icon={<Sparkles size={18} />}>
-          <Space className="rarity-bars" direction="vertical" size={12}>
+          <div className="rarity-bars">
             {rarityEntries.map(([rarity, value]) => (
-              <Space className="rarity-row" key={rarity} align="center">
+              <div className="rarity-row" key={rarity}>
                 <Badge>{rarity}</Badge>
                 <Progress
-                  percent={maxRarity ? Number(((value / maxRarity) * 100).toFixed(1)) : 0}
+                  percent={
+                    maxRarity
+                      ? Number(((value / maxRarity) * 100).toFixed(1))
+                      : 0
+                  }
                   showInfo={false}
                 />
                 <Typography.Text strong>
@@ -1182,9 +1242,9 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
                       : "0%"}
                   </Typography.Text>
                 </Typography.Text>
-              </Space>
+              </div>
             ))}
-          </Space>
+          </div>
         </Panel>
 
         <Panel
@@ -1430,10 +1490,11 @@ function AdminTable({
     <Panel
       title={title}
       icon={<Database size={18} />}
+      className="table-panel"
     >
       <Space className="table-toolbar" wrap>
         <Input
-          className="search-box"
+          className="toolbar-search"
           prefix={<Search size={16} />}
           allowClear
           style={{ width: 280 }}
@@ -1971,7 +2032,70 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
   }, [load]);
 
   const rows = data?.list || [];
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const columns: TableColumnsType<RedeemCodeRecord> = [
+    {
+      title: "兑换码",
+      dataIndex: "code",
+      render: (value) => (
+        <Typography.Text className="mono" copyable>
+          {String(value || "-")}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "名称",
+      dataIndex: "name",
+      ellipsis: true,
+    },
+    {
+      title: "状态",
+      dataIndex: "enabled",
+      width: 96,
+      render: (enabled) => (
+        <Tag color={enabled ? "success" : "default"}>
+          {enabled ? "启用" : "停用"}
+        </Tag>
+      ),
+    },
+    {
+      title: "库存",
+      width: 120,
+      render: (_, row) => `${row.used_count || 0} / ${row.total_limit || "不限"}`,
+    },
+    {
+      title: "奖励",
+      dataIndex: "rewards",
+      ellipsis: true,
+      render: (rewards) => formatRewards(rewards),
+    },
+    {
+      title: "有效期",
+      width: 260,
+      render: (_, row) => formatDateRange(row.starts_at, row.ends_at),
+    },
+    {
+      title: "操作",
+      width: 210,
+      fixed: "right",
+      render: (_, row) => (
+        <Space size={8} wrap>
+          <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+            详情
+          </Button>
+          <Button size="small" onClick={() => setEditing(row)}>
+            编辑
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<Trash2 size={14} />}
+            onClick={() => deleteRedeemCode(row)}
+            aria-label="删除"
+          />
+        </Space>
+      ),
+    },
+  ];
 
   async function saveRedeemCode(values: Partial<RedeemCodeRecord>) {
     const current = editing;
@@ -2003,175 +2127,90 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
   }
 
   return (
-    <div className="page-stack">
-      <Panel title="兑换码管理" icon={<Gift size={18} />}>
-        <div className="table-toolbar">
-          <label className="search-box">
-            <Search size={16} />
-            <input
-              value={keyword}
-              onChange={(event) => {
-                setPage(1);
-                setKeyword(event.target.value);
-              }}
-              placeholder="搜索兑换码或名称"
-            />
-          </label>
-          <div className="toolbar-actions">
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={load}
-              disabled={loading}
-            >
-              <RefreshCw size={15} />
-              刷新
-            </button>
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={() => exportRowsToCsv("兑换码", rows, redeemCodeFields)}
-              disabled={!rows.length}
-            >
-              <Download size={15} />
-              导出CSV
-            </button>
-            <button
-              className="primary-button compact"
-              type="button"
-              onClick={() => setCreating(true)}
-            >
-              新增
-            </button>
-          </div>
-        </div>
-
-        {error && <StateBox type="error">{error}</StateBox>}
-        {loading && !data && !error && <StateBox>正在加载兑换码...</StateBox>}
-        {data && rows.length === 0 && <StateBox>暂无兑换码</StateBox>}
-
-        {rows.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>兑换码</th>
-                  <th>名称</th>
-                  <th>状态</th>
-                  <th>库存</th>
-                  <th>奖励</th>
-                  <th>有效期</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td data-label="兑换码">
-                      <span className="cell-text mono">{row.code}</span>
-                    </td>
-                    <td data-label="名称">
-                      <span className="cell-text">{row.name}</span>
-                    </td>
-                    <td data-label="状态">
-                      <Badge>{row.enabled ? "启用" : "停用"}</Badge>
-                    </td>
-                    <td data-label="库存">
-                      {row.used_count || 0} / {row.total_limit || "不限"}
-                    </td>
-                    <td data-label="奖励">
-                      <span className="cell-text">{formatRewards(row.rewards)}</span>
-                    </td>
-                    <td data-label="有效期">
-                      <span className="cell-text">
-                        {formatDateRange(row.starts_at, row.ends_at)}
-                      </span>
-                    </td>
-                    <td data-label="操作">
-                      <div className="row-actions">
-                        <button
-                          className="secondary-button compact icon-text"
-                          type="button"
-                          onClick={() => setDetail(row)}
-                        >
-                          <Eye size={14} />
-                          详情
-                        </button>
-                        <button
-                          className="secondary-button compact"
-                          type="button"
-                          onClick={() => setEditing(row)}
-                        >
-                          编辑
-                        </button>
-                        <button
-                          className="danger"
-                          type="button"
-                          aria-label="删除"
-                          onClick={() => deleteRedeemCode(row)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="pagination">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-            type="button"
+    <Panel title="兑换码管理" icon={<Gift size={18} />} className="table-panel">
+      <Space className="table-toolbar" wrap>
+        <Input
+          className="toolbar-search"
+          prefix={<Search size={16} />}
+          allowClear
+          value={keyword}
+          onChange={(event) => {
+            setPage(1);
+            setKeyword(event.target.value);
+          }}
+          placeholder="搜索兑换码或名称"
+        />
+        <Space className="toolbar-actions" wrap>
+          <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
+            刷新
+          </Button>
+          <Button
+            icon={<Download size={15} />}
+            onClick={() => exportRowsToCsv("兑换码", rows, redeemCodeFields)}
+            disabled={!rows.length}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <span>
-            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
-            type="button"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+            导出CSV
+          </Button>
+          <Button type="primary" onClick={() => setCreating(true)}>
+            新增
+          </Button>
+        </Space>
+      </Space>
 
-        {(creating || editing) && (
-          <RedeemCodeModal
-            initial={editing || null}
-            itemOptions={options?.dropItems || []}
-            onCancel={() => {
-              setCreating(false);
-              setEditing(null);
-            }}
-            onSubmit={saveRedeemCode}
-          />
-        )}
-
-        {detail && (
-          <DetailModal
-            title="兑换码详情"
-            fields={redeemCodeFields}
-            data={detail}
-            loading={false}
-            onClose={() => setDetail(null)}
-          />
-        )}
-      </Panel>
-
-      <AdminTable
-        title="兑换记录"
-        endpoint="/admin/redeem-usages"
-        fields={redeemUsageFields}
-        searchPlaceholder="按 UID 查询"
-        keywordParam="uid"
+      {error && <StateBox type="error">{error}</StateBox>}
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无兑换码" />,
+        }}
       />
-    </div>
+
+      {(creating || editing) && (
+        <RedeemCodeModal
+          initial={editing || null}
+          itemOptions={options?.dropItems || []}
+          onCancel={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSubmit={saveRedeemCode}
+        />
+      )}
+
+      {detail && (
+        <DetailModal
+          title="兑换码详情"
+          fields={redeemCodeFields}
+          data={detail}
+          loading={false}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function RedeemUsagesPage() {
+  return (
+    <AdminTable
+      title="兑换记录"
+      endpoint="/admin/redeem-usages"
+      fields={redeemUsageFields}
+      searchPlaceholder="按 UID 查询"
+      keywordParam="uid"
+    />
   );
 }
 
@@ -2190,9 +2229,16 @@ function RedeemCodeModal({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const groupedItemOptions = groupItemOptions(itemOptions);
+  const itemSelectOptions = groupedItemOptions.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({
+      label: option.label,
+      value: String(option.value),
+      disabled: option.disabled,
+    })),
+  }));
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     try {
@@ -2209,209 +2255,192 @@ function RedeemCodeModal({
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="modal wide" onSubmit={submit}>
-        <header>
-          <div>
-            <span className="eyebrow">兑换码</span>
-            <h2>{initial ? "编辑兑换码" : "新增兑换码"}</h2>
-          </div>
-          <button type="button" onClick={onCancel}>
-            关闭
-          </button>
-        </header>
-        <div className="form-grid">
-          <label className="form-field">
-            <span>兑换码</span>
-            <input
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">兑换码</span>
+          <Typography.Title level={4}>
+            {initial ? "编辑兑换码" : "新增兑换码"}
+          </Typography.Title>
+        </div>
+      }
+      open
+      width={860}
+      onCancel={onCancel}
+      onOk={submit}
+      okText="保存兑换码"
+      cancelText="取消"
+      confirmLoading={loading}
+      destroyOnHidden
+    >
+      <Space direction="vertical" size={16} className="full-width">
+        <Form layout="vertical" className="form-grid antd-form-grid">
+          <Form.Item className="form-field" label="兑换码">
+            <Input
               value={values.code}
               placeholder="WELCOME2026"
               onChange={(event) =>
                 setValues({ ...values, code: event.target.value.toUpperCase() })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>名称</span>
-            <input
+          </Form.Item>
+          <Form.Item className="form-field" label="名称">
+            <Input
               value={values.name}
               placeholder="欢迎礼包"
               onChange={(event) =>
                 setValues({ ...values, name: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>状态</span>
-            <select
-              value={String(values.enabled)}
-              onChange={(event) =>
-                setValues({ ...values, enabled: event.target.value === "true" })
+          </Form.Item>
+          <Form.Item className="form-field" label="状态">
+            <Select
+              value={values.enabled ? "true" : "false"}
+              onChange={(value) =>
+                setValues({ ...values, enabled: value === "true" })
               }
-            >
-              <option value="true">启用</option>
-              <option value="false">停用</option>
-            </select>
-          </label>
-          <label className="form-field">
-            <span>总库存</span>
-            <input
-              type="number"
-              min="1"
-              value={values.total_limit}
+              options={[
+                { label: "启用", value: "true" },
+                { label: "停用", value: "false" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="总库存">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              value={values.total_limit === "" ? null : Number(values.total_limit)}
               placeholder="留空表示不限"
-              onChange={(event) =>
-                setValues({ ...values, total_limit: event.target.value })
+              onChange={(value) =>
+                setValues({
+                  ...values,
+                  total_limit: value === null ? "" : String(value),
+                })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>开始时间</span>
-            <input
+          </Form.Item>
+          <Form.Item className="form-field" label="开始时间">
+            <Input
               type="datetime-local"
               value={values.starts_at}
               onChange={(event) =>
                 setValues({ ...values, starts_at: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>结束时间</span>
-            <input
+          </Form.Item>
+          <Form.Item className="form-field" label="结束时间">
+            <Input
               type="datetime-local"
               value={values.ends_at}
               onChange={(event) =>
                 setValues({ ...values, ends_at: event.target.value })
               }
             />
-          </label>
-          <label className="form-field full-width">
-            <span>描述</span>
-            <textarea
+          </Form.Item>
+          <Form.Item className="form-field full-width" label="描述">
+            <Input.TextArea
               value={values.description}
               placeholder="面向运营和客服的备注"
+              autoSize={{ minRows: 3, maxRows: 6 }}
               onChange={(event) =>
                 setValues({ ...values, description: event.target.value })
               }
             />
-          </label>
-        </div>
-        <div className="reward-editor">
-          <div className="section-title-row">
-            <h3>奖励内容</h3>
-            <Badge>{formatRewards(values.rewards)}</Badge>
-          </div>
-          <label className="form-field">
-            <span>奖励积分</span>
-            <input
-              type="number"
-              min="0"
-              value={values.rewards.points}
-              onChange={(event) =>
-                setValues({
-                  ...values,
-                  rewards: {
-                    ...values.rewards,
-                    points: Number(event.target.value),
-                  },
-                })
-              }
-            />
-          </label>
-          <div className="reward-items">
-            {values.rewards.items.map((item, index) => (
-              <div className="reward-item-row" key={index}>
-                <select
-                  value={item.itemId || ""}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      rewards: updateRewardItem(values.rewards, index, {
-                        itemId: Number(event.target.value),
-                      }),
-                    })
-                  }
-                >
-                  <option value="">选择物品</option>
-                  {groupedItemOptions.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map((option) => (
-                        <option
-                          key={String(option.value)}
-                          value={String(option.value)}
-                          disabled={option.disabled}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min="1"
-                  value={item.num}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      rewards: updateRewardItem(values.rewards, index, {
-                        num: Number(event.target.value),
-                      }),
-                    })
-                  }
-                />
-                <button
-                  className="secondary-button compact"
-                  type="button"
-                  onClick={() =>
+          </Form.Item>
+        </Form>
+
+        <Card
+          size="small"
+          className="form-section-card"
+          title="奖励内容"
+          extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
+        >
+          <Space direction="vertical" size={12} className="full-width">
+            <Form layout="vertical">
+              <Form.Item label="奖励积分">
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  value={values.rewards.points}
+                  onChange={(value) =>
                     setValues({
                       ...values,
                       rewards: {
                         ...values.rewards,
-                        items: values.rewards.items.filter((_, i) => i !== index),
+                        points: Number(value || 0),
                       },
                     })
                   }
-                >
-                  移除
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="form-note">
-            积分请使用“奖励积分”字段；物品奖励主要选择卡片碎片或普通道具。
-          </p>
-          <button
-            className="secondary-button compact"
-            type="button"
-            onClick={() =>
-              setValues({
-                ...values,
-                rewards: {
-                  ...values.rewards,
-                  items: [...values.rewards.items, { itemId: 0, num: 1 }],
-                },
-              })
-            }
-          >
-            添加物品奖励
-          </button>
-        </div>
-        {error && <div className="error-box">{error}</div>}
-        <footer>
-          <button className="secondary-button" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className="primary-button compact"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "保存中..." : "保存兑换码"}
-          </button>
-        </footer>
-      </form>
-    </div>
+                />
+              </Form.Item>
+            </Form>
+            <Space direction="vertical" size={8} className="full-width">
+              {values.rewards.items.map((item, index) => (
+                <Space className="reward-item-row antd-reward-row" key={index} wrap>
+                  <Select
+                    className="reward-item-select"
+                    value={item.itemId ? String(item.itemId) : undefined}
+                    placeholder="选择物品"
+                    options={itemSelectOptions}
+                    onChange={(value) =>
+                      setValues({
+                        ...values,
+                        rewards: updateRewardItem(values.rewards, index, {
+                          itemId: Number(value),
+                        }),
+                      })
+                    }
+                  />
+                  <InputNumber
+                    className="reward-num-input"
+                    min={1}
+                    value={item.num}
+                    onChange={(value) =>
+                      setValues({
+                        ...values,
+                        rewards: updateRewardItem(values.rewards, index, {
+                          num: Number(value || 1),
+                        }),
+                      })
+                    }
+                  />
+                  <Button
+                    onClick={() =>
+                      setValues({
+                        ...values,
+                        rewards: {
+                          ...values.rewards,
+                          items: values.rewards.items.filter((_, i) => i !== index),
+                        },
+                      })
+                    }
+                  >
+                    移除
+                  </Button>
+                </Space>
+              ))}
+            </Space>
+            <Typography.Text type="secondary">
+              积分请使用“奖励积分”字段；物品奖励主要选择卡片碎片或普通道具。
+            </Typography.Text>
+            <Button
+              onClick={() =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                  },
+                })
+              }
+            >
+              添加物品奖励
+            </Button>
+          </Space>
+        </Card>
+        {error && <Alert type="error" message={error} showIcon />}
+      </Space>
+    </Modal>
   );
 }
 
@@ -2448,7 +2477,73 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
   }, [load]);
 
   const rows = data?.list || [];
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const columns: TableColumnsType<ExchangeShopItemRecord> = [
+    {
+      title: "兑换项",
+      dataIndex: "name",
+      ellipsis: true,
+    },
+    {
+      title: "状态",
+      dataIndex: "enabled",
+      width: 96,
+      render: (enabled) => (
+        <Tag color={enabled ? "success" : "default"}>
+          {enabled ? "启用" : "停用"}
+        </Tag>
+      ),
+    },
+    {
+      title: "消耗",
+      dataIndex: "costs",
+      ellipsis: true,
+      render: (costs) => formatCosts(costs),
+    },
+    {
+      title: "奖励",
+      dataIndex: "rewards",
+      ellipsis: true,
+      render: (rewards) => formatRewards(rewards),
+    },
+    {
+      title: "库存",
+      width: 120,
+      render: (_, row) => `${row.used_count || 0} / ${row.total_limit || "不限"}`,
+    },
+    {
+      title: "限兑",
+      dataIndex: "user_limit",
+      width: 96,
+      render: (value) => value || "不限",
+    },
+    {
+      title: "有效期",
+      width: 260,
+      render: (_, row) => formatDateRange(row.starts_at, row.ends_at),
+    },
+    {
+      title: "操作",
+      width: 210,
+      fixed: "right",
+      render: (_, row) => (
+        <Space size={8} wrap>
+          <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+            详情
+          </Button>
+          <Button size="small" onClick={() => setEditing(row)}>
+            编辑
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<Trash2 size={14} />}
+            onClick={() => deleteExchangeItem(row)}
+            aria-label="删除"
+          />
+        </Space>
+      ),
+    },
+  ];
 
   async function saveExchangeItem(values: Partial<ExchangeShopItemRecord>) {
     const current = editing;
@@ -2480,177 +2575,90 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
   }
 
   return (
-    <div className="page-stack">
-      <Panel title="兑换商店" icon={<Store size={18} />}>
-        <div className="table-toolbar">
-          <label className="search-box">
-            <Search size={16} />
-            <input
-              value={keyword}
-              onChange={(event) => {
-                setPage(1);
-                setKeyword(event.target.value);
-              }}
-              placeholder="搜索兑换项名称或说明"
-            />
-          </label>
-          <div className="toolbar-actions">
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={load}
-              disabled={loading}
-            >
-              <RefreshCw size={15} />
-              刷新
-            </button>
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={() => exportRowsToCsv("兑换商店", rows, exchangeItemFields)}
-              disabled={!rows.length}
-            >
-              <Download size={15} />
-              导出CSV
-            </button>
-            <button
-              className="primary-button compact"
-              type="button"
-              onClick={() => setCreating(true)}
-            >
-              新增
-            </button>
-          </div>
-        </div>
-
-        {error && <StateBox type="error">{error}</StateBox>}
-        {loading && !data && !error && <StateBox>正在加载兑换项...</StateBox>}
-        {data && rows.length === 0 && <StateBox>暂无兑换项</StateBox>}
-
-        {rows.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>兑换项</th>
-                  <th>状态</th>
-                  <th>消耗</th>
-                  <th>奖励</th>
-                  <th>库存</th>
-                  <th>限兑</th>
-                  <th>有效期</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td data-label="兑换项">
-                      <span className="cell-text">{row.name}</span>
-                    </td>
-                    <td data-label="状态">
-                      <Badge>{row.enabled ? "启用" : "停用"}</Badge>
-                    </td>
-                    <td data-label="消耗">
-                      <span className="cell-text">{formatCosts(row.costs)}</span>
-                    </td>
-                    <td data-label="奖励">
-                      <span className="cell-text">{formatRewards(row.rewards)}</span>
-                    </td>
-                    <td data-label="库存">
-                      {row.used_count || 0} / {row.total_limit || "不限"}
-                    </td>
-                    <td data-label="限兑">{row.user_limit || "不限"}</td>
-                    <td data-label="有效期">
-                      <span className="cell-text">
-                        {formatDateRange(row.starts_at, row.ends_at)}
-                      </span>
-                    </td>
-                    <td data-label="操作">
-                      <div className="row-actions">
-                        <button
-                          className="secondary-button compact icon-text"
-                          type="button"
-                          onClick={() => setDetail(row)}
-                        >
-                          <Eye size={14} />
-                          详情
-                        </button>
-                        <button
-                          className="secondary-button compact"
-                          type="button"
-                          onClick={() => setEditing(row)}
-                        >
-                          编辑
-                        </button>
-                        <button
-                          className="danger"
-                          type="button"
-                          aria-label="删除"
-                          onClick={() => deleteExchangeItem(row)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="pagination">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-            type="button"
+    <Panel title="兑换商店" icon={<Store size={18} />} className="table-panel">
+      <Space className="table-toolbar" wrap>
+        <Input
+          className="toolbar-search"
+          prefix={<Search size={16} />}
+          allowClear
+          value={keyword}
+          onChange={(event) => {
+            setPage(1);
+            setKeyword(event.target.value);
+          }}
+          placeholder="搜索兑换项名称或说明"
+        />
+        <Space className="toolbar-actions" wrap>
+          <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
+            刷新
+          </Button>
+          <Button
+            icon={<Download size={15} />}
+            onClick={() => exportRowsToCsv("兑换商店", rows, exchangeItemFields)}
+            disabled={!rows.length}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <span>
-            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
-            type="button"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+            导出CSV
+          </Button>
+          <Button type="primary" onClick={() => setCreating(true)}>
+            新增
+          </Button>
+        </Space>
+      </Space>
 
-        {(creating || editing) && (
-          <ExchangeShopModal
-            initial={editing || null}
-            itemOptions={options?.dropItems || []}
-            onCancel={() => {
-              setCreating(false);
-              setEditing(null);
-            }}
-            onSubmit={saveExchangeItem}
-          />
-        )}
-
-        {detail && (
-          <DetailModal
-            title="兑换项详情"
-            fields={exchangeItemFields}
-            data={detail}
-            loading={false}
-            onClose={() => setDetail(null)}
-          />
-        )}
-      </Panel>
-
-      <AdminTable
-        title="兑换商店记录"
-        endpoint="/admin/exchange-usages"
-        fields={exchangeUsageFields}
-        searchPlaceholder="按 UID 查询"
-        keywordParam="uid"
+      {error && <StateBox type="error">{error}</StateBox>}
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无兑换项" />,
+        }}
       />
-    </div>
+
+      {(creating || editing) && (
+        <ExchangeShopModal
+          initial={editing || null}
+          itemOptions={options?.dropItems || []}
+          onCancel={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSubmit={saveExchangeItem}
+        />
+      )}
+
+      {detail && (
+        <DetailModal
+          title="兑换项详情"
+          fields={exchangeItemFields}
+          data={detail}
+          loading={false}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function ExchangeUsagesPage() {
+  return (
+    <AdminTable
+      title="兑换商店记录"
+      endpoint="/admin/exchange-usages"
+      fields={exchangeUsageFields}
+      searchPlaceholder="按 UID 查询"
+      keywordParam="uid"
+    />
   );
 }
 
@@ -2676,9 +2684,24 @@ function ExchangeShopModal({
     itemOptions,
     (option) => option.type !== 1,
   );
+  const consumableSelectOptions = consumableGroups.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({
+      label: option.label,
+      value: String(option.value),
+      disabled: option.disabled,
+    })),
+  }));
+  const rewardSelectOptions = rewardGroups.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({
+      label: option.label,
+      value: String(option.value),
+      disabled: option.disabled,
+    })),
+  }));
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     try {
@@ -2697,157 +2720,152 @@ function ExchangeShopModal({
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="modal wide" onSubmit={submit}>
-        <header>
-          <div>
-            <span className="eyebrow">兑换商店</span>
-            <h2>{initial ? "编辑兑换项" : "新增兑换项"}</h2>
-          </div>
-          <button type="button" onClick={onCancel}>
-            关闭
-          </button>
-        </header>
-        <div className="form-grid">
-          <label className="form-field">
-            <span>兑换项名称</span>
-            <input
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">兑换商店</span>
+          <Typography.Title level={4}>
+            {initial ? "编辑兑换项" : "新增兑换项"}
+          </Typography.Title>
+        </div>
+      }
+      open
+      width={900}
+      onCancel={onCancel}
+      onOk={submit}
+      okText="保存兑换项"
+      cancelText="取消"
+      confirmLoading={loading}
+      destroyOnHidden
+    >
+      <Space direction="vertical" size={16} className="full-width">
+        <Form layout="vertical" className="form-grid antd-form-grid">
+          <Form.Item className="form-field" label="兑换项名称">
+            <Input
               value={values.name}
               placeholder="例如：活动代币换积分"
               onChange={(event) =>
                 setValues({ ...values, name: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>状态</span>
-            <select
-              value={String(values.enabled)}
-              onChange={(event) =>
-                setValues({ ...values, enabled: event.target.value === "true" })
+          </Form.Item>
+          <Form.Item className="form-field" label="状态">
+            <Select
+              value={values.enabled ? "true" : "false"}
+              onChange={(value) =>
+                setValues({ ...values, enabled: value === "true" })
               }
-            >
-              <option value="true">启用</option>
-              <option value="false">停用</option>
-            </select>
-          </label>
-          <label className="form-field">
-            <span>总库存</span>
-            <input
-              type="number"
-              min="1"
-              value={values.total_limit}
+              options={[
+                { label: "启用", value: "true" },
+                { label: "停用", value: "false" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="总库存">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              value={values.total_limit === "" ? null : Number(values.total_limit)}
               placeholder="留空表示不限"
-              onChange={(event) =>
-                setValues({ ...values, total_limit: event.target.value })
+              onChange={(value) =>
+                setValues({
+                  ...values,
+                  total_limit: value === null ? "" : String(value),
+                })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>单用户限兑</span>
-            <input
-              type="number"
-              min="1"
-              value={values.user_limit}
+          </Form.Item>
+          <Form.Item className="form-field" label="单用户限兑">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              value={values.user_limit === "" ? null : Number(values.user_limit)}
               placeholder="留空表示不限"
-              onChange={(event) =>
-                setValues({ ...values, user_limit: event.target.value })
+              onChange={(value) =>
+                setValues({
+                  ...values,
+                  user_limit: value === null ? "" : String(value),
+                })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>开始时间</span>
-            <input
+          </Form.Item>
+          <Form.Item className="form-field" label="开始时间">
+            <Input
               type="datetime-local"
               value={values.starts_at}
               onChange={(event) =>
                 setValues({ ...values, starts_at: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>结束时间</span>
-            <input
+          </Form.Item>
+          <Form.Item className="form-field" label="结束时间">
+            <Input
               type="datetime-local"
               value={values.ends_at}
               onChange={(event) =>
                 setValues({ ...values, ends_at: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>排序</span>
-            <input
-              type="number"
-              min="0"
-              value={values.sort_order}
-              onChange={(event) =>
-                setValues({ ...values, sort_order: Number(event.target.value) })
+          </Form.Item>
+          <Form.Item className="form-field" label="排序">
+            <InputNumber
+              className="full-width-control"
+              min={0}
+              value={Number(values.sort_order || 0)}
+              onChange={(value) =>
+                setValues({ ...values, sort_order: Number(value || 0) })
               }
             />
-          </label>
-          <label className="form-field full-width">
-            <span>说明</span>
-            <textarea
+          </Form.Item>
+          <Form.Item className="form-field full-width" label="说明">
+            <Input.TextArea
               value={values.description}
               placeholder="给运营和客服看的兑换说明"
+              autoSize={{ minRows: 3, maxRows: 6 }}
               onChange={(event) =>
                 setValues({ ...values, description: event.target.value })
               }
             />
-          </label>
-        </div>
+          </Form.Item>
+        </Form>
 
-        <div className="reward-editor">
-          <div className="section-title-row">
-            <h3>消耗物品</h3>
-            <Badge>{formatCosts(values.costs)}</Badge>
-          </div>
-          <div className="reward-items">
+        <Card
+          size="small"
+          className="form-section-card"
+          title="消耗物品"
+          extra={<Tag color="blue">{formatCosts(values.costs)}</Tag>}
+        >
+          <Space direction="vertical" size={12} className="full-width">
             {values.costs.map((item, index) => (
-              <div className="reward-item-row" key={index}>
-                <select
-                  value={item.itemId || ""}
-                  onChange={(event) =>
+              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+                <Select
+                  className="reward-item-select"
+                  value={item.itemId ? String(item.itemId) : undefined}
+                  placeholder="选择消耗物品"
+                  options={consumableSelectOptions}
+                  onChange={(value) =>
                     setValues({
                       ...values,
                       costs: updateCostItem(values.costs, index, {
-                        itemId: Number(event.target.value),
-                      }),
-                    })
-                  }
-                >
-                  <option value="">选择消耗物品</option>
-                  {consumableGroups.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map((option) => (
-                        <option
-                          key={String(option.value)}
-                          value={String(option.value)}
-                          disabled={option.disabled}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min="1"
-                  value={item.num}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      costs: updateCostItem(values.costs, index, {
-                        num: Number(event.target.value),
+                        itemId: Number(value),
                       }),
                     })
                   }
                 />
-                <button
-                  className="secondary-button compact"
-                  type="button"
+                <InputNumber
+                  className="reward-num-input"
+                  min={1}
+                  value={item.num}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      costs: updateCostItem(values.costs, index, {
+                        num: Number(value || 1),
+                      }),
+                    })
+                  }
+                />
+                <Button
                   onClick={() =>
                     setValues({
                       ...values,
@@ -2856,94 +2874,80 @@ function ExchangeShopModal({
                   }
                 >
                   移除
-                </button>
-              </div>
+                </Button>
+              </Space>
             ))}
-          </div>
-          <p className="form-note">
-            消耗项只支持背包物品，不能选择虚拟积分；积分消耗后续单独设计。
-          </p>
-          <button
-            className="secondary-button compact"
-            type="button"
-            onClick={() =>
-              setValues({
-                ...values,
-                costs: [...values.costs, { itemId: 0, num: 1 }],
-              })
-            }
-          >
-            添加消耗物品
-          </button>
-        </div>
-
-        <div className="reward-editor">
-          <div className="section-title-row">
-            <h3>兑换奖励</h3>
-            <Badge>{formatRewards(values.rewards)}</Badge>
-          </div>
-          <label className="form-field">
-            <span>奖励积分</span>
-            <input
-              type="number"
-              min="0"
-              value={values.rewards.points}
-              onChange={(event) =>
+            <Typography.Text type="secondary">
+              消耗项只支持背包物品，不能选择虚拟积分；积分消耗后续单独设计。
+            </Typography.Text>
+            <Button
+              onClick={() =>
                 setValues({
                   ...values,
-                  rewards: {
-                    ...values.rewards,
-                    points: Number(event.target.value),
-                  },
+                  costs: [...values.costs, { itemId: 0, num: 1 }],
                 })
               }
-            />
-          </label>
-          <div className="reward-items">
-            {values.rewards.items.map((item, index) => (
-              <div className="reward-item-row" key={index}>
-                <select
-                  value={item.itemId || ""}
-                  onChange={(event) =>
+            >
+              添加消耗物品
+            </Button>
+          </Space>
+        </Card>
+
+        <Card
+          size="small"
+          className="form-section-card"
+          title="兑换奖励"
+          extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
+        >
+          <Space direction="vertical" size={12} className="full-width">
+            <Form layout="vertical">
+              <Form.Item label="奖励积分">
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  value={values.rewards.points}
+                  onChange={(value) =>
                     setValues({
                       ...values,
-                      rewards: updateRewardItem(values.rewards, index, {
-                        itemId: Number(event.target.value),
-                      }),
+                      rewards: {
+                        ...values.rewards,
+                        points: Number(value || 0),
+                      },
                     })
                   }
-                >
-                  <option value="">选择奖励物品</option>
-                  {rewardGroups.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map((option) => (
-                        <option
-                          key={String(option.value)}
-                          value={String(option.value)}
-                          disabled={option.disabled}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min="1"
-                  value={item.num}
-                  onChange={(event) =>
+                />
+              </Form.Item>
+            </Form>
+            {values.rewards.items.map((item, index) => (
+              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+                <Select
+                  className="reward-item-select"
+                  value={item.itemId ? String(item.itemId) : undefined}
+                  placeholder="选择奖励物品"
+                  options={rewardSelectOptions}
+                  onChange={(value) =>
                     setValues({
                       ...values,
                       rewards: updateRewardItem(values.rewards, index, {
-                        num: Number(event.target.value),
+                        itemId: Number(value),
                       }),
                     })
                   }
                 />
-                <button
-                  className="secondary-button compact"
-                  type="button"
+                <InputNumber
+                  className="reward-num-input"
+                  min={1}
+                  value={item.num}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        num: Number(value || 1),
+                      }),
+                    })
+                  }
+                />
+                <Button
                   onClick={() =>
                     setValues({
                       ...values,
@@ -2955,68 +2959,56 @@ function ExchangeShopModal({
                   }
                 >
                   移除
-                </button>
-              </div>
+                </Button>
+              </Space>
             ))}
-          </div>
-          <p className="form-note">
-            积分请使用“奖励积分”字段；虚拟积分物品不会出现在奖励物品选择里。
-          </p>
-          <button
-            className="secondary-button compact"
-            type="button"
-            onClick={() =>
-              setValues({
-                ...values,
-                rewards: {
-                  ...values.rewards,
-                  items: [...values.rewards.items, { itemId: 0, num: 1 }],
-                },
-              })
-            }
-          >
-            添加奖励物品
-          </button>
-        </div>
-        {error && <div className="error-box">{error}</div>}
-        <footer>
-          <button className="secondary-button" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className="primary-button compact"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "保存中..." : "保存兑换项"}
-          </button>
-        </footer>
-      </form>
-    </div>
+            <Typography.Text type="secondary">
+              积分请使用“奖励积分”字段；虚拟积分物品不会出现在奖励物品选择里。
+            </Typography.Text>
+            <Button
+              onClick={() =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                  },
+                })
+              }
+            >
+              添加奖励物品
+            </Button>
+          </Space>
+        </Card>
+        {error && <Alert type="error" message={error} showIcon />}
+      </Space>
+    </Modal>
   );
 }
 
-function TradeAdminPage() {
+function TradeListingsPage() {
   return (
-    <div className="page-stack">
-      <TradeConfigPanel />
-      <AdminTable
-        title="交易挂单"
-        endpoint="/admin/trade-listings"
-        fields={tradeListingFields}
-        deletable
-        detailFetchable
-        searchPlaceholder="按卡片 UUID 查询"
-      />
-      <AdminTable
-        title="交易记录"
-        endpoint="/admin/trade-records"
-        fields={tradeRecordFields}
-        detailFetchable
-        searchPlaceholder="按 UID 查询"
-        keywordParam="uid"
-      />
-    </div>
+    <AdminTable
+      title="交易挂单"
+      endpoint="/admin/trade-listings"
+      fields={tradeListingFields}
+      deletable
+      detailFetchable
+      searchPlaceholder="按卡片 UUID 查询"
+    />
+  );
+}
+
+function TradeRecordsPage() {
+  return (
+    <AdminTable
+      title="交易记录"
+      endpoint="/admin/trade-records"
+      fields={tradeRecordFields}
+      detailFetchable
+      searchPlaceholder="按 UID 查询"
+      keywordParam="uid"
+    />
   );
 }
 
@@ -3053,8 +3045,7 @@ function TradeConfigPanel() {
     load();
   }, [load]);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     setNotice("");
@@ -3084,59 +3075,61 @@ function TradeConfigPanel() {
       icon={<Handshake size={18} />}
       action={<RefreshButton onClick={load} loading={loading} />}
     >
-      <form className="inline-config-form" onSubmit={submit}>
-        <label className="form-field">
-          <span>交易状态</span>
-          <select
-            value={String(values.enabled)}
-            onChange={(event) =>
-              setValues({ ...values, enabled: event.target.value === "true" })
-            }
+      <Space direction="vertical" size={16} className="full-width">
+        <Form layout="vertical" className="form-grid antd-form-grid">
+          <Form.Item className="form-field" label="交易状态">
+            <Select
+              value={String(values.enabled)}
+              onChange={(value) =>
+                setValues({ ...values, enabled: value === "true" })
+              }
+              options={[
+                { label: "开启", value: "true" },
+                { label: "关闭", value: "false" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            className="form-field"
+            label="手续费率"
+            extra="0.05 表示 5%，成交时按挂单创建时的费率结算。"
           >
-            <option value="true">开启</option>
-            <option value="false">关闭</option>
-          </select>
-        </label>
-        <label className="form-field">
-          <span>手续费率</span>
-          <input
-            type="number"
-            min="0"
-            max="1"
-            step="0.0001"
-            value={values.fee_rate}
-            onChange={(event) =>
-              setValues({ ...values, fee_rate: Number(event.target.value) })
-            }
-          />
-          <small>0.05 表示 5%，成交时按挂单创建时的费率结算。</small>
-        </label>
-        <label className="form-field">
-          <span>最低价格</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={values.min_price}
-            onChange={(event) =>
-              setValues({ ...values, min_price: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label className="form-field">
-          <span>最高价格</span>
-          <input
-            type="number"
-            min="1"
-            max="999999"
-            step="1"
-            value={values.max_price}
-            onChange={(event) =>
-              setValues({ ...values, max_price: Number(event.target.value) })
-            }
-          />
-        </label>
-        <div className="inline-config-actions">
+            <InputNumber
+              className="full-width-control"
+              min={0}
+              max={1}
+              step={0.0001}
+              value={Number(values.fee_rate || 0)}
+              onChange={(value) =>
+                setValues({ ...values, fee_rate: Number(value || 0) })
+              }
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="最低价格">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              step={1}
+              value={Number(values.min_price || 1)}
+              onChange={(value) =>
+                setValues({ ...values, min_price: Number(value || 1) })
+              }
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="最高价格">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              max={999999}
+              step={1}
+              value={Number(values.max_price || 999999)}
+              onChange={(value) =>
+                setValues({ ...values, max_price: Number(value || 999999) })
+              }
+            />
+          </Form.Item>
+        </Form>
+        <div className="config-summary-row">
           <DescriptionList
             items={[
               ["当前状态", config?.enabled === false ? "关闭" : "开启"],
@@ -3147,18 +3140,18 @@ function TradeConfigPanel() {
               ],
             ]}
           />
-          <button className="primary-button compact" type="submit" disabled={loading}>
-            {loading ? "保存中..." : "保存交易配置"}
-          </button>
+          <Button type="primary" loading={loading} onClick={submit}>
+            保存交易配置
+          </Button>
         </div>
-      </form>
-      {error && <div className="error-box">{error}</div>}
-      {notice && <div className="success-box">{notice}</div>}
+        {error && <Alert type="error" message={error} showIcon />}
+        {notice && <Alert type="success" message={notice} showIcon />}
+      </Space>
     </Panel>
   );
 }
 
-function RechargeAdminPage() {
+function RechargeRecordsPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [uid, setUid] = useState("");
@@ -3191,7 +3184,61 @@ function RechargeAdminPage() {
   }, [load]);
 
   const rows = data?.list || [];
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const columns: TableColumnsType<RechargeRecord> = [
+    {
+      title: "状态",
+      dataIndex: "statusLabel",
+      width: 120,
+      render: (value, row) => <Tag>{String(value || row.status || "-")}</Tag>,
+    },
+    {
+      title: "UID",
+      dataIndex: "uid",
+      ellipsis: true,
+      render: (value) => (
+        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+      ),
+    },
+    {
+      title: "鱼排用户名",
+      dataIndex: "fishpi_user_name",
+      ellipsis: true,
+    },
+    {
+      title: "充值",
+      width: 150,
+      render: (_, row) => `${row.amount} / 扣鱼排 ${row.fishpi_cost}`,
+    },
+    {
+      title: "积分变化",
+      width: 160,
+      render: (_, row) => `${row.point_before} → ${row.point_after}`,
+    },
+    {
+      title: "请求号",
+      dataIndex: "request_id",
+      ellipsis: true,
+      render: (value) => (
+        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+      ),
+    },
+    {
+      title: "时间",
+      dataIndex: "createdAt",
+      width: 190,
+      render: formatDate,
+    },
+    {
+      title: "操作",
+      width: 110,
+      fixed: "right",
+      render: (_, row) => (
+        <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+          详情
+        </Button>
+      ),
+    },
+  ];
 
   function resetFilters() {
     setPage(1);
@@ -3203,171 +3250,109 @@ function RechargeAdminPage() {
   }
 
   return (
-    <div className="page-stack">
-      <RechargeConfigPanel />
-      <Panel
-        title="充值记录"
-        icon={<Coins size={18} />}
-        action={<RefreshButton onClick={load} loading={loading} />}
-      >
-        <div className="table-toolbar recharge-toolbar">
-          <label className="search-box">
-            <Search size={16} />
-            <input
-              value={uid}
-              onChange={(event) => {
-                setPage(1);
-                setUid(event.target.value);
-              }}
-              placeholder="搜索 UID"
-            />
-          </label>
-          <input
-            value={userName}
-            onChange={(event) => {
-              setPage(1);
-              setUserName(event.target.value);
-            }}
-            placeholder="鱼排用户名"
-          />
-          <select
-            value={status}
-            onChange={(event) => {
-              setPage(1);
-              setStatus(event.target.value);
-            }}
+    <Panel
+      title="充值记录"
+      icon={<Coins size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+      className="table-panel"
+    >
+      <Space className="table-toolbar recharge-toolbar" wrap>
+        <Input
+          className="toolbar-search compact"
+          prefix={<Search size={16} />}
+          allowClear
+          value={uid}
+          onChange={(event) => {
+            setPage(1);
+            setUid(event.target.value);
+          }}
+          placeholder="搜索 UID"
+        />
+        <Input
+          className="toolbar-control"
+          allowClear
+          value={userName}
+          onChange={(event) => {
+            setPage(1);
+            setUserName(event.target.value);
+          }}
+          placeholder="鱼排用户名"
+        />
+        <Select
+          className="toolbar-control"
+          value={status}
+          onChange={(value) => {
+            setPage(1);
+            setStatus(value);
+          }}
+          options={[
+            { label: "全部状态", value: "" },
+            { label: "处理中", value: "pending" },
+            { label: "成功", value: "success" },
+            { label: "失败", value: "failed" },
+            { label: "本地入账失败", value: "local_failed" },
+          ]}
+        />
+        <Input
+          className="toolbar-datetime"
+          type="datetime-local"
+          value={start}
+          onChange={(event) => {
+            setPage(1);
+            setStart(event.target.value);
+          }}
+        />
+        <Input
+          className="toolbar-datetime"
+          type="datetime-local"
+          value={end}
+          onChange={(event) => {
+            setPage(1);
+            setEnd(event.target.value);
+          }}
+        />
+        <Space className="toolbar-actions" wrap>
+          <Button onClick={resetFilters}>重置</Button>
+          <Button
+            icon={<Download size={15} />}
+            onClick={() => exportRowsToCsv("充值记录", rows, rechargeRecordFields)}
+            disabled={!rows.length}
           >
-            <option value="">全部状态</option>
-            <option value="pending">处理中</option>
-            <option value="success">成功</option>
-            <option value="failed">失败</option>
-            <option value="local_failed">本地入账失败</option>
-          </select>
-          <input
-            type="datetime-local"
-            value={start}
-            onChange={(event) => {
-              setPage(1);
-              setStart(event.target.value);
-            }}
-          />
-          <input
-            type="datetime-local"
-            value={end}
-            onChange={(event) => {
-              setPage(1);
-              setEnd(event.target.value);
-            }}
-          />
-          <div className="toolbar-actions">
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={resetFilters}
-            >
-              重置
-            </button>
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={() => exportRowsToCsv("充值记录", rows, rechargeRecordFields)}
-              disabled={!rows.length}
-            >
-              <Download size={15} />
-              导出CSV
-            </button>
-          </div>
-        </div>
+            导出CSV
+          </Button>
+        </Space>
+      </Space>
 
-        {error && <StateBox type="error">{error}</StateBox>}
-        {loading && !data && !error && <StateBox>正在加载充值记录...</StateBox>}
-        {data && rows.length === 0 && <StateBox>暂无充值记录</StateBox>}
+      {error && <StateBox type="error">{error}</StateBox>}
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无充值记录" />,
+        }}
+      />
 
-        {rows.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>状态</th>
-                  <th>UID</th>
-                  <th>鱼排用户名</th>
-                  <th>充值</th>
-                  <th>积分变化</th>
-                  <th>请求号</th>
-                  <th>时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td data-label="状态">
-                      <Badge>{row.statusLabel || row.status}</Badge>
-                    </td>
-                    <td data-label="UID">
-                      <span className="cell-text mono">{row.uid}</span>
-                    </td>
-                    <td data-label="鱼排用户名">
-                      <span className="cell-text">{row.fishpi_user_name}</span>
-                    </td>
-                    <td data-label="充值">
-                      {row.amount} / 扣鱼排 {row.fishpi_cost}
-                    </td>
-                    <td data-label="积分变化">
-                      {row.point_before} → {row.point_after}
-                    </td>
-                    <td data-label="请求号">
-                      <span className="cell-text mono">{row.request_id}</span>
-                    </td>
-                    <td data-label="时间">{formatDate(row.createdAt)}</td>
-                    <td data-label="操作">
-                      <button
-                        className="secondary-button compact icon-text"
-                        type="button"
-                        onClick={() => setDetail(row)}
-                      >
-                        <Eye size={14} />
-                        详情
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="pagination">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-            type="button"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span>
-            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
-            type="button"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
-        {detail && (
-          <DetailModal
-            title="充值记录详情"
-            fields={rechargeRecordFields}
-            data={detail}
-            loading={false}
-            onClose={() => setDetail(null)}
-          />
-        )}
-      </Panel>
-    </div>
+      {detail && (
+        <DetailModal
+          title="充值记录详情"
+          fields={rechargeRecordFields}
+          data={detail}
+          loading={false}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </Panel>
   );
 }
 
@@ -3407,8 +3392,7 @@ function RechargeConfigPanel() {
     load();
   }, [load]);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     setNotice("");
@@ -3446,70 +3430,73 @@ function RechargeConfigPanel() {
       icon={<Coins size={18} />}
       action={<RefreshButton onClick={load} loading={loading} />}
     >
-      <form className="inline-config-form" onSubmit={submit}>
-        <label className="form-field">
-          <span>充值状态</span>
-          <select
-            value={String(values.enabled)}
-            onChange={(event) =>
-              setValues({ ...values, enabled: event.target.value === "true" })
-            }
+      <Space direction="vertical" size={16} className="full-width">
+        <Form layout="vertical" className="form-grid antd-form-grid">
+          <Form.Item className="form-field" label="充值状态">
+            <Select
+              value={String(values.enabled)}
+              onChange={(value) =>
+                setValues({ ...values, enabled: value === "true" })
+              }
+              options={[
+                { label: "关闭", value: "false" },
+                { label: "开启", value: "true" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            className="form-field"
+            label="goldFingerKey"
+            extra="留空保存会保留原密钥，不会明文回显。"
           >
-            <option value="false">关闭</option>
-            <option value="true">开启</option>
-          </select>
-        </label>
-        <label className="form-field">
-          <span>goldFingerKey</span>
-          <input
-            type="password"
-            value={values.gold_finger_key || ""}
-            placeholder={
-              config?.hasGoldFingerKey
-                ? `已配置：${config.maskedGoldFingerKey}`
-                : "请输入鱼排金手指密钥"
-            }
-            onChange={(event) =>
-              setValues({ ...values, gold_finger_key: event.target.value })
-            }
-          />
-          <small>留空保存会保留原密钥，不会明文回显。</small>
-        </label>
-        <label className="form-field">
-          <span>单次最低充值</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={values.min_amount}
-            onChange={(event) =>
-              setValues({ ...values, min_amount: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label className="form-field">
-          <span>单次最高充值</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={values.max_amount}
-            onChange={(event) =>
-              setValues({ ...values, max_amount: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label className="form-field full-width">
-          <span>扣鱼排积分备注模板</span>
-          <input
-            value={values.memo_template}
-            onChange={(event) =>
-              setValues({ ...values, memo_template: event.target.value })
-            }
-          />
-          <small>{`可使用 {amount} 作为充值数量占位。`}</small>
-        </label>
-        <div className="inline-config-actions">
+            <Input.Password
+              value={values.gold_finger_key || ""}
+              placeholder={
+                config?.hasGoldFingerKey
+                  ? `已配置：${config.maskedGoldFingerKey}`
+                  : "请输入鱼排金手指密钥"
+              }
+              onChange={(event) =>
+                setValues({ ...values, gold_finger_key: event.target.value })
+              }
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="单次最低充值">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              step={1}
+              value={Number(values.min_amount || 1)}
+              onChange={(value) =>
+                setValues({ ...values, min_amount: Number(value || 1) })
+              }
+            />
+          </Form.Item>
+          <Form.Item className="form-field" label="单次最高充值">
+            <InputNumber
+              className="full-width-control"
+              min={1}
+              step={1}
+              value={Number(values.max_amount || 9999)}
+              onChange={(value) =>
+                setValues({ ...values, max_amount: Number(value || 9999) })
+              }
+            />
+          </Form.Item>
+          <Form.Item
+            className="form-field full-width"
+            label="扣鱼排积分备注模板"
+            extra={`可使用 {amount} 作为充值数量占位。`}
+          >
+            <Input
+              value={values.memo_template}
+              onChange={(event) =>
+                setValues({ ...values, memo_template: event.target.value })
+              }
+            />
+          </Form.Item>
+        </Form>
+        <div className="config-summary-row">
           <DescriptionList
             items={[
               ["当前状态", config?.enabled ? "开启" : "关闭"],
@@ -3521,13 +3508,13 @@ function RechargeConfigPanel() {
               ["兑换比例", "1 鱼排积分 = 1 本地积分"],
             ]}
           />
-          <button className="primary-button compact" type="submit" disabled={loading}>
-            {loading ? "保存中..." : "保存充值配置"}
-          </button>
+          <Button type="primary" loading={loading} onClick={submit}>
+            保存充值配置
+          </Button>
         </div>
-      </form>
-      {error && <div className="error-box">{error}</div>}
-      {notice && <div className="success-box">{notice}</div>}
+        {error && <Alert type="error" message={error} showIcon />}
+        {notice && <Alert type="success" message={notice} showIcon />}
+      </Space>
     </Panel>
   );
 }
@@ -3577,36 +3564,33 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
         title="卡池配置工作台"
         icon={<Settings size={18} />}
         action={<RefreshButton onClick={load} loading={loading} />}
+        className="table-panel"
       >
-        <div className="table-toolbar">
-          <label className="search-box">
-            <Search size={16} />
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索卡池名称或 ID"
-            />
-          </label>
-          <select
+        <Space className="table-toolbar" wrap>
+          <Input
+            className="toolbar-search"
+            prefix={<Search size={16} />}
+            allowClear
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="搜索卡池名称或 ID"
+          />
+          <Select
+            className="toolbar-control"
             value={sourceFilter}
-            onChange={(event) => setSourceFilter(event.target.value)}
-          >
-            <option value="all">全部配置来源</option>
-            <option value="database">只看数据库配置</option>
-            <option value="env">只看环境默认</option>
-          </select>
-          <div className="toolbar-actions">
-            <button
-              className="secondary-button compact"
-              type="button"
-              onClick={load}
-              disabled={loading}
-            >
-              <RefreshCw size={15} />
+            onChange={setSourceFilter}
+            options={[
+              { label: "全部配置来源", value: "all" },
+              { label: "只看数据库配置", value: "database" },
+              { label: "只看环境默认", value: "env" },
+            ]}
+          />
+          <Space className="toolbar-actions" wrap>
+            <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
               刷新
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Space>
+        </Space>
         {error && <StateBox type="error">{error}</StateBox>}
         {!data && !error && <StateBox>正在加载配置...</StateBox>}
         {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
@@ -4563,15 +4547,17 @@ function Panel({
   icon,
   action,
   children,
+  className,
 }: {
   title: string;
   icon?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
     <Card
-      className="panel"
+      className={["panel", className].filter(Boolean).join(" ")}
       title={
         <Space className="panel-title">
           {icon}

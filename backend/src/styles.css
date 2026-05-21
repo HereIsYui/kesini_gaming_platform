@@ -448,7 +448,8 @@ select:focus-visible {
   padding: 24px;
 }
 
-.page-stack {
+.page-stack,
+.dashboard-page {
   display: grid;
   gap: 16px;
 }
@@ -472,7 +473,8 @@ select:focus-visible {
   padding: 0;
 }
 
-.stat-grid {
+.stat-grid,
+.metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
@@ -508,7 +510,8 @@ select:focus-visible {
   background: var(--primary-muted);
 }
 
-.dashboard-grid {
+.dashboard-grid,
+.dashboard-section-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.8fr);
   gap: 16px;
@@ -525,7 +528,15 @@ select:focus-visible {
 }
 
 .panel .ant-card-body {
+  padding: 16px;
+}
+
+.table-panel .ant-card-body {
   padding: 0;
+}
+
+.table-panel .ant-table-wrapper {
+  padding: 0 0 8px;
 }
 
 .panel-header {
@@ -563,6 +574,19 @@ select:focus-visible {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
+}
+
+.toolbar-search {
+  width: min(320px, 100%);
+}
+
+.toolbar-search.compact,
+.toolbar-control {
+  width: min(220px, 100%);
+}
+
+.toolbar-datetime {
+  width: min(220px, 100%);
 }
 
 .toolbar-actions {
@@ -751,11 +775,13 @@ select:focus-visible {
 }
 
 .rarity-bars,
-.activity-list,
-.activity-table {
+.activity-list {
   display: grid;
   gap: 12px;
-  padding: 16px;
+}
+
+.activity-table {
+  display: block;
 }
 
 .rarity-row {
@@ -819,23 +845,9 @@ select:focus-visible {
   border-bottom: 0;
 }
 
-.activity-table div {
-  display: grid;
-  grid-template-columns: minmax(120px, 1fr) 68px minmax(120px, 1fr) 150px;
+.activity-table .ant-list-item {
   gap: 12px;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.activity-table div:last-child {
-  border-bottom: 0;
-}
-
-.activity-table time {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  text-align: right;
+  padding: 12px 0;
 }
 
 .mono {
@@ -888,6 +900,14 @@ select:focus-visible {
   background: var(--muted);
 }
 
+.panel > .ant-card-body > .state-box:first-child:last-child {
+  margin: 0;
+}
+
+.table-panel > .ant-card-body > .state-box:first-child {
+  margin: 16px;
+}
+
 .state-box.error,
 .error-box {
   border-color: color-mix(in srgb, var(--destructive) 36%, var(--border));
@@ -909,6 +929,34 @@ select:focus-visible {
   display: grid;
   gap: 0;
   margin: 0;
+}
+
+.config-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.config-summary-row .description-list {
+  min-width: 0;
+}
+
+.form-section-card {
+  border-color: var(--border);
+}
+
+.antd-reward-row {
+  width: 100%;
+}
+
+.reward-item-select {
+  min-width: min(360px, 100%);
+  flex: 1 1 280px;
+}
+
+.reward-num-input {
+  width: 120px;
 }
 
 .description-list div {
@@ -1811,11 +1859,13 @@ select:focus-visible {
     height: 3px;
   }
 
-  .stat-grid {
+  .stat-grid,
+  .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-grid {
+  .dashboard-grid,
+  .dashboard-section-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1875,13 +1925,25 @@ select:focus-visible {
     font-size: 13px;
   }
 
-  .stat-grid {
+  .stat-grid,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-summary-row {
     grid-template-columns: 1fr;
   }
 
   .table-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .toolbar-search,
+  .toolbar-search.compact,
+  .toolbar-control,
+  .toolbar-datetime {
+    width: 100%;
   }
 
   .toolbar-actions {
