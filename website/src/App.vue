@@ -171,6 +171,19 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const playerDisplayName = computed(
+  () =>
+    currentUser.value?.nickname ||
+    currentUser.value?.name ||
+    currentUser.value?.uid ||
+    "已登录玩家",
+);
+const playerInitial = computed(() =>
+  String(playerDisplayName.value || "?").trim().slice(0, 1).toUpperCase(),
+);
+const playerUidLabel = computed(() =>
+  currentUser.value?.uid ? `UID ${currentUser.value.uid}` : "身份已验证",
+);
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
 );
@@ -1083,18 +1096,69 @@ function leaderboardRankLabel(rank?: number) {
           </div>
         </div>
 
-        <aside class="panel auth-panel">
-          <div class="panel-heading compact">
-            <div>
-              <p class="eyebrow">玩家身份</p>
-              <h2>{{ isAuthed ? currentUser?.nickname || currentUser?.name || "已登录玩家" : "登录后同步资产" }}</h2>
+        <aside class="panel auth-panel identity-card">
+          <div v-if="isAuthed" class="player-profile">
+            <div class="player-avatar">
+              <img v-if="currentUser?.avatar" :src="currentUser.avatar" :alt="playerDisplayName" />
+              <span v-else>{{ playerInitial }}</span>
             </div>
-            <span class="status-dot" :class="{ online: isAuthed }"></span>
+            <div class="player-info">
+              <p class="eyebrow">玩家身份</p>
+              <h2>{{ playerDisplayName }}</h2>
+              <span>{{ playerUidLabel }}</span>
+            </div>
+            <span class="status-pill online">
+              <span class="status-dot online"></span>
+              在线
+            </span>
           </div>
 
-          <div class="api-box">
+          <div v-else class="identity-login-head">
+            <div class="player-avatar guest">
+              <UserRound :size="28" />
+            </div>
+            <div>
+              <p class="eyebrow">玩家身份</p>
+              <h2>登录后同步资产</h2>
+              <span>登录后可抽卡、交易、查看背包和排行榜。</span>
+            </div>
+          </div>
+
+          <div v-if="isAuthed" class="point-card">
+            <span>积分余额</span>
+            <strong>{{ stats?.point || 0 }}</strong>
+            <small>当前卡池 {{ selectedPool?.pool_name || "未选择" }}</small>
+          </div>
+
+          <div v-if="isAuthed" class="player-metrics">
+            <article>
+              <small>累计抽数</small>
+              <strong>{{ stats?.totalDraws || 0 }}</strong>
+            </article>
+            <article>
+              <small>UR 收藏</small>
+              <strong>{{ stats?.cardCounts?.UR || 0 }}</strong>
+            </article>
+            <article>
+              <small>SSR 收藏</small>
+              <strong>{{ stats?.cardCounts?.SSR || 0 }}</strong>
+            </article>
+          </div>
+
+          <div v-if="isAuthed" class="identity-status-list">
+            <div>
+              <span>最近最高结果</span>
+              <strong>{{ bestResult ? `${bestResult.rarity} · ${bestResult.cardName}` : "暂无抽卡结果" }}</strong>
+            </div>
+            <div>
+              <span>服务连接</span>
+              <strong>{{ apiBase }}</strong>
+            </div>
+          </div>
+
+          <div class="connection-card" :class="{ compact: isAuthed }">
             <label>
-              <span>API 地址</span>
+              <span>{{ isAuthed ? "连接信息" : "API 地址" }}</span>
               <input v-model="apiBase" type="url" placeholder="http://localhost:3000" @blur="saveApiBase" />
             </label>
           </div>
@@ -1105,7 +1169,7 @@ function leaderboardRankLabel(rank?: number) {
               <LogIn v-else :size="18" />
               使用 OpenID 登录
             </button>
-            <label class="token-box">
+            <label class="token-box debug-token-box">
               <span>本地调试 Token</span>
               <textarea v-model="manualToken" placeholder="粘贴玩家 JWT，仅保存在当前浏览器"></textarea>
             </label>
@@ -1113,25 +1177,6 @@ function leaderboardRankLabel(rank?: number) {
               <ShieldCheck :size="18" />
               使用 Token 进入
             </button>
-          </div>
-
-          <div v-else class="stats-grid">
-            <div class="stat-card">
-              <small>积分余额</small>
-              <strong>{{ stats?.point || 0 }}</strong>
-            </div>
-            <div class="stat-card">
-              <small>累计抽数</small>
-              <strong>{{ stats?.totalDraws || 0 }}</strong>
-            </div>
-            <div class="stat-card">
-              <small>UR</small>
-              <strong>{{ stats?.cardCounts?.UR || 0 }}</strong>
-            </div>
-            <div class="stat-card">
-              <small>SSR</small>
-              <strong>{{ stats?.cardCounts?.SSR || 0 }}</strong>
-            </div>
           </div>
         </aside>
       </section>
