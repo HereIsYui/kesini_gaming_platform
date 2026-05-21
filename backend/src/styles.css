@@ -113,8 +113,6 @@ select:focus-visible {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100dvh;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 240px),
@@ -137,6 +135,12 @@ select:focus-visible {
   border-right: 1px solid var(--border);
   background: var(--sidebar);
   color: var(--sidebar-foreground);
+}
+
+.sidebar .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .sidebar-header {
@@ -221,6 +225,17 @@ select:focus-visible {
 .nav-list {
   display: grid;
   gap: 18px;
+}
+
+.admin-menu {
+  border-inline-end: 0 !important;
+  background: transparent;
+}
+
+.admin-menu .ant-menu-item,
+.admin-menu .ant-menu-submenu-title {
+  margin-inline: 0;
+  width: 100%;
 }
 
 .nav-section {
@@ -317,11 +332,17 @@ select:focus-visible {
   z-index: 10;
   justify-content: space-between;
   gap: 18px;
+  height: auto;
   min-height: 76px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--background) 88%, transparent);
   backdrop-filter: blur(14px);
+  line-height: normal;
+}
+
+.topbar .ant-typography {
+  margin: 0;
 }
 
 .topbar-title {
@@ -468,29 +489,11 @@ select:focus-visible {
 }
 
 .stat-card {
-  display: flex;
   min-height: 108px;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+}
+
+.stat-card .ant-card-body {
   padding: 16px;
-}
-
-.stat-card span {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.stat-card strong {
-  display: block;
-  margin-top: 12px;
-  color: var(--foreground);
-  font-size: 28px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 750;
-  line-height: 1;
 }
 
 .stat-icon {
@@ -514,6 +517,15 @@ select:focus-visible {
 .panel {
   min-width: 0;
   overflow: hidden;
+}
+
+.panel .ant-card-head {
+  min-height: 54px;
+  background: color-mix(in srgb, var(--card) 92%, var(--muted));
+}
+
+.panel .ant-card-body {
+  padding: 0;
 }
 
 .panel-header {
@@ -607,7 +619,7 @@ select:focus-visible {
   overflow-x: auto;
 }
 
-table {
+.table-wrap > table {
   width: 100%;
   min-width: 720px;
   border-collapse: separate;
@@ -615,8 +627,8 @@ table {
   font-size: 13px;
 }
 
-th,
-td {
+.table-wrap th,
+.table-wrap td {
   max-width: 280px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
@@ -624,7 +636,7 @@ td {
   vertical-align: middle;
 }
 
-th {
+.table-wrap th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -634,7 +646,7 @@ th {
   font-weight: 700;
 }
 
-td {
+.table-wrap td {
   overflow: hidden;
   color: var(--foreground);
   text-overflow: ellipsis;
@@ -649,11 +661,11 @@ td {
   white-space: nowrap;
 }
 
-tbody tr {
+.table-wrap tbody tr {
   transition: background-color 140ms ease;
 }
 
-tbody tr:hover {
+.table-wrap tbody tr:hover {
   background: color-mix(in srgb, var(--muted) 54%, transparent);
 }
 
@@ -1335,7 +1347,10 @@ tbody tr:hover {
   line-height: 1.6;
 }
 
-label {
+.modal label,
+.inline-config-form label,
+.reward-editor label,
+.config-edit label {
   display: grid;
   gap: 7px;
   color: var(--muted-foreground);
@@ -1343,9 +1358,18 @@ label {
   font-weight: 700;
 }
 
-input,
-textarea,
-select {
+.modal input,
+.modal textarea,
+.modal select,
+.inline-config-form input,
+.inline-config-form textarea,
+.inline-config-form select,
+.reward-editor input,
+.reward-editor textarea,
+.reward-editor select,
+.config-edit input,
+.config-edit textarea,
+.config-edit select {
   min-width: 0;
   min-height: 40px;
   padding: 9px 11px;
@@ -1355,7 +1379,10 @@ select {
   background: var(--card);
 }
 
-textarea {
+.modal textarea,
+.inline-config-form textarea,
+.reward-editor textarea,
+.config-edit textarea {
   min-height: 92px;
   resize: vertical;
 }
@@ -1873,7 +1900,7 @@ textarea {
     overflow-x: visible;
   }
 
-  table {
+  .table-wrap > table {
     min-width: 0;
   }
 
@@ -1881,29 +1908,29 @@ textarea {
     min-width: 0;
   }
 
-  thead {
+  .table-wrap thead {
     display: none;
   }
 
-  tbody,
-  tr,
-  td {
+  .table-wrap tbody,
+  .table-wrap tr,
+  .table-wrap td {
     display: block;
     width: 100%;
   }
 
-  tbody {
+  .table-wrap tbody {
     padding: 10px;
   }
 
-  tr {
+  .table-wrap tr {
     margin-bottom: 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--card);
   }
 
-  td {
+  .table-wrap td {
     display: flex;
     max-width: none;
     min-height: 42px;
@@ -1914,7 +1941,7 @@ textarea {
     white-space: normal;
   }
 
-  td::before {
+  .table-wrap td::before {
     flex: 0 0 92px;
     color: var(--muted-foreground);
     content: attr(data-label);

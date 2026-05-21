@@ -12,6 +12,7 @@ import {
   History,
   Layers,
   LogOut,
+  Menu as MenuIcon,
   Moon,
   Package,
   RefreshCw,
@@ -27,6 +28,38 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Checkbox,
+  ConfigProvider,
+  Descriptions,
+  Drawer,
+  Empty,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Layout,
+  List,
+  Menu,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Spin,
+  Statistic,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  theme as antdTheme,
+} from "antd";
+import type { MenuProps, TableColumnsType } from "antd";
+import zhCN from "antd/locale/zh_CN";
 import {
   FormEvent,
   ReactNode,
@@ -488,11 +521,51 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(
     (localStorage.getItem("kesini_theme") as Theme) || "light",
   );
+  const screens = Grid.useBreakpoint();
+  const isNarrowLayout = screens.lg === false;
+  const [navOpen, setNavOpen] = useState(false);
+
+  const antTheme = useMemo(
+    () => ({
+      algorithm:
+        theme === "dark"
+          ? antdTheme.darkAlgorithm
+          : antdTheme.defaultAlgorithm,
+      token: {
+        borderRadius: 8,
+        colorPrimary: "#2563eb",
+        fontFamily:
+          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      },
+      components: {
+        Layout: {
+          bodyBg: theme === "dark" ? "#09090b" : "#f6f7f9",
+          headerBg: theme === "dark" ? "#111114" : "#ffffff",
+          siderBg: theme === "dark" ? "#0f0f12" : "#ffffff",
+        },
+        Menu: {
+          itemBorderRadius: 8,
+          itemHeight: 40,
+        },
+        Table: {
+          headerBg: theme === "dark" ? "#1d1d22" : "#f3f4f6",
+          rowHoverBg: theme === "dark" ? "#1d1d22" : "#f8fafc",
+        },
+      },
+    }),
+    [theme],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("kesini_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!isNarrowLayout) {
+      setNavOpen(false);
+    }
+  }, [isNarrowLayout]);
 
   useEffect(() => {
     if (!token) {
@@ -734,6 +807,44 @@ export function App() {
         .filter((item) => item.pages.length > 0),
     [pageDefinitions],
   );
+  const menuItems = useMemo<MenuProps["items"]>(
+    () =>
+      pagesByGroup.map((group) => ({
+        key: group.group,
+        type: "group" as const,
+        label: group.group,
+        children: group.pages.map((page) => {
+          const Icon = page.icon;
+          return {
+            key: page.key,
+            icon: <Icon size={16} />,
+            label: page.label,
+            title: page.description,
+          };
+        }),
+      })),
+    [pagesByGroup],
+  );
+  const menuNode = (
+    <Menu
+      className="admin-menu"
+      mode="inline"
+      items={menuItems}
+      selectedKeys={[activePage.key]}
+      onClick={({ key }) => {
+        setRoute(key as PageKey);
+        setNavOpen(false);
+      }}
+    />
+  );
+
+  function withAntProvider(node: ReactNode) {
+    return (
+      <ConfigProvider locale={zhCN} theme={antTheme}>
+        <AntApp>{node}</AntApp>
+      </ConfigProvider>
+    );
+  }
 
   const handleLogin = useCallback((nextToken: string) => {
     setAuthError("");
@@ -741,11 +852,13 @@ export function App() {
   }, []);
 
   if (!token) {
-    return <LoginPage initialError={authError} onLogin={handleLogin} />;
+    return withAntProvider(
+      <LoginPage initialError={authError} onLogin={handleLogin} />,
+    );
   }
 
   if (!admin) {
-    return (
+    return withAntProvider(
       <main className="login-screen">
         <section className="login-panel">
           <div className="brand-mark large">
@@ -755,91 +868,90 @@ export function App() {
           <h1>正在验证后台权限</h1>
           <p>正在确认当前账号是否具备后台管理权限。</p>
         </section>
-      </main>
+      </main>,
     );
   }
 
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="brand">
-            <div className="brand-mark">
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <strong>Kesini</strong>
-              <span>Gacha Admin</span>
-            </div>
-          </div>
-          <span className="sidebar-pill">运营控制台</span>
-        </div>
+  return withAntProvider(
+    <Layout className="app-shell">
+      {!isNarrowLayout && (
+        <Layout.Sider className="sidebar" width={260}>
+          <SidebarBrand />
+          <div className="sidebar-scroll">{menuNode}</div>
+        </Layout.Sider>
+      )}
 
-        <div className="sidebar-scroll">
-          <nav className="nav-list" aria-label="后台页面导航">
-            {pagesByGroup.map((group) => (
-              <section className="nav-section" key={group.group}>
-                <div className="nav-section-title">{group.group}</div>
-                <div className="nav-section-items">
-                  {group.pages.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activePage.key === item.key;
-                    return (
-                      <button
-                        key={item.key}
-                        className={`nav-item${isActive ? " active" : ""}`}
-                        onClick={() => setRoute(item.key)}
-                        aria-current={isActive ? "page" : undefined}
-                        title={item.description}
-                        type="button"
-                      >
-                        <Icon size={18} />
-                        <span className="nav-item-label">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      <main className="main">
-        <header className="topbar">
+      <Layout className="main">
+        <Layout.Header className="topbar">
           <div className="topbar-title">
-            <span className="eyebrow">{activePage.group}</span>
-            <h1>{activePage.label}</h1>
-            <p className="topbar-description">{activePage.description}</p>
+            <Space align="center" size={8}>
+              {isNarrowLayout && (
+                <Button
+                  className="mobile-menu-button"
+                  icon={<MenuIcon size={17} />}
+                  onClick={() => setNavOpen(true)}
+                  aria-label="打开导航菜单"
+                />
+              )}
+              <span className="eyebrow">{activePage.group}</span>
+            </Space>
+            <Typography.Title level={3}>{activePage.label}</Typography.Title>
+            <Typography.Text className="topbar-description">
+              {activePage.description}
+            </Typography.Text>
           </div>
-          <div className="top-actions">
-            <span className="status-dot">API {getApiBase()}</span>
-            <button
-              className="icon-button"
-              type="button"
+          <Space className="top-actions" size={8}>
+            <Tag className="status-dot" color="success">
+              API {getApiBase()}
+            </Tag>
+            <Button
+              icon={theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
               aria-label="切换主题"
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            >
-              {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-            </button>
-            <button
-              className="icon-button"
-              type="button"
+            />
+            <Button
+              icon={<LogOut size={18} />}
               aria-label="退出登录"
               onClick={() => {
                 clearToken();
                 setLocalToken("");
               }}
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
-        </header>
+            />
+          </Space>
+        </Layout.Header>
 
-        <section className="content" aria-label={activePage.label}>
+        <Layout.Content className="content" aria-label={activePage.label}>
           {activePage.render()}
-        </section>
-      </main>
+        </Layout.Content>
+      </Layout>
+
+      <Drawer
+        className="nav-drawer"
+        title={<SidebarBrand />}
+        placement="left"
+        open={navOpen}
+        width={300}
+        onClose={() => setNavOpen(false)}
+      >
+        {menuNode}
+      </Drawer>
+    </Layout>,
+  );
+}
+
+function SidebarBrand() {
+  return (
+    <div className="sidebar-header">
+      <div className="brand">
+        <div className="brand-mark">
+          <Sparkles size={20} />
+        </div>
+        <div>
+          <strong>Kesini</strong>
+          <span>Gacha Admin</span>
+        </div>
+      </div>
+      <span className="sidebar-pill">运营控制台</span>
     </div>
   );
 }
@@ -919,8 +1031,7 @@ function LoginPage({
     }
   }
 
-  function useManualToken(event: FormEvent) {
-    event.preventDefault();
+  function useManualToken() {
     if (!manualToken.trim()) {
       setError("请输入 JWT Token");
       return;
@@ -931,49 +1042,56 @@ function LoginPage({
 
   return (
     <main className="login-screen">
-      <section className="login-panel">
-        <div className="brand-mark large">
-          <Sparkles size={28} />
-        </div>
-        <span className="eyebrow">Kesini Gacha Admin</span>
-        <h1>后台管理</h1>
-        <p>使用现有 OpenID/JWT 登录体系进入管理台。</p>
+      <Card className="login-panel">
+        <Space direction="vertical" size={16} className="full-width">
+          <div className="brand-mark large">
+            <Sparkles size={28} />
+          </div>
+          <div>
+            <span className="eyebrow">Kesini Gacha Admin</span>
+            <Typography.Title level={2}>后台管理</Typography.Title>
+            <Typography.Paragraph type="secondary">
+              使用现有 OpenID/JWT 登录体系进入管理台。
+            </Typography.Paragraph>
+          </div>
 
-        <label>
-          API 地址
-          <input
-            value={apiBase}
-            onChange={(event) => setApiBaseState(event.target.value)}
-            placeholder="http://localhost:3000"
-          />
-        </label>
+          <Form layout="vertical">
+            <Form.Item label="API 地址">
+              <Input
+                value={apiBase}
+                onChange={(event) => setApiBaseState(event.target.value)}
+                placeholder="http://localhost:3000"
+              />
+            </Form.Item>
+            <Button
+              type="primary"
+              block
+              size="large"
+              icon={<Shield size={18} />}
+              onClick={startLogin}
+              loading={loading}
+            >
+              使用 OpenID 登录
+            </Button>
+          </Form>
 
-        <button
-          className="primary-button"
-          onClick={startLogin}
-          disabled={loading}
-          type="button"
-        >
-          <Shield size={18} />
-          {loading ? "处理中..." : "使用 OpenID 登录"}
-        </button>
+          <Form className="manual-token" layout="vertical" onFinish={useManualToken}>
+            <Form.Item label="本地调试 Token">
+              <Input.TextArea
+                value={manualToken}
+                onChange={(event) => setManualToken(event.target.value)}
+                placeholder="粘贴已有 JWT"
+                autoSize={{ minRows: 4, maxRows: 6 }}
+              />
+            </Form.Item>
+            <Button block htmlType="submit">
+              使用 Token 进入
+            </Button>
+          </Form>
 
-        <form className="manual-token" onSubmit={useManualToken}>
-          <label>
-            本地调试 Token
-            <textarea
-              value={manualToken}
-              onChange={(event) => setManualToken(event.target.value)}
-              placeholder="粘贴已有 JWT"
-            />
-          </label>
-          <button className="secondary-button" type="submit">
-            使用 Token 进入
-          </button>
-        </form>
-
-        {error && <div className="error-box">{error}</div>}
-      </section>
+          {error && <Alert type="error" message={error} showIcon />}
+        </Space>
+      </Card>
     </main>
   );
 }
@@ -1031,45 +1149,42 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <article className="stat-card" key={stat.label}>
-              <div className="stat-icon">
-                <Icon size={20} />
-              </div>
-              <div>
-                <span>{stat.label}</span>
-                <strong>{String(stat.value)}</strong>
-              </div>
-            </article>
+            <Card className="stat-card" key={stat.label}>
+              <Statistic
+                title={stat.label}
+                value={stat.value}
+                prefix={
+                  <span className="stat-icon">
+                    <Icon size={18} />
+                  </span>
+                }
+              />
+            </Card>
           );
         })}
       </div>
 
       <div className="dashboard-grid">
         <Panel title="稀有度分布" icon={<Sparkles size={18} />}>
-          <div className="rarity-bars">
+          <Space className="rarity-bars" direction="vertical" size={12}>
             {rarityEntries.map(([rarity, value]) => (
-              <div className="rarity-row" key={rarity}>
-                <span>
-                  <Badge>{rarity}</Badge>
-                </span>
-                <div>
-                  <i
-                    style={{
-                      width: `${Math.max(4, (value / maxRarity) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <strong>
-                  {value}
-                  <small>
+              <Space className="rarity-row" key={rarity} align="center">
+                <Badge>{rarity}</Badge>
+                <Progress
+                  percent={maxRarity ? Number(((value / maxRarity) * 100).toFixed(1)) : 0}
+                  showInfo={false}
+                />
+                <Typography.Text strong>
+                  {value}{" "}
+                  <Typography.Text type="secondary">
                     {totalRarity
                       ? `${((value / totalRarity) * 100).toFixed(1)}%`
                       : "0%"}
-                  </small>
-                </strong>
-              </div>
+                  </Typography.Text>
+                </Typography.Text>
+              </Space>
             ))}
-          </div>
+          </Space>
         </Panel>
 
         <Panel
@@ -1078,16 +1193,30 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
           action={<RefreshButton onClick={load} loading={loading} />}
         >
           {data.recentHistories.length ? (
-            <div className="activity-table">
-              {data.recentHistories.map((history, index) => (
-                <div key={String(history.id || index)}>
-                  <span className="mono">UID {String(history.uid || "-")}</span>
-                  <strong>{String(history.count || 0)} 抽</strong>
-                  <span>{summarizeRarities(String(history.card_levels || ""))}</span>
-                  <time>{formatDate(history.createdAt)}</time>
-                </div>
-              ))}
-            </div>
+            <List
+              className="activity-table"
+              dataSource={data.recentHistories}
+              renderItem={(history, index) => (
+                <List.Item key={String(history.id || index)}>
+                  <List.Item.Meta
+                    title={
+                      <Space wrap>
+                        <Typography.Text className="mono">
+                          UID {String(history.uid || "-")}
+                        </Typography.Text>
+                        <Tag>{String(history.count || 0)} 抽</Tag>
+                      </Space>
+                    }
+                    description={summarizeRarities(
+                      String(history.card_levels || ""),
+                    )}
+                  />
+                  <Typography.Text type="secondary">
+                    {formatDate(history.createdAt)}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
           ) : (
             <StateBox>暂无抽卡记录</StateBox>
           )}
@@ -1102,11 +1231,22 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
               1,
             )}
           </div>
-          <DescriptionList
+          <Descriptions
+            bordered
+            size="small"
+            column={1}
             items={[
-              ["UID", admin?.user?.uid || "-"],
-              ["昵称", admin?.user?.nickname || admin?.user?.name || "-"],
-              ["管理员状态", admin?.user?.is_admin ? "已授权" : "未授权"],
+              { key: "uid", label: "UID", children: admin?.user?.uid || "-" },
+              {
+                key: "nickname",
+                label: "昵称",
+                children: String(admin?.user?.nickname || admin?.user?.name || "-"),
+              },
+              {
+                key: "admin",
+                label: "管理员状态",
+                children: admin?.user?.is_admin ? "已授权" : "未授权",
+              },
             ]}
           />
         </div>
@@ -1146,6 +1286,7 @@ function AdminTable({
     onSubmit: (values: Record<string, any>) => Promise<void>;
   }) => ReactNode;
 }) {
+  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -1195,15 +1336,23 @@ function AdminTable({
     });
     setEditing(null);
     setCreating(false);
+    message.success(current ? "已保存修改" : "已新增记录");
     load();
   }
 
-  async function deleteItem(row: Record<string, any>) {
-    if (!window.confirm(`确认删除 ${title} #${row.id}？`)) {
-      return;
-    }
-    await request(`${endpoint}/${row.id}`, { method: "DELETE" });
-    load();
+  function deleteItem(row: Record<string, any>) {
+    modal.confirm({
+      title: `确认删除 ${title} #${row.id}？`,
+      content: "删除后不可直接恢复，请确认这不是误操作。",
+      okText: "确认删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      async onOk() {
+        await request(`${endpoint}/${row.id}`, { method: "DELETE" });
+        message.success("已删除");
+        load();
+      },
+    });
   }
 
   async function openDetail(row: Record<string, any>) {
@@ -1229,175 +1378,149 @@ function AdminTable({
   }
 
   const rows = data?.list || [];
-  const totalPages = data
-    ? Math.max(1, Math.ceil(data.total / data.pageSize))
-    : 1;
+  const columns = useMemo<TableColumnsType<Record<string, any>>>(
+    () => [
+      ...fields.map((field) => ({
+        title: field.label,
+        key: field.key,
+        ellipsis: true,
+        render: (_: unknown, row: Record<string, any>) => {
+          const value = formatValue(getValue(row, field.key));
+          return (
+            <Typography.Text ellipsis title={value}>
+              {value}
+            </Typography.Text>
+          );
+        },
+      })),
+      {
+        title: "操作",
+        key: "actions",
+        width: 210,
+        render: (_: unknown, row: Record<string, any>) => (
+          <Space size={8} wrap>
+            <Button
+              size="small"
+              icon={<Eye size={14} />}
+              onClick={() => openDetail(row)}
+            >
+              详情
+            </Button>
+            {editable && (
+              <Button size="small" onClick={() => setEditing(row)}>
+                编辑
+              </Button>
+            )}
+            {deletable && (
+              <Button
+                size="small"
+                danger
+                icon={<Trash2 size={14} />}
+                onClick={() => deleteItem(row)}
+              />
+            )}
+          </Space>
+        ),
+      },
+    ],
+    [fields, editable, deletable],
+  );
 
   return (
     <Panel
       title={title}
       icon={<Database size={18} />}
     >
-      <div className="table-toolbar">
-        <label className="search-box">
-          <Search size={16} />
-          <input
-            value={keyword}
-            onChange={(event) => {
-              setPage(1);
-              setKeyword(event.target.value);
-            }}
-            placeholder={searchPlaceholder || "搜索"}
-          />
-        </label>
+      <Space className="table-toolbar" wrap>
+        <Input
+          className="search-box"
+          prefix={<Search size={16} />}
+          allowClear
+          style={{ width: 280 }}
+          value={keyword}
+          onChange={(event) => {
+            setPage(1);
+            setKeyword(event.target.value);
+          }}
+          placeholder={searchPlaceholder || "搜索"}
+        />
         {poolFilterOptions && (
-          <select
+          <Select
             value={poolId}
-            onChange={(event) => {
+            style={{ width: 180 }}
+            onChange={(value) => {
               setPage(1);
-              setPoolId(event.target.value);
+              setPoolId(value);
             }}
-          >
-            <option value="">全部卡池</option>
-            {poolFilterOptions.map((option) => (
-              <option key={String(option.value)} value={String(option.value)}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={[
+              { label: "全部卡池", value: "" },
+              ...poolFilterOptions.map((option) => ({
+                label: option.label,
+                value: String(option.value),
+              })),
+            ]}
+          />
         )}
         {enableRarityFilter && (
-          <select
+          <Select
             value={rarity}
-            onChange={(event) => {
+            style={{ width: 150 }}
+            onChange={(value) => {
               setPage(1);
-              setRarity(event.target.value);
+              setRarity(value);
             }}
-          >
-            <option value="">全部稀有度</option>
-            <option value="N">N</option>
-            <option value="R">R</option>
-            <option value="SR">SR</option>
-            <option value="SSR">SSR</option>
-            <option value="UR">UR</option>
-          </select>
+            options={[
+              { label: "全部稀有度", value: "" },
+              { label: "N", value: "N" },
+              { label: "R", value: "R" },
+              { label: "SR", value: "SR" },
+              { label: "SSR", value: "SSR" },
+              { label: "UR", value: "UR" },
+            ]}
+          />
         )}
-        <div className="toolbar-actions">
-          <button
-            className="secondary-button compact"
-            type="button"
+        <Space className="toolbar-actions" wrap>
+          <Button
+            icon={<RefreshCw size={15} />}
             onClick={load}
             disabled={loading}
           >
-            <RefreshCw size={15} />
             刷新
-          </button>
-          <button
-            className="secondary-button compact"
-            type="button"
+          </Button>
+          <Button
+            icon={<Download size={15} />}
             onClick={exportCurrentPage}
             disabled={!rows.length}
           >
-            <Download size={15} />
             导出CSV
-          </button>
+          </Button>
           {creatable && (
-            <button
-              className="primary-button compact"
-              type="button"
-              onClick={() => setCreating(true)}
-            >
+            <Button type="primary" onClick={() => setCreating(true)}>
               新增
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
+        </Space>
+      </Space>
 
       {error && <StateBox type="error">{error}</StateBox>}
-      {loading && !data && !error && <StateBox>正在加载数据...</StateBox>}
-      {data && rows.length === 0 && <StateBox>暂无数据</StateBox>}
-
-      {rows.length > 0 && (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                {fields.map((field) => (
-                  <th key={field.key}>{field.label}</th>
-                ))}
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={String(row.id)}>
-                  {fields.map((field) => (
-                    <td key={field.key} data-label={field.label}>
-                      <span
-                        className="cell-text"
-                        title={formatValue(getValue(row, field.key))}
-                      >
-                        {formatValue(getValue(row, field.key))}
-                      </span>
-                    </td>
-                  ))}
-                  <td data-label="操作">
-                    <div className="row-actions">
-                      <button
-                        className="secondary-button compact icon-text"
-                        type="button"
-                        onClick={() => openDetail(row)}
-                      >
-                        <Eye size={14} />
-                        详情
-                      </button>
-                      {editable && (
-                        <button
-                          className="secondary-button compact"
-                          type="button"
-                          onClick={() => setEditing(row)}
-                        >
-                          编辑
-                        </button>
-                      )}
-                      {deletable && (
-                        <button
-                          className="danger"
-                          type="button"
-                          aria-label="删除"
-                          onClick={() => deleteItem(row)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="pagination">
-        <button
-          disabled={page <= 1}
-          onClick={() => setPage(page - 1)}
-          type="button"
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <span>
-          第 {page} / {totalPages} 页，共 {data?.total || 0} 条
-        </span>
-        <button
-          disabled={page >= totalPages}
-          onClick={() => setPage(page + 1)}
-          type="button"
-        >
-          <ChevronRight size={16} />
-        </button>
-      </div>
+      <Table
+        rowKey={(row) => String(row.id)}
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无数据" />,
+        }}
+      />
 
       {(editing || creating) && (
         renderEditor ? (
@@ -1467,8 +1590,7 @@ function EditModal({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     try {
@@ -1480,160 +1602,144 @@ function EditModal({
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="modal" onSubmit={submit}>
-        <header>
-          <h2>{title}</h2>
-          <button type="button" onClick={onCancel}>
-            关闭
-          </button>
-        </header>
-        <div className="form-grid">
-          {fields.map((field) => {
-            const fieldOptions =
-              field.type === "boolean" ? booleanOptions : field.options;
-            const shouldRenderSelect =
-              field.type === "select" ||
-              field.type === "boolean" ||
-              Boolean(fieldOptions?.length);
-            const fieldClass =
-              field.fullWidth || field.type === "textarea"
-                ? "form-field full-width"
-                : "form-field";
+    <Modal
+      title={title}
+      open
+      onCancel={onCancel}
+      onOk={submit}
+      okText="保存"
+      cancelText="取消"
+      confirmLoading={loading}
+      width={760}
+      destroyOnHidden
+    >
+      <Form layout="vertical" className="form-grid antd-form-grid">
+        {fields.map((field) => {
+          const fieldOptions =
+            field.type === "boolean" ? booleanOptions : field.options;
+          const shouldRenderSelect =
+            field.type === "select" ||
+            field.type === "boolean" ||
+            Boolean(fieldOptions?.length);
+          const fieldClass =
+            field.fullWidth || field.type === "textarea"
+              ? "form-field full-width"
+              : "form-field";
 
-            if (field.type === "multiSelect") {
-              return (
-                <div className={fieldClass} key={field.key}>
-                  <span>{field.label}</span>
-                  <div
-                    className="rarity-segment-grid"
-                    role="group"
-                    aria-label={field.label}
-                  >
-                    {(fieldOptions || []).map((option) => {
-                      const selected = Array.isArray(values[field.key])
-                        ? values[field.key].map(String)
-                        : [];
-                      const optionValue = String(option.value);
-                      const isSelected = selected.includes(optionValue);
-                      return (
-                        <button
-                          className={`rarity-segment rarity-${optionValue.toLowerCase()}${isSelected ? " selected" : ""}`}
-                          type="button"
-                          key={optionValue}
-                          aria-pressed={isSelected}
-                          disabled={option.disabled}
-                          onClick={() =>
-                            setValues({
-                              ...values,
-                              [field.key]: toggleMultiSelectValue(
-                                selected,
-                                optionValue,
-                                !isSelected,
-                                field,
-                              ),
-                            })
-                          }
-                        >
-                          <span className="rarity-check" aria-hidden="true">
-                            {isSelected ? "✓" : ""}
-                          </span>
-                          <span>{option.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {field.helper && <small>{field.helper}</small>}
-                </div>
-              );
-            }
-
+          if (field.type === "multiSelect") {
             return (
-              <label className={fieldClass} key={field.key}>
-                <span>{field.label}</span>
-                {field.type === "textarea" ? (
-                  <textarea
-                    value={values[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        [field.key]: event.target.value,
-                      })
-                    }
-                  />
-                ) : shouldRenderSelect ? (
-                  <select
-                    value={String(values[field.key] ?? "")}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        [field.key]: coerceFieldValue(
-                          field,
-                          event.target.value,
-                        ),
-                      })
-                    }
-                  >
-                    {!(fieldOptions || []).some((option) => String(option.value) === "") && (
-                      <option value="">
-                        {fieldOptions?.length ? "请选择" : "暂无可选项"}
-                      </option>
-                    )}
-                    {(fieldOptions || []).map((option) => (
-                      <option
-                        key={String(option.value)}
-                        value={String(option.value)}
-                        disabled={option.disabled}
-                      >
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === "number" ? (
-                  <input
-                    type="number"
-                    value={values[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        [field.key]: Number(event.target.value),
-                      })
-                    }
-                  />
-                ) : (
-                  <input
-                    value={values[field.key] ?? ""}
-                    placeholder={field.placeholder}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        [field.key]: event.target.value,
-                      })
-                    }
-                  />
-                )}
-                {field.helper && <small>{field.helper}</small>}
-              </label>
+              <Form.Item
+                className={fieldClass}
+                key={field.key}
+                label={field.label}
+                extra={field.helper}
+              >
+                <Checkbox.Group
+                  className="rarity-segment-grid"
+                  value={
+                    Array.isArray(values[field.key])
+                      ? values[field.key].map(String)
+                      : []
+                  }
+                  onChange={(checkedValues) =>
+                    setValues({
+                      ...values,
+                      [field.key]: checkedValues
+                        .map(String)
+                        .sort((left, right) => {
+                          const order = (fieldOptions || []).map((option) =>
+                            String(option.value),
+                          );
+                          return order.indexOf(left) - order.indexOf(right);
+                        }),
+                    })
+                  }
+                  options={(fieldOptions || []).map((option) => ({
+                    label: option.label,
+                    value: String(option.value),
+                    disabled: option.disabled,
+                  }))}
+                />
+              </Form.Item>
             );
-          })}
-        </div>
-        {error && <div className="error-box">{error}</div>}
-        <footer>
-          <button className="secondary-button" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className="primary-button compact"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "保存中..." : "保存"}
-          </button>
-        </footer>
-      </form>
-    </div>
+          }
+
+          return (
+            <Form.Item
+              className={fieldClass}
+              key={field.key}
+              label={field.label}
+              extra={field.helper}
+            >
+              {field.type === "textarea" ? (
+                <Input.TextArea
+                  value={values[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  autoSize={{ minRows: 4, maxRows: 8 }}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      [field.key]: event.target.value,
+                    })
+                  }
+                />
+              ) : shouldRenderSelect ? (
+                <Select
+                  value={String(values[field.key] ?? "")}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      [field.key]: coerceFieldValue(field, value),
+                    })
+                  }
+                  options={[
+                    ...(!(fieldOptions || []).some(
+                      (option) => String(option.value) === "",
+                    )
+                      ? [
+                          {
+                            label: fieldOptions?.length ? "请选择" : "暂无可选项",
+                            value: "",
+                          },
+                        ]
+                      : []),
+                    ...(fieldOptions || []).map((option) => ({
+                      label: option.label,
+                      value: String(option.value),
+                      disabled: option.disabled,
+                    })),
+                  ]}
+                />
+              ) : field.type === "number" ? (
+                <InputNumber
+                  className="full-width-control"
+                  value={values[field.key] === "" ? null : Number(values[field.key])}
+                  placeholder={field.placeholder}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      [field.key]: value ?? "",
+                    })
+                  }
+                />
+              ) : (
+                <Input
+                  value={values[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      [field.key]: event.target.value,
+                    })
+                  }
+                />
+              )}
+            </Form.Item>
+          );
+        })}
+      </Form>
+      {error && <Alert type="error" message={error} showIcon />}
+    </Modal>
   );
 }
 
@@ -1652,8 +1758,7 @@ function ItemModal({
   const currentType = Number(values.drop_type || 0);
   const showUsageParams = currentType === 2 || currentType === 3;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setLoading(true);
     setError("");
     try {
@@ -1671,22 +1776,29 @@ function ItemModal({
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="modal" onSubmit={submit}>
-        <header>
-          <div>
-            <span className="eyebrow">物品管理</span>
-            <h2>{initial.id ? "编辑物品" : "新增物品"}</h2>
-          </div>
-          <button type="button" onClick={onCancel}>
-            关闭
-          </button>
-        </header>
-        <div className="item-template-row">
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">物品管理</span>
+          <Typography.Title level={4}>
+            {initial.id ? "编辑物品" : "新增物品"}
+          </Typography.Title>
+        </div>
+      }
+      open
+      width={760}
+      onCancel={onCancel}
+      onOk={submit}
+      okText="保存物品"
+      cancelText="取消"
+      confirmLoading={loading}
+      destroyOnHidden
+    >
+      <Space direction="vertical" size={16} className="full-width">
+        <Space wrap>
           {itemTemplates.map((template) => (
-            <button
-              className="secondary-button compact"
-              type="button"
+            <Button
+              size="small"
               key={template.label}
               onClick={() =>
                 setValues({
@@ -1696,142 +1808,139 @@ function ItemModal({
               }
             >
               {template.label}
-            </button>
+            </Button>
           ))}
-        </div>
-        <div className="form-grid">
-          <label className="form-field">
-            <span>物品名称</span>
-            <input
+        </Space>
+        <Form layout="vertical" className="form-grid antd-form-grid">
+          <Form.Item className="form-field" label="物品名称">
+            <Input
               value={values.drop_name}
               placeholder="例如：SSR碎片"
               onChange={(event) =>
                 setValues({ ...values, drop_name: event.target.value })
               }
             />
-          </label>
-          <label className="form-field">
-            <span>物品类型</span>
-            <select
+          </Form.Item>
+          <Form.Item className="form-field" label="物品类型">
+            <Select
               value={String(values.drop_type)}
-              onChange={(event) =>
+              onChange={(value) =>
                 setValues({
                   ...values,
-                  drop_type: Number(event.target.value),
+                  drop_type: Number(value),
                   drop_item_type: 0,
                   drop_item_value: 0,
                   default_fragment:
-                    Number(event.target.value) === 0
+                    Number(value) === 0
                       ? values.default_fragment
                       : false,
                 })
               }
-            >
-              {dropTypeOptions.map((option) => (
-                <option key={String(option.value)} value={String(option.value)}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="item-hint full-width">
-            <Badge>{getDropTypeLabel(currentType)}</Badge>
-            <span>{getDropTypeUsage(currentType)}</span>
-          </div>
+              options={dropTypeOptions.map((option) => ({
+                label: option.label,
+                value: String(option.value),
+              }))}
+            />
+          </Form.Item>
+          <Alert
+            className="full-width"
+            type="info"
+            showIcon
+            message={
+              <Space wrap>
+                <Badge>{getDropTypeLabel(currentType)}</Badge>
+                <span>{getDropTypeUsage(currentType)}</span>
+              </Space>
+            }
+          />
           {currentType === 0 && (
-            <label className="form-field full-width switch-field">
-              <span>
-                <strong>默认分解碎片</strong>
-                <small>卡片未单独选择碎片时，合成和分解会使用这个物品。</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={values.default_fragment === true}
-                onChange={(event) =>
-                  setValues({
-                    ...values,
-                    default_fragment: event.target.checked,
-                  })
-                }
-              />
-            </label>
+            <Form.Item className="form-field full-width">
+              <div className="switch-field">
+                <span>
+                  <strong>默认分解碎片</strong>
+                  <small>卡片未单独选择碎片时，合成和分解会使用这个物品。</small>
+                </span>
+                <Switch
+                  checked={values.default_fragment === true}
+                  onChange={(checked) =>
+                    setValues({
+                      ...values,
+                      default_fragment: checked,
+                    })
+                  }
+                />
+              </div>
+            </Form.Item>
           )}
-          <label className="form-field full-width">
-            <span>物品说明</span>
-            <textarea
+          <Form.Item className="form-field full-width" label="物品说明">
+            <Input.TextArea
               value={values.drop_desc}
               placeholder="给运营和玩家都能看懂的说明"
+              autoSize={{ minRows: 4, maxRows: 8 }}
               onChange={(event) =>
                 setValues({ ...values, drop_desc: event.target.value })
               }
             />
-          </label>
+          </Form.Item>
           {showUsageParams && (
             <>
-              <label className="form-field">
-                <span>用途参数类型</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={values.drop_item_type}
-                  onChange={(event) =>
+              <Form.Item
+                className="form-field"
+                label="用途参数类型"
+                extra="普通道具和其他类型可用于后续业务扩展。"
+              >
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  value={Number(values.drop_item_type || 0)}
+                  onChange={(value) =>
                     setValues({
                       ...values,
-                      drop_item_type: Number(event.target.value),
+                      drop_item_type: Number(value || 0),
                     })
                   }
                 />
-                <small>普通道具和其他类型可用于后续业务扩展。</small>
-              </label>
-              <label className="form-field">
-                <span>用途参数值</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={values.drop_item_value}
-                  onChange={(event) =>
+              </Form.Item>
+              <Form.Item
+                className="form-field"
+                label="用途参数值"
+                extra="没有特殊规则时保持 0。"
+              >
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  value={Number(values.drop_item_value || 0)}
+                  onChange={(value) =>
                     setValues({
                       ...values,
-                      drop_item_value: Number(event.target.value),
+                      drop_item_value: Number(value || 0),
                     })
                   }
                 />
-                <small>没有特殊规则时保持 0。</small>
-              </label>
+              </Form.Item>
             </>
           )}
-          <label className="form-field">
-            <span>状态</span>
-            <select
+          <Form.Item className="form-field" label="状态">
+            <Select
               value={values.disabled ? "true" : "false"}
-              onChange={(event) =>
-                setValues({ ...values, disabled: event.target.value === "true" })
+              onChange={(value) =>
+                setValues({ ...values, disabled: value === "true" })
               }
-            >
-              <option value="false">启用</option>
-              <option value="true">禁用</option>
-            </select>
-          </label>
-        </div>
-        {error && <div className="error-box">{error}</div>}
-        <footer>
-          <button className="secondary-button" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className="primary-button compact"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "保存中..." : "保存物品"}
-          </button>
-        </footer>
-      </form>
-    </div>
+              options={[
+                { label: "启用", value: "false" },
+                { label: "禁用", value: "true" },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+        {error && <Alert type="error" message={error} showIcon />}
+      </Space>
+    </Modal>
   );
 }
 
 function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
+  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -1878,12 +1987,19 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
     load();
   }
 
-  async function deleteRedeemCode(row: RedeemCodeRecord) {
-    if (!window.confirm(`确认停用并删除兑换码 ${row.code}？`)) {
-      return;
-    }
-    await request(`/admin/redeem-codes/${row.id}`, { method: "DELETE" });
-    load();
+  function deleteRedeemCode(row: RedeemCodeRecord) {
+    modal.confirm({
+      title: `确认停用并删除兑换码 ${row.code}？`,
+      content: "已有领取记录会保留用于审计。",
+      okText: "确认删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      async onOk() {
+        await request(`/admin/redeem-codes/${row.id}`, { method: "DELETE" });
+        message.success("兑换码已删除");
+        load();
+      },
+    });
   }
 
   return (
@@ -2300,6 +2416,7 @@ function RedeemCodeModal({
 }
 
 function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
+  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -2347,12 +2464,19 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
     load();
   }
 
-  async function deleteExchangeItem(row: ExchangeShopItemRecord) {
-    if (!window.confirm(`确认停用并删除兑换项 ${row.name}？`)) {
-      return;
-    }
-    await request(`/admin/exchange-items/${row.id}`, { method: "DELETE" });
-    load();
+  function deleteExchangeItem(row: ExchangeShopItemRecord) {
+    modal.confirm({
+      title: `确认停用并删除兑换项 ${row.name}？`,
+      content: "兑换记录会保留用于审计。",
+      okText: "确认删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      async onOk() {
+        await request(`/admin/exchange-items/${row.id}`, { method: "DELETE" });
+        message.success("兑换项已删除");
+        load();
+      },
+    });
   }
 
   return (
@@ -3565,13 +3689,12 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
                         {config.updatedAt ? formatDate(config.updatedAt) : "-"}
                       </td>
                       <td data-label="操作">
-                        <button
-                          className="secondary-button compact"
-                          type="button"
+                        <Button
+                          size="small"
                           onClick={() => setEditing({ poolKey, config })}
                         >
                           编辑
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -3656,6 +3779,7 @@ function GachaConfigModal({
   onSubmit: (poolId: number, values: GachaPoolConfig) => Promise<void>;
   onCopy: (poolId: number, targetPoolIds: number[]) => Promise<void>;
 }) {
+  const { modal } = AntApp.useApp();
   const [values, setValues] = useState<GachaFormState>(() =>
     createGachaFormState(poolKey, config),
   );
@@ -3810,8 +3934,7 @@ function GachaConfigModal({
     return "";
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setError("");
     setNotice("");
     const validationError = validateForm();
@@ -3836,60 +3959,67 @@ function GachaConfigModal({
       setError("请选择要复制到的目标卡池");
       return;
     }
-    if (
-      !window.confirm(
-        `确认把当前生效配置复制到 ${targetPoolIds.length} 个卡池？目标卡池的数据库配置会被覆盖。`,
-      )
-    ) {
-      return;
-    }
-    setCopyLoading(true);
-    try {
-      await onCopy(values.poolId, targetPoolIds);
-      setCopyTargets([]);
-      setNotice(
-        `已复制到：${targetPoolIds
-          .map((targetPoolId) => poolNames[String(targetPoolId)] || poolNameById(targetPoolId))
-          .join("、")}`,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "复制失败");
-    } finally {
-      setCopyLoading(false);
-    }
+    modal.confirm({
+      title: `确认复制到 ${targetPoolIds.length} 个卡池？`,
+      content: "复制的是服务器当前已生效配置，目标卡池数据库配置会被覆盖。",
+      okText: "确认复制",
+      cancelText: "取消",
+      async onOk() {
+        setCopyLoading(true);
+        try {
+          await onCopy(values.poolId, targetPoolIds);
+          setCopyTargets([]);
+          setNotice(
+            `已复制到：${targetPoolIds
+              .map(
+                (targetPoolId) =>
+                  poolNames[String(targetPoolId)] || poolNameById(targetPoolId),
+              )
+              .join("、")}`,
+          );
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "复制失败");
+        } finally {
+          setCopyLoading(false);
+        }
+      },
+    });
   }
 
   return (
-    <div className="modal-backdrop">
-      <form className="modal wide gacha-modal" onSubmit={submit}>
-        <header>
-          <div>
-            <span className="eyebrow">抽卡配置</span>
-            <h2>编辑 {poolName || poolNameById(values.poolId)}</h2>
-          </div>
-          <div className="modal-header-actions">
-            <button type="button" onClick={fillFromDefault}>
-              从环境默认填充
-            </button>
-            <button type="button" onClick={onCancel}>
-              关闭
-            </button>
-          </div>
-        </header>
-        <div className="config-tabs" role="tablist" aria-label="抽卡配置分区">
-          {configTabs.map((tab) => (
-            <button
-              key={tab.key}
-              className={activeTab === tab.key ? "active" : ""}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">抽卡配置</span>
+          <Typography.Title level={4}>
+            编辑 {poolName || poolNameById(values.poolId)}
+          </Typography.Title>
         </div>
+      }
+      open
+      width={1040}
+      className="gacha-modal"
+      onCancel={onCancel}
+      destroyOnHidden
+      footer={
+        <Space>
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" loading={loading} onClick={submit}>
+            保存配置
+          </Button>
+        </Space>
+      }
+    >
+      <Space direction="vertical" size={14} className="full-width">
+        <Button onClick={fillFromDefault}>从环境默认填充</Button>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={configTabs.map((tab) => ({
+            key: tab.key,
+            label: tab.label,
+          }))}
+        />
         <div className="config-edit config-edit-workspace">
           {activeTab === "base" && (
             <section>
@@ -4334,22 +4464,10 @@ function GachaConfigModal({
             </section>
           )}
         </div>
-        {error && <div className="error-box">{error}</div>}
-        {notice && <div className="success-box">{notice}</div>}
-        <footer>
-          <button className="secondary-button" type="button" onClick={onCancel}>
-            取消
-          </button>
-          <button
-            className="primary-button compact"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "保存中..." : "保存配置"}
-          </button>
-        </footer>
-      </form>
-    </div>
+        {error && <Alert type="error" message={error} showIcon />}
+        {notice && <Alert type="success" message={notice} showIcon />}
+      </Space>
+    </Modal>
   );
 }
 
@@ -4369,32 +4487,34 @@ function DetailModal({
   const items = getDetailItems(data, fields);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section
-        className="modal detail-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header>
-          <div>
-            <span className="eyebrow">记录详情</span>
-            <h2>{title}</h2>
-          </div>
-          <button type="button" aria-label="关闭详情" onClick={onClose}>
-            关闭
-          </button>
-        </header>
-        {loading ? (
-          <StateBox>正在读取详情...</StateBox>
-        ) : (
-          <div className="detail-modal-body">
-            <DescriptionList items={items} />
-          </div>
-        )}
-      </section>
-    </div>
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">记录详情</span>
+          <Typography.Title level={4}>{title}</Typography.Title>
+        </div>
+      }
+      open
+      onCancel={onClose}
+      footer={null}
+      width={760}
+      destroyOnHidden
+    >
+      {loading ? (
+        <Spin tip="正在读取详情..." />
+      ) : (
+        <Descriptions
+          bordered
+          size="small"
+          column={1}
+          items={items.map(([label, value]) => ({
+            key: label,
+            label,
+            children: formatValue(value),
+          }))}
+        />
+      )}
+    </Modal>
   );
 }
 
@@ -4416,7 +4536,7 @@ function DescriptionList({
 }
 
 function Badge({ children }: { children: ReactNode }) {
-  return <span className="badge">{children}</span>;
+  return <Tag color="blue">{children}</Tag>;
 }
 
 function RefreshButton({
@@ -4427,15 +4547,14 @@ function RefreshButton({
   loading?: boolean;
 }) {
   return (
-    <button
-      className="secondary-button compact icon-text"
-      type="button"
+    <Button
+      size="small"
+      icon={<RefreshCw size={15} />}
       onClick={onClick}
-      disabled={loading}
+      loading={loading}
     >
-      <RefreshCw size={15} />
       刷新
-    </button>
+    </Button>
   );
 }
 
@@ -4451,25 +4570,26 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="panel">
-      <header className="panel-header">
-        <div className="panel-title">
+    <Card
+      className="panel"
+      title={
+        <Space className="panel-title">
           {icon}
-          <h2>{title}</h2>
-        </div>
-        {action}
-      </header>
+          <span>{title}</span>
+        </Space>
+      }
+      extra={action}
+    >
       {children}
-    </section>
+    </Card>
   );
 }
 
 function StateBox({ children, type }: { children: ReactNode; type?: "error" }) {
-  return (
-    <div className={type === "error" ? "state-box error" : "state-box"}>
-      {children}
-    </div>
-  );
+  if (type === "error") {
+    return <Alert className="state-box" type="error" message={children} showIcon />;
+  }
+  return <Empty className="state-box" description={children} />;
 }
 
 function createRedeemFormState(initial: RedeemCodeRecord | null) {

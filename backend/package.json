@@ -11,6 +11,8 @@
   "dependencies": {
     "@rsbuild/core": "^2.0.6",
     "@rsbuild/plugin-react": "^2.0.0",
+    "antd": "^6.4.3",
+    "dayjs": "^1.11.20",
     "lucide-react": "^0.555.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
