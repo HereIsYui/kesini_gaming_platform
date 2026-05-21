@@ -3,6 +3,7 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Coins,
   Gift,
   History,
   LoaderCircle,
@@ -44,6 +45,8 @@ import type {
   LoginResponse,
   LoginUrlResponse,
   PoolInfo,
+  RechargeConfig,
+  RechargePointsResponse,
   RedeemClaimResponse,
   TradeConfig,
   TradeListing,
@@ -116,6 +119,7 @@ const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
+const rechargeConfig = ref<RechargeConfig | null>(null);
 const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
@@ -146,6 +150,8 @@ const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const listingPrice = ref("");
 const redeemCode = ref("");
+const rechargeModalOpen = ref(false);
+const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
 const feedback = ref<{ type: FeedbackType; text: string } | null>(null);
 const callbackBusy = ref(false);
@@ -161,6 +167,7 @@ const busy = reactive({
   shop: false,
   redeem: false,
   trade: false,
+  recharge: false,
 });
 
 let feedbackTimer: number | undefined;
@@ -190,6 +197,13 @@ const selectedPool = computed(() =>
 const selectedDrawCosts = computed(
   () => selectedPool.value?.drawCosts || { once: 10, ten: 100 },
 );
+const rechargeRangeLabel = computed(() => {
+  const config = rechargeConfig.value;
+  if (!config) {
+    return "充值配置同步中";
+  }
+  return `${config.minAmount} - ${config.maxAmount} 积分`;
+});
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
 );
@@ -327,6 +341,14 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function createRechargeRequestId() {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `website-${random}`;
+}
+
 function saveApiBase() {
   setApiBase(apiBase.value);
   notify("success", "API 地址已保存");
@@ -420,8 +442,12 @@ function logout() {
 async function loadPublicData() {
   busy.public = true;
   try {
-    const list = await request<PoolInfo[]>("/card/pools");
+    const [list, recharge] = await Promise.all([
+      request<PoolInfo[]>("/card/pools"),
+      request<RechargeConfig>("/recharge/config").catch(() => null),
+    ]);
     pools.value = list || [];
+    rechargeConfig.value = recharge;
     if (!activePoolId.value && pools.value.length > 0) {
       activePoolId.value = pools.value[0].id;
     }
@@ -586,6 +612,74 @@ async function refreshAll() {
     await loadPrivateData();
   }
   notify("success", "页面数据已刷新");
+}
+
+function openRechargeModal() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再充值");
+    return;
+  }
+  if (!rechargeConfig.value?.enabled) {
+    notify("error", "充值功能暂未开启");
+    return;
+  }
+  if (!rechargeConfig.value.hasGoldFingerKey) {
+    notify("error", "后台尚未配置充值密钥");
+    return;
+  }
+  rechargeAmount.value = Math.max(
+    rechargeConfig.value.minAmount || 1,
+    Math.min(rechargeConfig.value.maxAmount || 9999, rechargeAmount.value || 10),
+  );
+  rechargeModalOpen.value = true;
+}
+
+function closeRechargeModal() {
+  if (!busy.recharge) {
+    rechargeModalOpen.value = false;
+  }
+}
+
+async function submitRecharge() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再充值");
+    return;
+  }
+  const config = rechargeConfig.value;
+  const amount = Number(rechargeAmount.value);
+  if (!config) {
+    notify("error", "充值配置还未加载完成");
+    return;
+  }
+  if (!Number.isInteger(amount) || amount <= 0) {
+    notify("error", "充值数量必须为正整数");
+    return;
+  }
+  if (amount < config.minAmount || amount > config.maxAmount) {
+    notify("error", `充值数量需在 ${config.minAmount}-${config.maxAmount} 之间`);
+    return;
+  }
+
+  busy.recharge = true;
+  try {
+    const data = await request<RechargePointsResponse>("/recharge/points", {
+      method: "POST",
+      body: JSON.stringify({
+        amount,
+        requestId: createRechargeRequestId(),
+      }),
+    });
+    notify(
+      "success",
+      `充值成功：扣除鱼排积分 ${data.fishpiCost}，本地积分 ${data.pointBefore} → ${data.pointAfter}`,
+    );
+    rechargeModalOpen.value = false;
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.recharge = false;
+  }
 }
 
 async function performDraw(mode: "once" | "ten") {
@@ -1125,9 +1219,22 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <div v-if="isAuthed" class="point-card">
-            <span>积分余额</span>
+            <div class="point-card-head">
+              <span>积分余额</span>
+              <button
+                class="recharge-trigger"
+                type="button"
+                :disabled="busy.recharge || rechargeConfig?.enabled === false"
+                @click="openRechargeModal"
+              >
+                <Coins :size="15" />
+                充值
+              </button>
+            </div>
             <strong>{{ stats?.point || 0 }}</strong>
-            <small>当前卡池 {{ selectedPool?.pool_name || "未选择" }}</small>
+            <small>
+              当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值 {{ rechargeRangeLabel }}
+            </small>
           </div>
 
           <div v-if="isAuthed" class="player-metrics">
@@ -1746,6 +1853,66 @@ function leaderboardRankLabel(rank?: number) {
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
       {{ feedback.text }}
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="rechargeModalOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeRechargeModal"
+      >
+        <section class="trade-listing-modal recharge-modal" role="dialog" aria-modal="true" aria-label="积分充值">
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">积分充值</p>
+              <h2>扣鱼排积分换本地积分</h2>
+              <span>1 鱼排积分 = 1 本地抽卡积分</span>
+            </div>
+            <button class="modal-close" type="button" :disabled="busy.recharge" @click="closeRechargeModal">关闭</button>
+          </header>
+          <div class="trade-listing-body recharge-modal-body">
+            <label class="redeem-input">
+              <span>充值数量</span>
+              <input
+                v-model.number="rechargeAmount"
+                type="number"
+                :min="rechargeConfig?.minAmount || 1"
+                :max="rechargeConfig?.maxAmount || 9999"
+                step="1"
+                placeholder="输入要充值的积分"
+                @keyup.enter="submitRecharge"
+              />
+            </label>
+            <dl>
+              <div>
+                <dt>充值范围</dt>
+                <dd>{{ rechargeRangeLabel }}</dd>
+              </div>
+              <div>
+                <dt>将扣除鱼排积分</dt>
+                <dd>{{ rechargeAmount || 0 }}</dd>
+              </div>
+              <div>
+                <dt>本地到账积分</dt>
+                <dd>{{ rechargeAmount || 0 }}</dd>
+              </div>
+              <div>
+                <dt>说明</dt>
+                <dd>充值成功后会刷新积分余额；重复提交同一请求不会重复入账。</dd>
+              </div>
+            </dl>
+          </div>
+          <footer class="result-modal-actions">
+            <button class="secondary-action" type="button" :disabled="busy.recharge" @click="closeRechargeModal">取消</button>
+            <button class="primary-action" type="button" :disabled="busy.recharge" @click="submitRecharge">
+              <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
+              <Coins v-else :size="18" />
+              确认充值
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div

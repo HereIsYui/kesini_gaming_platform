@@ -164,6 +164,22 @@ export interface ExchangeClaimResponse {
   rewards: RedeemRewards;
 }
 
+export interface RechargeConfig {
+  enabled: boolean;
+  minAmount: number;
+  maxAmount: number;
+  ratio: number;
+  hasGoldFingerKey: boolean;
+}
+
+export interface RechargePointsResponse {
+  requestId: string;
+  amount: number;
+  fishpiCost: number;
+  pointBefore: number;
+  pointAfter: number;
+}
+
 export type LeaderboardMetric =
   | "totalCards"
   | "ssrCards"

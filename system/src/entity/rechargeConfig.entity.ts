@@ -1,0 +1,39 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from "typeorm";
+
+@Entity()
+export class RechargeConfig {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  // 是否开启玩家自助充值
+  @Column({ default: false })
+  enabled: boolean;
+
+  // 鱼排金手指密钥，仅后台配置，不向玩家端返回
+  @Column({ length: 255, default: "" })
+  gold_finger_key: string;
+
+  // 单次最小充值积分
+  @Column({ default: 1 })
+  min_amount: number;
+
+  // 单次最大充值积分
+  @Column({ default: 9999 })
+  max_amount: number;
+
+  // 提交给鱼排接口的备注模板，支持 {amount} 占位
+  @Column({ length: 255, default: "抽卡平台充值，兑换本地积分 {amount}" })
+  memo_template: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}

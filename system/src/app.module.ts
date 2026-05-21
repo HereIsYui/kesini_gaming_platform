@@ -12,6 +12,8 @@ import { UserGachaPity } from "./entity/userGachaPity.entity";
 import { GachaPoolConfig } from "./entity/gachaPoolConfig.entity";
 import { RedeemCode } from "./entity/redeemCode.entity";
 import { RedeemCodeUsage } from "./entity/redeemCodeUsage.entity";
+import { RechargeConfig } from "./entity/rechargeConfig.entity";
+import { RechargeRecord } from "./entity/rechargeRecord.entity";
 import { ExchangeShopItem } from "./entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "./entity/exchangeShopUsage.entity";
 import { TradeConfig } from "./entity/tradeConfig.entity";
@@ -25,6 +27,7 @@ import { AdminModule } from "./admin/admin.module";
 import { RedeemModule } from "./redeem/redeem.module";
 import { ExchangeModule } from "./exchange/exchange.module";
 import { TradeModule } from "./trade/trade.module";
+import { RechargeModule } from "./recharge/recharge.module";
 
 @Module({
   imports: [
@@ -43,6 +46,8 @@ import { TradeModule } from "./trade/trade.module";
       GachaPoolConfig,
       RedeemCode,
       RedeemCodeUsage,
+      RechargeConfig,
+      RechargeRecord,
       ExchangeShopItem,
       ExchangeShopUsage,
       TradeListing,
@@ -56,6 +61,7 @@ import { TradeModule } from "./trade/trade.module";
     RedeemModule,
     ExchangeModule,
     TradeModule,
+    RechargeModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

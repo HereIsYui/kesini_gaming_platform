@@ -162,3 +162,34 @@ export interface TradeConfigRecord {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface RechargeConfigRecord {
+  id?: number;
+  enabled: boolean;
+  min_amount: number;
+  max_amount: number;
+  memo_template: string;
+  hasGoldFingerKey?: boolean;
+  maskedGoldFingerKey?: string;
+  gold_finger_key?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RechargeRecord {
+  id: number;
+  uid: string;
+  fishpi_user_name: string;
+  request_id: string;
+  amount: number;
+  fishpi_cost: number;
+  point_before: number;
+  point_after: number;
+  status: string;
+  statusLabel?: string;
+  thirdPartyMsg?: string;
+  failure_reason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}

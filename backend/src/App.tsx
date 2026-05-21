@@ -3,6 +3,7 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Coins,
   Database,
   Download,
   Eye,
@@ -59,6 +60,8 @@ import type {
   PageResult,
   RedeemCodeRecord,
   RedeemRewards,
+  RechargeConfigRecord,
+  RechargeRecord,
   SelectOption,
   TradeConfigRecord,
 } from "./types";
@@ -82,6 +85,7 @@ const navItems = [
   { key: "redeem-codes", label: "兑换码", icon: Gift },
   { key: "exchange-shop", label: "兑换商店", icon: Store },
   { key: "trade", label: "交易管理", icon: Handshake },
+  { key: "recharge", label: "充值管理", icon: Coins },
   { key: "config", label: "配置", icon: Settings },
 ];
 
@@ -370,6 +374,21 @@ const tradeRecordFields: FieldConfig[] = [
   { key: "createdAt", label: "成交时间", readonly: true },
 ];
 
+const rechargeRecordFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "statusLabel", label: "状态", readonly: true },
+  { key: "uid", label: "UID", readonly: true },
+  { key: "fishpi_user_name", label: "鱼排用户名", readonly: true },
+  { key: "amount", label: "到账积分", readonly: true },
+  { key: "fishpi_cost", label: "扣除鱼排积分", readonly: true },
+  { key: "point_before", label: "充值前", readonly: true },
+  { key: "point_after", label: "充值后", readonly: true },
+  { key: "request_id", label: "请求号", readonly: true },
+  { key: "thirdPartyMsg", label: "鱼排响应", readonly: true },
+  { key: "failure_reason", label: "失败原因", readonly: true },
+  { key: "createdAt", label: "充值时间", readonly: true },
+];
+
 export function App() {
   const [token, setLocalToken] = useState(getToken());
   const [admin, setAdmin] = useState<AdminMeResponse | null>(null);
@@ -610,6 +629,7 @@ export function App() {
             <ExchangeShopPage options={adminOptions} />
           )}
           {active === "trade" && <TradeAdminPage />}
+          {active === "recharge" && <RechargeAdminPage />}
           {active === "config" && <ConfigPage options={adminOptions} />}
         </section>
       </main>
@@ -2798,6 +2818,380 @@ function TradeConfigPanel() {
           />
           <button className="primary-button compact" type="submit" disabled={loading}>
             {loading ? "保存中..." : "保存交易配置"}
+          </button>
+        </div>
+      </form>
+      {error && <div className="error-box">{error}</div>}
+      {notice && <div className="success-box">{notice}</div>}
+    </Panel>
+  );
+}
+
+function RechargeAdminPage() {
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [uid, setUid] = useState("");
+  const [userName, setUserName] = useState("");
+  const [status, setStatus] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [data, setData] = useState<PageResult<RechargeRecord> | null>(null);
+  const [detail, setDetail] = useState<RechargeRecord | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const filters = useMemo(
+    () => ({ page, pageSize, uid, userName, status, start, end }),
+    [page, pageSize, uid, userName, status, start, end],
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<PageResult<RechargeRecord>>(
+      `/admin/recharge-records${toQuery(filters)}`,
+    )
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = data?.list || [];
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+
+  function resetFilters() {
+    setPage(1);
+    setUid("");
+    setUserName("");
+    setStatus("");
+    setStart("");
+    setEnd("");
+  }
+
+  return (
+    <div className="page-stack">
+      <RechargeConfigPanel />
+      <Panel
+        title="充值记录"
+        icon={<Coins size={18} />}
+        action={<RefreshButton onClick={load} loading={loading} />}
+      >
+        <div className="table-toolbar recharge-toolbar">
+          <label className="search-box">
+            <Search size={16} />
+            <input
+              value={uid}
+              onChange={(event) => {
+                setPage(1);
+                setUid(event.target.value);
+              }}
+              placeholder="搜索 UID"
+            />
+          </label>
+          <input
+            value={userName}
+            onChange={(event) => {
+              setPage(1);
+              setUserName(event.target.value);
+            }}
+            placeholder="鱼排用户名"
+          />
+          <select
+            value={status}
+            onChange={(event) => {
+              setPage(1);
+              setStatus(event.target.value);
+            }}
+          >
+            <option value="">全部状态</option>
+            <option value="pending">处理中</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="local_failed">本地入账失败</option>
+          </select>
+          <input
+            type="datetime-local"
+            value={start}
+            onChange={(event) => {
+              setPage(1);
+              setStart(event.target.value);
+            }}
+          />
+          <input
+            type="datetime-local"
+            value={end}
+            onChange={(event) => {
+              setPage(1);
+              setEnd(event.target.value);
+            }}
+          />
+          <div className="toolbar-actions">
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={resetFilters}
+            >
+              重置
+            </button>
+            <button
+              className="secondary-button compact"
+              type="button"
+              onClick={() => exportRowsToCsv("充值记录", rows, rechargeRecordFields)}
+              disabled={!rows.length}
+            >
+              <Download size={15} />
+              导出CSV
+            </button>
+          </div>
+        </div>
+
+        {error && <StateBox type="error">{error}</StateBox>}
+        {loading && !data && !error && <StateBox>正在加载充值记录...</StateBox>}
+        {data && rows.length === 0 && <StateBox>暂无充值记录</StateBox>}
+
+        {rows.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>状态</th>
+                  <th>UID</th>
+                  <th>鱼排用户名</th>
+                  <th>充值</th>
+                  <th>积分变化</th>
+                  <th>请求号</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td data-label="状态">
+                      <Badge>{row.statusLabel || row.status}</Badge>
+                    </td>
+                    <td data-label="UID">
+                      <span className="cell-text mono">{row.uid}</span>
+                    </td>
+                    <td data-label="鱼排用户名">
+                      <span className="cell-text">{row.fishpi_user_name}</span>
+                    </td>
+                    <td data-label="充值">
+                      {row.amount} / 扣鱼排 {row.fishpi_cost}
+                    </td>
+                    <td data-label="积分变化">
+                      {row.point_before} → {row.point_after}
+                    </td>
+                    <td data-label="请求号">
+                      <span className="cell-text mono">{row.request_id}</span>
+                    </td>
+                    <td data-label="时间">{formatDate(row.createdAt)}</td>
+                    <td data-label="操作">
+                      <button
+                        className="secondary-button compact icon-text"
+                        type="button"
+                        onClick={() => setDetail(row)}
+                      >
+                        <Eye size={14} />
+                        详情
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="pagination">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            type="button"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span>
+            第 {page} / {totalPages} 页，共 {data?.total || 0} 条
+          </span>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+            type="button"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {detail && (
+          <DetailModal
+            title="充值记录详情"
+            fields={rechargeRecordFields}
+            data={detail}
+            loading={false}
+            onClose={() => setDetail(null)}
+          />
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+function RechargeConfigPanel() {
+  const [config, setConfig] = useState<RechargeConfigRecord | null>(null);
+  const [values, setValues] = useState<RechargeConfigRecord>({
+    enabled: false,
+    min_amount: 1,
+    max_amount: 9999,
+    memo_template: "抽卡平台充值，兑换本地积分 {amount}",
+    gold_finger_key: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<RechargeConfigRecord>("/admin/config/recharge")
+      .then((data) => {
+        setConfig(data);
+        setValues({
+          ...data,
+          min_amount: Number(data.min_amount || 1),
+          max_amount: Number(data.max_amount || 9999),
+          memo_template:
+            data.memo_template || "抽卡平台充值，兑换本地积分 {amount}",
+          gold_finger_key: "",
+        });
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const body: Partial<RechargeConfigRecord> = {
+        enabled: values.enabled,
+        min_amount: Number(values.min_amount || 1),
+        max_amount: Number(values.max_amount || 9999),
+        memo_template: values.memo_template,
+      };
+      const nextKey = String(values.gold_finger_key || "").trim();
+      if (nextKey) {
+        body.gold_finger_key = nextKey;
+      }
+      const next = await request<RechargeConfigRecord>("/admin/config/recharge", {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      setConfig(next);
+      setValues({
+        ...next,
+        gold_finger_key: "",
+      });
+      setNotice("充值配置已保存");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Panel
+      title="充值配置"
+      icon={<Coins size={18} />}
+      action={<RefreshButton onClick={load} loading={loading} />}
+    >
+      <form className="inline-config-form" onSubmit={submit}>
+        <label className="form-field">
+          <span>充值状态</span>
+          <select
+            value={String(values.enabled)}
+            onChange={(event) =>
+              setValues({ ...values, enabled: event.target.value === "true" })
+            }
+          >
+            <option value="false">关闭</option>
+            <option value="true">开启</option>
+          </select>
+        </label>
+        <label className="form-field">
+          <span>goldFingerKey</span>
+          <input
+            type="password"
+            value={values.gold_finger_key || ""}
+            placeholder={
+              config?.hasGoldFingerKey
+                ? `已配置：${config.maskedGoldFingerKey}`
+                : "请输入鱼排金手指密钥"
+            }
+            onChange={(event) =>
+              setValues({ ...values, gold_finger_key: event.target.value })
+            }
+          />
+          <small>留空保存会保留原密钥，不会明文回显。</small>
+        </label>
+        <label className="form-field">
+          <span>单次最低充值</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={values.min_amount}
+            onChange={(event) =>
+              setValues({ ...values, min_amount: Number(event.target.value) })
+            }
+          />
+        </label>
+        <label className="form-field">
+          <span>单次最高充值</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={values.max_amount}
+            onChange={(event) =>
+              setValues({ ...values, max_amount: Number(event.target.value) })
+            }
+          />
+        </label>
+        <label className="form-field full-width">
+          <span>扣鱼排积分备注模板</span>
+          <input
+            value={values.memo_template}
+            onChange={(event) =>
+              setValues({ ...values, memo_template: event.target.value })
+            }
+          />
+          <small>{`可使用 {amount} 作为充值数量占位。`}</small>
+        </label>
+        <div className="inline-config-actions">
+          <DescriptionList
+            items={[
+              ["当前状态", config?.enabled ? "开启" : "关闭"],
+              ["密钥状态", config?.hasGoldFingerKey ? "已配置" : "未配置"],
+              [
+                "充值范围",
+                `${config?.min_amount || 1} - ${config?.max_amount || 9999}`,
+              ],
+              ["兑换比例", "1 鱼排积分 = 1 本地积分"],
+            ]}
+          />
+          <button className="primary-button compact" type="submit" disabled={loading}>
+            {loading ? "保存中..." : "保存充值配置"}
           </button>
         </div>
       </form>

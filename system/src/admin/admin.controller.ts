@@ -176,6 +176,54 @@ class TradeConfigPatchDto {
   max_price?: number;
 }
 
+class RechargeRecordQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @IsString()
+  userName?: string;
+
+  @IsOptional()
+  @IsIn(["pending", "success", "failed", "local_failed"])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  start?: string;
+
+  @IsOptional()
+  @IsString()
+  end?: string;
+}
+
+class RechargeConfigPatchDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  gold_finger_key?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  min_amount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  max_amount?: number;
+
+  @IsOptional()
+  @IsString()
+  memo_template?: string;
+}
+
 class PoolDto {
   @IsOptional()
   @IsString()
@@ -876,6 +924,34 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateTradeConfig(body as any),
       "更新交易配置成功",
+    );
+  }
+
+  @Get("config/recharge")
+  async getRechargeConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getRechargeConfig(),
+      "获取充值配置成功",
+    );
+  }
+
+  @Patch("config/recharge")
+  async updateRechargeConfig(
+    @Body() body: RechargeConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateRechargeConfig(body as any),
+      "更新充值配置成功",
+    );
+  }
+
+  @Get("recharge-records")
+  async listRechargeRecords(
+    @Query() query: RechargeRecordQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listRechargeRecords(query),
+      "获取充值记录成功",
     );
   }
 

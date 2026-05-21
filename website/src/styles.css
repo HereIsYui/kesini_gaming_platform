@@ -749,7 +749,7 @@ h3 {
 
 .point-card {
   display: grid;
-  gap: 5px;
+  gap: 8px;
   overflow: hidden;
   border: 1px solid rgba(150, 242, 255, 0.24);
   border-radius: var(--radius);
@@ -757,6 +757,13 @@ h3 {
     radial-gradient(circle at 82% 18%, rgba(255, 211, 106, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(84, 216, 255, 0.16), rgba(255, 255, 255, 0.05));
   padding: 16px;
+}
+
+.point-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .point-card span,
@@ -770,6 +777,33 @@ h3 {
   font-size: clamp(32px, 5vw, 42px);
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.recharge-trigger {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 211, 106, 0.34);
+  border-radius: 999px;
+  color: #ffe6a3;
+  background: rgba(255, 211, 106, 0.12);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.recharge-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.recharge-modal-body dl div:nth-child(2) dd,
+.recharge-modal-body dl div:nth-child(3) dd {
+  color: #ffe6a3;
+  font-weight: 900;
 }
 
 .player-metrics {
@@ -2464,6 +2498,15 @@ h3 {
 
   .point-card {
     padding: 14px;
+  }
+
+  .point-card-head {
+    align-items: flex-start;
+  }
+
+  .recharge-trigger {
+    min-height: 36px;
+    padding: 0 10px;
   }
 
   .player-metrics {

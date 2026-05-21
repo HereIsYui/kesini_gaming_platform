@@ -26,6 +26,11 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { RedeemCode, RedeemRewards } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
+import { RechargeConfig } from "src/entity/rechargeConfig.entity";
+import {
+  RechargeRecord,
+  RechargeRecordStatus,
+} from "src/entity/rechargeRecord.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
@@ -45,6 +50,14 @@ const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
   3: { label: "其他", usage: "预留类型，需结合业务说明使用" },
 };
 const CARD_RARITIES = ["N", "R", "SR", "SSR", "UR"];
+const DEFAULT_RECHARGE_MEMO_TEMPLATE =
+  "抽卡平台充值，兑换本地积分 {amount}";
+const RECHARGE_STATUSES: RechargeRecordStatus[] = [
+  "pending",
+  "success",
+  "failed",
+  "local_failed",
+];
 
 @Injectable()
 export class AdminService {
@@ -81,6 +94,12 @@ export class AdminService {
     @Optional()
     @InjectRepository(TradeConfig)
     private readonly tradeConfigRepository?: Repository<TradeConfig>,
+    @Optional()
+    @InjectRepository(RechargeConfig)
+    private readonly rechargeConfigRepository?: Repository<RechargeConfig>,
+    @Optional()
+    @InjectRepository(RechargeRecord)
+    private readonly rechargeRecordRepository?: Repository<RechargeRecord>,
   ) {}
 
   async getMe(uid: string) {
@@ -899,6 +918,95 @@ export class AdminService {
     return repository.save(config);
   }
 
+  async getRechargeConfig() {
+    const config = await this.ensureRechargeConfig();
+    return this.toRechargeConfigView(config);
+  }
+
+  async updateRechargeConfig(body: Partial<RechargeConfig>) {
+    const repository = this.mustRechargeConfigRepository();
+    const config = await this.ensureRechargeConfig();
+    const next = Object.assign(config, {
+      enabled:
+        body.enabled === undefined ? config.enabled : body.enabled === true,
+      min_amount:
+        body.min_amount === undefined
+          ? config.min_amount
+          : Number(body.min_amount),
+      max_amount:
+        body.max_amount === undefined
+          ? config.max_amount
+          : Number(body.max_amount),
+      memo_template:
+        body.memo_template === undefined
+          ? config.memo_template
+          : String(body.memo_template || "").trim() ||
+            DEFAULT_RECHARGE_MEMO_TEMPLATE,
+    });
+    const nextKey = String(body.gold_finger_key || "").trim();
+    if (nextKey) {
+      next.gold_finger_key = nextKey;
+    }
+    this.assertRechargeConfig(next);
+    return this.toRechargeConfigView(await repository.save(next));
+  }
+
+  async listRechargeRecords(
+    query: PageQuery & {
+      uid?: string;
+      userName?: string;
+      status?: string;
+      start?: string;
+      end?: string;
+    },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const repository = this.mustRechargeRecordRepository();
+    const queryBuilder = repository
+      .createQueryBuilder("record")
+      .orderBy("record.id", "DESC")
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    if (query.uid) {
+      queryBuilder.andWhere("record.uid LIKE :uid", {
+        uid: `%${query.uid}%`,
+      });
+    }
+    if (query.userName) {
+      queryBuilder.andWhere("record.fishpi_user_name LIKE :userName", {
+        userName: `%${query.userName}%`,
+      });
+    }
+    if (query.status) {
+      const status = query.status as RechargeRecordStatus;
+      if (!RECHARGE_STATUSES.includes(status)) {
+        throw new Error("充值状态无效");
+      }
+      queryBuilder.andWhere("record.status = :status", { status });
+    }
+    if (query.start) {
+      const start = this.parseOptionalDate(query.start);
+      if (start) {
+        queryBuilder.andWhere("record.createdAt >= :start", { start });
+      }
+    }
+    if (query.end) {
+      const end = this.parseOptionalDate(query.end);
+      if (end) {
+        queryBuilder.andWhere("record.createdAt <= :end", { end });
+      }
+    }
+
+    const [list, total] = await queryBuilder.getManyAndCount();
+    return {
+      list: list.map((record) => this.decorateRechargeRecord(record)),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
   private async attachInventoryInfo(result: {
     list: UserInventory[];
     total: number;
@@ -973,6 +1081,16 @@ export class AdminService {
     }));
   }
 
+  private decorateRechargeRecord(record: RechargeRecord) {
+    return {
+      ...record,
+      statusLabel: this.getRechargeStatusLabel(record.status),
+      thirdPartyMsg: this.getRechargeThirdPartyMessage(
+        record.third_party_response,
+      ),
+    };
+  }
+
   private async ensureTradeConfig() {
     const repository = this.mustTradeConfigRepository();
     let config = await repository.findOne({ where: { id: 1 } });
@@ -994,6 +1112,28 @@ export class AdminService {
     return config;
   }
 
+  private async ensureRechargeConfig() {
+    const repository = this.mustRechargeConfigRepository();
+    let config = await repository.findOne({ where: { id: 1 } });
+    if (!config) {
+      config = repository.create({
+        id: 1,
+        enabled: false,
+        gold_finger_key: "",
+        min_amount: 1,
+        max_amount: 9999,
+        memo_template: DEFAULT_RECHARGE_MEMO_TEMPLATE,
+      });
+      config = await repository.save(config);
+    }
+    config.enabled = config.enabled === true;
+    config.min_amount = Number(config.min_amount || 1);
+    config.max_amount = Number(config.max_amount || 9999);
+    config.memo_template = config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE;
+    this.assertRechargeConfig(config);
+    return config;
+  }
+
   private assertTradeConfig(config: TradeConfig) {
     if (!Number.isFinite(config.fee_rate) || config.fee_rate < 0 || config.fee_rate > 1) {
       throw new Error("交易手续费率必须在0-1之间");
@@ -1008,6 +1148,64 @@ export class AdminService {
     ) {
       throw new Error("最高交易价格必须大于等于最低价格且不超过999999");
     }
+  }
+
+  private assertRechargeConfig(config: RechargeConfig) {
+    if (!Number.isInteger(config.min_amount) || config.min_amount < 1) {
+      throw new Error("最低充值金额必须为正整数");
+    }
+    if (
+      !Number.isInteger(config.max_amount) ||
+      config.max_amount < config.min_amount
+    ) {
+      throw new Error("最高充值金额必须大于等于最低充值金额");
+    }
+    if (!String(config.memo_template || "").trim()) {
+      throw new Error("充值备注模板不能为空");
+    }
+  }
+
+  private toRechargeConfigView(config: RechargeConfig) {
+    const key = String(config.gold_finger_key || "").trim();
+    return {
+      id: config.id,
+      enabled: config.enabled === true,
+      min_amount: config.min_amount,
+      max_amount: config.max_amount,
+      memo_template: config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE,
+      hasGoldFingerKey: Boolean(key),
+      maskedGoldFingerKey: this.maskSecret(key),
+      createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
+    };
+  }
+
+  private maskSecret(value: string) {
+    if (!value) {
+      return "";
+    }
+    if (value.length <= 8) {
+      return `${value.slice(0, 2)}******`;
+    }
+    return `${value.slice(0, 4)}******${value.slice(-4)}`;
+  }
+
+  private getRechargeStatusLabel(status: RechargeRecordStatus) {
+    const labels: Record<RechargeRecordStatus, string> = {
+      pending: "处理中",
+      success: "成功",
+      failed: "失败",
+      local_failed: "本地入账失败",
+    };
+    return labels[status] || "未知";
+  }
+
+  private getRechargeThirdPartyMessage(response: unknown) {
+    if (!response || typeof response !== "object") {
+      return "-";
+    }
+    const value = response as Record<string, unknown>;
+    return String(value.msg || value.message || value.code || "已记录");
   }
 
   private mustTradeListingRepository() {
@@ -1029,6 +1227,20 @@ export class AdminService {
       throw new Error("交易配置仓库未初始化");
     }
     return this.tradeConfigRepository;
+  }
+
+  private mustRechargeConfigRepository() {
+    if (!this.rechargeConfigRepository) {
+      throw new Error("充值配置仓库未初始化");
+    }
+    return this.rechargeConfigRepository;
+  }
+
+  private mustRechargeRecordRepository() {
+    if (!this.rechargeRecordRepository) {
+      throw new Error("充值记录仓库未初始化");
+    }
+    return this.rechargeRecordRepository;
   }
 
   private normalizePage(query: PageQuery) {
