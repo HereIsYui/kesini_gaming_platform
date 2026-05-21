@@ -117,6 +117,11 @@ const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
+const poolDetailOpen = ref(false);
+const poolDetailLoading = ref(false);
+const poolDetailError = ref("");
+const poolDetailPool = ref<PoolInfo | null>(null);
+const poolDetailCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
@@ -196,6 +201,30 @@ const selectedPool = computed(() =>
 );
 const selectedDrawCosts = computed(
   () => selectedPool.value?.drawCosts || { once: 10, ten: 100 },
+);
+const poolDetailProbabilityRows = computed(() => {
+  const probabilities =
+    poolDetailPool.value?.rarityProbabilities ||
+    selectedPool.value?.rarityProbabilities ||
+    {};
+  return rarityOrder.map((rarity) => {
+    const value = Number(probabilities[rarity] || 0);
+    return {
+      rarity,
+      value,
+      percent: Math.max(0, Math.min(100, value * 100)),
+    };
+  });
+});
+const poolDetailCardsByRarity = computed(() =>
+  rarityOrder
+    .map((rarity) => ({
+      rarity,
+      cards: poolDetailCards.value.filter((card) =>
+        parseCardRarities(card.card_level).includes(rarity),
+      ),
+    }))
+    .filter((group) => group.cards.length > 0),
 );
 const rechargeRangeLabel = computed(() => {
   const config = rechargeConfig.value;
@@ -483,6 +512,35 @@ async function loadPoolCards() {
   } catch {
     poolCards.value = [];
   }
+}
+
+async function openPoolDetail() {
+  const poolId = activePoolId.value;
+  if (!poolId) {
+    notify("error", "请先选择一个卡池");
+    return;
+  }
+  poolDetailOpen.value = true;
+  poolDetailLoading.value = true;
+  poolDetailError.value = "";
+  poolDetailPool.value = selectedPool.value || null;
+  poolDetailCards.value = poolCards.value;
+  try {
+    const [pool, cards] = await Promise.all([
+      request<PoolInfo>(`/card/pool/${poolId}`),
+      request<CardItem[]>(`/card/pool/${poolId}/cards`),
+    ]);
+    poolDetailPool.value = pool;
+    poolDetailCards.value = cards || [];
+  } catch (error) {
+    poolDetailError.value = getErrorMessage(error);
+  } finally {
+    poolDetailLoading.value = false;
+  }
+}
+
+function closePoolDetail() {
+  poolDetailOpen.value = false;
 }
 
 async function loadPrivateData() {
@@ -1123,7 +1181,18 @@ function leaderboardRankLabel(rank?: number) {
               <p class="eyebrow">当前卡池</p>
               <h1>{{ selectedPool?.pool_name || "等待卡池同步" }}</h1>
             </div>
-            <span class="type-pill">{{ poolTypeLabel(selectedPool?.card_type) }}</span>
+            <div class="pool-heading-actions">
+              <span class="type-pill">{{ poolTypeLabel(selectedPool?.card_type) }}</span>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="!activePoolId || busy.public"
+                @click="openPoolDetail"
+              >
+                <Package :size="16" />
+                卡池详情
+              </button>
+            </div>
           </div>
 
           <p class="pool-desc">
@@ -1865,6 +1934,111 @@ function leaderboardRankLabel(rank?: number) {
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
       {{ feedback.text }}
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="poolDetailOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closePoolDetail"
+      >
+        <section class="pool-detail-modal" role="dialog" aria-modal="true" aria-label="卡池详情">
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡池详情</p>
+              <h2>{{ poolDetailPool?.pool_name || selectedPool?.pool_name || "卡池详情" }}</h2>
+              <span>
+                {{ poolTypeLabel(poolDetailPool?.card_type ?? selectedPool?.card_type) }}
+                · 单抽 {{ poolDetailPool?.drawCosts?.once || selectedDrawCosts.once }}
+                · 十连 {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
+              </span>
+            </div>
+            <button class="modal-close" type="button" @click="closePoolDetail">关闭</button>
+          </header>
+
+          <div class="pool-detail-body">
+            <div v-if="poolDetailLoading" class="empty-state">
+              <LoaderCircle :size="30" class="spin" />
+              <strong>正在同步卡池详情</strong>
+              <span>正在读取卡片列表和服务端抽卡概率。</span>
+            </div>
+            <div v-else-if="poolDetailError" class="empty-state">
+              <Package :size="30" />
+              <strong>卡池详情加载失败</strong>
+              <span>{{ poolDetailError }}</span>
+            </div>
+            <template v-else>
+              <section class="pool-detail-section">
+                <div class="section-title-row">
+                  <div>
+                    <p class="eyebrow">抽卡概率</p>
+                    <h3>稀有度分布</h3>
+                  </div>
+                  <span class="type-pill">{{ poolDetailCards.length }} 张基础卡片</span>
+                </div>
+                <div class="pool-probability-list">
+                  <div
+                    v-for="item in poolDetailProbabilityRows"
+                    :key="item.rarity"
+                    class="pool-probability-row"
+                    :class="rarityClass(item.rarity)"
+                  >
+                    <span class="rarity-badge">{{ item.rarity }}</span>
+                    <div class="probability-track">
+                      <i :style="{ width: `${item.percent}%` }"></i>
+                    </div>
+                    <strong>{{ formatPercent(item.value) }}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section class="pool-detail-section">
+                <div class="section-title-row">
+                  <div>
+                    <p class="eyebrow">卡池卡片</p>
+                    <h3>全部可抽取卡片</h3>
+                  </div>
+                  <span class="type-pill">{{ poolDetailCardsByRarity.length }} 个稀有度分组</span>
+                </div>
+                <div v-if="poolDetailCards.length === 0" class="empty-state compact">
+                  <Package :size="26" />
+                  <strong>当前卡池暂无卡片</strong>
+                  <span>后台添加卡片后会显示在这里。</span>
+                </div>
+                <div v-else class="pool-card-groups">
+                  <article
+                    v-for="group in poolDetailCardsByRarity"
+                    :key="group.rarity"
+                    class="pool-card-group"
+                  >
+                    <header>
+                      <span class="rarity-badge" :class="rarityClass(group.rarity)">
+                        {{ group.rarity }}
+                      </span>
+                      <strong>{{ group.cards.length }} 张</strong>
+                    </header>
+                    <div class="pool-detail-card-grid">
+                      <div
+                        v-for="card in group.cards"
+                        :key="`${group.rarity}-${card.id}`"
+                        class="pool-detail-card"
+                      >
+                        <strong>{{ card.card_name }}</strong>
+                        <p>{{ card.card_desc || "暂无介绍" }}</p>
+                        <div class="tag-row">
+                          <span>{{ cardTypeLabel(card.card_type) }}</span>
+                          <span>#{{ card.id }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </section>
+            </template>
+          </div>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div

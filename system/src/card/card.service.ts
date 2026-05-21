@@ -672,6 +672,7 @@ export class CardService {
     const config = await this.gachaConfigService.getConfigByPoolId(pool.id);
     return {
       ...pool,
+      rarityProbabilities: config.rarityProbabilities || {},
       drawCosts: config.drawCosts || { once: 10, ten: 100 },
     };
   }
