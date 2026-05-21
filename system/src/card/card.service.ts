@@ -1,5 +1,5 @@
 import { randomInt } from "crypto";
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, EntityManager, In, IsNull, Repository } from "typeorm";
 import { v4 as uuidv4 } from "uuid";
@@ -22,6 +22,7 @@ import {
   LeaderboardResponse,
   PitySystemConfig,
 } from "src/types/api";
+import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { GachaConfigService } from "./gacha-config.service";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
@@ -56,6 +57,8 @@ export class CardService {
     private readonly pityRepository: Repository<UserGachaPity>,
     private readonly gachaConfigService: GachaConfigService,
     private readonly dataSource: DataSource,
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
   ) {}
 
   /**
@@ -121,7 +124,11 @@ export class CardService {
       this.assertPoolCanDraw(cardsByRarity, probabilities, effectivePoolId);
 
       const user = await this.findOrCreateUser(manager, uid);
-      this.deductUserPoint(user, drawCost);
+      await this.deductUserPoint(manager, user, drawCost, {
+        count,
+        poolId: effectivePoolId,
+        poolName: pool.pool_name,
+      });
       const pity = await this.findOrCreatePity(
         pityRepository,
         uid,
@@ -282,10 +289,7 @@ export class CardService {
         return;
       }
 
-      const metrics = this.ensureLeaderboardMetrics(
-        metricsByUid,
-        userCard.uid,
-      );
+      const metrics = this.ensureLeaderboardMetrics(metricsByUid, userCard.uid);
       metrics.totalCards += 1;
       if (rarity === "SSR") {
         metrics.ssrCards += 1;
@@ -351,7 +355,9 @@ export class CardService {
    */
   async getAllPools(): Promise<PoolInfo[]> {
     const pools = await this.poolRepository.find();
-    return Promise.all(pools.map((pool) => this.decoratePoolWithDrawCosts(pool)));
+    return Promise.all(
+      pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
+    );
   }
 
   /**
@@ -381,7 +387,9 @@ export class CardService {
     const pools = await this.poolRepository.find({
       where: { card_type: cardType },
     });
-    return Promise.all(pools.map((pool) => this.decoratePoolWithDrawCosts(pool)));
+    return Promise.all(
+      pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
+    );
   }
 
   /**
@@ -660,10 +668,32 @@ export class CardService {
     return count === 10 ? drawCosts.ten : drawCosts.once;
   }
 
-  private deductUserPoint(user: User, cost: number): void {
+  private async deductUserPoint(
+    manager: EntityManager,
+    user: User,
+    cost: number,
+    context: { count: number; poolId: number; poolName: string },
+  ): Promise<void> {
     this.normalizeUserStats(user);
     if (user.point < cost) {
       throw new Error(`积分不足，需要${cost}，当前${user.point}`);
+    }
+    if (this.pointLedgerService) {
+      await this.pointLedgerService.applyChange(manager, user, -cost, {
+        sourceType: context.count === 10 ? "draw_ten" : "draw_once",
+        sourceId: context.poolId,
+        title:
+          context.count === 10
+            ? `十连抽：${context.poolName}`
+            : `单抽：${context.poolName}`,
+        metadata: {
+          poolId: context.poolId,
+          poolName: context.poolName,
+          count: context.count,
+          cost,
+        },
+      });
+      return;
     }
     user.point -= cost;
   }
@@ -989,9 +1019,7 @@ export class CardService {
     poolCardIds?: number[],
   ): Promise<number[]> {
     const cards = await this.cardRepository.find(
-      poolCardIds === undefined
-        ? {}
-        : { where: { id: In(poolCardIds) } },
+      poolCardIds === undefined ? {} : { where: { id: In(poolCardIds) } },
     );
 
     return cards

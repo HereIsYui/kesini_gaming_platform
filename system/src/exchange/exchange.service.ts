@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, In, Repository } from "typeorm";
 import { DropItem } from "src/entity/drop.entity";
 import {
@@ -7,15 +7,17 @@ import {
 } from "src/entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
 import { UserInventory } from "src/entity/inventory.entity";
-import {
-  RedeemRewardItem,
-  RedeemRewards,
-} from "src/entity/redeemCode.entity";
+import { RedeemRewardItem, RedeemRewards } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
+import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 
 @Injectable()
 export class ExchangeService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
+  ) {}
 
   async listAvailableItems(uid: string) {
     return this.dataSource.transaction(async (manager) => {
@@ -160,8 +162,26 @@ export class ExchangeService {
       }
 
       if (scaledRewards.points > 0) {
-        user.point = (user.point || 0) + scaledRewards.points;
-        await userRepository.save(user);
+        if (this.pointLedgerService) {
+          await this.pointLedgerService.applyChange(
+            manager,
+            user,
+            scaledRewards.points,
+            {
+              sourceType: "exchange_shop",
+              sourceId: shopItem.id,
+              title: `兑换商店奖励：${shopItem.name}`,
+              metadata: {
+                exchangeItemId: shopItem.id,
+                exchangeItemName: shopItem.name,
+                count,
+              },
+            },
+          );
+        } else {
+          user.point = (user.point || 0) + scaledRewards.points;
+          await userRepository.save(user);
+        }
       }
       for (const rewardItem of scaledRewards.items) {
         await this.grantInventoryItem(inventoryRepository, user.id, rewardItem);

@@ -8,6 +8,7 @@ import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
+import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 import { TradeController } from "./trade.controller";
 import { TradeService } from "./trade.service";
 
@@ -23,6 +24,7 @@ import { TradeService } from "./trade.service";
       PoolInfo,
     ]),
     AuthModule,
+    PointLedgerModule,
   ],
   controllers: [TradeController],
   providers: [TradeService],

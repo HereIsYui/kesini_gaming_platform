@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import axios from "axios";
 import { randomUUID } from "crypto";
 import { DataSource, EntityManager } from "typeorm";
@@ -8,6 +8,7 @@ import {
   RechargeRecordStatus,
 } from "src/entity/rechargeRecord.entity";
 import { User } from "src/entity/user.entity";
+import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
 const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换本地积分 {amount}";
@@ -22,7 +23,11 @@ export interface RechargeConfigView {
 
 @Injectable()
 export class RechargeService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
+  ) {}
 
   async getPublicConfig(): Promise<RechargeConfigView> {
     const config = await this.ensureConfig();
@@ -104,7 +109,8 @@ export class RechargeService {
       return this.toRechargeResult(saved);
     } catch (error) {
       await this.markRecord(pending.id, "local_failed", {
-        third_party_response: this.sanitizeThirdPartyResponse(thirdPartyResponse),
+        third_party_response:
+          this.sanitizeThirdPartyResponse(thirdPartyResponse),
         failure_reason: this.getErrorMessage(error),
       });
       throw new Error("鱼排积分已扣除，但本地积分入账失败，请联系管理员处理");
@@ -112,7 +118,9 @@ export class RechargeService {
   }
 
   async ensureConfig(manager?: EntityManager): Promise<RechargeConfig> {
-    const repository = (manager || this.dataSource).getRepository(RechargeConfig);
+    const repository = (manager || this.dataSource).getRepository(
+      RechargeConfig,
+    );
     let config = await repository.findOne({ where: { id: 1 } });
     if (!config) {
       config = repository.create({
@@ -164,10 +172,31 @@ export class RechargeService {
       throw new Error("用户不存在");
     }
 
-    const pointBefore = Number(user.point || 0);
-    const pointAfter = pointBefore + amount;
-    user.point = pointAfter;
-    await userRepository.save(user);
+    let pointBefore = Number(user.point || 0);
+    let pointAfter = pointBefore + amount;
+    if (this.pointLedgerService) {
+      const ledger = await this.pointLedgerService.applyChange(
+        manager,
+        user,
+        amount,
+        {
+          sourceType: "recharge",
+          sourceId: record.request_id,
+          title: "积分充值",
+          metadata: {
+            requestId: record.request_id,
+            fishpiUserName: record.fishpi_user_name,
+            fishpiCost: record.fishpi_cost,
+            amount,
+          },
+        },
+      );
+      pointBefore = ledger.point_before;
+      pointAfter = ledger.point_after;
+    } else {
+      user.point = pointAfter;
+      await userRepository.save(user);
+    }
 
     record.point_before = pointBefore;
     record.point_after = pointAfter;
@@ -237,9 +266,13 @@ export class RechargeService {
       throw new Error("该充值请求正在处理中，请稍后查看积分余额");
     }
     if (record.status === "local_failed") {
-      throw new Error("该充值请求已扣除鱼排积分但本地入账失败，请联系管理员处理");
+      throw new Error(
+        "该充值请求已扣除鱼排积分但本地入账失败，请联系管理员处理",
+      );
     }
-    throw new Error(record.failure_reason || "该充值请求已失败，请更换请求号后重试");
+    throw new Error(
+      record.failure_reason || "该充值请求已失败，请更换请求号后重试",
+    );
   }
 
   private normalizeAmount(value: number): number {

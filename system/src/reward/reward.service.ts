@@ -1,16 +1,25 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { EntityManager, Repository } from "typeorm";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
-import {
-  RedeemRewards,
-  RedeemRewardItem,
-} from "src/entity/redeemCode.entity";
+import { RedeemRewards, RedeemRewardItem } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
+import {
+  PointLedgerContext,
+  PointLedgerService,
+} from "src/point-ledger/point-ledger.service";
 
 @Injectable()
 export class RewardService {
-  normalizeRewards(rewards: unknown, emptyMessage = "奖励不能为空"): RedeemRewards {
+  constructor(
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
+  ) {}
+
+  normalizeRewards(
+    rewards: unknown,
+    emptyMessage = "奖励不能为空",
+  ): RedeemRewards {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isInteger(points) || points < 0) {
@@ -62,13 +71,23 @@ export class RewardService {
     manager: EntityManager,
     user: User,
     rewards: RedeemRewards,
+    pointContext?: PointLedgerContext,
   ) {
     const userRepository = manager.getRepository(User);
     const inventoryRepository = manager.getRepository(UserInventory);
 
     if (rewards.points > 0) {
-      user.point = (user.point || 0) + rewards.points;
-      await userRepository.save(user);
+      if (this.pointLedgerService && pointContext) {
+        await this.pointLedgerService.applyChange(
+          manager,
+          user,
+          rewards.points,
+          pointContext,
+        );
+      } else {
+        user.point = (user.point || 0) + rewards.points;
+        await userRepository.save(user);
+      }
     }
 
     for (const item of rewards.items) {

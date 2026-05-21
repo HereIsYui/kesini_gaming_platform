@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager, FindOptionsWhere, In } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -10,6 +10,7 @@ import {
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
+import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 
 const RARITY_ORDER = ["N", "R", "SR", "SSR", "UR"] as const;
 type CardRarity = (typeof RARITY_ORDER)[number];
@@ -26,7 +27,11 @@ export interface TradeListQuery {
 
 @Injectable()
 export class TradeService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
+  ) {}
 
   async listListings(uid: string, query: TradeListQuery) {
     const { page, pageSize } = this.normalizePage(query);
@@ -78,7 +83,9 @@ export class TradeService {
 
     const sort = query.sort || "newest";
     if (sort === "priceAsc") {
-      queryBuilder.orderBy("listing.price", "ASC").addOrderBy("listing.id", "DESC");
+      queryBuilder
+        .orderBy("listing.price", "ASC")
+        .addOrderBy("listing.id", "DESC");
     } else if (sort === "priceDesc") {
       queryBuilder
         .orderBy("listing.price", "DESC")
@@ -155,9 +162,16 @@ export class TradeService {
         cancelled_at: null,
       });
       const saved = await listingRepository.save(listing);
-      return (await this.decorateListings([saved], uid, true, manager, [
-        card,
-      ], pool ? [pool] : []))[0];
+      return (
+        await this.decorateListings(
+          [saved],
+          uid,
+          true,
+          manager,
+          [card],
+          pool ? [pool] : [],
+        )
+      )[0];
     });
   }
 
@@ -220,10 +234,14 @@ export class TradeService {
         throw new Error("卖家不存在");
       }
       if ((buyer.point || 0) < listing.price) {
-        throw new Error(`积分不足，需要${listing.price}，当前${buyer.point || 0}`);
+        throw new Error(
+          `积分不足，需要${listing.price}，当前${buyer.point || 0}`,
+        );
       }
 
-      const card = await cardRepository.findOne({ where: { id: listing.card_id } });
+      const card = await cardRepository.findOne({
+        where: { id: listing.card_id },
+      });
       if (!card) {
         throw new Error("卡片不存在");
       }
@@ -231,14 +249,57 @@ export class TradeService {
       const feeAmount = this.calculateFee(listing.price, listing.fee_rate);
       const sellerIncome = listing.price - feeAmount;
 
-      buyer.point = (buyer.point || 0) - listing.price;
-      seller.point = (seller.point || 0) + sellerIncome;
+      if (this.pointLedgerService) {
+        await this.pointLedgerService.applyChange(
+          manager,
+          buyer,
+          -listing.price,
+          {
+            sourceType: "trade_buy",
+            sourceId: listing.id,
+            title: `购买卡片：${card.card_name}`,
+            metadata: {
+              listingId: listing.id,
+              cardUuid: listing.card_uuid,
+              cardId: listing.card_id,
+              cardName: card.card_name,
+              cardLevel: listing.card_level,
+              price: listing.price,
+            },
+          },
+        );
+        if (sellerIncome > 0) {
+          await this.pointLedgerService.applyChange(
+            manager,
+            seller,
+            sellerIncome,
+            {
+              sourceType: "trade_sell",
+              sourceId: listing.id,
+              title: `出售卡片：${card.card_name}`,
+              metadata: {
+                listingId: listing.id,
+                cardUuid: listing.card_uuid,
+                cardId: listing.card_id,
+                cardName: card.card_name,
+                cardLevel: listing.card_level,
+                price: listing.price,
+                feeAmount,
+                sellerIncome,
+              },
+            },
+          );
+        }
+      } else {
+        buyer.point = (buyer.point || 0) - listing.price;
+        seller.point = (seller.point || 0) + sellerIncome;
+        await userRepository.save([buyer, seller]);
+      }
       userCard.uid = uid;
       listing.status = "sold";
       listing.buyer_uid = uid;
       listing.sold_at = new Date();
 
-      await userRepository.save([buyer, seller]);
       await userCardRepository.save(userCard);
       await listingRepository.save(listing);
       const record = await recordRepository.save(
@@ -356,9 +417,7 @@ export class TradeService {
         enabled:
           body.enabled === undefined ? config.enabled : body.enabled === true,
         fee_rate:
-          body.fee_rate === undefined
-            ? config.fee_rate
-            : Number(body.fee_rate),
+          body.fee_rate === undefined ? config.fee_rate : Number(body.fee_rate),
         min_price:
           body.min_price === undefined
             ? config.min_price
@@ -486,7 +545,9 @@ export class TradeService {
       throw new Error("交易价格必须为整数");
     }
     if (value < config.min_price || value > config.max_price) {
-      throw new Error(`交易价格必须在${config.min_price}-${config.max_price}之间`);
+      throw new Error(
+        `交易价格必须在${config.min_price}-${config.max_price}之间`,
+      );
     }
     return value;
   }
@@ -501,7 +562,11 @@ export class TradeService {
   }
 
   private assertValidConfig(config: TradeConfig) {
-    if (!Number.isFinite(config.fee_rate) || config.fee_rate < 0 || config.fee_rate > 1) {
+    if (
+      !Number.isFinite(config.fee_rate) ||
+      config.fee_rate < 0 ||
+      config.fee_rate > 1
+    ) {
       throw new Error("交易手续费率必须在0-1之间");
     }
     if (!Number.isInteger(config.min_price) || config.min_price < 1) {
@@ -530,7 +595,9 @@ export class TradeService {
   }
 
   private normalizeRarity(rarity: string): CardRarity {
-    const normalized = String(rarity || "").trim().toUpperCase();
+    const normalized = String(rarity || "")
+      .trim()
+      .toUpperCase();
     if (!RARITY_ORDER.includes(normalized as CardRarity)) {
       throw new Error("稀有度参数无效");
     }
@@ -552,8 +619,7 @@ export class TradeService {
       throw new Error("未知的卡片等级");
     }
     return levels.sort(
-      (left, right) =>
-        RARITY_ORDER.indexOf(right) - RARITY_ORDER.indexOf(left),
+      (left, right) => RARITY_ORDER.indexOf(right) - RARITY_ORDER.indexOf(left),
     )[0];
   }
 }

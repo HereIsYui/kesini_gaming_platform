@@ -203,6 +203,38 @@ export interface RechargePointsResponse {
   pointAfter: number;
 }
 
+export type PointLedgerSourceType =
+  | "draw_once"
+  | "draw_ten"
+  | "recharge"
+  | "redeem_code"
+  | "launch_activity"
+  | "exchange_shop"
+  | "trade_buy"
+  | "trade_sell";
+
+export interface PointLedgerRecord {
+  id: number;
+  changeAmount: number;
+  pointBefore: number;
+  pointAfter: number;
+  sourceType: PointLedgerSourceType | string;
+  sourceId?: string | null;
+  sourceLabel: string;
+  title: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface PointLedgerRecordsResponse {
+  list: PointLedgerRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  currentPoint: number;
+}
+
 export type LeaderboardMetric =
   | "totalCards"
   | "ssrCards"

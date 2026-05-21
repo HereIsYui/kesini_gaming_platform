@@ -44,6 +44,9 @@ import type {
   LeaderboardEntry,
   LeaderboardMetric,
   LeaderboardResponse,
+  PointLedgerRecord,
+  PointLedgerRecordsResponse,
+  PointLedgerSourceType,
   LoginResponse,
   LoginUrlResponse,
   PoolInfo,
@@ -72,6 +75,7 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "synthesize", label: "合成", icon: WandSparkles },
+  { key: "points", label: "积分", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
@@ -133,6 +137,11 @@ const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
+const pointRecords = ref<PointLedgerRecordsResponse | null>(null);
+const pointRecordPage = ref(1);
+const pointRecordTypeFilter = ref<"all" | "income" | "expense">("all");
+const pointRecordSourceFilter = ref<PointLedgerSourceType | "">("");
+const pointRecordTotalPages = ref(1);
 const exchangeItems = ref<ExchangeShopItem[]>([]);
 const tradeListings = ref<TradeListing[]>([]);
 const myTradeListings = ref<TradeListing[]>([]);
@@ -174,6 +183,7 @@ const busy = reactive({
   drawing: false,
   assets: false,
   leaderboard: false,
+  points: false,
   shop: false,
   redeem: false,
   trade: false,
@@ -197,12 +207,17 @@ const playerDisplayName = computed(
     "已登录玩家",
 );
 const playerInitial = computed(() =>
-  String(playerDisplayName.value || "?").trim().slice(0, 1).toUpperCase(),
+  String(playerDisplayName.value || "?")
+    .trim()
+    .slice(0, 1)
+    .toUpperCase(),
 );
 const playerUidLabel = computed(() =>
   currentUser.value?.uid ? `UID ${currentUser.value.uid}` : "身份已验证",
 );
-const launchActivityInfo = computed(() => launchActivity.value?.activity || null);
+const launchActivityInfo = computed(
+  () => launchActivity.value?.activity || null,
+);
 const hasLaunchActivityReward = computed(
   () =>
     Boolean(isAuthed.value) &&
@@ -285,18 +300,46 @@ const synthesisAvailableCount = computed(
 );
 const activeLeaderboardTab = computed(
   () =>
-    leaderboardTabs.find((item) => item.key === activeLeaderboardMetric.value) ||
-    leaderboardTabs[0],
+    leaderboardTabs.find(
+      (item) => item.key === activeLeaderboardMetric.value,
+    ) || leaderboardTabs[0],
 );
 const activeLeaderboardBoard = computed(
   () => leaderboard.value?.rankings[activeLeaderboardMetric.value] || null,
 );
-const podiumEntries = computed<LeaderboardEntry[]>(() =>
-  activeLeaderboardBoard.value?.list.slice(0, 3) || [],
+const podiumEntries = computed<LeaderboardEntry[]>(
+  () => activeLeaderboardBoard.value?.list.slice(0, 3) || [],
 );
-const leaderboardRows = computed<LeaderboardEntry[]>(() =>
-  activeLeaderboardBoard.value?.list.slice(3) || [],
+const leaderboardRows = computed<LeaderboardEntry[]>(
+  () => activeLeaderboardBoard.value?.list.slice(3) || [],
 );
+const pointLedgerRows = computed<PointLedgerRecord[]>(
+  () => pointRecords.value?.list || [],
+);
+const pointIncomeTotal = computed(() =>
+  pointLedgerRows.value
+    .filter((record) => record.changeAmount > 0)
+    .reduce((sum, record) => sum + record.changeAmount, 0),
+);
+const pointExpenseTotal = computed(() =>
+  pointLedgerRows.value
+    .filter((record) => record.changeAmount < 0)
+    .reduce((sum, record) => sum + Math.abs(record.changeAmount), 0),
+);
+const pointNetTotal = computed(() =>
+  pointLedgerRows.value.reduce((sum, record) => sum + record.changeAmount, 0),
+);
+const pointSourceOptions = [
+  { value: "", label: "全部来源" },
+  { value: "draw_once", label: "单抽消耗" },
+  { value: "draw_ten", label: "十连消耗" },
+  { value: "recharge", label: "积分充值" },
+  { value: "redeem_code", label: "兑换码奖励" },
+  { value: "launch_activity", label: "开服福利" },
+  { value: "exchange_shop", label: "兑换商店" },
+  { value: "trade_buy", label: "交易购买" },
+  { value: "trade_sell", label: "交易出售" },
+] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const tradeTotalPages = ref(1);
 const myTradeTotalPages = ref(1);
@@ -486,6 +529,8 @@ function logout() {
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
   leaderboardError.value = "";
+  pointRecords.value = null;
+  pointRecordPage.value = 1;
   exchangeItems.value = [];
   tradeListings.value = [];
   myTradeListings.value = [];
@@ -568,6 +613,7 @@ async function loadPrivateData() {
     loadUserCards(),
     loadLaunchActivity(),
     loadLeaderboard(),
+    loadPointRecords(),
     loadExchangeItems(),
     loadTradeData(),
   ]);
@@ -641,6 +687,37 @@ async function loadLeaderboard() {
   }
 }
 
+async function loadPointRecords() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.points = true;
+  try {
+    const data = await request<PointLedgerRecordsResponse>(
+      `/points/records${toQuery({
+        page: pointRecordPage.value,
+        pageSize: 20,
+        type:
+          pointRecordTypeFilter.value === "all"
+            ? ""
+            : pointRecordTypeFilter.value,
+        sourceType: pointRecordSourceFilter.value,
+      })}`,
+    );
+    pointRecords.value = data;
+    pointRecordTotalPages.value = data.totalPages || 1;
+    if (stats.value && typeof data.currentPoint === "number") {
+      stats.value.point = data.currentPoint;
+    }
+  } catch (error) {
+    if (activeSection.value === "points") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.points = false;
+  }
+}
+
 async function loadExchangeItems() {
   if (!isAuthed.value) {
     return;
@@ -657,7 +734,11 @@ async function loadTradeData() {
   if (!isAuthed.value) {
     return;
   }
-  await Promise.all([loadTradeListings(), loadMyTradeListings(), loadTradeRecords()]);
+  await Promise.all([
+    loadTradeListings(),
+    loadMyTradeListings(),
+    loadTradeRecords(),
+  ]);
 }
 
 async function loadTradeListings() {
@@ -723,6 +804,18 @@ async function refreshAll() {
   notify("success", "页面数据已刷新");
 }
 
+function changePointPage(delta: number) {
+  const next = Math.min(
+    Math.max(1, pointRecordPage.value + delta),
+    pointRecordTotalPages.value,
+  );
+  if (next === pointRecordPage.value) {
+    return;
+  }
+  pointRecordPage.value = next;
+  void loadPointRecords();
+}
+
 function openRechargeModal() {
   if (!isAuthed.value) {
     notify("error", "请先登录后再充值");
@@ -738,7 +831,10 @@ function openRechargeModal() {
   }
   rechargeAmount.value = Math.max(
     rechargeConfig.value.minAmount || 1,
-    Math.min(rechargeConfig.value.maxAmount || 9999, rechargeAmount.value || 10),
+    Math.min(
+      rechargeConfig.value.maxAmount || 9999,
+      rechargeAmount.value || 10,
+    ),
   );
   rechargeModalOpen.value = true;
 }
@@ -810,7 +906,10 @@ async function submitRecharge() {
     return;
   }
   if (amount < config.minAmount || amount > config.maxAmount) {
-    notify("error", `扣除鱼排积分需在 ${config.minAmount}-${config.maxAmount} 之间`);
+    notify(
+      "error",
+      `扣除鱼排积分需在 ${config.minAmount}-${config.maxAmount} 之间`,
+    );
     return;
   }
 
@@ -1066,6 +1165,44 @@ async function claimExchange(item: ExchangeShopItem) {
   }
 }
 
+function pointChangeClass(amount: number) {
+  return amount >= 0 ? "income" : "expense";
+}
+
+function formatPointChange(amount: number) {
+  return `${amount > 0 ? "+" : ""}${amount}`;
+}
+
+function pointMetadataSummary(record: PointLedgerRecord) {
+  const metadata = record.metadata || {};
+  const meta = (key: string) => metadata[key];
+  switch (record.sourceType) {
+    case "draw_once":
+    case "draw_ten":
+      return `卡池 ${String(meta("poolName") || meta("poolId") || "-")} · ${String(
+        meta("count") || 1,
+      )} 次`;
+    case "recharge":
+      return `鱼排用户名 ${String(meta("fishpiUserName") || "-")} · 扣除 ${String(
+        meta("fishpiCost") || Math.abs(record.changeAmount),
+      )}`;
+    case "redeem_code":
+      return `兑换码 ${String(meta("code") || "-")}`;
+    case "launch_activity":
+      return `活动 ${String(meta("activityName") || meta("activityKey") || "-")}`;
+    case "exchange_shop":
+      return `兑换项 ${String(meta("exchangeItemName") || meta("exchangeItemId") || "-")} · ${String(
+        meta("count") || 1,
+      )} 次`;
+    case "trade_buy":
+      return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
+    case "trade_sell":
+      return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
+    default:
+      return record.title;
+  }
+}
+
 function changeCardPage(delta: number) {
   const next = Math.min(Math.max(1, cardPage.value + delta), totalPages.value);
   if (next === cardPage.value) {
@@ -1077,7 +1214,10 @@ function changeCardPage(delta: number) {
 
 function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
   if (kind === "market") {
-    const next = Math.min(Math.max(1, tradePage.value + delta), tradeTotalPages.value);
+    const next = Math.min(
+      Math.max(1, tradePage.value + delta),
+      tradeTotalPages.value,
+    );
     if (next !== tradePage.value) {
       tradePage.value = next;
       void loadTradeListings();
@@ -1085,7 +1225,10 @@ function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
     return;
   }
   if (kind === "mine") {
-    const next = Math.min(Math.max(1, myTradePage.value + delta), myTradeTotalPages.value);
+    const next = Math.min(
+      Math.max(1, myTradePage.value + delta),
+      myTradeTotalPages.value,
+    );
     if (next !== myTradePage.value) {
       myTradePage.value = next;
       void loadMyTradeListings();
@@ -1148,7 +1291,9 @@ function cardTypeLabel(type?: number) {
 }
 
 function itemTypeLabel(type?: number) {
-  return ["卡片碎片", "虚拟积分", "普通道具", "其他"][Number(type || 0)] || "物品";
+  return (
+    ["卡片碎片", "虚拟积分", "普通道具", "其他"][Number(type || 0)] || "物品"
+  );
 }
 
 function tradeStatusLabel(status?: string) {
@@ -1180,7 +1325,10 @@ function formatDate(value?: string | null) {
   });
 }
 
-function formatRewards(rewards?: { points?: number; items?: Array<{ itemName?: string; itemId: number; num: number }> }) {
+function formatRewards(rewards?: {
+  points?: number;
+  items?: Array<{ itemName?: string; itemId: number; num: number }>;
+}) {
   if (!rewards) {
     return "无奖励";
   }
@@ -1194,7 +1342,9 @@ function formatRewards(rewards?: { points?: number; items?: Array<{ itemName?: s
   return parts.length > 0 ? parts.join("，") : "无奖励";
 }
 
-function formatCosts(costs?: Array<{ itemName?: string; itemId: number; num: number }>) {
+function formatCosts(
+  costs?: Array<{ itemName?: string; itemId: number; num: number }>,
+) {
   if (!costs || costs.length === 0) {
     return "无消耗";
   }
@@ -1246,11 +1396,24 @@ function leaderboardRankLabel(rank?: number) {
       </nav>
 
       <div class="top-actions">
-        <button class="icon-button" type="button" :disabled="busy.public || busy.assets || busy.leaderboard" @click="refreshAll">
-          <RefreshCw :size="17" :class="{ spin: busy.public || busy.assets || busy.leaderboard }" />
+        <button
+          class="icon-button"
+          type="button"
+          :disabled="busy.public || busy.assets || busy.leaderboard"
+          @click="refreshAll"
+        >
+          <RefreshCw
+            :size="17"
+            :class="{ spin: busy.public || busy.assets || busy.leaderboard }"
+          />
           <span>刷新</span>
         </button>
-        <button v-if="isAuthed" class="icon-button ghost" type="button" @click="logout">
+        <button
+          v-if="isAuthed"
+          class="icon-button ghost"
+          type="button"
+          @click="logout"
+        >
           <LogOut :size="17" />
           <span>退出</span>
         </button>
@@ -1258,7 +1421,11 @@ function leaderboardRankLabel(rank?: number) {
     </header>
 
     <main class="page">
-      <section v-if="activeSection === 'draw'" class="hero-grid" data-section="draw">
+      <section
+        v-if="activeSection === 'draw'"
+        class="hero-grid"
+        data-section="draw"
+      >
         <div class="panel draw-panel">
           <div class="panel-heading">
             <div>
@@ -1266,7 +1433,9 @@ function leaderboardRankLabel(rank?: number) {
               <h1>{{ selectedPool?.pool_name || "等待卡池同步" }}</h1>
             </div>
             <div class="pool-heading-actions">
-              <span class="type-pill">{{ poolTypeLabel(selectedPool?.card_type) }}</span>
+              <span class="type-pill">{{
+                poolTypeLabel(selectedPool?.card_type)
+              }}</span>
               <button
                 class="secondary-action compact"
                 type="button"
@@ -1280,7 +1449,10 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <p class="pool-desc">
-            {{ selectedPool?.card_desc || "选择一个卡池后即可开始抽取，所有概率与保底均由服务端控制。" }}
+            {{
+              selectedPool?.card_desc ||
+              "选择一个卡池后即可开始抽取，所有概率与保底均由服务端控制。"
+            }}
           </p>
 
           <div class="pool-strip" aria-label="卡池列表">
@@ -1294,7 +1466,8 @@ function leaderboardRankLabel(rank?: number) {
             >
               <span>{{ pool.pool_name }}</span>
               <small>
-                {{ poolTypeLabel(pool.card_type) }} · 单抽 {{ pool.drawCosts?.once || 10 }}
+                {{ poolTypeLabel(pool.card_type) }} · 单抽
+                {{ pool.drawCosts?.once || 10 }}
               </small>
             </button>
             <div v-if="!busy.public && pools.length === 0" class="empty-inline">
@@ -1323,7 +1496,9 @@ function leaderboardRankLabel(rank?: number) {
               <div class="cost-board">
                 <div>
                   <span>积分余额</span>
-                  <strong>{{ isAuthed ? stats?.point ?? 0 : "未登录" }}</strong>
+                  <strong>{{
+                    isAuthed ? (stats?.point ?? 0) : "未登录"
+                  }}</strong>
                 </div>
                 <div>
                   <span>单抽</span>
@@ -1334,11 +1509,21 @@ function leaderboardRankLabel(rank?: number) {
                   <strong>{{ selectedDrawCosts.ten }} 积分</strong>
                 </div>
               </div>
-              <button class="primary-action" type="button" :disabled="busy.drawing" @click="performDraw('once')">
+              <button
+                class="primary-action"
+                type="button"
+                :disabled="busy.drawing"
+                @click="performDraw('once')"
+              >
                 <Sparkles :size="18" />
                 单抽 · {{ selectedDrawCosts.once }}
               </button>
-              <button class="primary-action golden" type="button" :disabled="busy.drawing" @click="performDraw('ten')">
+              <button
+                class="primary-action golden"
+                type="button"
+                :disabled="busy.drawing"
+                @click="performDraw('ten')"
+              >
                 <Ticket :size="18" />
                 十连 · {{ selectedDrawCosts.ten }}
               </button>
@@ -1358,7 +1543,11 @@ function leaderboardRankLabel(rank?: number) {
         <aside class="panel auth-panel identity-card">
           <div v-if="isAuthed" class="player-profile">
             <div class="player-avatar">
-              <img v-if="currentUser?.avatar" :src="currentUser.avatar" :alt="playerDisplayName" />
+              <img
+                v-if="currentUser?.avatar"
+                :src="currentUser.avatar"
+                :alt="playerDisplayName"
+              />
               <span v-else>{{ playerInitial }}</span>
             </div>
             <div class="player-info">
@@ -1398,7 +1587,8 @@ function leaderboardRankLabel(rank?: number) {
             </div>
             <strong>{{ stats?.point || 0 }}</strong>
             <small>
-              当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值 {{ rechargeRangeLabel }}
+              当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值
+              {{ rechargeRangeLabel }}
             </small>
           </div>
 
@@ -1437,7 +1627,11 @@ function leaderboardRankLabel(rank?: number) {
           <div v-if="isAuthed" class="identity-status-list">
             <div>
               <span>最近最高结果</span>
-              <strong>{{ bestResult ? `${bestResult.rarity} · ${bestResult.cardName}` : "暂无抽卡结果" }}</strong>
+              <strong>{{
+                bestResult
+                  ? `${bestResult.rarity} · ${bestResult.cardName}`
+                  : "暂无抽卡结果"
+              }}</strong>
             </div>
             <div>
               <span>服务连接</span>
@@ -1448,21 +1642,42 @@ function leaderboardRankLabel(rank?: number) {
           <div class="connection-card" :class="{ compact: isAuthed }">
             <label>
               <span>{{ isAuthed ? "连接信息" : "API 地址" }}</span>
-              <input v-model="apiBase" type="url" placeholder="http://localhost:3000" @blur="saveApiBase" />
+              <input
+                v-model="apiBase"
+                type="url"
+                placeholder="http://localhost:3000"
+                @blur="saveApiBase"
+              />
             </label>
           </div>
 
           <div v-if="!isAuthed" class="login-stack">
-            <button class="primary-action wide" type="button" :disabled="busy.auth || callbackBusy" @click="loginWithOpenId">
-              <LoaderCircle v-if="busy.auth || callbackBusy" :size="18" class="spin" />
+            <button
+              class="primary-action wide"
+              type="button"
+              :disabled="busy.auth || callbackBusy"
+              @click="loginWithOpenId"
+            >
+              <LoaderCircle
+                v-if="busy.auth || callbackBusy"
+                :size="18"
+                class="spin"
+              />
               <LogIn v-else :size="18" />
               使用 OpenID 登录
             </button>
             <label class="token-box debug-token-box">
               <span>本地调试 Token</span>
-              <textarea v-model="manualToken" placeholder="粘贴玩家 JWT，仅保存在当前浏览器"></textarea>
+              <textarea
+                v-model="manualToken"
+                placeholder="粘贴玩家 JWT，仅保存在当前浏览器"
+              ></textarea>
             </label>
-            <button class="secondary-action wide" type="button" @click="applyManualToken">
+            <button
+              class="secondary-action wide"
+              type="button"
+              @click="applyManualToken"
+            >
               <ShieldCheck :size="18" />
               使用 Token 进入
             </button>
@@ -1470,7 +1685,11 @@ function leaderboardRankLabel(rank?: number) {
         </aside>
       </section>
 
-      <section v-if="activeSection === 'bag'" class="collection-grid" data-section="bag">
+      <section
+        v-if="activeSection === 'bag'"
+        class="collection-grid"
+        data-section="bag"
+      >
         <div class="panel collection-panel">
           <div class="section-head">
             <div>
@@ -1478,15 +1697,41 @@ function leaderboardRankLabel(rank?: number) {
               <h2>卡片与物品</h2>
             </div>
             <div class="filter-row">
-              <select v-model="rarityFilter" @change="cardPage = 1; loadUserCards()">
+              <select
+                v-model="rarityFilter"
+                @change="
+                  cardPage = 1;
+                  loadUserCards();
+                "
+              >
                 <option value="">全部稀有度</option>
-                <option v-for="rarity in rarityOrder" :key="rarity" :value="rarity">{{ rarity }}</option>
+                <option
+                  v-for="rarity in rarityOrder"
+                  :key="rarity"
+                  :value="rarity"
+                >
+                  {{ rarity }}
+                </option>
               </select>
-              <select v-model="poolFilter" @change="cardPage = 1; loadUserCards()">
+              <select
+                v-model="poolFilter"
+                @change="
+                  cardPage = 1;
+                  loadUserCards();
+                "
+              >
                 <option value="">全部卡池</option>
-                <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
+                <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                  {{ pool.pool_name }}
+                </option>
               </select>
-              <button class="secondary-action" type="button" @click="resetCardFilters">重置</button>
+              <button
+                class="secondary-action"
+                type="button"
+                @click="resetCardFilters"
+              >
+                重置
+              </button>
             </div>
           </div>
 
@@ -1504,20 +1749,35 @@ function leaderboardRankLabel(rank?: number) {
             <span>去抽卡区试试手气，或调整筛选条件。</span>
           </div>
           <div v-else class="owned-grid">
-            <article v-for="(card, index) in userCards.list" :key="card.uuid" class="result-card owned-card" :class="rarityClass(card.cardLevel)" :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }">
+            <article
+              v-for="(card, index) in userCards.list"
+              :key="card.uuid"
+              class="result-card owned-card"
+              :class="rarityClass(card.cardLevel)"
+              :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
+            >
               <div class="card-face">
                 <div class="result-card-top">
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
-                  <span class="card-type-pill">{{ cardTypeLabel(card.cardType) }}</span>
+                  <span class="card-type-pill">{{
+                    cardTypeLabel(card.cardType)
+                  }}</span>
                 </div>
                 <div class="card-sigil"></div>
                 <div class="card-content">
                   <h3>{{ card.cardName }}</h3>
                   <p>{{ card.cardDesc || "暂无介绍" }}</p>
                   <div class="tag-row">
-                    <span>{{ poolTypeLabel(pools.find((pool) => pool.id === card.poolId)?.card_type) }}</span>
+                    <span>{{
+                      poolTypeLabel(
+                        pools.find((pool) => pool.id === card.poolId)
+                          ?.card_type,
+                      )
+                    }}</span>
                     <span>{{ formatDate(card.obtainedAt) }}</span>
-                    <span v-if="card.isListed">交易中 · {{ card.tradePrice }}积分</span>
+                    <span v-if="card.isListed"
+                      >交易中 · {{ card.tradePrice }}积分</span
+                    >
                   </div>
                 </div>
               </div>
@@ -1528,9 +1788,14 @@ function leaderboardRankLabel(rank?: number) {
                   :disabled="card.isListed || !card.canSell"
                   @click="openTradeListingModal(card)"
                 >
-                  {{ card.isListed ? '已挂售' : '挂售' }}
+                  {{ card.isListed ? "已挂售" : "挂售" }}
                 </button>
-                <button class="danger-action" type="button" :disabled="card.cardLevel === 'UR' || card.isListed" @click="decomposeCard(card)">
+                <button
+                  class="danger-action"
+                  type="button"
+                  :disabled="card.cardLevel === 'UR' || card.isListed"
+                  @click="decomposeCard(card)"
+                >
                   分解
                 </button>
               </div>
@@ -1538,12 +1803,20 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <div class="pager">
-            <button type="button" :disabled="cardPage <= 1" @click="changeCardPage(-1)">
+            <button
+              type="button"
+              :disabled="cardPage <= 1"
+              @click="changeCardPage(-1)"
+            >
               <ChevronLeft :size="16" />
               上一页
             </button>
             <span>第 {{ cardPage }} / {{ totalPages }} 页</span>
-            <button type="button" :disabled="cardPage >= totalPages" @click="changeCardPage(1)">
+            <button
+              type="button"
+              :disabled="cardPage >= totalPages"
+              @click="changeCardPage(1)"
+            >
               下一页
               <ChevronRight :size="16" />
             </button>
@@ -1557,7 +1830,9 @@ function leaderboardRankLabel(rank?: number) {
               <h2>物品库存</h2>
             </div>
           </div>
-          <div v-if="inventoryItems.length === 0" class="empty-mini">暂无背包物品</div>
+          <div v-if="inventoryItems.length === 0" class="empty-mini">
+            暂无背包物品
+          </div>
           <div v-else class="inventory-list">
             <article v-for="item in inventoryItems" :key="item.id">
               <div>
@@ -1571,7 +1846,11 @@ function leaderboardRankLabel(rank?: number) {
         </aside>
       </section>
 
-      <section v-if="activeSection === 'synthesize'" class="panel catalog-panel synthesize-panel" data-section="synthesize">
+      <section
+        v-if="activeSection === 'synthesize'"
+        class="panel catalog-panel synthesize-panel"
+        data-section="synthesize"
+      >
         <div class="section-head">
           <div>
             <p class="eyebrow">碎片合成</p>
@@ -1579,13 +1858,25 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <div class="filter-row">
             <select v-model="activePoolId">
-              <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
+              <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                {{ pool.pool_name }}
+              </option>
             </select>
             <select v-model="synthesisRarityFilter">
               <option value="">全部稀有度</option>
-              <option v-for="rarity in rarityOrder" :key="rarity" :value="rarity">{{ rarity }}</option>
+              <option
+                v-for="rarity in rarityOrder"
+                :key="rarity"
+                :value="rarity"
+              >
+                {{ rarity }}
+              </option>
             </select>
-            <button class="secondary-action" type="button" @click="synthesisRarityFilter = ''">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="synthesisRarityFilter = ''"
+            >
               重置
             </button>
           </div>
@@ -1611,10 +1902,15 @@ function leaderboardRankLabel(rank?: number) {
           <strong>当前卡池暂无卡片</strong>
           <span>切换卡池后可查看可合成卡片。</span>
         </div>
-        <div v-else-if="filteredSynthesisCards.length === 0" class="empty-state">
+        <div
+          v-else-if="filteredSynthesisCards.length === 0"
+          class="empty-state"
+        >
           <Package :size="30" />
           <strong>暂无该稀有度版本</strong>
-          <span>当前卡池没有 {{ synthesisRarityFilter }} 稀有度的可展示卡片。</span>
+          <span
+            >当前卡池没有 {{ synthesisRarityFilter }} 稀有度的可展示卡片。</span
+          >
         </div>
         <div v-else class="catalog-grid synthesis-grid">
           <article
@@ -1627,7 +1923,9 @@ function leaderboardRankLabel(rank?: number) {
             <div class="card-face">
               <div class="result-card-top">
                 <span class="rarity-badge">{{ item.rarity }}</span>
-                <span class="card-type-pill">{{ cardTypeLabel(item.card.card_type) }}</span>
+                <span class="card-type-pill">{{
+                  cardTypeLabel(item.card.card_type)
+                }}</span>
               </div>
               <div class="card-sigil"></div>
               <div class="card-content">
@@ -1645,19 +1943,165 @@ function leaderboardRankLabel(rank?: number) {
               :disabled="busy.assets || item.disabled"
               @click="synthesizeCard(item)"
             >
-              {{ item.disabled ? '不可合成' : '碎片合成' }}
+              {{ item.disabled ? "不可合成" : "碎片合成" }}
             </button>
           </article>
         </div>
       </section>
 
-      <section v-if="activeSection === 'trade'" class="panel trade-panel" data-section="trade">
+      <section
+        v-if="activeSection === 'points'"
+        class="panel points-panel"
+        data-section="points"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">积分流水</p>
+            <h2>积分变化记录</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.points"
+            @click="loadPointRecords"
+          >
+            <RefreshCw :size="16" :class="{ spin: busy.points }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <Coins :size="30" />
+          <strong>登录后查看积分流水</strong>
+          <span>抽卡、充值、交易和活动奖励都会在这里记录。</span>
+        </div>
+        <div v-else class="points-content">
+          <div class="points-overview">
+            <article>
+              <small>当前余额</small>
+              <strong>{{
+                pointRecords?.currentPoint ?? stats?.point ?? 0
+              }}</strong>
+            </article>
+            <article class="income">
+              <small>本页收入</small>
+              <strong>+{{ pointIncomeTotal }}</strong>
+            </article>
+            <article class="expense">
+              <small>本页支出</small>
+              <strong>-{{ pointExpenseTotal }}</strong>
+            </article>
+            <article :class="pointNetTotal >= 0 ? 'income' : 'expense'">
+              <small>本页净变动</small>
+              <strong>{{ formatPointChange(pointNetTotal) }}</strong>
+            </article>
+          </div>
+
+          <div class="filter-row point-filter-row">
+            <select
+              v-model="pointRecordTypeFilter"
+              @change="
+                pointRecordPage = 1;
+                loadPointRecords();
+              "
+            >
+              <option value="all">全部收支</option>
+              <option value="income">只看收入</option>
+              <option value="expense">只看支出</option>
+            </select>
+            <select
+              v-model="pointRecordSourceFilter"
+              @change="
+                pointRecordPage = 1;
+                loadPointRecords();
+              "
+            >
+              <option
+                v-for="option in pointSourceOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <div
+            v-if="busy.points && !pointRecords"
+            class="skeleton-grid points-skeleton"
+          >
+            <span v-for="item in 6" :key="item"></span>
+          </div>
+          <div v-else-if="pointLedgerRows.length === 0" class="empty-state">
+            <Coins :size="30" />
+            <strong>暂无积分流水</strong>
+            <span>新的积分收入和支出会从现在开始记录。</span>
+          </div>
+          <div v-else class="point-ledger-list">
+            <article
+              v-for="record in pointLedgerRows"
+              :key="record.id"
+              class="point-ledger-card"
+              :class="pointChangeClass(record.changeAmount)"
+            >
+              <div class="point-ledger-main">
+                <div class="point-ledger-head">
+                  <span>{{ record.sourceLabel }}</span>
+                  <time>{{ formatDate(record.createdAt) }}</time>
+                </div>
+                <strong>{{ record.title }}</strong>
+                <small>{{ pointMetadataSummary(record) }}</small>
+              </div>
+              <div class="point-ledger-amount">
+                <strong>{{ formatPointChange(record.changeAmount) }}</strong>
+                <span>{{ record.pointBefore }} → {{ record.pointAfter }}</span>
+              </div>
+            </article>
+          </div>
+
+          <div
+            v-if="pointRecords && pointRecords.total > pointRecords.pageSize"
+            class="pager"
+          >
+            <button
+              type="button"
+              :disabled="pointRecordPage <= 1"
+              @click="changePointPage(-1)"
+            >
+              <ChevronLeft :size="16" />
+              上一页
+            </button>
+            <span
+              >第 {{ pointRecordPage }} / {{ pointRecordTotalPages }} 页</span
+            >
+            <button
+              type="button"
+              :disabled="pointRecordPage >= pointRecordTotalPages"
+              @click="changePointPage(1)"
+            >
+              下一页
+              <ChevronRight :size="16" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section
+        v-if="activeSection === 'trade'"
+        class="panel trade-panel"
+        data-section="trade"
+      >
         <div class="section-head">
           <div>
             <p class="eyebrow">匿名交易</p>
             <h2>卡片交易市场</h2>
           </div>
-          <button class="secondary-action" type="button" :disabled="busy.trade" @click="loadTradeData">
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.trade"
+            @click="loadTradeData"
+          >
             <RefreshCw :size="16" :class="{ spin: busy.trade }" />
             刷新
           </button>
@@ -1672,7 +2116,7 @@ function leaderboardRankLabel(rank?: number) {
           <div class="trade-config-strip">
             <article>
               <small>交易状态</small>
-              <strong>{{ tradeConfig.enabled ? '已开启' : '已关闭' }}</strong>
+              <strong>{{ tradeConfig.enabled ? "已开启" : "已关闭" }}</strong>
             </article>
             <article>
               <small>手续费</small>
@@ -1680,7 +2124,9 @@ function leaderboardRankLabel(rank?: number) {
             </article>
             <article>
               <small>价格范围</small>
-              <strong>{{ tradeConfig.minPrice }} - {{ tradeConfig.maxPrice }}</strong>
+              <strong
+                >{{ tradeConfig.minPrice }} - {{ tradeConfig.maxPrice }}</strong
+              >
             </article>
             <article>
               <small>我的积分</small>
@@ -1689,31 +2135,96 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <div class="trade-tabs" role="tablist" aria-label="交易分区">
-            <button type="button" :class="{ active: tradeTab === 'market' }" @click="tradeTab = 'market'">市场</button>
-            <button type="button" :class="{ active: tradeTab === 'mine' }" @click="tradeTab = 'mine'">我的挂售</button>
-            <button type="button" :class="{ active: tradeTab === 'records' }" @click="tradeTab = 'records'">成交记录</button>
+            <button
+              type="button"
+              :class="{ active: tradeTab === 'market' }"
+              @click="tradeTab = 'market'"
+            >
+              市场
+            </button>
+            <button
+              type="button"
+              :class="{ active: tradeTab === 'mine' }"
+              @click="tradeTab = 'mine'"
+            >
+              我的挂售
+            </button>
+            <button
+              type="button"
+              :class="{ active: tradeTab === 'records' }"
+              @click="tradeTab = 'records'"
+            >
+              成交记录
+            </button>
           </div>
 
           <div v-if="tradeTab === 'market'" class="trade-section">
             <div class="filter-row trade-filter-row">
-              <select v-model="tradeRarityFilter" @change="tradePage = 1; loadTradeListings()">
+              <select
+                v-model="tradeRarityFilter"
+                @change="
+                  tradePage = 1;
+                  loadTradeListings();
+                "
+              >
                 <option value="">全部稀有度</option>
-                <option v-for="rarity in rarityOrder" :key="rarity" :value="rarity">{{ rarity }}</option>
+                <option
+                  v-for="rarity in rarityOrder"
+                  :key="rarity"
+                  :value="rarity"
+                >
+                  {{ rarity }}
+                </option>
               </select>
-              <select v-model="tradePoolFilter" @change="tradePage = 1; loadTradeListings()">
+              <select
+                v-model="tradePoolFilter"
+                @change="
+                  tradePage = 1;
+                  loadTradeListings();
+                "
+              >
                 <option value="">全部卡池</option>
-                <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.pool_name }}</option>
+                <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                  {{ pool.pool_name }}
+                </option>
               </select>
-              <select v-model="tradeSort" @change="tradePage = 1; loadTradeListings()">
+              <select
+                v-model="tradeSort"
+                @change="
+                  tradePage = 1;
+                  loadTradeListings();
+                "
+              >
                 <option value="newest">最新上架</option>
                 <option value="priceAsc">价格从低到高</option>
                 <option value="priceDesc">价格从高到低</option>
               </select>
-              <input v-model="tradeMinPrice" type="number" min="0" placeholder="最低价" @change="tradePage = 1; loadTradeListings()" />
-              <input v-model="tradeMaxPrice" type="number" min="0" placeholder="最高价" @change="tradePage = 1; loadTradeListings()" />
+              <input
+                v-model="tradeMinPrice"
+                type="number"
+                min="0"
+                placeholder="最低价"
+                @change="
+                  tradePage = 1;
+                  loadTradeListings();
+                "
+              />
+              <input
+                v-model="tradeMaxPrice"
+                type="number"
+                min="0"
+                placeholder="最高价"
+                @change="
+                  tradePage = 1;
+                  loadTradeListings();
+                "
+              />
             </div>
 
-            <div v-if="busy.trade && tradeListings.length === 0" class="skeleton-grid">
+            <div
+              v-if="busy.trade && tradeListings.length === 0"
+              class="skeleton-grid"
+            >
               <span v-for="item in 6" :key="item"></span>
             </div>
             <div v-else-if="tradeListings.length === 0" class="empty-state">
@@ -1722,11 +2233,16 @@ function leaderboardRankLabel(rank?: number) {
               <span>可以从背包选择卡片挂售，市场不会展示卖家身份。</span>
             </div>
             <div v-else class="trade-grid">
-              <article v-for="listing in tradeListings" :key="listing.id" class="trade-card" :class="rarityClass(listing.cardLevel)">
+              <article
+                v-for="listing in tradeListings"
+                :key="listing.id"
+                class="trade-card"
+                :class="rarityClass(listing.cardLevel)"
+              >
                 <div class="trade-card-art">
                   <span class="rarity-badge">{{ listing.cardLevel }}</span>
                   <strong>{{ listing.cardName }}</strong>
-                  <small>{{ listing.poolName || '未知卡池' }}</small>
+                  <small>{{ listing.poolName || "未知卡池" }}</small>
                 </div>
                 <div class="trade-card-body">
                   <p>{{ listing.cardDesc || "暂无介绍" }}</p>
@@ -1744,19 +2260,34 @@ function leaderboardRankLabel(rank?: number) {
                       <dd>{{ formatDate(listing.createdAt) }}</dd>
                     </div>
                   </dl>
-                  <button class="primary-action wide" type="button" :disabled="busy.trade || listing.isMine || !tradeConfig.enabled" @click="buyTradeListing(listing)">
-                    {{ listing.isMine ? '自己的挂单' : '购买' }}
+                  <button
+                    class="primary-action wide"
+                    type="button"
+                    :disabled="
+                      busy.trade || listing.isMine || !tradeConfig.enabled
+                    "
+                    @click="buyTradeListing(listing)"
+                  >
+                    {{ listing.isMine ? "自己的挂单" : "购买" }}
                   </button>
                 </div>
               </article>
             </div>
             <div class="pager">
-              <button type="button" :disabled="tradePage <= 1" @click="changeTradePage('market', -1)">
+              <button
+                type="button"
+                :disabled="tradePage <= 1"
+                @click="changeTradePage('market', -1)"
+              >
                 <ChevronLeft :size="16" />
                 上一页
               </button>
               <span>第 {{ tradePage }} / {{ tradeTotalPages }} 页</span>
-              <button type="button" :disabled="tradePage >= tradeTotalPages" @click="changeTradePage('market', 1)">
+              <button
+                type="button"
+                :disabled="tradePage >= tradeTotalPages"
+                @click="changeTradePage('market', 1)"
+              >
                 下一页
                 <ChevronRight :size="16" />
               </button>
@@ -1772,20 +2303,42 @@ function leaderboardRankLabel(rank?: number) {
             <div v-else class="trade-list">
               <article v-for="listing in myTradeListings" :key="listing.id">
                 <div>
-                  <strong>{{ listing.cardName }} · {{ listing.cardLevel }}</strong>
-                  <span>{{ listing.cardUuid }} · {{ listing.poolName || '未知卡池' }}</span>
+                  <strong
+                    >{{ listing.cardName }} · {{ listing.cardLevel }}</strong
+                  >
+                  <span
+                    >{{ listing.cardUuid }} ·
+                    {{ listing.poolName || "未知卡池" }}</span
+                  >
                 </div>
                 <b>{{ listing.price }} 积分</b>
                 <span>{{ tradeStatusLabel(listing.status) }}</span>
-                <button class="secondary-action" type="button" :disabled="busy.trade || listing.status !== 'active'" @click="cancelTradeListing(listing)">
+                <button
+                  class="secondary-action"
+                  type="button"
+                  :disabled="busy.trade || listing.status !== 'active'"
+                  @click="cancelTradeListing(listing)"
+                >
                   取消挂售
                 </button>
               </article>
             </div>
             <div class="pager">
-              <button type="button" :disabled="myTradePage <= 1" @click="changeTradePage('mine', -1)">上一页</button>
+              <button
+                type="button"
+                :disabled="myTradePage <= 1"
+                @click="changeTradePage('mine', -1)"
+              >
+                上一页
+              </button>
               <span>第 {{ myTradePage }} / {{ myTradeTotalPages }} 页</span>
-              <button type="button" :disabled="myTradePage >= myTradeTotalPages" @click="changeTradePage('mine', 1)">下一页</button>
+              <button
+                type="button"
+                :disabled="myTradePage >= myTradeTotalPages"
+                @click="changeTradePage('mine', 1)"
+              >
+                下一页
+              </button>
             </div>
           </div>
 
@@ -1798,30 +2351,62 @@ function leaderboardRankLabel(rank?: number) {
             <div v-else class="trade-list">
               <article v-for="record in tradeRecords" :key="record.id">
                 <div>
-                  <strong>{{ tradeRoleLabel(record.role) }} · {{ record.cardName }} · {{ record.cardLevel }}</strong>
-                  <span>{{ record.cardUuid }} · {{ record.poolName || '未知卡池' }}</span>
+                  <strong
+                    >{{ tradeRoleLabel(record.role) }} · {{ record.cardName }} ·
+                    {{ record.cardLevel }}</strong
+                  >
+                  <span
+                    >{{ record.cardUuid }} ·
+                    {{ record.poolName || "未知卡池" }}</span
+                  >
                 </div>
                 <b>{{ record.price }} 积分</b>
-                <span v-if="record.role === 'seller'">实收 {{ record.sellerIncome }}，手续费 {{ record.feeAmount }}</span>
+                <span v-if="record.role === 'seller'"
+                  >实收 {{ record.sellerIncome }}，手续费
+                  {{ record.feeAmount }}</span
+                >
                 <span v-else>成交 {{ formatDate(record.createdAt) }}</span>
               </article>
             </div>
             <div class="pager">
-              <button type="button" :disabled="tradeRecordPage <= 1" @click="changeTradePage('records', -1)">上一页</button>
-              <span>第 {{ tradeRecordPage }} / {{ tradeRecordTotalPages }} 页</span>
-              <button type="button" :disabled="tradeRecordPage >= tradeRecordTotalPages" @click="changeTradePage('records', 1)">下一页</button>
+              <button
+                type="button"
+                :disabled="tradeRecordPage <= 1"
+                @click="changeTradePage('records', -1)"
+              >
+                上一页
+              </button>
+              <span
+                >第 {{ tradeRecordPage }} / {{ tradeRecordTotalPages }} 页</span
+              >
+              <button
+                type="button"
+                :disabled="tradeRecordPage >= tradeRecordTotalPages"
+                @click="changeTradePage('records', 1)"
+              >
+                下一页
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section v-if="activeSection === 'leaderboard'" class="panel leaderboard-panel" data-section="leaderboard">
+      <section
+        v-if="activeSection === 'leaderboard'"
+        class="panel leaderboard-panel"
+        data-section="leaderboard"
+      >
         <div class="section-head">
           <div>
             <p class="eyebrow">玩家排行</p>
             <h2>收藏榜单</h2>
           </div>
-          <button class="secondary-action" type="button" :disabled="busy.leaderboard" @click="loadLeaderboard">
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.leaderboard"
+            @click="loadLeaderboard"
+          >
             <RefreshCw :size="16" :class="{ spin: busy.leaderboard }" />
             刷新
           </button>
@@ -1832,14 +2417,23 @@ function leaderboardRankLabel(rank?: number) {
           <strong>登录后查看排行榜</strong>
           <span>排行榜按当前收藏统计，分解后的卡片不会计入排名。</span>
         </div>
-        <div v-else-if="busy.leaderboard && !leaderboard" class="skeleton-grid leaderboard-skeleton">
+        <div
+          v-else-if="busy.leaderboard && !leaderboard"
+          class="skeleton-grid leaderboard-skeleton"
+        >
           <span v-for="item in 6" :key="item"></span>
         </div>
         <div v-else-if="leaderboardError" class="empty-state">
           <Trophy :size="30" />
           <strong>排行榜加载失败</strong>
           <span>{{ leaderboardError }}</span>
-          <button class="secondary-action" type="button" @click="loadLeaderboard">重新加载</button>
+          <button
+            class="secondary-action"
+            type="button"
+            @click="loadLeaderboard"
+          >
+            重新加载
+          </button>
         </div>
         <div v-else class="leaderboard-content">
           <div class="leaderboard-tabs" role="tablist" aria-label="排行榜类型">
@@ -1858,11 +2452,15 @@ function leaderboardRankLabel(rank?: number) {
           <div v-if="activeLeaderboardBoard?.me" class="my-rank-card">
             <div>
               <small>我的排名</small>
-              <strong>{{ leaderboardRankLabel(activeLeaderboardBoard.me.rank) }}</strong>
+              <strong>{{
+                leaderboardRankLabel(activeLeaderboardBoard.me.rank)
+              }}</strong>
             </div>
             <div>
               <small>{{ activeLeaderboardTab.label }}</small>
-              <strong>{{ formatLeaderboardValue(activeLeaderboardBoard.me.value) }}</strong>
+              <strong>{{
+                formatLeaderboardValue(activeLeaderboardBoard.me.value)
+              }}</strong>
             </div>
             <span>{{ activeLeaderboardTab.hint }}</span>
           </div>
@@ -1880,9 +2478,17 @@ function leaderboardRankLabel(rank?: number) {
                 class="podium-card"
                 :class="`rank-${entry.rank}`"
               >
-                <span class="rank-badge">{{ leaderboardRankLabel(entry.rank) }}</span>
-                <img v-if="entry.avatar" :src="entry.avatar" :alt="entry.nickname" />
-                <span v-else class="avatar-fallback">{{ leaderboardInitial(entry) }}</span>
+                <span class="rank-badge">{{
+                  leaderboardRankLabel(entry.rank)
+                }}</span>
+                <img
+                  v-if="entry.avatar"
+                  :src="entry.avatar"
+                  :alt="entry.nickname"
+                />
+                <span v-else class="avatar-fallback">{{
+                  leaderboardInitial(entry)
+                }}</span>
                 <h3>{{ entry.nickname || entry.uid }}</h3>
                 <p>{{ entry.uid }}</p>
                 <strong>{{ formatLeaderboardValue(entry.value) }}</strong>
@@ -1896,8 +2502,14 @@ function leaderboardRankLabel(rank?: number) {
                 :class="{ mine: entry.uid === activeLeaderboardBoard?.me?.uid }"
               >
                 <b>{{ leaderboardRankLabel(entry.rank) }}</b>
-                <img v-if="entry.avatar" :src="entry.avatar" :alt="entry.nickname" />
-                <span v-else class="avatar-fallback small">{{ leaderboardInitial(entry) }}</span>
+                <img
+                  v-if="entry.avatar"
+                  :src="entry.avatar"
+                  :alt="entry.nickname"
+                />
+                <span v-else class="avatar-fallback small">{{
+                  leaderboardInitial(entry)
+                }}</span>
                 <div>
                   <strong>{{ entry.nickname || entry.uid }}</strong>
                   <span>{{ entry.uid }}</span>
@@ -1913,7 +2525,11 @@ function leaderboardRankLabel(rank?: number) {
         </div>
       </section>
 
-      <section v-if="activeSection === 'redeem'" class="redeem-grid" data-section="redeem">
+      <section
+        v-if="activeSection === 'redeem'"
+        class="redeem-grid"
+        data-section="redeem"
+      >
         <div class="panel redeem-panel">
           <div class="section-head">
             <div>
@@ -1924,9 +2540,19 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <label class="redeem-input">
             <span>兑换码</span>
-            <input v-model="redeemCode" type="text" placeholder="输入兑换码" @keyup.enter="claimRedeemCode" />
+            <input
+              v-model="redeemCode"
+              type="text"
+              placeholder="输入兑换码"
+              @keyup.enter="claimRedeemCode"
+            />
           </label>
-          <button class="primary-action wide" type="button" :disabled="busy.redeem" @click="claimRedeemCode">
+          <button
+            class="primary-action wide"
+            type="button"
+            :disabled="busy.redeem"
+            @click="claimRedeemCode"
+          >
             <LoaderCircle v-if="busy.redeem" :size="18" class="spin" />
             <Gift v-else :size="18" />
             立即兑换
@@ -1939,7 +2565,12 @@ function leaderboardRankLabel(rank?: number) {
               <p class="eyebrow">兑换商店</p>
               <h2>物品消费</h2>
             </div>
-            <button class="secondary-action" type="button" :disabled="busy.shop" @click="loadExchangeItems">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.shop"
+              @click="loadExchangeItems"
+            >
               <RefreshCw :size="16" :class="{ spin: busy.shop }" />
               刷新
             </button>
@@ -1950,7 +2581,10 @@ function leaderboardRankLabel(rank?: number) {
             <strong>登录后查看商店</strong>
             <span>兑换商店会根据你的背包数量显示可兑换状态。</span>
           </div>
-          <div v-else-if="busy.shop && exchangeItems.length === 0" class="skeleton-grid">
+          <div
+            v-else-if="busy.shop && exchangeItems.length === 0"
+            class="skeleton-grid"
+          >
             <span v-for="item in 4" :key="item"></span>
           </div>
           <div v-else-if="exchangeItems.length === 0" class="empty-state">
@@ -1959,13 +2593,21 @@ function leaderboardRankLabel(rank?: number) {
             <span>后台启用兑换项后会出现在这里。</span>
           </div>
           <div v-else class="shop-grid">
-            <article v-for="item in exchangeItems" :key="item.id" class="shop-card">
+            <article
+              v-for="item in exchangeItems"
+              :key="item.id"
+              class="shop-card"
+            >
               <div class="shop-card-head">
                 <div>
                   <h3>{{ item.name }}</h3>
                   <p>{{ item.description || "暂无说明" }}</p>
                 </div>
-                <span>{{ item.remaining === null || item.remaining === undefined ? "不限库存" : `剩余 ${item.remaining}` }}</span>
+                <span>{{
+                  item.remaining === null || item.remaining === undefined
+                    ? "不限库存"
+                    : `剩余 ${item.remaining}`
+                }}</span>
               </div>
               <dl>
                 <div>
@@ -1978,22 +2620,41 @@ function leaderboardRankLabel(rank?: number) {
                 </div>
                 <div>
                   <dt>限兑</dt>
-                  <dd>{{ item.user_limit ? `${item.usedByUser || 0}/${item.user_limit}` : "不限" }}</dd>
+                  <dd>
+                    {{
+                      item.user_limit
+                        ? `${item.usedByUser || 0}/${item.user_limit}`
+                        : "不限"
+                    }}
+                  </dd>
                 </div>
                 <div>
                   <dt>时间</dt>
-                  <dd>{{ formatDate(item.starts_at) }} 至 {{ formatDate(item.ends_at) }}</dd>
+                  <dd>
+                    {{ formatDate(item.starts_at) }} 至
+                    {{ formatDate(item.ends_at) }}
+                  </dd>
                 </div>
               </dl>
               <div class="shop-actions">
-                <input v-model.number="exchangeCounts[item.id]" type="number" min="1" max="99" placeholder="1" />
+                <input
+                  v-model.number="exchangeCounts[item.id]"
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="1"
+                />
                 <button
                   class="primary-action"
                   type="button"
                   :disabled="busy.shop || item.canExchange === false"
                   @click="claimExchange(item)"
                 >
-                  {{ item.canExchange === false ? item.unavailableReason || "不可兑换" : "兑换" }}
+                  {{
+                    item.canExchange === false
+                      ? item.unavailableReason || "不可兑换"
+                      : "兑换"
+                  }}
                 </button>
               </div>
             </article>
@@ -2009,9 +2670,14 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <History :size="22" />
         </div>
-        <div v-if="!stats?.recentDraws?.length" class="empty-mini">暂无最近抽卡记录</div>
+        <div v-if="!stats?.recentDraws?.length" class="empty-mini">
+          暂无最近抽卡记录
+        </div>
         <div v-else class="recent-list">
-          <article v-for="(record, index) in stats.recentDraws" :key="`${record.createdAt}-${index}`">
+          <article
+            v-for="(record, index) in stats.recentDraws"
+            :key="`${record.createdAt}-${index}`"
+          >
             <strong>{{ record.count }} 抽</strong>
             <span>{{ record.cardLevels.join(" / ") || "未记录稀有度" }}</span>
             <time>{{ formatDate(record.createdAt) }}</time>
@@ -2043,18 +2709,39 @@ function leaderboardRankLabel(rank?: number) {
         role="presentation"
         @click.self="closePoolDetail"
       >
-        <section class="pool-detail-modal" role="dialog" aria-modal="true" aria-label="卡池详情">
+        <section
+          class="pool-detail-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="卡池详情"
+        >
           <header class="result-modal-head">
             <div>
               <p class="eyebrow">卡池详情</p>
-              <h2>{{ poolDetailPool?.pool_name || selectedPool?.pool_name || "卡池详情" }}</h2>
+              <h2>
+                {{
+                  poolDetailPool?.pool_name ||
+                  selectedPool?.pool_name ||
+                  "卡池详情"
+                }}
+              </h2>
               <span>
-                {{ poolTypeLabel(poolDetailPool?.card_type ?? selectedPool?.card_type) }}
-                · 单抽 {{ poolDetailPool?.drawCosts?.once || selectedDrawCosts.once }}
-                · 十连 {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
+                {{
+                  poolTypeLabel(
+                    poolDetailPool?.card_type ?? selectedPool?.card_type,
+                  )
+                }}
+                · 单抽
+                {{
+                  poolDetailPool?.drawCosts?.once || selectedDrawCosts.once
+                }}
+                · 十连
+                {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
               </span>
             </div>
-            <button class="modal-close" type="button" @click="closePoolDetail">关闭</button>
+            <button class="modal-close" type="button" @click="closePoolDetail">
+              关闭
+            </button>
           </header>
 
           <div class="pool-detail-body">
@@ -2075,7 +2762,9 @@ function leaderboardRankLabel(rank?: number) {
                     <p class="eyebrow">抽卡概率</p>
                     <h3>稀有度分布</h3>
                   </div>
-                  <span class="type-pill">{{ poolDetailCards.length }} 张基础卡片</span>
+                  <span class="type-pill"
+                    >{{ poolDetailCards.length }} 张基础卡片</span
+                  >
                 </div>
                 <div class="pool-probability-list">
                   <div
@@ -2099,9 +2788,14 @@ function leaderboardRankLabel(rank?: number) {
                     <p class="eyebrow">卡池卡片</p>
                     <h3>全部可抽取卡片</h3>
                   </div>
-                  <span class="type-pill">{{ poolDetailCardsByRarity.length }} 个稀有度分组</span>
+                  <span class="type-pill"
+                    >{{ poolDetailCardsByRarity.length }} 个稀有度分组</span
+                  >
                 </div>
-                <div v-if="poolDetailCards.length === 0" class="empty-state compact">
+                <div
+                  v-if="poolDetailCards.length === 0"
+                  class="empty-state compact"
+                >
                   <Package :size="26" />
                   <strong>当前卡池暂无卡片</strong>
                   <span>后台添加卡片后会显示在这里。</span>
@@ -2113,7 +2807,10 @@ function leaderboardRankLabel(rank?: number) {
                     class="pool-card-group"
                   >
                     <header>
-                      <span class="rarity-badge" :class="rarityClass(group.rarity)">
+                      <span
+                        class="rarity-badge"
+                        :class="rarityClass(group.rarity)"
+                      >
                         {{ group.rarity }}
                       </span>
                       <strong>{{ group.cards.length }} 张</strong>
@@ -2174,7 +2871,9 @@ function leaderboardRankLabel(rank?: number) {
           </header>
           <div class="trade-listing-body launch-activity-body">
             <p class="launch-activity-desc">
-              {{ launchActivityInfo.description || "登录后可领取一次开服福利。" }}
+              {{
+                launchActivityInfo.description || "登录后可领取一次开服福利。"
+              }}
             </p>
             <div class="launch-reward-card">
               <span>本次奖励</span>
@@ -2182,7 +2881,9 @@ function leaderboardRankLabel(rank?: number) {
               <small>领取后会立即刷新积分和背包库存。</small>
             </div>
             <div class="launch-reward-grid">
-              <article v-if="Number(launchActivityInfo.rewards.points || 0) > 0">
+              <article
+                v-if="Number(launchActivityInfo.rewards.points || 0) > 0"
+              >
                 <span>积分</span>
                 <strong>{{ launchActivityInfo.rewards.points }}</strong>
               </article>
@@ -2210,7 +2911,11 @@ function leaderboardRankLabel(rank?: number) {
               :disabled="busy.launchActivity"
               @click="claimLaunchActivity"
             >
-              <LoaderCircle v-if="busy.launchActivity" :size="18" class="spin" />
+              <LoaderCircle
+                v-if="busy.launchActivity"
+                :size="18"
+                class="spin"
+              />
               <Gift v-else :size="18" />
               立即领取
             </button>
@@ -2226,14 +2931,26 @@ function leaderboardRankLabel(rank?: number) {
         role="presentation"
         @click.self="closeRechargeModal"
       >
-        <section class="trade-listing-modal recharge-modal" role="dialog" aria-modal="true" aria-label="积分充值">
+        <section
+          class="trade-listing-modal recharge-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="积分充值"
+        >
           <header class="result-modal-head">
             <div>
               <p class="eyebrow">积分充值</p>
               <h2>扣鱼排积分换本地积分</h2>
               <span>{{ rechargeRatioLabel }}</span>
             </div>
-            <button class="modal-close" type="button" :disabled="busy.recharge" @click="closeRechargeModal">关闭</button>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.recharge"
+              @click="closeRechargeModal"
+            >
+              关闭
+            </button>
           </header>
           <div class="trade-listing-body recharge-modal-body">
             <label class="redeem-input">
@@ -2263,13 +2980,27 @@ function leaderboardRankLabel(rank?: number) {
               </div>
               <div>
                 <dt>说明</dt>
-                <dd>充值成功后会刷新积分余额；重复提交同一请求不会重复入账。</dd>
+                <dd>
+                  充值成功后会刷新积分余额；重复提交同一请求不会重复入账。
+                </dd>
               </div>
             </dl>
           </div>
           <footer class="result-modal-actions">
-            <button class="secondary-action" type="button" :disabled="busy.recharge" @click="closeRechargeModal">取消</button>
-            <button class="primary-action" type="button" :disabled="busy.recharge" @click="submitRecharge">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.recharge"
+              @click="closeRechargeModal"
+            >
+              取消
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.recharge"
+              @click="submitRecharge"
+            >
               <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
               <Coins v-else :size="18" />
               确认充值
@@ -2286,14 +3017,28 @@ function leaderboardRankLabel(rank?: number) {
         role="presentation"
         @click.self="closeTradeListingModal"
       >
-        <section class="trade-listing-modal" role="dialog" aria-modal="true" aria-label="挂售卡片">
+        <section
+          class="trade-listing-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="挂售卡片"
+        >
           <header class="result-modal-head">
             <div>
               <p class="eyebrow">卡片挂售</p>
               <h2>{{ listingTarget.cardName }}</h2>
-              <span>{{ listingTarget.cardLevel }} · UUID {{ listingTarget.uuid }}</span>
+              <span
+                >{{ listingTarget.cardLevel }} · UUID
+                {{ listingTarget.uuid }}</span
+              >
             </div>
-            <button class="modal-close" type="button" @click="closeTradeListingModal">关闭</button>
+            <button
+              class="modal-close"
+              type="button"
+              @click="closeTradeListingModal"
+            >
+              关闭
+            </button>
           </header>
           <div class="trade-listing-body">
             <label class="redeem-input">
@@ -2314,7 +3059,10 @@ function leaderboardRankLabel(rank?: number) {
               </div>
               <div>
                 <dt>手续费</dt>
-                <dd>{{ formatPercent(tradeConfig.feeRate) }} · 预计 {{ listingFeePreview.feeAmount }} 积分</dd>
+                <dd>
+                  {{ formatPercent(tradeConfig.feeRate) }} · 预计
+                  {{ listingFeePreview.feeAmount }} 积分
+                </dd>
               </div>
               <div>
                 <dt>预计实收</dt>
@@ -2327,8 +3075,19 @@ function leaderboardRankLabel(rank?: number) {
             </dl>
           </div>
           <footer class="result-modal-actions">
-            <button class="secondary-action" type="button" @click="closeTradeListingModal">取消</button>
-            <button class="primary-action" type="button" :disabled="busy.trade || !tradeConfig.enabled" @click="createTradeListing">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="closeTradeListingModal"
+            >
+              取消
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.trade || !tradeConfig.enabled"
+              @click="createTradeListing"
+            >
               确认挂售
             </button>
           </footer>
@@ -2355,13 +3114,22 @@ function leaderboardRankLabel(rank?: number) {
               <h2>{{ resultModalTitle }}</h2>
               <span>{{ resultModalSubtitle }}</span>
             </div>
-            <button class="modal-close" type="button" aria-label="关闭抽卡结果" @click="closeResultModal">
+            <button
+              class="modal-close"
+              type="button"
+              aria-label="关闭抽卡结果"
+              @click="closeResultModal"
+            >
               关闭
             </button>
           </header>
 
           <div class="result-modal-summary">
-            <span v-for="rarity in rarityOrder" :key="rarity" :class="['summary-pill', rarityClass(rarity)]">
+            <span
+              v-for="rarity in rarityOrder"
+              :key="rarity"
+              :class="['summary-pill', rarityClass(rarity)]"
+            >
               {{ rarity }} {{ resultSummary[rarity] }}
             </span>
           </div>
@@ -2375,13 +3143,18 @@ function leaderboardRankLabel(rank?: number) {
               v-for="(card, index) in lastResults"
               :key="`${card.userCardUuid}-${index}`"
               class="result-card"
-              :class="[rarityClass(card.rarity), { featured: lastResults.length === 1 }]"
+              :class="[
+                rarityClass(card.rarity),
+                { featured: lastResults.length === 1 },
+              ]"
               :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
             >
               <div class="card-face">
                 <div class="result-card-top">
                   <span class="rarity-badge">{{ card.rarity }}</span>
-                  <span class="card-type-pill">{{ cardTypeLabel(card.cardType) }}</span>
+                  <span class="card-type-pill">{{
+                    cardTypeLabel(card.cardType)
+                  }}</span>
                 </div>
                 <div class="card-sigil"></div>
                 <div class="card-content">
@@ -2398,14 +3171,28 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <footer class="result-modal-actions">
-            <button class="secondary-action" type="button" @click="closeResultModal">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="closeResultModal"
+            >
               收起结果
             </button>
-            <button class="primary-action" type="button" :disabled="busy.drawing" @click="performDraw('once')">
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.drawing"
+              @click="performDraw('once')"
+            >
               <Sparkles :size="18" />
               继续单抽
             </button>
-            <button class="primary-action golden" type="button" :disabled="busy.drawing" @click="performDraw('ten')">
+            <button
+              class="primary-action golden"
+              type="button"
+              :disabled="busy.drawing"
+              @click="performDraw('ten')"
+            >
               <Ticket :size="18" />
               再来十连
             </button>

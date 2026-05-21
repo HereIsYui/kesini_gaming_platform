@@ -54,7 +54,15 @@ export class RedeemService {
         dropRepository,
         rewards.items,
       );
-      await this.rewardService.grantRewards(manager, user, rewards);
+      await this.rewardService.grantRewards(manager, user, rewards, {
+        sourceType: "redeem_code",
+        sourceId: redeemCode!.id,
+        title: `兑换码奖励：${redeemCode!.code}`,
+        metadata: {
+          code: redeemCode!.code,
+          name: redeemCode!.name,
+        },
+      });
 
       redeemCode!.used_count = (redeemCode!.used_count || 0) + 1;
       await redeemCodeRepository.save(redeemCode!);
@@ -74,7 +82,9 @@ export class RedeemService {
     });
   }
 
-  private assertRedeemCodeAvailable(code: RedeemCode | null): asserts code is RedeemCode {
+  private assertRedeemCodeAvailable(
+    code: RedeemCode | null,
+  ): asserts code is RedeemCode {
     if (!code) {
       throw new Error("兑换码不存在");
     }

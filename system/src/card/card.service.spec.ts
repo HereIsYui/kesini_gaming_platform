@@ -5,7 +5,11 @@ jest.mock("uuid", () => ({
 import { ArgumentMetadata, ValidationPipe } from "@nestjs/common";
 import { CardService } from "./card.service";
 import { GachaConfigService } from "./gacha-config.service";
-import { DrawCardDto, DrawMultipleDto, SynthesizeCardDto } from "./card.controller";
+import {
+  DrawCardDto,
+  DrawMultipleDto,
+  SynthesizeCardDto,
+} from "./card.controller";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
@@ -254,8 +258,9 @@ describe("CardController 入参安全", () => {
     await expect(
       pipe.transform({ poolId: 1, count: 2 }, metadata),
     ).rejects.toThrow();
-    await expect(pipe.transform({ poolId: 1, count: 10 }, metadata)).resolves
-      .toEqual(expect.objectContaining({ count: 10 }));
+    await expect(
+      pipe.transform({ poolId: 1, count: 10 }, metadata),
+    ).resolves.toEqual(expect.objectContaining({ count: 10 }));
   });
 
   it("合成请求只允许合法目标稀有度", async () => {
@@ -383,11 +388,14 @@ describe("CardService 背包筛选", () => {
     ] as UserCard[];
 
     const cardRepository = createRepository({
-      find: jest.fn(async (options?: any) => filterByWhere(cards, options?.where)),
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(cards, options?.where),
+      ),
     });
     const userCardRepository = createRepository({
-      count: jest.fn(async (options?: any) =>
-        filterByWhere(userCards, options?.where).length,
+      count: jest.fn(
+        async (options?: any) =>
+          filterByWhere(userCards, options?.where).length,
       ),
       find: jest.fn(async (options?: any) =>
         filterByWhere(userCards, options?.where)
@@ -521,9 +529,9 @@ describe("CardService 背包筛选", () => {
   it("非法稀有度仍会被拒绝", async () => {
     const { service } = createListService();
 
-    await expect(service.getUserCards("u1", "X", undefined, 1, 20)).rejects.toThrow(
-      "稀有度参数无效",
-    );
+    await expect(
+      service.getUserCards("u1", "X", undefined, 1, 20),
+    ).rejects.toThrow("稀有度参数无效");
   });
 });
 
@@ -853,7 +861,11 @@ describe("CardService 抽卡积分扣除", () => {
     };
   }
 
-  function createDrawService(user: Partial<User>, drawCosts = { once: 10, ten: 100 }) {
+  function createDrawService(
+    user: Partial<User>,
+    drawCosts = { once: 10, ten: 100 },
+    pointLedgerService?: any,
+  ) {
     const poolRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
         id: 1,
@@ -930,6 +942,7 @@ describe("CardService 抽卡积分扣除", () => {
       {} as any,
       configService,
       dataSource as any,
+      pointLedgerService,
     );
 
     return {
@@ -958,6 +971,38 @@ describe("CardService 抽卡积分扣除", () => {
       expect.objectContaining({
         point: 0,
         card_count_n: 1,
+      }),
+    );
+  });
+
+  it("抽卡扣积分时会写入积分流水", async () => {
+    const pointLedgerService = {
+      applyChange: jest.fn(async (_manager, user, amount, context) => {
+        const pointBefore = user.point || 0;
+        user.point = pointBefore + amount;
+        return {
+          point_before: pointBefore,
+          point_after: user.point,
+          ...context,
+        };
+      }),
+    };
+    const { service } = createDrawService(
+      { point: 10 },
+      { once: 10, ten: 100 },
+      pointLedgerService,
+    );
+
+    await service.drawOnce("u1", 1);
+
+    expect(pointLedgerService.applyChange).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      -10,
+      expect.objectContaining({
+        sourceType: "draw_once",
+        sourceId: 1,
+        title: "单抽：测试卡池",
       }),
     );
   });

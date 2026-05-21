@@ -14,6 +14,7 @@ import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { GachaConfigService } from "./gacha-config.service";
+import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { GachaConfigService } from "./gacha-config.service";
       TradeListing,
     ]),
     AuthModule,
+    PointLedgerModule,
   ],
   controllers: [CardController],
   providers: [CardService, GachaConfigService],

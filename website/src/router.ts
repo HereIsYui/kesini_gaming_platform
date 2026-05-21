@@ -1,4 +1,8 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+  type RouteRecordRaw,
+} from "vue-router";
 
 const PageShell = {
   template: "<span />",
@@ -10,6 +14,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/result", redirect: "/draw" },
   { path: "/bag", name: "bag", component: PageShell },
   { path: "/synthesize", name: "synthesize", component: PageShell },
+  { path: "/points", name: "points", component: PageShell },
   { path: "/leaderboard", name: "leaderboard", component: PageShell },
   { path: "/trade", name: "trade", component: PageShell },
   { path: "/redeem", name: "redeem", component: PageShell },

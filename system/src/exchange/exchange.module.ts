@@ -6,6 +6,7 @@ import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { User } from "src/entity/user.entity";
+import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 import { ExchangeController } from "./exchange.controller";
 import { ExchangeService } from "./exchange.service";
 
@@ -19,6 +20,7 @@ import { ExchangeService } from "./exchange.service";
       DropItem,
     ]),
     AuthModule,
+    PointLedgerModule,
   ],
   controllers: [ExchangeController],
   providers: [ExchangeService],

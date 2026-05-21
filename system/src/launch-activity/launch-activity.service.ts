@@ -75,7 +75,15 @@ export class LaunchActivityService {
         dropRepository,
         rewards.items,
       );
-      await this.rewardService.grantRewards(manager, user, rewards);
+      await this.rewardService.grantRewards(manager, user, rewards, {
+        sourceType: "launch_activity",
+        sourceId: config.activity_key,
+        title: `开服福利：${config.name}`,
+        metadata: {
+          activityKey: config.activity_key,
+          activityName: config.name,
+        },
+      });
 
       const claim = claimRepository.create({
         activity_key: config.activity_key,
@@ -99,12 +107,10 @@ export class LaunchActivityService {
     return config || this.createDefaultConfig(repository);
   }
 
-  private createDefaultConfig(
-    repository: {
-      create(value: Partial<LaunchActivityConfig>): LaunchActivityConfig;
-      save(value: LaunchActivityConfig): Promise<LaunchActivityConfig>;
-    },
-  ) {
+  private createDefaultConfig(repository: {
+    create(value: Partial<LaunchActivityConfig>): LaunchActivityConfig;
+    save(value: LaunchActivityConfig): Promise<LaunchActivityConfig>;
+  }) {
     return repository.save(
       repository.create({
         id: 1,
