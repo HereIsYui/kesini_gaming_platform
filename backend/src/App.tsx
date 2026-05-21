@@ -281,10 +281,9 @@ const poolFields: FieldConfig[] = [
 ];
 
 function createCardFields(options: AdminOptions | null): FieldConfig[] {
-  const poolOptions =
-    options?.pools?.length
-      ? options.pools
-      : [{ label: "默认卡池 #1", value: 1 }];
+  const poolOptions = options?.pools?.length
+    ? options.pools
+    : [{ label: "默认卡池 #1", value: 1 }];
   const fragmentOptions =
     options?.dropItems
       ?.filter((item) => item.type === 0 && item.disabled !== true)
@@ -335,10 +334,9 @@ function createCardFields(options: AdminOptions | null): FieldConfig[] {
       type: "select",
       options: fragmentSelectOptions,
       fullWidth: true,
-      helper:
-        options?.defaultFragmentItem
-          ? "留空时使用全局默认碎片；也可以为这张卡单独指定碎片。消耗规则：N=80、R=160、SR=320、SSR=1000，UR不可合成/分解。"
-          : "还没有设置全局默认碎片，请先到物品管理把一个卡片碎片设为默认，或为这张卡单独指定碎片。",
+      helper: options?.defaultFragmentItem
+        ? "留空时使用全局默认碎片；也可以为这张卡单独指定碎片。消耗规则：N=80、R=160、SR=320、SSR=1000，UR不可合成/分解。"
+        : "还没有设置全局默认碎片，请先到物品管理把一个卡片碎片设为默认，或为这张卡单独指定碎片。",
     },
   ];
 }
@@ -559,14 +557,12 @@ export function App() {
   const antTheme = useMemo(
     () => ({
       algorithm:
-        theme === "dark"
-          ? antdTheme.darkAlgorithm
-          : antdTheme.defaultAlgorithm,
+        theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
       token: {
         borderRadius: 8,
         colorPrimary: "#2563eb",
         fontFamily:
-          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       },
       components: {
         Layout: {
@@ -1162,7 +1158,11 @@ function LoginPage({
             </Button>
           </Form>
 
-          <Form className="manual-token" layout="vertical" onFinish={useManualToken}>
+          <Form
+            className="manual-token"
+            layout="vertical"
+            onFinish={useManualToken}
+          >
             <Form.Item label="本地调试 Token">
               <Input.TextArea
                 value={manualToken}
@@ -1331,7 +1331,9 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
               {
                 key: "nickname",
                 label: "昵称",
-                children: String(admin?.user?.nickname || admin?.user?.name || "-"),
+                children: String(
+                  admin?.user?.nickname || admin?.user?.name || "-",
+                ),
               },
               {
                 key: "admin",
@@ -1518,11 +1520,7 @@ function AdminTable({
   );
 
   return (
-    <Panel
-      title={title}
-      icon={<Database size={18} />}
-      className="table-panel"
-    >
+    <Panel title={title} icon={<Database size={18} />} className="table-panel">
       <Space className="table-toolbar" wrap>
         <Input
           className="toolbar-search"
@@ -1614,8 +1612,8 @@ function AdminTable({
         }}
       />
 
-      {(editing || creating) && (
-        renderEditor ? (
+      {(editing || creating) &&
+        (renderEditor ? (
           renderEditor({
             initial: editing || {},
             onCancel: () => {
@@ -1635,8 +1633,7 @@ function AdminTable({
             }}
             onSubmit={saveForm}
           />
-        )
-      )}
+        ))}
 
       {detail && (
         <DetailModal
@@ -1705,132 +1702,150 @@ function EditModal({
       width={760}
       destroyOnHidden
     >
-      <Form layout="vertical" className="form-grid antd-form-grid">
-        {fields.map((field) => {
-          const fieldOptions =
-            field.type === "boolean" ? booleanOptions : field.options;
-          const shouldRenderSelect =
-            field.type === "select" ||
-            field.type === "boolean" ||
-            Boolean(fieldOptions?.length);
-          const fieldClass =
-            field.fullWidth || field.type === "textarea"
-              ? "form-field full-width"
-              : "form-field";
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="基础信息"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            {fields.map((field) => {
+              const fieldOptions =
+                field.type === "boolean" ? booleanOptions : field.options;
+              const shouldRenderSelect =
+                field.type === "select" ||
+                field.type === "boolean" ||
+                Boolean(fieldOptions?.length);
+              const fieldClass =
+                field.fullWidth || field.type === "textarea"
+                  ? "form-field full-width"
+                  : "form-field";
 
-          if (field.type === "multiSelect") {
-            return (
-              <Form.Item
-                className={fieldClass}
-                key={field.key}
-                label={field.label}
-                extra={field.helper}
-              >
-                <Checkbox.Group
-                  className="rarity-segment-grid"
-                  value={
-                    Array.isArray(values[field.key])
-                      ? values[field.key].map(String)
-                      : []
-                  }
-                  onChange={(checkedValues) =>
-                    setValues({
-                      ...values,
-                      [field.key]: checkedValues
-                        .map(String)
-                        .sort((left, right) => {
-                          const order = (fieldOptions || []).map((option) =>
-                            String(option.value),
-                          );
-                          return order.indexOf(left) - order.indexOf(right);
-                        }),
-                    })
-                  }
-                  options={(fieldOptions || []).map((option) => ({
-                    label: option.label,
-                    value: String(option.value),
-                    disabled: option.disabled,
-                  }))}
-                />
-              </Form.Item>
-            );
-          }
+              if (field.type === "multiSelect") {
+                return (
+                  <Form.Item
+                    className={fieldClass}
+                    key={field.key}
+                    label={field.label}
+                    extra={field.helper}
+                  >
+                    <Checkbox.Group
+                      className="rarity-segment-grid"
+                      value={
+                        Array.isArray(values[field.key])
+                          ? values[field.key].map(String)
+                          : []
+                      }
+                      onChange={(checkedValues) =>
+                        setValues({
+                          ...values,
+                          [field.key]: checkedValues
+                            .map(String)
+                            .sort((left, right) => {
+                              const order = (fieldOptions || []).map((option) =>
+                                String(option.value),
+                              );
+                              return order.indexOf(left) - order.indexOf(right);
+                            }),
+                        })
+                      }
+                      options={(fieldOptions || []).map((option) => ({
+                        label: option.label,
+                        value: String(option.value),
+                        disabled: option.disabled,
+                      }))}
+                    />
+                  </Form.Item>
+                );
+              }
 
-          return (
-            <Form.Item
-              className={fieldClass}
-              key={field.key}
-              label={field.label}
-              extra={field.helper}
-            >
-              {field.type === "textarea" ? (
-                <Input.TextArea
-                  value={values[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  autoSize={{ minRows: 4, maxRows: 8 }}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      [field.key]: event.target.value,
-                    })
-                  }
-                />
-              ) : shouldRenderSelect ? (
-                <Select
-                  value={String(values[field.key] ?? "")}
-                  onChange={(value) =>
-                    setValues({
-                      ...values,
-                      [field.key]: coerceFieldValue(field, value),
-                    })
-                  }
-                  options={[
-                    ...(!(fieldOptions || []).some(
-                      (option) => String(option.value) === "",
-                    )
-                      ? [
-                          {
-                            label: fieldOptions?.length ? "请选择" : "暂无可选项",
-                            value: "",
-                          },
-                        ]
-                      : []),
-                    ...(fieldOptions || []).map((option) => ({
-                      label: option.label,
-                      value: String(option.value),
-                      disabled: option.disabled,
-                    })),
-                  ]}
-                />
-              ) : field.type === "number" ? (
-                <InputNumber
-                  className="full-width-control"
-                  value={values[field.key] === "" ? null : Number(values[field.key])}
-                  placeholder={field.placeholder}
-                  onChange={(value) =>
-                    setValues({
-                      ...values,
-                      [field.key]: value ?? "",
-                    })
-                  }
-                />
-              ) : (
-                <Input
-                  value={values[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  onChange={(event) =>
-                    setValues({
-                      ...values,
-                      [field.key]: event.target.value,
-                    })
-                  }
-                />
-              )}
-            </Form.Item>
-          );
-        })}
-      </Form>
-      {error && <Alert type="error" message={error} showIcon />}
+              return (
+                <Form.Item
+                  className={fieldClass}
+                  key={field.key}
+                  label={field.label}
+                  extra={field.helper}
+                >
+                  {field.type === "textarea" ? (
+                    <Input.TextArea
+                      value={values[field.key] ?? ""}
+                      placeholder={field.placeholder}
+                      autoSize={{ minRows: 4, maxRows: 8 }}
+                      onChange={(event) =>
+                        setValues({
+                          ...values,
+                          [field.key]: event.target.value,
+                        })
+                      }
+                    />
+                  ) : shouldRenderSelect ? (
+                    <Select
+                      value={String(values[field.key] ?? "")}
+                      onChange={(value) =>
+                        setValues({
+                          ...values,
+                          [field.key]: coerceFieldValue(field, value),
+                        })
+                      }
+                      options={[
+                        ...(!(fieldOptions || []).some(
+                          (option) => String(option.value) === "",
+                        )
+                          ? [
+                              {
+                                label: fieldOptions?.length
+                                  ? "请选择"
+                                  : "暂无可选项",
+                                value: "",
+                              },
+                            ]
+                          : []),
+                        ...(fieldOptions || []).map((option) => ({
+                          label: option.label,
+                          value: String(option.value),
+                          disabled: option.disabled,
+                        })),
+                      ]}
+                    />
+                  ) : field.type === "number" ? (
+                    <InputNumber
+                      className="full-width-control"
+                      value={
+                        values[field.key] === ""
+                          ? null
+                          : Number(values[field.key])
+                      }
+                      placeholder={field.placeholder}
+                      onChange={(value) =>
+                        setValues({
+                          ...values,
+                          [field.key]: value ?? "",
+                        })
+                      }
+                    />
+                  ) : (
+                    <Input
+                      value={values[field.key] ?? ""}
+                      placeholder={field.placeholder}
+                      onChange={(event) =>
+                        setValues({
+                          ...values,
+                          [field.key]: event.target.value,
+                        })
+                      }
+                    />
+                  )}
+                </Form.Item>
+              );
+            })}
+          </Form>
+        </Card>
+        {error && <Alert type="error" message={error} showIcon />}
+      </Space>
     </Modal>
   );
 }
@@ -1857,8 +1872,12 @@ function ItemModal({
       await onSubmit({
         ...values,
         drop_type: currentType,
-        drop_item_type: showUsageParams ? Number(values.drop_item_type || 0) : 0,
-        drop_item_value: showUsageParams ? Number(values.drop_item_value || 0) : 0,
+        drop_item_type: showUsageParams
+          ? Number(values.drop_item_type || 0)
+          : 0,
+        drop_item_value: showUsageParams
+          ? Number(values.drop_item_value || 0)
+          : 0,
         default_fragment: currentType === 0 && values.default_fragment === true,
       });
     } catch (err) {
@@ -1886,145 +1905,161 @@ function ItemModal({
       confirmLoading={loading}
       destroyOnHidden
     >
-      <Space direction="vertical" size={16} className="full-width">
-        <Space wrap>
-          {itemTemplates.map((template) => (
-            <Button
-              size="small"
-              key={template.label}
-              onClick={() =>
-                setValues({
-                  ...values,
-                  ...template.values,
-                })
-              }
-            >
-              {template.label}
-            </Button>
-          ))}
-        </Space>
-        <Form layout="vertical" className="form-grid antd-form-grid">
-          <Form.Item className="form-field" label="物品名称">
-            <Input
-              value={values.drop_name}
-              placeholder="例如：SSR碎片"
-              onChange={(event) =>
-                setValues({ ...values, drop_name: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="物品类型">
-            <Select
-              value={String(values.drop_type)}
-              onChange={(value) =>
-                setValues({
-                  ...values,
-                  drop_type: Number(value),
-                  drop_item_type: 0,
-                  drop_item_value: 0,
-                  default_fragment:
-                    Number(value) === 0
-                      ? values.default_fragment
-                      : false,
-                })
-              }
-              options={dropTypeOptions.map((option) => ({
-                label: option.label,
-                value: String(option.value),
-              }))}
-            />
-          </Form.Item>
-          <Alert
-            className="full-width"
-            type="info"
-            showIcon
-            message={
-              <Space wrap>
-                <Badge>{getDropTypeLabel(currentType)}</Badge>
-                <span>{getDropTypeUsage(currentType)}</span>
-              </Space>
-            }
-          />
-          {currentType === 0 && (
-            <Form.Item className="form-field full-width">
-              <div className="switch-field">
-                <span>
-                  <strong>默认分解碎片</strong>
-                  <small>卡片未单独选择碎片时，合成和分解会使用这个物品。</small>
-                </span>
-                <Switch
-                  checked={values.default_fragment === true}
-                  onChange={(checked) =>
-                    setValues({
-                      ...values,
-                      default_fragment: checked,
-                    })
-                  }
-                />
-              </div>
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="常用模板"
+        >
+          <Space wrap className="template-row">
+            {itemTemplates.map((template) => (
+              <Button
+                size="small"
+                key={template.label}
+                onClick={() =>
+                  setValues({
+                    ...values,
+                    ...template.values,
+                  })
+                }
+              >
+                {template.label}
+              </Button>
+            ))}
+          </Space>
+        </Card>
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="物品信息"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="物品名称">
+              <Input
+                value={values.drop_name}
+                placeholder="例如：SSR碎片"
+                onChange={(event) =>
+                  setValues({ ...values, drop_name: event.target.value })
+                }
+              />
             </Form.Item>
-          )}
-          <Form.Item className="form-field full-width" label="物品说明">
-            <Input.TextArea
-              value={values.drop_desc}
-              placeholder="给运营和玩家都能看懂的说明"
-              autoSize={{ minRows: 4, maxRows: 8 }}
-              onChange={(event) =>
-                setValues({ ...values, drop_desc: event.target.value })
+            <Form.Item className="form-field" label="物品类型">
+              <Select
+                value={String(values.drop_type)}
+                onChange={(value) =>
+                  setValues({
+                    ...values,
+                    drop_type: Number(value),
+                    drop_item_type: 0,
+                    drop_item_value: 0,
+                    default_fragment:
+                      Number(value) === 0 ? values.default_fragment : false,
+                  })
+                }
+                options={dropTypeOptions.map((option) => ({
+                  label: option.label,
+                  value: String(option.value),
+                }))}
+              />
+            </Form.Item>
+            <Alert
+              className="full-width"
+              type="info"
+              showIcon
+              message={
+                <Space wrap>
+                  <Badge>{getDropTypeLabel(currentType)}</Badge>
+                  <span>{getDropTypeUsage(currentType)}</span>
+                </Space>
               }
             />
-          </Form.Item>
-          {showUsageParams && (
-            <>
-              <Form.Item
-                className="form-field"
-                label="用途参数类型"
-                extra="普通道具和其他类型可用于后续业务扩展。"
-              >
-                <InputNumber
-                  className="full-width-control"
-                  min={0}
-                  value={Number(values.drop_item_type || 0)}
-                  onChange={(value) =>
-                    setValues({
-                      ...values,
-                      drop_item_type: Number(value || 0),
-                    })
-                  }
-                />
+            {currentType === 0 && (
+              <Form.Item className="form-field full-width">
+                <div className="switch-field">
+                  <span>
+                    <strong>默认分解碎片</strong>
+                    <small>
+                      卡片未单独选择碎片时，合成和分解会使用这个物品。
+                    </small>
+                  </span>
+                  <Switch
+                    checked={values.default_fragment === true}
+                    onChange={(checked) =>
+                      setValues({
+                        ...values,
+                        default_fragment: checked,
+                      })
+                    }
+                  />
+                </div>
               </Form.Item>
-              <Form.Item
-                className="form-field"
-                label="用途参数值"
-                extra="没有特殊规则时保持 0。"
-              >
-                <InputNumber
-                  className="full-width-control"
-                  min={0}
-                  value={Number(values.drop_item_value || 0)}
-                  onChange={(value) =>
-                    setValues({
-                      ...values,
-                      drop_item_value: Number(value || 0),
-                    })
-                  }
-                />
-              </Form.Item>
-            </>
-          )}
-          <Form.Item className="form-field" label="状态">
-            <Select
-              value={values.disabled ? "true" : "false"}
-              onChange={(value) =>
-                setValues({ ...values, disabled: value === "true" })
-              }
-              options={[
-                { label: "启用", value: "false" },
-                { label: "禁用", value: "true" },
-              ]}
-            />
-          </Form.Item>
-        </Form>
+            )}
+            <Form.Item className="form-field full-width" label="物品说明">
+              <Input.TextArea
+                value={values.drop_desc}
+                placeholder="给运营和玩家都能看懂的说明"
+                autoSize={{ minRows: 4, maxRows: 8 }}
+                onChange={(event) =>
+                  setValues({ ...values, drop_desc: event.target.value })
+                }
+              />
+            </Form.Item>
+            {showUsageParams && (
+              <>
+                <Form.Item
+                  className="form-field"
+                  label="用途参数类型"
+                  extra="普通道具和其他类型可用于后续业务扩展。"
+                >
+                  <InputNumber
+                    className="full-width-control"
+                    min={0}
+                    value={Number(values.drop_item_type || 0)}
+                    onChange={(value) =>
+                      setValues({
+                        ...values,
+                        drop_item_type: Number(value || 0),
+                      })
+                    }
+                  />
+                </Form.Item>
+                <Form.Item
+                  className="form-field"
+                  label="用途参数值"
+                  extra="没有特殊规则时保持 0。"
+                >
+                  <InputNumber
+                    className="full-width-control"
+                    min={0}
+                    value={Number(values.drop_item_value || 0)}
+                    onChange={(value) =>
+                      setValues({
+                        ...values,
+                        drop_item_value: Number(value || 0),
+                      })
+                    }
+                  />
+                </Form.Item>
+              </>
+            )}
+            <Form.Item className="form-field" label="状态">
+              <Select
+                value={values.disabled ? "true" : "false"}
+                onChange={(value) =>
+                  setValues({ ...values, disabled: value === "true" })
+                }
+                options={[
+                  { label: "启用", value: "false" },
+                  { label: "禁用", value: "true" },
+                ]}
+              />
+            </Form.Item>
+          </Form>
+        </Card>
         {error && <Alert type="error" message={error} showIcon />}
       </Space>
     </Modal>
@@ -2091,7 +2126,8 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
     {
       title: "库存",
       width: 120,
-      render: (_, row) => `${row.used_count || 0} / ${row.total_limit || "不限"}`,
+      render: (_, row) =>
+        `${row.used_count || 0} / ${row.total_limit || "不限"}`,
     },
     {
       title: "奖励",
@@ -2110,7 +2146,11 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
       fixed: "right",
       render: (_, row) => (
         <Space size={8} wrap>
-          <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+          <Button
+            size="small"
+            icon={<Eye size={14} />}
+            onClick={() => setDetail(row)}
+          >
             详情
           </Button>
           <Button size="small" onClick={() => setEditing(row)}>
@@ -2172,7 +2212,11 @@ function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
           placeholder="搜索兑换码或名称"
         />
         <Space className="toolbar-actions" wrap>
-          <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
+          <Button
+            icon={<RefreshCw size={15} />}
+            onClick={load}
+            disabled={loading}
+          >
             刷新
           </Button>
           <Button
@@ -2277,7 +2321,8 @@ function RedeemCodeModal({
         ...values,
         starts_at: fromDateTimeLocal(values.starts_at),
         ends_at: fromDateTimeLocal(values.ends_at),
-        total_limit: values.total_limit === "" ? null : Number(values.total_limit),
+        total_limit:
+          values.total_limit === "" ? null : Number(values.total_limit),
       } as Partial<RedeemCodeRecord>);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -2304,85 +2349,100 @@ function RedeemCodeModal({
       confirmLoading={loading}
       destroyOnHidden
     >
-      <Space direction="vertical" size={16} className="full-width">
-        <Form layout="vertical" className="form-grid antd-form-grid">
-          <Form.Item className="form-field" label="兑换码">
-            <Input
-              value={values.code}
-              placeholder="WELCOME2026"
-              onChange={(event) =>
-                setValues({ ...values, code: event.target.value.toUpperCase() })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="名称">
-            <Input
-              value={values.name}
-              placeholder="欢迎礼包"
-              onChange={(event) =>
-                setValues({ ...values, name: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="状态">
-            <Select
-              value={values.enabled ? "true" : "false"}
-              onChange={(value) =>
-                setValues({ ...values, enabled: value === "true" })
-              }
-              options={[
-                { label: "启用", value: "true" },
-                { label: "停用", value: "false" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="总库存">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              value={values.total_limit === "" ? null : Number(values.total_limit)}
-              placeholder="留空表示不限"
-              onChange={(value) =>
-                setValues({
-                  ...values,
-                  total_limit: value === null ? "" : String(value),
-                })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="开始时间">
-            <Input
-              type="datetime-local"
-              value={values.starts_at}
-              onChange={(event) =>
-                setValues({ ...values, starts_at: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="结束时间">
-            <Input
-              type="datetime-local"
-              value={values.ends_at}
-              onChange={(event) =>
-                setValues({ ...values, ends_at: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field full-width" label="描述">
-            <Input.TextArea
-              value={values.description}
-              placeholder="面向运营和客服的备注"
-              autoSize={{ minRows: 3, maxRows: 6 }}
-              onChange={(event) =>
-                setValues({ ...values, description: event.target.value })
-              }
-            />
-          </Form.Item>
-        </Form>
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="基础信息"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="兑换码">
+              <Input
+                value={values.code}
+                placeholder="WELCOME2026"
+                onChange={(event) =>
+                  setValues({
+                    ...values,
+                    code: event.target.value.toUpperCase(),
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="名称">
+              <Input
+                value={values.name}
+                placeholder="欢迎礼包"
+                onChange={(event) =>
+                  setValues({ ...values, name: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="状态">
+              <Select
+                value={values.enabled ? "true" : "false"}
+                onChange={(value) =>
+                  setValues({ ...values, enabled: value === "true" })
+                }
+                options={[
+                  { label: "启用", value: "true" },
+                  { label: "停用", value: "false" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="总库存">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                value={
+                  values.total_limit === "" ? null : Number(values.total_limit)
+                }
+                placeholder="留空表示不限"
+                onChange={(value) =>
+                  setValues({
+                    ...values,
+                    total_limit: value === null ? "" : String(value),
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="开始时间">
+              <Input
+                type="datetime-local"
+                value={values.starts_at}
+                onChange={(event) =>
+                  setValues({ ...values, starts_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="结束时间">
+              <Input
+                type="datetime-local"
+                value={values.ends_at}
+                onChange={(event) =>
+                  setValues({ ...values, ends_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field full-width" label="描述">
+              <Input.TextArea
+                value={values.description}
+                placeholder="面向运营和客服的备注"
+                autoSize={{ minRows: 3, maxRows: 6 }}
+                onChange={(event) =>
+                  setValues({ ...values, description: event.target.value })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
 
         <Card
           size="small"
-          className="form-section-card"
+          className="admin-form-card form-section-card"
           title="奖励内容"
           extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
         >
@@ -2407,7 +2467,11 @@ function RedeemCodeModal({
             </Form>
             <Space direction="vertical" size={8} className="full-width">
               {values.rewards.items.map((item, index) => (
-                <Space className="reward-item-row antd-reward-row" key={index} wrap>
+                <Space
+                  className="reward-item-row antd-reward-row"
+                  key={index}
+                  wrap
+                >
                   <Select
                     className="reward-item-select"
                     value={item.itemId ? String(item.itemId) : undefined}
@@ -2441,7 +2505,9 @@ function RedeemCodeModal({
                         ...values,
                         rewards: {
                           ...values.rewards,
-                          items: values.rewards.items.filter((_, i) => i !== index),
+                          items: values.rewards.items.filter(
+                            (_, i) => i !== index,
+                          ),
                         },
                       })
                     }
@@ -2480,8 +2546,9 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
-  const [data, setData] =
-    useState<PageResult<ExchangeShopItemRecord> | null>(null);
+  const [data, setData] = useState<PageResult<ExchangeShopItemRecord> | null>(
+    null,
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<ExchangeShopItemRecord | null>(null);
@@ -2539,7 +2606,8 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
     {
       title: "库存",
       width: 120,
-      render: (_, row) => `${row.used_count || 0} / ${row.total_limit || "不限"}`,
+      render: (_, row) =>
+        `${row.used_count || 0} / ${row.total_limit || "不限"}`,
     },
     {
       title: "限兑",
@@ -2558,7 +2626,11 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
       fixed: "right",
       render: (_, row) => (
         <Space size={8} wrap>
-          <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+          <Button
+            size="small"
+            icon={<Eye size={14} />}
+            onClick={() => setDetail(row)}
+          >
             详情
           </Button>
           <Button size="small" onClick={() => setEditing(row)}>
@@ -2620,12 +2692,18 @@ function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
           placeholder="搜索兑换项名称或说明"
         />
         <Space className="toolbar-actions" wrap>
-          <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
+          <Button
+            icon={<RefreshCw size={15} />}
+            onClick={load}
+            disabled={loading}
+          >
             刷新
           </Button>
           <Button
             icon={<Download size={15} />}
-            onClick={() => exportRowsToCsv("兑换商店", rows, exchangeItemFields)}
+            onClick={() =>
+              exportRowsToCsv("兑换商店", rows, exchangeItemFields)
+            }
             disabled={!rows.length}
           >
             导出CSV
@@ -2770,15 +2848,23 @@ function LaunchActivityConfigPanel({
       icon={<Gift size={18} />}
       action={<RefreshButton onClick={load} loading={loading} />}
     >
-      <Space direction="vertical" size={16} className="full-width">
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
         <Alert
           type="info"
           showIcon
           message="活动批次用于控制是否可重复领取"
           description="修改活动批次会视为新一期活动，已经领取旧批次的玩家可以再次领取新批次。"
         />
-        <Card size="small" className="form-section-card" title="活动规则">
-          <Form layout="vertical" className="form-grid antd-form-grid">
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="活动规则"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
             <Form.Item className="form-field" label="活动状态">
               <Select
                 value={values.enabled ? "true" : "false"}
@@ -2846,7 +2932,7 @@ function LaunchActivityConfigPanel({
 
         <Card
           size="small"
-          className="form-section-card"
+          className="admin-form-card form-section-card"
           title="领取奖励"
           extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
         >
@@ -2871,7 +2957,11 @@ function LaunchActivityConfigPanel({
               </Form.Item>
             </Form>
             {values.rewards.items.map((item, index) => (
-              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+              <Space
+                className="reward-item-row antd-reward-row"
+                key={index}
+                wrap
+              >
                 <Select
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
@@ -2905,7 +2995,9 @@ function LaunchActivityConfigPanel({
                       ...values,
                       rewards: {
                         ...values.rewards,
-                        items: values.rewards.items.filter((_, i) => i !== index),
+                        items: values.rewards.items.filter(
+                          (_, i) => i !== index,
+                        ),
                       },
                     })
                   }
@@ -2933,8 +3025,12 @@ function LaunchActivityConfigPanel({
           </Space>
         </Card>
 
-        <Card size="small" className="form-section-card" title="当前生效配置">
-          <div className="config-summary-row">
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="当前生效配置"
+        >
+          <div className="admin-form-actions config-summary-row">
             <DescriptionList
               items={[
                 ["当前状态", config?.enabled ? "开启" : "关闭"],
@@ -2993,7 +3089,9 @@ function LaunchActivityClaimsPage() {
       dataIndex: "activity_key",
       ellipsis: true,
       render: (value) => (
-        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+        <Typography.Text className="mono">
+          {String(value || "-")}
+        </Typography.Text>
       ),
     },
     {
@@ -3006,7 +3104,9 @@ function LaunchActivityClaimsPage() {
       dataIndex: "uid",
       ellipsis: true,
       render: (value) => (
-        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+        <Typography.Text className="mono">
+          {String(value || "-")}
+        </Typography.Text>
       ),
     },
     {
@@ -3026,7 +3126,11 @@ function LaunchActivityClaimsPage() {
       width: 110,
       fixed: "right",
       render: (_, row) => (
-        <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+        <Button
+          size="small"
+          icon={<Eye size={14} />}
+          onClick={() => setDetail(row)}
+        >
           详情
         </Button>
       ),
@@ -3097,7 +3201,11 @@ function LaunchActivityClaimsPage() {
           onChange: (nextPage) => setPage(nextPage),
         }}
         locale={{
-          emptyText: error ? "加载失败" : <Empty description="暂无活动领取记录" />,
+          emptyText: error ? (
+            "加载失败"
+          ) : (
+            <Empty description="暂无活动领取记录" />
+          ),
         }}
       />
       {detail && (
@@ -3160,7 +3268,8 @@ function ExchangeShopModal({
         ...values,
         starts_at: fromDateTimeLocal(values.starts_at),
         ends_at: fromDateTimeLocal(values.ends_at),
-        total_limit: values.total_limit === "" ? null : Number(values.total_limit),
+        total_limit:
+          values.total_limit === "" ? null : Number(values.total_limit),
         user_limit: values.user_limit === "" ? null : Number(values.user_limit),
         sort_order: Number(values.sort_order || 0),
       } as Partial<ExchangeShopItemRecord>);
@@ -3189,106 +3298,124 @@ function ExchangeShopModal({
       confirmLoading={loading}
       destroyOnHidden
     >
-      <Space direction="vertical" size={16} className="full-width">
-        <Form layout="vertical" className="form-grid antd-form-grid">
-          <Form.Item className="form-field" label="兑换项名称">
-            <Input
-              value={values.name}
-              placeholder="例如：活动代币换积分"
-              onChange={(event) =>
-                setValues({ ...values, name: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="状态">
-            <Select
-              value={values.enabled ? "true" : "false"}
-              onChange={(value) =>
-                setValues({ ...values, enabled: value === "true" })
-              }
-              options={[
-                { label: "启用", value: "true" },
-                { label: "停用", value: "false" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="总库存">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              value={values.total_limit === "" ? null : Number(values.total_limit)}
-              placeholder="留空表示不限"
-              onChange={(value) =>
-                setValues({
-                  ...values,
-                  total_limit: value === null ? "" : String(value),
-                })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="单用户限兑">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              value={values.user_limit === "" ? null : Number(values.user_limit)}
-              placeholder="留空表示不限"
-              onChange={(value) =>
-                setValues({
-                  ...values,
-                  user_limit: value === null ? "" : String(value),
-                })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="开始时间">
-            <Input
-              type="datetime-local"
-              value={values.starts_at}
-              onChange={(event) =>
-                setValues({ ...values, starts_at: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="结束时间">
-            <Input
-              type="datetime-local"
-              value={values.ends_at}
-              onChange={(event) =>
-                setValues({ ...values, ends_at: event.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="排序">
-            <InputNumber
-              className="full-width-control"
-              min={0}
-              value={Number(values.sort_order || 0)}
-              onChange={(value) =>
-                setValues({ ...values, sort_order: Number(value || 0) })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field full-width" label="说明">
-            <Input.TextArea
-              value={values.description}
-              placeholder="给运营和客服看的兑换说明"
-              autoSize={{ minRows: 3, maxRows: 6 }}
-              onChange={(event) =>
-                setValues({ ...values, description: event.target.value })
-              }
-            />
-          </Form.Item>
-        </Form>
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="基础信息"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="兑换项名称">
+              <Input
+                value={values.name}
+                placeholder="例如：活动代币换积分"
+                onChange={(event) =>
+                  setValues({ ...values, name: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="状态">
+              <Select
+                value={values.enabled ? "true" : "false"}
+                onChange={(value) =>
+                  setValues({ ...values, enabled: value === "true" })
+                }
+                options={[
+                  { label: "启用", value: "true" },
+                  { label: "停用", value: "false" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="总库存">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                value={
+                  values.total_limit === "" ? null : Number(values.total_limit)
+                }
+                placeholder="留空表示不限"
+                onChange={(value) =>
+                  setValues({
+                    ...values,
+                    total_limit: value === null ? "" : String(value),
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="单用户限兑">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                value={
+                  values.user_limit === "" ? null : Number(values.user_limit)
+                }
+                placeholder="留空表示不限"
+                onChange={(value) =>
+                  setValues({
+                    ...values,
+                    user_limit: value === null ? "" : String(value),
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="开始时间">
+              <Input
+                type="datetime-local"
+                value={values.starts_at}
+                onChange={(event) =>
+                  setValues({ ...values, starts_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="结束时间">
+              <Input
+                type="datetime-local"
+                value={values.ends_at}
+                onChange={(event) =>
+                  setValues({ ...values, ends_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="排序">
+              <InputNumber
+                className="full-width-control"
+                min={0}
+                value={Number(values.sort_order || 0)}
+                onChange={(value) =>
+                  setValues({ ...values, sort_order: Number(value || 0) })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field full-width" label="说明">
+              <Input.TextArea
+                value={values.description}
+                placeholder="给运营和客服看的兑换说明"
+                autoSize={{ minRows: 3, maxRows: 6 }}
+                onChange={(event) =>
+                  setValues({ ...values, description: event.target.value })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
 
         <Card
           size="small"
-          className="form-section-card"
+          className="admin-form-card form-section-card"
           title="消耗物品"
           extra={<Tag color="blue">{formatCosts(values.costs)}</Tag>}
         >
           <Space direction="vertical" size={12} className="full-width">
             {values.costs.map((item, index) => (
-              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+              <Space
+                className="reward-item-row antd-reward-row"
+                key={index}
+                wrap
+              >
                 <Select
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
@@ -3346,7 +3473,7 @@ function ExchangeShopModal({
 
         <Card
           size="small"
-          className="form-section-card"
+          className="admin-form-card form-section-card"
           title="兑换奖励"
           extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
         >
@@ -3370,7 +3497,11 @@ function ExchangeShopModal({
               </Form.Item>
             </Form>
             {values.rewards.items.map((item, index) => (
-              <Space className="reward-item-row antd-reward-row" key={index} wrap>
+              <Space
+                className="reward-item-row antd-reward-row"
+                key={index}
+                wrap
+              >
                 <Select
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
@@ -3404,7 +3535,9 @@ function ExchangeShopModal({
                       ...values,
                       rewards: {
                         ...values.rewards,
-                        items: values.rewards.items.filter((_, i) => i !== index),
+                        items: values.rewards.items.filter(
+                          (_, i) => i !== index,
+                        ),
                       },
                     })
                   }
@@ -3526,75 +3659,91 @@ function TradeConfigPanel() {
       icon={<Handshake size={18} />}
       action={<RefreshButton onClick={load} loading={loading} />}
     >
-      <Space direction="vertical" size={16} className="full-width">
-        <Form layout="vertical" className="form-grid antd-form-grid">
-          <Form.Item className="form-field" label="交易状态">
-            <Select
-              value={String(values.enabled)}
-              onChange={(value) =>
-                setValues({ ...values, enabled: value === "true" })
-              }
-              options={[
-                { label: "开启", value: "true" },
-                { label: "关闭", value: "false" },
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="交易规则"
+        >
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="交易状态">
+              <Select
+                value={String(values.enabled)}
+                onChange={(value) =>
+                  setValues({ ...values, enabled: value === "true" })
+                }
+                options={[
+                  { label: "开启", value: "true" },
+                  { label: "关闭", value: "false" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              className="form-field"
+              label="手续费率"
+              extra="0.05 表示 5%，成交时按挂单创建时的费率结算。"
+            >
+              <InputNumber
+                className="full-width-control"
+                min={0}
+                max={1}
+                step={0.0001}
+                value={Number(values.fee_rate || 0)}
+                onChange={(value) =>
+                  setValues({ ...values, fee_rate: Number(value || 0) })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="最低价格">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                step={1}
+                value={Number(values.min_price || 1)}
+                onChange={(value) =>
+                  setValues({ ...values, min_price: Number(value || 1) })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="最高价格">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                max={999999}
+                step={1}
+                value={Number(values.max_price || 999999)}
+                onChange={(value) =>
+                  setValues({ ...values, max_price: Number(value || 999999) })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="当前生效配置"
+        >
+          <div className="admin-form-actions config-summary-row">
+            <DescriptionList
+              items={[
+                ["当前状态", config?.enabled === false ? "关闭" : "开启"],
+                ["当前手续费", `${formatPercent(config?.fee_rate || 0)}`],
+                [
+                  "当前价格范围",
+                  `${config?.min_price || 1} - ${config?.max_price || 999999}`,
+                ],
               ]}
             />
-          </Form.Item>
-          <Form.Item
-            className="form-field"
-            label="手续费率"
-            extra="0.05 表示 5%，成交时按挂单创建时的费率结算。"
-          >
-            <InputNumber
-              className="full-width-control"
-              min={0}
-              max={1}
-              step={0.0001}
-              value={Number(values.fee_rate || 0)}
-              onChange={(value) =>
-                setValues({ ...values, fee_rate: Number(value || 0) })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="最低价格">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              step={1}
-              value={Number(values.min_price || 1)}
-              onChange={(value) =>
-                setValues({ ...values, min_price: Number(value || 1) })
-              }
-            />
-          </Form.Item>
-          <Form.Item className="form-field" label="最高价格">
-            <InputNumber
-              className="full-width-control"
-              min={1}
-              max={999999}
-              step={1}
-              value={Number(values.max_price || 999999)}
-              onChange={(value) =>
-                setValues({ ...values, max_price: Number(value || 999999) })
-              }
-            />
-          </Form.Item>
-        </Form>
-        <div className="config-summary-row">
-          <DescriptionList
-            items={[
-              ["当前状态", config?.enabled === false ? "关闭" : "开启"],
-              ["当前手续费", `${formatPercent(config?.fee_rate || 0)}`],
-              [
-                "当前价格范围",
-                `${config?.min_price || 1} - ${config?.max_price || 999999}`,
-              ],
-            ]}
-          />
-          <Button type="primary" loading={loading} onClick={submit}>
-            保存交易配置
-          </Button>
-        </div>
+            <Button type="primary" loading={loading} onClick={submit}>
+              保存交易配置
+            </Button>
+          </div>
+        </Card>
         {error && <Alert type="error" message={error} showIcon />}
         {notice && <Alert type="success" message={notice} showIcon />}
       </Space>
@@ -3647,7 +3796,9 @@ function RechargeRecordsPage() {
       dataIndex: "uid",
       ellipsis: true,
       render: (value) => (
-        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+        <Typography.Text className="mono">
+          {String(value || "-")}
+        </Typography.Text>
       ),
     },
     {
@@ -3670,7 +3821,9 @@ function RechargeRecordsPage() {
       dataIndex: "request_id",
       ellipsis: true,
       render: (value) => (
-        <Typography.Text className="mono">{String(value || "-")}</Typography.Text>
+        <Typography.Text className="mono">
+          {String(value || "-")}
+        </Typography.Text>
       ),
     },
     {
@@ -3684,7 +3837,11 @@ function RechargeRecordsPage() {
       width: 110,
       fixed: "right",
       render: (_, row) => (
-        <Button size="small" icon={<Eye size={14} />} onClick={() => setDetail(row)}>
+        <Button
+          size="small"
+          icon={<Eye size={14} />}
+          onClick={() => setDetail(row)}
+        >
           详情
         </Button>
       ),
@@ -3766,7 +3923,9 @@ function RechargeRecordsPage() {
           <Button onClick={resetFilters}>重置</Button>
           <Button
             icon={<Download size={15} />}
-            onClick={() => exportRowsToCsv("充值记录", rows, rechargeRecordFields)}
+            onClick={() =>
+              exportRowsToCsv("充值记录", rows, rechargeRecordFields)
+            }
             disabled={!rows.length}
           >
             导出CSV
@@ -3861,10 +4020,13 @@ function RechargeConfigPanel() {
       if (nextKey) {
         body.gold_finger_key = nextKey;
       }
-      const next = await request<RechargeConfigRecord>("/admin/config/recharge", {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
+      const next = await request<RechargeConfigRecord>(
+        "/admin/config/recharge",
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        },
+      );
       setConfig(next);
       setValues({
         ...next,
@@ -3887,15 +4049,18 @@ function RechargeConfigPanel() {
       <Space
         direction="vertical"
         size={16}
-        className="full-width recharge-config-stack"
+        className="full-width admin-form-stack recharge-config-stack"
       >
-        <div className="recharge-config-layout">
+        <div className="admin-form-layout recharge-config-layout">
           <Card
             size="small"
-            className="form-section-card recharge-rule-card"
+            className="admin-form-card form-section-card recharge-rule-card"
             title="充值规则"
           >
-            <Form layout="vertical" className="recharge-rule-grid">
+            <Form
+              layout="vertical"
+              className="admin-form-grid recharge-rule-grid"
+            >
               <Form.Item label="充值状态">
                 <Select
                   value={String(values.enabled)}
@@ -3958,7 +4123,7 @@ function RechargeConfigPanel() {
 
           <Card
             size="small"
-            className="form-section-card recharge-secret-card"
+            className="admin-form-card form-section-card recharge-secret-card"
             title="鱼排接口"
           >
             <Form layout="vertical" className="recharge-secret-grid">
@@ -3974,7 +4139,10 @@ function RechargeConfigPanel() {
                       : "请输入鱼排金手指密钥"
                   }
                   onChange={(event) =>
-                    setValues({ ...values, gold_finger_key: event.target.value })
+                    setValues({
+                      ...values,
+                      gold_finger_key: event.target.value,
+                    })
                   }
                 />
               </Form.Item>
@@ -3993,8 +4161,12 @@ function RechargeConfigPanel() {
           </Card>
         </div>
 
-        <Card size="small" className="form-section-card" title="当前生效配置">
-          <div className="config-summary-row">
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="当前生效配置"
+        >
+          <div className="admin-form-actions config-summary-row">
             <DescriptionList
               items={[
                 ["当前状态", config?.enabled ? "开启" : "关闭"],
@@ -4049,7 +4221,8 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
     ([left], [right]) => Number(left) - Number(right),
   );
   const filteredPoolEntries = poolEntries.filter(([poolKey, config]) => {
-    const poolName = data?.poolNames?.[poolKey] || poolNameById(Number(poolKey));
+    const poolName =
+      data?.poolNames?.[poolKey] || poolNameById(Number(poolKey));
     const query = keyword.trim().toLowerCase();
     const matchesKeyword =
       !query || `${poolKey} ${poolName}`.toLowerCase().includes(query);
@@ -4088,7 +4261,11 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
             ]}
           />
           <Space className="toolbar-actions" wrap>
-            <Button icon={<RefreshCw size={15} />} onClick={load} disabled={loading}>
+            <Button
+              icon={<RefreshCw size={15} />}
+              onClick={load}
+              disabled={loading}
+            >
               刷新
             </Button>
           </Space>
@@ -4195,8 +4372,8 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
               <span className="eyebrow">保留字段</span>
               <strong>管理员白名单</strong>
               <p>
-                当前后台权限以数据库 <code>User.is_admin</code>{" "}
-                为准，环境变量 <code>ADMIN_UIDS</code> 仅保留展示。
+                当前后台权限以数据库 <code>User.is_admin</code> 为准，环境变量{" "}
+                <code>ADMIN_UIDS</code> 仅保留展示。
               </p>
             </div>
             <div className="tag-list">
@@ -4220,8 +4397,12 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
           poolNames={data?.poolNames || {}}
           onCancel={() => setEditing(null)}
           onSubmit={async (poolId, values) => {
-            const { poolId: _poolId, source: _source, updatedAt: _updatedAt, ...payload } =
-              values;
+            const {
+              poolId: _poolId,
+              source: _source,
+              updatedAt: _updatedAt,
+              ...payload
+            } = values;
             await request(`/admin/config/gacha/${poolId}`, {
               method: "PATCH",
               body: JSON.stringify(payload),
@@ -4291,7 +4472,10 @@ function GachaConfigModal({
         .toLowerCase()
         .includes(upKeyword.trim().toLowerCase());
     const matchesRarity =
-      !upRarity || String(card.rarity || "").split(",").includes(upRarity);
+      !upRarity ||
+      String(card.rarity || "")
+        .split(",")
+        .includes(upRarity);
     return matchesKeyword && matchesRarity;
   });
   const selectedUpCards = poolCardOptions.filter((card) =>
@@ -4303,7 +4487,9 @@ function GachaConfigModal({
   const selectedUnknownUpCardIds = (values.upCards?.cardIds || []).filter(
     (cardId) => !selectedKnownUpCardIds.has(cardId),
   );
-  const otherPools = allPools.filter(([targetPoolKey]) => targetPoolKey !== poolKey);
+  const otherPools = allPools.filter(
+    ([targetPoolKey]) => targetPoolKey !== poolKey,
+  );
   const configTabs = [
     { key: "base", label: "基础价格" },
     { key: "probability", label: "稀有度概率" },
@@ -4390,14 +4576,20 @@ function GachaConfigModal({
     }
     if (
       rarityOptions.some(
-        (option) => Number(values.rarityProbabilities[String(option.value)] || 0) < 0,
+        (option) =>
+          Number(values.rarityProbabilities[String(option.value)] || 0) < 0,
       )
     ) {
       return "稀有度概率不能小于 0";
     }
     const once = Number(values.drawCosts?.once);
     const ten = Number(values.drawCosts?.ten);
-    if (!Number.isInteger(once) || once <= 0 || !Number.isInteger(ten) || ten <= 0) {
+    if (
+      !Number.isInteger(once) ||
+      once <= 0 ||
+      !Number.isInteger(ten) ||
+      ten <= 0
+    ) {
       return "单抽和十连消耗必须为正整数";
     }
     const upRate = Number(values.upCards?.upRate || 0);
@@ -4440,7 +4632,9 @@ function GachaConfigModal({
   async function copyConfigToTargets() {
     setError("");
     setNotice("");
-    const targetPoolIds = copyTargets.map(Number).filter((poolId) => poolId > 0);
+    const targetPoolIds = copyTargets
+      .map(Number)
+      .filter((poolId) => poolId > 0);
     if (targetPoolIds.length === 0) {
       setError("请选择要复制到的目标卡池");
       return;
@@ -4496,7 +4690,11 @@ function GachaConfigModal({
         </Space>
       }
     >
-      <Space direction="vertical" size={14} className="full-width">
+      <Space
+        direction="vertical"
+        size={14}
+        className="full-width admin-form-stack"
+      >
         <Button onClick={fillFromDefault}>从环境默认填充</Button>
         <Tabs
           activeKey={activeTab}
@@ -4511,21 +4709,26 @@ function GachaConfigModal({
             <section>
               <div className="section-title-row">
                 <h3>基础价格</h3>
-                <Badge>{values.enabled === false ? "回退环境默认" : "数据库配置"}</Badge>
+                <Badge>
+                  {values.enabled === false ? "回退环境默认" : "数据库配置"}
+                </Badge>
               </div>
               <label className="form-field">
                 <span>启用数据库配置</span>
                 <select
                   value={String(values.enabled !== false)}
                   onChange={(event) =>
-                    setValues({ ...values, enabled: event.target.value === "true" })
+                    setValues({
+                      ...values,
+                      enabled: event.target.value === "true",
+                    })
                   }
                 >
                   <option value="true">启用</option>
                   <option value="false">关闭并回退环境默认</option>
                 </select>
               </label>
-              <div className="form-grid no-padding">
+              <div className="admin-form-grid no-padding">
                 <label className="form-field">
                   <span>单抽消耗</span>
                   <input
@@ -4565,8 +4768,14 @@ function GachaConfigModal({
               </div>
               <DescriptionList
                 items={[
-                  ["环境默认单抽", `${currentDefault.drawCosts?.once ?? 10} 积分`],
-                  ["环境默认十连", `${currentDefault.drawCosts?.ten ?? 100} 积分`],
+                  [
+                    "环境默认单抽",
+                    `${currentDefault.drawCosts?.once ?? 10} 积分`,
+                  ],
+                  [
+                    "环境默认十连",
+                    `${currentDefault.drawCosts?.ten ?? 100} 积分`,
+                  ],
                   [
                     "当前配置来源",
                     config.source === "database" && config.enabled !== false
@@ -4618,7 +4827,10 @@ function GachaConfigModal({
                   const rarity = String(option.value);
                   const value = Number(values.rarityProbabilities[rarity] || 0);
                   return (
-                    <label className="form-field probability-field" key={rarity}>
+                    <label
+                      className="form-field probability-field"
+                      key={rarity}
+                    >
                       <span>{rarity} 概率</span>
                       <input
                         type="number"
@@ -4627,7 +4839,10 @@ function GachaConfigModal({
                         step="0.01"
                         value={Number((value * 100).toFixed(4))}
                         onChange={(event) =>
-                          setProbabilityFromPercent(rarity, Number(event.target.value))
+                          setProbabilityFromPercent(
+                            rarity,
+                            Number(event.target.value),
+                          )
                         }
                       />
                       <small>保存为 {value.toFixed(6)}</small>
@@ -4659,7 +4874,7 @@ function GachaConfigModal({
                 <h3>UP 配置</h3>
                 <Badge>{values.upCards?.enabled ? "已开启" : "已关闭"}</Badge>
               </div>
-              <div className="form-grid no-padding">
+              <div className="admin-form-grid no-padding">
                 <label className="form-field">
                   <span>UP 状态</span>
                   <select
@@ -4686,7 +4901,9 @@ function GachaConfigModal({
                     min="0"
                     max="100"
                     step="0.01"
-                    value={Number(((values.upCards?.upRate || 0) * 100).toFixed(4))}
+                    value={Number(
+                      ((values.upCards?.upRate || 0) * 100).toFixed(4),
+                    )}
                     onChange={(event) =>
                       setValues({
                         ...values,
@@ -4716,7 +4933,10 @@ function GachaConfigModal({
                   >
                     <option value="">全部稀有度</option>
                     {rarityOptions.map((option) => (
-                      <option key={String(option.value)} value={String(option.value)}>
+                      <option
+                        key={String(option.value)}
+                        value={String(option.value)}
+                      >
                         {option.label}
                       </option>
                     ))}
@@ -4727,7 +4947,8 @@ function GachaConfigModal({
                     <>
                       {selectedUpCards.map((card) => (
                         <Badge key={String(card.value)}>
-                          {card.label} · {card.rarity || "-"} · #{String(card.value)}
+                          {card.label} · {card.rarity || "-"} · #
+                          {String(card.value)}
                         </Badge>
                       ))}
                       {selectedUnknownUpCardIds.map((cardId) => (
@@ -4743,10 +4964,15 @@ function GachaConfigModal({
                     filteredUpCards.map((card) => {
                       const cardId = Number(card.value);
                       return (
-                        <label className="up-card-option" key={String(card.value)}>
+                        <label
+                          className="up-card-option"
+                          key={String(card.value)}
+                        >
                           <input
                             type="checkbox"
-                            checked={(values.upCards?.cardIds || []).includes(cardId)}
+                            checked={(values.upCards?.cardIds || []).includes(
+                              cardId,
+                            )}
                             onChange={(event) =>
                               toggleUpCard(cardId, event.target.checked)
                             }
@@ -4795,12 +5021,14 @@ function GachaConfigModal({
                 </select>
               </label>
               {values.pitySystem?.enabled === false ? (
-                <StateBox>保底已关闭，抽卡时只按基础概率和 UP 配置计算。</StateBox>
+                <StateBox>
+                  保底已关闭，抽卡时只按基础概率和 UP 配置计算。
+                </StateBox>
               ) : (
                 <div className="pity-rule-grid">
                   <div className="pity-rule-card">
                     <h4>软保底</h4>
-                    <div className="form-grid no-padding">
+                    <div className="admin-form-grid no-padding">
                       <label className="form-field">
                         <span>触发次数</span>
                         <input
@@ -4818,7 +5046,8 @@ function GachaConfigModal({
                         <span>保底稀有度</span>
                         <select
                           value={
-                            values.pitySystem?.softPity?.guaranteedRarity || "SR"
+                            values.pitySystem?.softPity?.guaranteedRarity ||
+                            "SR"
                           }
                           onChange={(event) =>
                             setPityRule(setValues, values, "softPity", {
@@ -4840,7 +5069,7 @@ function GachaConfigModal({
                   </div>
                   <div className="pity-rule-card">
                     <h4>硬保底</h4>
-                    <div className="form-grid no-padding">
+                    <div className="admin-form-grid no-padding">
                       <label className="form-field">
                         <span>触发次数</span>
                         <input
@@ -4858,7 +5087,8 @@ function GachaConfigModal({
                         <span>保底稀有度</span>
                         <select
                           value={
-                            values.pitySystem?.hardPity?.guaranteedRarity || "SSR"
+                            values.pitySystem?.hardPity?.guaranteedRarity ||
+                            "SSR"
                           }
                           onChange={(event) =>
                             setPityRule(setValues, values, "hardPity", {
@@ -4933,7 +5163,10 @@ function GachaConfigModal({
                           type="checkbox"
                           checked={copyTargets.includes(targetPoolKey)}
                           onChange={(event) =>
-                            toggleCopyTarget(targetPoolKey, event.target.checked)
+                            toggleCopyTarget(
+                              targetPoolKey,
+                              event.target.checked,
+                            )
                           }
                         />
                         <span>
@@ -5004,11 +5237,7 @@ function DetailModal({
   );
 }
 
-function DescriptionList({
-  items,
-}: {
-  items: Array<[string, unknown]>;
-}) {
+function DescriptionList({ items }: { items: Array<[string, unknown]> }) {
   return (
     <dl className="description-list">
       {items.map(([label, value]) => (
@@ -5075,7 +5304,9 @@ function Panel({
 
 function StateBox({ children, type }: { children: ReactNode; type?: "error" }) {
   if (type === "error") {
-    return <Alert className="state-box" type="error" message={children} showIcon />;
+    return (
+      <Alert className="state-box" type="error" message={children} showIcon />
+    );
   }
   return <Empty className="state-box" description={children} />;
 }
@@ -5202,7 +5433,9 @@ function groupItemOptions(
   const groups = dropTypeOptions
     .map((type) => ({
       label: String(type.label),
-      options: enabledOptions.filter((option: any) => option.type === type.value),
+      options: enabledOptions.filter(
+        (option: any) => option.type === type.value,
+      ),
     }))
     .filter((group) => group.options.length > 0);
   const otherOptions = enabledOptions.filter(
@@ -5385,8 +5618,7 @@ function createGachaFormState(
       enabled: config.pitySystem?.enabled !== false,
       softPity: {
         count: Number(config.pitySystem?.softPity?.count || 10),
-        guaranteedRarity:
-          config.pitySystem?.softPity?.guaranteedRarity || "SR",
+        guaranteedRarity: config.pitySystem?.softPity?.guaranteedRarity || "SR",
       },
       hardPity: {
         count: Number(config.pitySystem?.hardPity?.count || 90),
