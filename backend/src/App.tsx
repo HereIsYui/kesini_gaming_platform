@@ -71,23 +71,58 @@ type GachaFormState = GachaPoolConfig & {
   poolId: number;
   rarityProbabilities: Record<string, number>;
 };
-const handledOpenidCallbacks = new Set<string>();
+type PageKey =
+  | "dashboard"
+  | "users"
+  | "pools"
+  | "cards"
+  | "drop-items"
+  | "histories"
+  | "inventories"
+  | "pity"
+  | "redeem-codes"
+  | "exchange-shop"
+  | "trade"
+  | "recharge"
+  | "gacha-config";
+type NavGroup = "工作台" | "内容配置" | "玩家资产" | "运营工具" | "系统配置";
+type PageDefinition = {
+  key: PageKey;
+  label: string;
+  description: string;
+  group: NavGroup;
+  icon: LucideIcon;
+  render: () => ReactNode;
+};
 
-const navItems = [
-  { key: "dashboard", label: "总览", icon: Gauge },
-  { key: "users", label: "用户", icon: Users },
-  { key: "pools", label: "卡池", icon: Layers },
-  { key: "cards", label: "卡片", icon: Sparkles },
-  { key: "drop-items", label: "物品管理", icon: Package },
-  { key: "histories", label: "历史", icon: History },
-  { key: "inventories", label: "背包", icon: Boxes },
-  { key: "pity", label: "保底", icon: Ticket },
-  { key: "redeem-codes", label: "兑换码", icon: Gift },
-  { key: "exchange-shop", label: "兑换商店", icon: Store },
-  { key: "trade", label: "交易管理", icon: Handshake },
-  { key: "recharge", label: "充值管理", icon: Coins },
-  { key: "config", label: "配置", icon: Settings },
+const defaultPageKey: PageKey = "dashboard";
+const pageKeys: PageKey[] = [
+  "dashboard",
+  "users",
+  "pools",
+  "cards",
+  "drop-items",
+  "histories",
+  "inventories",
+  "pity",
+  "redeem-codes",
+  "exchange-shop",
+  "trade",
+  "recharge",
+  "gacha-config",
 ];
+const pageKeySet = new Set<string>(pageKeys);
+const navGroups: NavGroup[] = [
+  "工作台",
+  "内容配置",
+  "玩家资产",
+  "运营工具",
+  "系统配置",
+];
+const routeAliases: Record<string, PageKey> = {
+  config: "gacha-config",
+};
+const handledOpenidCallbacks = new Set<string>();
 
 const rarityOptions: SelectOption[] = [
   { label: "N", value: "N" },
@@ -389,14 +424,67 @@ const rechargeRecordFields: FieldConfig[] = [
   { key: "createdAt", label: "充值时间", readonly: true },
 ];
 
+function readHashRoute(): { key: PageKey; shouldReplace: boolean } {
+  const raw = window.location.hash.replace(/^#/, "").trim();
+  if (!raw) {
+    return { key: defaultPageKey, shouldReplace: false };
+  }
+
+  const mapped = routeAliases[raw] || raw;
+  if (pageKeySet.has(mapped)) {
+    return {
+      key: mapped as PageKey,
+      shouldReplace: mapped !== raw,
+    };
+  }
+
+  return { key: defaultPageKey, shouldReplace: true };
+}
+
+function replaceHashRoute(key: PageKey) {
+  window.history.replaceState(
+    {},
+    "",
+    `${window.location.pathname}${window.location.search}#${key}`,
+  );
+}
+
+function useHashRoute() {
+  const [active, setActive] = useState<PageKey>(() => readHashRoute().key);
+
+  useEffect(() => {
+    function syncFromHash() {
+      const next = readHashRoute();
+      if (next.shouldReplace) {
+        replaceHashRoute(next.key);
+      }
+      setActive(next.key);
+    }
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, []);
+
+  const setRoute = useCallback((key: PageKey) => {
+    if (!pageKeySet.has(key)) {
+      return;
+    }
+    setActive(key);
+    if (window.location.hash.replace(/^#/, "") !== key) {
+      window.location.hash = key;
+    }
+  }, []);
+
+  return [active, setRoute] as const;
+}
+
 export function App() {
   const [token, setLocalToken] = useState(getToken());
   const [admin, setAdmin] = useState<AdminMeResponse | null>(null);
   const [adminOptions, setAdminOptions] = useState<AdminOptions | null>(null);
   const [authError, setAuthError] = useState("");
-  const [active, setActive] = useState(
-    window.location.hash.replace("#", "") || "dashboard",
-  );
+  const [active, setRoute] = useHashRoute();
   const [theme, setTheme] = useState<Theme>(
     (localStorage.getItem("kesini_theme") as Theme) || "light",
   );
@@ -444,15 +532,213 @@ export function App() {
     [adminOptions],
   );
 
+  const pageDefinitions = useMemo<PageDefinition[]>(
+    () => [
+      {
+        key: "dashboard",
+        label: "总览",
+        description: "查看关键运营指标、稀有度分布和最近抽卡动态。",
+        group: "工作台",
+        icon: Gauge,
+        render: () => <Dashboard admin={admin} />,
+      },
+      {
+        key: "pools",
+        label: "卡池管理",
+        description: "维护卡池名称、描述和基础类型。",
+        group: "内容配置",
+        icon: Layers,
+        render: () => (
+          <AdminTable
+            title="卡池管理"
+            endpoint="/admin/pools"
+            fields={poolFields}
+            editable
+            creatable
+            deletable
+            detailFetchable
+            searchPlaceholder="搜索卡池名称或描述"
+          />
+        ),
+      },
+      {
+        key: "cards",
+        label: "卡片管理",
+        description: "维护卡片信息、可出现稀有度和分解碎片配置。",
+        group: "内容配置",
+        icon: Sparkles,
+        render: () => (
+          <AdminTable
+            title="卡片管理"
+            endpoint="/admin/cards"
+            fields={cardFields}
+            editable
+            creatable
+            deletable
+            detailFetchable
+            searchPlaceholder="搜索卡片名称"
+            enableRarityFilter
+            poolFilterOptions={adminOptions?.pools || []}
+          />
+        ),
+      },
+      {
+        key: "drop-items",
+        label: "物品管理",
+        description: "维护碎片、普通物品和活动道具，设置默认分解碎片。",
+        group: "内容配置",
+        icon: Package,
+        render: () => (
+          <AdminTable
+            title="物品管理"
+            endpoint="/admin/drop-items"
+            fields={dropFields}
+            editable
+            creatable
+            deletable
+            detailFetchable
+            searchPlaceholder="搜索物品名称或说明"
+            renderEditor={({ initial, onCancel, onSubmit }) => (
+              <ItemModal
+                initial={initial}
+                onCancel={onCancel}
+                onSubmit={onSubmit}
+              />
+            )}
+          />
+        ),
+      },
+      {
+        key: "users",
+        label: "用户管理",
+        description: "查看用户资料、积分和管理员状态。",
+        group: "玩家资产",
+        icon: Users,
+        render: () => (
+          <AdminTable
+            title="用户管理"
+            endpoint="/admin/users"
+            fields={userFields}
+            editable
+            detailFetchable
+            searchPlaceholder="搜索 UID、用户名或昵称"
+          />
+        ),
+      },
+      {
+        key: "histories",
+        label: "抽卡历史",
+        description: "按 UID 和稀有度追踪玩家抽卡记录。",
+        group: "玩家资产",
+        icon: History,
+        render: () => (
+          <AdminTable
+            title="抽卡历史"
+            endpoint="/admin/histories"
+            fields={historyFields}
+            searchPlaceholder="按 UID 查询"
+            keywordParam="uid"
+            enableRarityFilter
+          />
+        ),
+      },
+      {
+        key: "inventories",
+        label: "背包管理",
+        description: "查看和调整玩家背包物品库存。",
+        group: "玩家资产",
+        icon: Boxes,
+        render: () => (
+          <AdminTable
+            title="背包管理"
+            endpoint="/admin/inventories"
+            fields={inventoryFields}
+            editable
+            searchPlaceholder="按 UID 查询"
+            keywordParam="uid"
+          />
+        ),
+      },
+      {
+        key: "pity",
+        label: "保底状态",
+        description: "维护玩家在各卡池中的保底计数。",
+        group: "玩家资产",
+        icon: Ticket,
+        render: () => (
+          <AdminTable
+            title="保底状态"
+            endpoint="/admin/pity"
+            fields={pityFields}
+            editable
+            searchPlaceholder="按 UID 查询"
+            keywordParam="uid"
+          />
+        ),
+      },
+      {
+        key: "redeem-codes",
+        label: "兑换码",
+        description: "创建礼包码，查看领取记录和奖励发放情况。",
+        group: "运营工具",
+        icon: Gift,
+        render: () => <RedeemCodesPage options={adminOptions} />,
+      },
+      {
+        key: "exchange-shop",
+        label: "兑换商店",
+        description: "配置物品消耗、奖励内容、库存和限兑规则。",
+        group: "运营工具",
+        icon: Store,
+        render: () => <ExchangeShopPage options={adminOptions} />,
+      },
+      {
+        key: "trade",
+        label: "交易管理",
+        description: "审计匿名交易挂单、成交记录和交易参数。",
+        group: "运营工具",
+        icon: Handshake,
+        render: () => <TradeAdminPage />,
+      },
+      {
+        key: "recharge",
+        label: "充值管理",
+        description: "配置鱼排扣分充值，并追踪充值请求状态。",
+        group: "运营工具",
+        icon: Coins,
+        render: () => <RechargeAdminPage />,
+      },
+      {
+        key: "gacha-config",
+        label: "抽卡配置",
+        description: "维护概率、UP、保底和单抽/十连积分价格。",
+        group: "系统配置",
+        icon: Settings,
+        render: () => <ConfigPage options={adminOptions} />,
+      },
+    ],
+    [admin, adminOptions, cardFields],
+  );
+  const pageMap = useMemo(
+    () => new Map(pageDefinitions.map((page) => [page.key, page])),
+    [pageDefinitions],
+  );
+  const activePage = pageMap.get(active) || pageDefinitions[0];
+  const pagesByGroup = useMemo(
+    () =>
+      navGroups
+        .map((group) => ({
+          group,
+          pages: pageDefinitions.filter((page) => page.group === group),
+        }))
+        .filter((item) => item.pages.length > 0),
+    [pageDefinitions],
+  );
+
   const handleLogin = useCallback((nextToken: string) => {
     setAuthError("");
     setLocalToken(nextToken);
   }, []);
-
-  function switchPage(key: string) {
-    setActive(key);
-    window.location.hash = key;
-  }
 
   if (!token) {
     return <LoginPage initialError={authError} onLogin={handleLogin} />;
@@ -476,40 +762,55 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">
-            <Sparkles size={20} />
+        <div className="sidebar-header">
+          <div className="brand">
+            <div className="brand-mark">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <strong>Kesini</strong>
+              <span>Gacha Admin</span>
+            </div>
           </div>
-          <div>
-            <strong>Kesini</strong>
-            <span>Gacha Admin</span>
-          </div>
+          <span className="sidebar-pill">运营控制台</span>
         </div>
 
-        <nav className="nav-list">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                className={active === item.key ? "active" : ""}
-                onClick={() => switchPage(item.key)}
-                aria-current={active === item.key ? "page" : undefined}
-                type="button"
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <div className="sidebar-scroll">
+          <nav className="nav-list" aria-label="后台页面导航">
+            {pagesByGroup.map((group) => (
+              <section className="nav-section" key={group.group}>
+                <div className="nav-section-title">{group.group}</div>
+                <div className="nav-section-items">
+                  {group.pages.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activePage.key === item.key;
+                    return (
+                      <button
+                        key={item.key}
+                        className={`nav-item${isActive ? " active" : ""}`}
+                        onClick={() => setRoute(item.key)}
+                        aria-current={isActive ? "page" : undefined}
+                        title={item.description}
+                        type="button"
+                      >
+                        <Icon size={18} />
+                        <span className="nav-item-label">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </nav>
+        </div>
       </aside>
 
       <main className="main">
         <header className="topbar">
           <div className="topbar-title">
-            <span className="eyebrow">后台管理</span>
-            <h1>{navItems.find((item) => item.key === active)?.label}</h1>
+            <span className="eyebrow">{activePage.group}</span>
+            <h1>{activePage.label}</h1>
+            <p className="topbar-description">{activePage.description}</p>
           </div>
           <div className="top-actions">
             <span className="status-dot">API {getApiBase()}</span>
@@ -535,102 +836,8 @@ export function App() {
           </div>
         </header>
 
-        <section className="content">
-          {active === "dashboard" && <Dashboard admin={admin} />}
-          {active === "users" && (
-            <AdminTable
-              title="用户管理"
-              endpoint="/admin/users"
-              fields={userFields}
-              editable
-              detailFetchable
-              searchPlaceholder="搜索 UID、用户名或昵称"
-            />
-          )}
-          {active === "pools" && (
-            <AdminTable
-              title="卡池管理"
-              endpoint="/admin/pools"
-              fields={poolFields}
-              editable
-              creatable
-              deletable
-              detailFetchable
-              searchPlaceholder="搜索卡池名称或描述"
-            />
-          )}
-          {active === "cards" && (
-            <AdminTable
-              title="卡片管理"
-              endpoint="/admin/cards"
-              fields={cardFields}
-              editable
-              creatable
-              deletable
-              detailFetchable
-              searchPlaceholder="搜索卡片名称"
-              enableRarityFilter
-              poolFilterOptions={adminOptions?.pools || []}
-            />
-          )}
-          {active === "drop-items" && (
-            <AdminTable
-              title="物品管理"
-              endpoint="/admin/drop-items"
-              fields={dropFields}
-              editable
-              creatable
-              deletable
-              detailFetchable
-              searchPlaceholder="搜索物品名称或说明"
-              renderEditor={({ initial, onCancel, onSubmit }) => (
-                <ItemModal
-                  initial={initial}
-                  onCancel={onCancel}
-                  onSubmit={onSubmit}
-                />
-              )}
-            />
-          )}
-          {active === "histories" && (
-            <AdminTable
-              title="抽卡历史"
-              endpoint="/admin/histories"
-              fields={historyFields}
-              searchPlaceholder="按 UID 查询"
-              keywordParam="uid"
-              enableRarityFilter
-            />
-          )}
-          {active === "inventories" && (
-            <AdminTable
-              title="背包管理"
-              endpoint="/admin/inventories"
-              fields={inventoryFields}
-              editable
-              searchPlaceholder="按 UID 查询"
-              keywordParam="uid"
-            />
-          )}
-          {active === "pity" && (
-            <AdminTable
-              title="保底状态"
-              endpoint="/admin/pity"
-              fields={pityFields}
-              editable
-              searchPlaceholder="按 UID 查询"
-              keywordParam="uid"
-            />
-          )}
-          {active === "redeem-codes" && (
-            <RedeemCodesPage options={adminOptions} />
-          )}
-          {active === "exchange-shop" && (
-            <ExchangeShopPage options={adminOptions} />
-          )}
-          {active === "trade" && <TradeAdminPage />}
-          {active === "recharge" && <RechargeAdminPage />}
-          {active === "config" && <ConfigPage options={adminOptions} />}
+        <section className="content" aria-label={activePage.label}>
+          {activePage.render()}
         </section>
       </main>
     </div>
