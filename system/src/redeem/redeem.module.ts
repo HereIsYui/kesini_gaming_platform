@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { RedeemCode } from "src/entity/redeemCode.entity";
@@ -21,6 +22,7 @@ import { RedeemService } from "./redeem.service";
     ]),
     AuthModule,
     RewardModule,
+    AchievementModule,
   ],
   controllers: [RedeemController],
   providers: [RedeemService],

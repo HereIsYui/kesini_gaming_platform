@@ -30,6 +30,11 @@ import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { ResponseDto } from "src/common/dto/response.dto";
 import { HttpExceptionFilter } from "src/common/filters/http-exception.filter";
 import { TransformInterceptor } from "src/common/interceptors/transform.interceptor";
+import {
+  ACHIEVEMENT_TARGET_TYPES,
+  AchievementService,
+} from "src/achievement/achievement.service";
+import type { AchievementTargetType } from "src/entity/achievementConfig.entity";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
 
@@ -275,6 +280,85 @@ class LaunchActivityConfigPatchDto {
     points: number;
     items: Array<{ itemId: number; num: number }>;
   };
+}
+
+class AchievementQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  targetType?: string;
+}
+
+class UserAchievementQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @IsString()
+  achieved?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  achievementId?: number;
+}
+
+class AchievementConfigDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsIn(ACHIEVEMENT_TARGET_TYPES)
+  target_type?: AchievementTargetType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  target_value?: number;
+
+  @IsOptional()
+  @IsObject()
+  target_scope?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+  };
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
 }
 
 class PoolDto {
@@ -552,7 +636,10 @@ interface UserInfo {
 @UseInterceptors(TransformInterceptor)
 @UseFilters(HttpExceptionFilter)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly achievementService: AchievementService,
+  ) {}
 
   @Get("me")
   async me(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
@@ -575,6 +662,57 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.getOptions(),
       "获取后台选项成功",
+    );
+  }
+
+  @Get("achievements")
+  async listAchievements(
+    @Query() query: AchievementQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.achievementService.listAdminAchievements(query),
+      "获取成就配置成功",
+    );
+  }
+
+  @Post("achievements")
+  async createAchievement(
+    @Body() body: AchievementConfigDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.achievementService.createAchievement(body as any),
+      "创建成就成功",
+    );
+  }
+
+  @Patch("achievements/:id")
+  async updateAchievement(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: AchievementConfigDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.achievementService.updateAchievement(id, body as any),
+      "更新成就成功",
+    );
+  }
+
+  @Delete("achievements/:id")
+  async deleteAchievement(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.achievementService.deleteAchievement(id),
+      "删除成就成功",
+    );
+  }
+
+  @Get("user-achievements")
+  async listUserAchievements(
+    @Query() query: UserAchievementQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.achievementService.listUserAchievements(query),
+      "获取玩家成就记录成功",
     );
   }
 

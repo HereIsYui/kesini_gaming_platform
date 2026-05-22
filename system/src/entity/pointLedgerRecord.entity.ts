@@ -13,6 +13,7 @@ export type PointLedgerSourceType =
   | "redeem_code"
   | "launch_activity"
   | "exchange_shop"
+  | "achievement"
   | "trade_buy"
   | "trade_sell";
 

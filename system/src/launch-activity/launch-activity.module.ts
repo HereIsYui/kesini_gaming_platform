@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
@@ -21,6 +22,7 @@ import { LaunchActivityService } from "./launch-activity.service";
     ]),
     AuthModule,
     RewardModule,
+    AchievementModule,
   ],
   controllers: [LaunchActivityController],
   providers: [LaunchActivityService],

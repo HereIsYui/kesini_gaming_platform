@@ -10,6 +10,7 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { RedeemRewardItem, RedeemRewards } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
+import { AchievementService } from "src/achievement/achievement.service";
 
 @Injectable()
 export class ExchangeService {
@@ -17,6 +18,8 @@ export class ExchangeService {
     private readonly dataSource: DataSource,
     @Optional()
     private readonly pointLedgerService?: PointLedgerService,
+    @Optional()
+    private readonly achievementService?: AchievementService,
   ) {}
 
   async listAvailableItems(uid: string) {
@@ -199,6 +202,7 @@ export class ExchangeService {
           reward_snapshot: this.enrichRewards(scaledRewards, rewardItems),
         }),
       );
+      await this.achievementService?.evaluateAndUnlock(manager, uid);
 
       return {
         exchangeItemId: shopItem.id,

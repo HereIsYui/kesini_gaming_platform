@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { DropItem } from "src/entity/drop.entity";
 import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "src/entity/exchangeShopUsage.entity";
@@ -21,6 +22,7 @@ import { ExchangeService } from "./exchange.service";
     ]),
     AuthModule,
     PointLedgerModule,
+    AchievementModule,
   ],
   controllers: [ExchangeController],
   providers: [ExchangeService],

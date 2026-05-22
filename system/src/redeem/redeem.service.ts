@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { DropItem } from "src/entity/drop.entity";
 import { RedeemCode } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { User } from "src/entity/user.entity";
+import { AchievementService } from "src/achievement/achievement.service";
 import { RewardService } from "src/reward/reward.service";
 
 @Injectable()
@@ -11,6 +12,8 @@ export class RedeemService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly rewardService: RewardService,
+    @Optional()
+    private readonly achievementService?: AchievementService,
   ) {}
 
   async claim(uid: string, rawCode: string) {
@@ -74,6 +77,7 @@ export class RedeemService {
         reward_snapshot: rewards,
       });
       await usageRepository.save(usage);
+      await this.achievementService?.evaluateAndUnlock(manager, uid);
 
       return {
         code: redeemCode!.code,

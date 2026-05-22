@@ -16,6 +16,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/synthesize", name: "synthesize", component: PageShell },
   { path: "/points", name: "points", component: PageShell },
   { path: "/leaderboard", name: "leaderboard", component: PageShell },
+  { path: "/achievements", name: "achievements", component: PageShell },
   { path: "/trade", name: "trade", component: PageShell },
   { path: "/redeem", name: "redeem", component: PageShell },
   { path: "/:pathMatch(.*)*", redirect: "/draw" },

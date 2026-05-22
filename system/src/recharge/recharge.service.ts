@@ -9,6 +9,7 @@ import {
 } from "src/entity/rechargeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
+import { AchievementService } from "src/achievement/achievement.service";
 
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
 const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
@@ -32,6 +33,8 @@ export class RechargeService {
     private readonly dataSource: DataSource,
     @Optional()
     private readonly pointLedgerService?: PointLedgerService,
+    @Optional()
+    private readonly achievementService?: AchievementService,
   ) {}
 
   async getPublicConfig(): Promise<RechargeConfigView> {
@@ -225,7 +228,9 @@ export class RechargeService {
     record.third_party_response =
       this.sanitizeThirdPartyResponse(thirdPartyResponse);
     record.failure_reason = null;
-    return recordRepository.save(record);
+    const saved = await recordRepository.save(record);
+    await this.achievementService?.evaluateAndUnlock(manager, uid);
+    return saved;
   }
 
   private async callFishpiUserInfo(config: RechargeConfig, userName: string) {

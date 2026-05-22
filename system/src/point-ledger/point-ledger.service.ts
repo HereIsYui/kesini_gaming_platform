@@ -27,6 +27,7 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   redeem_code: "兑换码奖励",
   launch_activity: "开服福利",
   exchange_shop: "兑换商店",
+  achievement: "成就奖励",
   trade_buy: "交易购买",
   trade_sell: "交易出售",
 };

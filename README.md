@@ -277,6 +277,58 @@ EOF
 ```sql
 ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
 ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
+
+CREATE TABLE achievement_config (
+  id int NOT NULL AUTO_INCREMENT,
+  code varchar(64) NOT NULL,
+  name varchar(80) NOT NULL,
+  description varchar(1024) NOT NULL DEFAULT '',
+  category varchar(40) NOT NULL DEFAULT '常规',
+  target_type varchar(40) NOT NULL,
+  target_value int NOT NULL,
+  target_scope json NULL,
+  rewards json NOT NULL,
+  sort_order int NOT NULL DEFAULT 0,
+  enabled tinyint NOT NULL DEFAULT 1,
+  starts_at datetime NULL,
+  ends_at datetime NULL,
+  delete_flag tinyint NOT NULL DEFAULT 0,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updatedAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_achievement_config_code (code),
+  KEY IDX_achievement_config_enabled (enabled, delete_flag)
+);
+
+CREATE TABLE user_achievement (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  achievement_id int NOT NULL,
+  achievement_code varchar(64) NOT NULL,
+  progress int NOT NULL DEFAULT 0,
+  achieved tinyint NOT NULL DEFAULT 0,
+  achieved_at datetime NULL,
+  reward_snapshot json NULL,
+  notification_ack_at datetime NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updatedAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_user_achievement_unique (uid, achievement_id),
+  KEY IDX_user_achievement_uid_achieved (uid, achieved),
+  KEY IDX_user_achievement_notification (uid, achieved, notification_ack_at)
+);
+
+CREATE TABLE achievement_event (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  event_type varchar(40) NOT NULL,
+  amount int NOT NULL DEFAULT 1,
+  metadata json NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  KEY IDX_achievement_event_uid_type (uid, event_type),
+  KEY IDX_achievement_event_created (createdAt)
+);
 ```
 
 ## 管理员权限

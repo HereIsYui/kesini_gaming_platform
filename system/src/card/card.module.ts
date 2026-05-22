@@ -13,6 +13,7 @@ import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 
@@ -32,6 +33,7 @@ import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
     ]),
     AuthModule,
     PointLedgerModule,
+    AchievementModule,
   ],
   controllers: [CardController],
   providers: [CardService, GachaConfigService],

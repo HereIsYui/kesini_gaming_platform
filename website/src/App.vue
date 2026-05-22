@@ -33,6 +33,9 @@ import {
 import type {
   CardItem,
   CardRarity,
+  AchievementListResponse,
+  AchievementNotification,
+  AchievementRecord,
   BulkDecomposeResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
@@ -76,6 +79,7 @@ const sectionItems = [
   { key: "synthesize", label: "合成", icon: WandSparkles },
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
+  { key: "achievements", label: "成就", icon: ShieldCheck },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
@@ -136,6 +140,7 @@ const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
 const pointRecords = ref<PointLedgerRecordsResponse | null>(null);
+const achievements = ref<AchievementRecord[]>([]);
 const pointRecordPage = ref(1);
 const pointRecordTypeFilter = ref<"all" | "income" | "expense">("all");
 const pointRecordSourceFilter = ref<PointLedgerSourceType | "">("");
@@ -179,6 +184,8 @@ const rechargeModalOpen = ref(false);
 const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
 const feedback = ref<{ type: FeedbackType; text: string } | null>(null);
+const achievementToasts = ref<AchievementNotification[]>([]);
+const achievementToastQueue = ref<AchievementNotification[]>([]);
 const callbackBusy = ref(false);
 const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
@@ -192,6 +199,7 @@ const busy = reactive({
   points: false,
   shop: false,
   redeem: false,
+  achievements: false,
   trade: false,
   recharge: false,
   bulkDecompose: false,
@@ -200,6 +208,7 @@ const busy = reactive({
 });
 
 let feedbackTimer: number | undefined;
+const achievementToastTimers = new Map<number, number>();
 
 const isAuthed = computed(() => Boolean(token.value));
 const activeSection = computed<SectionKey>(() => {
@@ -324,6 +333,36 @@ const leaderboardRows = computed<LeaderboardEntry[]>(
 const pointLedgerRows = computed<PointLedgerRecord[]>(
   () => pointRecords.value?.list || [],
 );
+const achievementGroups = computed(() => {
+  const groups = new Map<string, AchievementRecord[]>();
+  achievements.value.forEach((achievement) => {
+    const category = achievement.category || "常规";
+    if (!groups.has(category)) {
+      groups.set(category, []);
+    }
+    groups.get(category)!.push(achievement);
+  });
+  return Array.from(groups.entries()).map(([category, list]) => ({
+    category,
+    list: [...list].sort(
+      (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.id - b.id,
+    ),
+  }));
+});
+const achievementUnlockedCount = computed(
+  () => achievements.value.filter((achievement) => achievement.achieved).length,
+);
+const achievementProgressingCount = computed(
+  () => achievements.value.length - achievementUnlockedCount.value,
+);
+const achievementCompletionPercent = computed(() => {
+  if (achievements.value.length === 0) {
+    return 0;
+  }
+  return Math.round(
+    (achievementUnlockedCount.value / achievements.value.length) * 100,
+  );
+});
 const pointIncomeTotal = computed(() =>
   pointLedgerRows.value
     .filter((record) => record.changeAmount > 0)
@@ -345,6 +384,7 @@ const pointSourceOptions = [
   { value: "redeem_code", label: "兑换码奖励" },
   { value: "launch_activity", label: "开服福利" },
   { value: "exchange_shop", label: "兑换商店" },
+  { value: "achievement", label: "成就奖励" },
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
 ] as const;
@@ -544,6 +584,11 @@ function logout() {
   leaderboard.value = null;
   leaderboardError.value = "";
   pointRecords.value = null;
+  achievements.value = [];
+  achievementToasts.value = [];
+  achievementToastQueue.value = [];
+  achievementToastTimers.forEach((timer) => window.clearTimeout(timer));
+  achievementToastTimers.clear();
   pointRecordPage.value = 1;
   exchangeItems.value = [];
   tradeListings.value = [];
@@ -627,6 +672,8 @@ async function loadPrivateData() {
     loadUserCards(),
     loadLaunchActivity(),
     loadLeaderboard(),
+    loadAchievements(),
+    loadAchievementNotifications(),
     loadPointRecords(),
     loadExchangeItems(),
     loadTradeData(),
@@ -699,6 +746,88 @@ async function loadLeaderboard() {
   } finally {
     busy.leaderboard = false;
   }
+}
+
+async function loadAchievements() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.achievements = true;
+  try {
+    const data = await request<AchievementListResponse>("/achievement/list");
+    achievements.value = data.list || [];
+  } catch (error) {
+    if (activeSection.value === "achievements") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.achievements = false;
+  }
+}
+
+async function loadAchievementNotifications() {
+  if (!isAuthed.value) {
+    return;
+  }
+  try {
+    const notices = await request<AchievementNotification[]>(
+      "/achievement/notifications/unread",
+    );
+    if (!notices.length) {
+      return;
+    }
+    enqueueAchievementNotifications(notices);
+    await request("/achievement/notifications/ack", {
+      method: "POST",
+      body: JSON.stringify({
+        achievementIds: notices.map((notice) => notice.achievementId),
+      }),
+    });
+  } catch {
+    // 成就通知不影响主流程。
+  }
+}
+
+function enqueueAchievementNotifications(notices: AchievementNotification[]) {
+  notices.forEach((notice) => {
+    const exists =
+      achievementToasts.value.some(
+        (item) => item.achievementId === notice.achievementId,
+      ) ||
+      achievementToastQueue.value.some(
+        (item) => item.achievementId === notice.achievementId,
+      );
+    if (!exists) {
+      achievementToastQueue.value.push(notice);
+    }
+  });
+  flushAchievementToastQueue();
+}
+
+function flushAchievementToastQueue() {
+  while (
+    achievementToasts.value.length < 3 &&
+    achievementToastQueue.value.length > 0
+  ) {
+    const notice = achievementToastQueue.value.shift()!;
+    achievementToasts.value.push(notice);
+    const timer = window.setTimeout(() => {
+      dismissAchievementToast(notice.achievementId);
+    }, 6000);
+    achievementToastTimers.set(notice.achievementId, timer);
+  }
+}
+
+function dismissAchievementToast(achievementId: number) {
+  const timer = achievementToastTimers.get(achievementId);
+  if (timer) {
+    window.clearTimeout(timer);
+    achievementToastTimers.delete(achievementId);
+  }
+  achievementToasts.value = achievementToasts.value.filter(
+    (notice) => notice.achievementId !== achievementId,
+  );
+  flushAchievementToastQueue();
 }
 
 async function loadPointRecords() {
@@ -1437,6 +1566,36 @@ function formatRewards(rewards?: {
     parts.push(`${item.itemName || `物品 ${item.itemId}`} x${item.num}`);
   });
   return parts.length > 0 ? parts.join("，") : "无奖励";
+}
+
+function achievementProgressPercent(achievement: AchievementRecord) {
+  if (achievement.achieved) {
+    return 100;
+  }
+  const target = Math.max(1, Number(achievement.targetValue || 0));
+  return Math.max(
+    0,
+    Math.min(100, Math.round((Number(achievement.progress || 0) / target) * 100)),
+  );
+}
+
+function achievementProgressText(achievement: AchievementRecord) {
+  const target = Math.max(0, Number(achievement.targetValue || 0));
+  const progress = Math.min(Math.max(0, Number(achievement.progress || 0)), target);
+  return `${progress} / ${target}`;
+}
+
+function achievementScopeLabel(achievement: AchievementRecord) {
+  const scope = achievement.targetScope || {};
+  const parts: string[] = [];
+  if (scope.rarity) {
+    parts.push(`${scope.rarity} 稀有度`);
+  }
+  if (scope.poolId) {
+    const pool = pools.value.find((item) => item.id === scope.poolId);
+    parts.push(pool?.pool_name || `卡池 #${scope.poolId}`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : achievement.targetLabel;
 }
 
 function formatFragmentSummary(
@@ -2683,6 +2842,107 @@ function leaderboardRankLabel(rank?: number) {
       </section>
 
       <section
+        v-if="activeSection === 'achievements'"
+        class="panel achievement-panel"
+        data-section="achievements"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">成就图鉴</p>
+            <h2>目标进度</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.achievements"
+            @click="loadAchievements"
+          >
+            <RefreshCw :size="16" :class="{ spin: busy.achievements }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <ShieldCheck :size="30" />
+          <strong>登录后查看成就</strong>
+          <span>抽卡、收藏、交易和兑换记录会汇聚成你的成就进度。</span>
+        </div>
+        <div
+          v-else-if="busy.achievements && achievements.length === 0"
+          class="skeleton-grid achievement-skeleton"
+        >
+          <span v-for="item in 6" :key="item"></span>
+        </div>
+        <div v-else-if="achievements.length === 0" class="empty-state">
+          <Trophy :size="30" />
+          <strong>暂无可见成就</strong>
+          <span>新的目标开放后会出现在这里。</span>
+        </div>
+        <div v-else class="achievement-content">
+          <div class="achievement-summary">
+            <article>
+              <small>已达成</small>
+              <strong>{{ achievementUnlockedCount }}</strong>
+            </article>
+            <article>
+              <small>进行中</small>
+              <strong>{{ achievementProgressingCount }}</strong>
+            </article>
+            <article>
+              <small>完成度</small>
+              <strong>{{ achievementCompletionPercent }}%</strong>
+            </article>
+          </div>
+
+          <section
+            v-for="group in achievementGroups"
+            :key="group.category"
+            class="achievement-group"
+          >
+            <div class="achievement-group-head">
+              <h3>{{ group.category }}</h3>
+              <span>{{ group.list.length }} 项</span>
+            </div>
+            <div class="achievement-grid">
+              <article
+                v-for="achievement in group.list"
+                :key="achievement.id"
+                class="achievement-card"
+                :class="{ achieved: achievement.achieved }"
+                :style="{
+                  '--progress': `${achievementProgressPercent(achievement)}%`,
+                }"
+              >
+                <header>
+                  <span class="achievement-icon">
+                    <Trophy v-if="achievement.achieved" :size="17" />
+                    <ShieldCheck v-else :size="17" />
+                  </span>
+                  <div>
+                    <strong>{{ achievement.name }}</strong>
+                    <small>{{ achievement.targetLabel }}</small>
+                  </div>
+                  <b>{{ achievement.achieved ? "已达成" : "进行中" }}</b>
+                </header>
+                <p>{{ achievement.description || "完成目标后自动发放奖励。" }}</p>
+                <div class="achievement-meta">
+                  <span>{{ achievementScopeLabel(achievement) }}</span>
+                  <span>{{ achievementProgressText(achievement) }}</span>
+                </div>
+                <div class="achievement-progress" aria-hidden="true">
+                  <i></i>
+                </div>
+                <footer>
+                  <span>奖励</span>
+                  <strong>{{ formatRewards(achievement.rewards) }}</strong>
+                </footer>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section
         v-if="activeSection === 'redeem'"
         class="redeem-grid"
         data-section="redeem"
@@ -2857,6 +3117,36 @@ function leaderboardRankLabel(rank?: number) {
 
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
       {{ feedback.text }}
+    </div>
+
+    <div
+      v-if="achievementToasts.length"
+      class="achievement-toast-stack"
+      aria-live="polite"
+    >
+      <article
+        v-for="notice in achievementToasts"
+        :key="notice.achievementId"
+        class="achievement-toast"
+        role="status"
+      >
+        <div class="achievement-toast-icon">
+          <Trophy :size="18" />
+        </div>
+        <div class="achievement-toast-body">
+          <span>成就达成</span>
+          <strong>{{ notice.name }}</strong>
+          <p>{{ notice.description || "奖励已发放到账户。" }}</p>
+          <small>{{ formatRewards(notice.rewards) }}</small>
+        </div>
+        <button
+          type="button"
+          aria-label="关闭成就通知"
+          @click="dismissAchievementToast(notice.achievementId)"
+        >
+          ×
+        </button>
+      </article>
     </div>
 
     <Teleport to="body">

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { CardItem } from "src/entity/card.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
@@ -25,6 +26,7 @@ import { TradeService } from "./trade.service";
     ]),
     AuthModule,
     PointLedgerModule,
+    AchievementModule,
   ],
   controllers: [TradeController],
   providers: [TradeService],

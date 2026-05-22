@@ -11,6 +11,7 @@ import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
+import { AchievementService } from "src/achievement/achievement.service";
 
 const RARITY_ORDER = ["N", "R", "SR", "SSR", "UR"] as const;
 type CardRarity = (typeof RARITY_ORDER)[number];
@@ -31,6 +32,8 @@ export class TradeService {
     private readonly dataSource: DataSource,
     @Optional()
     private readonly pointLedgerService?: PointLedgerService,
+    @Optional()
+    private readonly achievementService?: AchievementService,
   ) {}
 
   async listListings(uid: string, query: TradeListQuery) {
@@ -322,6 +325,11 @@ export class TradeService {
             poolName: pool?.pool_name,
           },
         }),
+      );
+      await this.achievementService?.evaluateAndUnlock(manager, uid);
+      await this.achievementService?.evaluateAndUnlock(
+        manager,
+        listing.seller_uid,
       );
 
       return {

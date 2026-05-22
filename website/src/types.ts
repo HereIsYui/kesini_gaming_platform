@@ -219,6 +219,55 @@ export interface BulkDecomposeResponse {
   fragments?: BulkDecomposeFragment[];
 }
 
+export type AchievementTargetType =
+  | "total_draws"
+  | "rarity_draws"
+  | "owned_cards"
+  | "rarity_owned_cards"
+  | "completed_pools"
+  | "recharge_points"
+  | "redeem_count"
+  | "exchange_count"
+  | "trade_buy_count"
+  | "trade_sell_count"
+  | "synthesize_count"
+  | "decompose_count";
+
+export interface AchievementRecord {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  targetType: AchievementTargetType | string;
+  targetLabel: string;
+  targetValue: number;
+  targetScope?: {
+    rarity?: string;
+    poolId?: number;
+  } | null;
+  progress: number;
+  achieved: boolean;
+  achievedAt?: string | null;
+  rewards: RedeemRewards;
+  sortOrder?: number;
+}
+
+export interface AchievementListResponse {
+  list: AchievementRecord[];
+  total: number;
+}
+
+export interface AchievementNotification {
+  achievementId: number;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  achievedAt: string;
+  rewards: RedeemRewards;
+}
+
 export type PointLedgerSourceType =
   | "draw_once"
   | "draw_ten"
@@ -226,6 +275,7 @@ export type PointLedgerSourceType =
   | "redeem_code"
   | "launch_activity"
   | "exchange_shop"
+  | "achievement"
   | "trade_buy"
   | "trade_sell";
 

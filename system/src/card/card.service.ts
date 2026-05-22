@@ -23,6 +23,7 @@ import {
   PitySystemConfig,
 } from "src/types/api";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
+import { AchievementService } from "src/achievement/achievement.service";
 import { GachaConfigService } from "./gacha-config.service";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
@@ -70,6 +71,8 @@ export class CardService {
     private readonly dataSource: DataSource,
     @Optional()
     private readonly pointLedgerService?: PointLedgerService,
+    @Optional()
+    private readonly achievementService?: AchievementService,
   ) {}
 
   /**
@@ -195,6 +198,7 @@ export class CardService {
       await manager.getRepository(User).save(user);
       await pityRepository.save(pity);
       await this.saveUserHistoryToDB(userHistoryRepository, uid, results);
+      await this.achievementService?.evaluateAndUnlock(manager, uid);
 
       return results;
     });
@@ -570,6 +574,13 @@ export class CardService {
         delete_flag: false,
       });
       await userCardRepository.save(userCard);
+      await this.achievementService?.evaluateAndUnlock(manager, uid, [
+        {
+          type: "synthesize_count",
+          amount: 1,
+          metadata: { cardId, rarity, cardUuid: userCard.card_uuid },
+        },
+      ]);
 
       return {
         data: {
@@ -627,6 +638,17 @@ export class CardService {
         fragmentDrop.fragmentItem,
         fragmentDrop.fragmentCount,
       );
+      await this.achievementService?.evaluateAndUnlock(manager, uid, [
+        {
+          type: "decompose_count",
+          amount: 1,
+          metadata: {
+            cardId: Number(userCard.card_id),
+            rarity: fragmentDrop.rarity,
+            cardUuid,
+          },
+        },
+      ]);
 
       return {
         data: {
@@ -739,6 +761,15 @@ export class CardService {
       for (const { item, count } of fragmentMap.values()) {
         await this.applyFragmentGain(manager, user.id, item, count);
       }
+      await this.achievementService?.evaluateAndUnlock(manager, uid, [
+        {
+          type: "decompose_count",
+          amount: candidates.length,
+          metadata: {
+            rarities: selectedRarities,
+          },
+        },
+      ]);
 
       return {
         ...preview,

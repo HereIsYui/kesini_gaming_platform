@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "src/card/gacha-config.service";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
@@ -49,6 +50,7 @@ import { AdminService } from "./admin.service";
       TradeConfig,
     ]),
     AuthModule,
+    AchievementModule,
   ],
   controllers: [AdminController],
   providers: [AdminGuard, AdminService, GachaConfigService],

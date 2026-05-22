@@ -210,6 +210,62 @@ export interface RechargeRecord {
   [key: string]: unknown;
 }
 
+export type AchievementTargetType =
+  | "total_draws"
+  | "rarity_draws"
+  | "owned_cards"
+  | "rarity_owned_cards"
+  | "completed_pools"
+  | "recharge_points"
+  | "redeem_count"
+  | "exchange_count"
+  | "trade_buy_count"
+  | "trade_sell_count"
+  | "synthesize_count"
+  | "decompose_count";
+
+export interface AchievementTargetScope {
+  rarity?: string;
+  poolId?: number;
+}
+
+export interface AchievementConfigRecord {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  target_type: AchievementTargetType;
+  targetTypeLabel?: string;
+  target_value: number;
+  target_scope?: AchievementTargetScope | null;
+  rewards: RedeemRewards;
+  sort_order: number;
+  enabled: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface UserAchievementRecord {
+  id: number;
+  uid: string;
+  achievementId: number;
+  achievementCode: string;
+  achievementName: string;
+  category?: string;
+  progress: number;
+  targetValue: number;
+  achieved: boolean;
+  achievedAt?: string | null;
+  notificationAckAt?: string | null;
+  rewards?: RedeemRewards | null;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
 export interface LaunchActivityConfigRecord {
   id?: number;
   enabled: boolean;

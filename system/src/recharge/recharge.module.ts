@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
+import { AchievementModule } from "src/achievement/achievement.module";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { User } from "src/entity/user.entity";
@@ -13,6 +14,7 @@ import { RechargeService } from "./recharge.service";
     TypeOrmModule.forFeature([RechargeConfig, RechargeRecord, User]),
     AuthModule,
     PointLedgerModule,
+    AchievementModule,
   ],
   controllers: [RechargeController],
   providers: [RechargeService],

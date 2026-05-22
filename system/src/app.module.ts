@@ -22,7 +22,11 @@ import { TradeRecord } from "./entity/tradeRecord.entity";
 import { LaunchActivityConfig } from "./entity/launchActivityConfig.entity";
 import { LaunchActivityClaim } from "./entity/launchActivityClaim.entity";
 import { PointLedgerRecord } from "./entity/pointLedgerRecord.entity";
+import { AchievementConfig } from "./entity/achievementConfig.entity";
+import { AchievementEvent } from "./entity/achievementEvent.entity";
+import { UserAchievement } from "./entity/userAchievement.entity";
 import { ApisModule } from "./apis/apis.module";
+import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
 import { ConfigurationService } from "./config/configuration.service";
@@ -61,6 +65,9 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
       LaunchActivityConfig,
       LaunchActivityClaim,
       PointLedgerRecord,
+      AchievementConfig,
+      AchievementEvent,
+      UserAchievement,
     ]),
     ConfigurationModule,
     ApisModule,
@@ -72,6 +79,7 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
     RechargeModule,
     LaunchActivityModule,
     PointLedgerModule,
+    AchievementModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

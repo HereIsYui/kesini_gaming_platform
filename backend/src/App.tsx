@@ -23,6 +23,7 @@ import {
   Ticket,
   Trash2,
   Handshake,
+  Trophy,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -81,6 +82,8 @@ import {
 import type {
   AdminMeResponse,
   AdminOptions,
+  AchievementConfigRecord,
+  AchievementTargetType,
   DashboardData,
   ExchangeCostItem,
   ExchangeShopItemRecord,
@@ -98,6 +101,7 @@ import type {
   RechargeRecord,
   SelectOption,
   TradeConfigRecord,
+  UserAchievementRecord,
 } from "./types";
 
 type Theme = "light" | "dark";
@@ -120,6 +124,8 @@ type PageKey =
   | "exchange-usages"
   | "launch-activity-config"
   | "launch-activity-claims"
+  | "achievements"
+  | "user-achievements"
   | "trade-config"
   | "trade-listings"
   | "trade-records"
@@ -158,6 +164,8 @@ const pageKeys: PageKey[] = [
   "exchange-usages",
   "launch-activity-config",
   "launch-activity-claims",
+  "achievements",
+  "user-achievements",
   "trade-config",
   "trade-listings",
   "trade-records",
@@ -187,6 +195,31 @@ const rarityOptions: SelectOption[] = [
   { label: "SR", value: "SR" },
   { label: "SSR", value: "SSR" },
   { label: "UR", value: "UR" },
+];
+
+const achievementTargetOptions: Array<{
+  label: string;
+  value: AchievementTargetType;
+  needsRarity?: boolean;
+  supportsPool?: boolean;
+}> = [
+  { label: "总抽数", value: "total_draws" },
+  { label: "指定稀有度抽取数", value: "rarity_draws", needsRarity: true },
+  { label: "当前持有卡片数", value: "owned_cards", supportsPool: true },
+  {
+    label: "指定稀有度持有数",
+    value: "rarity_owned_cards",
+    needsRarity: true,
+    supportsPool: true,
+  },
+  { label: "集齐卡池数", value: "completed_pools" },
+  { label: "累计充值星穹币", value: "recharge_points" },
+  { label: "兑换码次数", value: "redeem_count" },
+  { label: "兑换商店次数", value: "exchange_count" },
+  { label: "买入次数", value: "trade_buy_count" },
+  { label: "卖出次数", value: "trade_sell_count" },
+  { label: "合成次数", value: "synthesize_count" },
+  { label: "分解次数", value: "decompose_count" },
 ];
 
 const booleanOptions: SelectOption[] = [
@@ -455,6 +488,32 @@ const launchActivityClaimFields: FieldConfig[] = [
   { key: "uid", label: "UID", readonly: true },
   { key: "reward_snapshot", label: "奖励快照", readonly: true },
   { key: "createdAt", label: "领取时间", readonly: true },
+];
+
+const achievementDetailFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "code", label: "编码", readonly: true },
+  { key: "name", label: "名称", readonly: true },
+  { key: "category", label: "分类", readonly: true },
+  { key: "targetTypeLabel", label: "目标类型", readonly: true },
+  { key: "target_value", label: "目标值", readonly: true },
+  { key: "target_scope", label: "目标范围", readonly: true },
+  { key: "rewards", label: "奖励", readonly: true },
+  { key: "enabled", label: "状态", readonly: true },
+  { key: "starts_at", label: "开始时间", readonly: true },
+  { key: "ends_at", label: "结束时间", readonly: true },
+];
+
+const userAchievementFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "uid", label: "UID", readonly: true },
+  { key: "achievementName", label: "成就", readonly: true },
+  { key: "category", label: "分类", readonly: true },
+  { key: "progress", label: "进度", readonly: true },
+  { key: "achieved", label: "状态", readonly: true },
+  { key: "rewards", label: "奖励", readonly: true },
+  { key: "achievedAt", label: "达成时间", readonly: true },
+  { key: "notificationAckAt", label: "通知确认", readonly: true },
 ];
 
 const tradeListingFields: FieldConfig[] = [
@@ -831,6 +890,22 @@ export function App() {
         group: "运营工具",
         icon: History,
         render: () => <LaunchActivityClaimsPage />,
+      },
+      {
+        key: "achievements",
+        label: "成就配置",
+        description: "配置成就目标、奖励和上线状态。",
+        group: "运营工具",
+        icon: Trophy,
+        render: () => <AchievementsPage options={adminOptions} />,
+      },
+      {
+        key: "user-achievements",
+        label: "成就记录",
+        description: "查看玩家成就进度、达成时间和通知状态。",
+        group: "运营工具",
+        icon: History,
+        render: () => <UserAchievementsPage />,
       },
       {
         key: "trade-config",
@@ -3458,6 +3533,582 @@ function LaunchActivityClaimsPage() {
   );
 }
 
+function AchievementsPage({ options }: { options: AdminOptions | null }) {
+  const { message, modal } = AntApp.useApp();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [keyword, setKeyword] = useState("");
+  const [data, setData] =
+    useState<PageResult<AchievementConfigRecord> | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<AchievementConfigRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [detail, setDetail] = useState<AchievementConfigRecord | null>(null);
+
+  const filters = useMemo(
+    () => ({ page, pageSize, keyword }),
+    [page, pageSize, keyword],
+  );
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+    request<PageResult<AchievementConfigRecord>>(
+      `/admin/achievements${toQuery(filters)}`,
+    )
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = data?.list || [];
+  const columns: TableColumnsType<AchievementConfigRecord> = [
+    {
+      title: "成就",
+      dataIndex: "name",
+      render: (value, row) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong>{String(value || "-")}</Typography.Text>
+          <Typography.Text className="mono" type="secondary">
+            {row.code}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "分类",
+      dataIndex: "category",
+      width: 120,
+      render: (value) => <Tag color="blue">{String(value || "常规")}</Tag>,
+    },
+    {
+      title: "目标",
+      width: 220,
+      render: (_, row) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>{row.targetTypeLabel || row.target_type}</Typography.Text>
+          <Typography.Text type="secondary">
+            {formatAchievementScope(row)} / {row.target_value}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "奖励",
+      dataIndex: "rewards",
+      ellipsis: true,
+      render: (rewards) => formatRewards(rewards),
+    },
+    {
+      title: "状态",
+      dataIndex: "enabled",
+      width: 96,
+      render: (enabled) => (
+        <Tag color={enabled ? "success" : "default"}>
+          {enabled ? "上线" : "下线"}
+        </Tag>
+      ),
+    },
+    {
+      title: "排序",
+      dataIndex: "sort_order",
+      width: 80,
+    },
+    {
+      title: "有效期",
+      width: 240,
+      render: (_, row) => formatDateRange(row.starts_at, row.ends_at),
+    },
+    {
+      title: "操作",
+      width: 220,
+      fixed: "right",
+      render: (_, row) => (
+        <Space size={8} wrap>
+          <Button
+            size="small"
+            icon={<Eye size={14} />}
+            onClick={() => setDetail(row)}
+          >
+            详情
+          </Button>
+          <Button size="small" onClick={() => setEditing(row)}>
+            编辑
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<Trash2 size={14} />}
+            onClick={() => deleteAchievement(row)}
+            aria-label="删除"
+          />
+        </Space>
+      ),
+    },
+  ];
+
+  async function saveAchievement(values: Partial<AchievementConfigRecord>) {
+    const current = editing;
+    await request(
+      current ? `/admin/achievements/${current.id}` : "/admin/achievements",
+      {
+        method: current ? "PATCH" : "POST",
+        body: JSON.stringify(values),
+      },
+    );
+    setEditing(null);
+    setCreating(false);
+    load();
+  }
+
+  function deleteAchievement(row: AchievementConfigRecord) {
+    modal.confirm({
+      title: `确认删除成就 ${row.name}？`,
+      content: "已达成记录会保留用于审计。",
+      okText: "确认删除",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      async onOk() {
+        await request(`/admin/achievements/${row.id}`, { method: "DELETE" });
+        message.success("成就已删除");
+        load();
+      },
+    });
+  }
+
+  return (
+    <Panel title="成就配置" icon={<Trophy size={18} />} className="table-panel">
+      <Space className="table-toolbar" wrap>
+        <Input
+          className="toolbar-search"
+          prefix={<Search size={16} />}
+          allowClear
+          value={keyword}
+          onChange={(event) => {
+            setPage(1);
+            setKeyword(event.target.value);
+          }}
+          placeholder="搜索成就名称、编码或说明"
+        />
+        <Space className="toolbar-actions" wrap>
+          <Button
+            icon={<RefreshCw size={15} />}
+            onClick={load}
+            disabled={loading}
+          >
+            刷新
+          </Button>
+          <Button type="primary" onClick={() => setCreating(true)}>
+            新增
+          </Button>
+        </Space>
+      </Space>
+
+      {error && <StateBox type="error">{error}</StateBox>}
+      <Table
+        rowKey="id"
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        scroll={{ x: "max-content" }}
+        pagination={{
+          current: page,
+          pageSize,
+          total: data?.total || 0,
+          showSizeChanger: false,
+          showTotal: (total) => `共 ${total} 条`,
+          onChange: (nextPage) => setPage(nextPage),
+        }}
+        locale={{
+          emptyText: error ? "加载失败" : <Empty description="暂无成就配置" />,
+        }}
+      />
+
+      {(creating || editing) && (
+        <AchievementModal
+          initial={editing}
+          itemOptions={options?.dropItems || []}
+          poolOptions={options?.pools || []}
+          onCancel={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSubmit={saveAchievement}
+        />
+      )}
+
+      {detail && (
+        <DetailModal
+          title="成就详情"
+          fields={achievementDetailFields}
+          data={detail}
+          loading={false}
+          onClose={() => setDetail(null)}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function AchievementModal({
+  initial,
+  itemOptions,
+  poolOptions,
+  onCancel,
+  onSubmit,
+}: {
+  initial: AchievementConfigRecord | null;
+  itemOptions: SelectOption[];
+  poolOptions: SelectOption[];
+  onCancel: () => void;
+  onSubmit: (values: Partial<AchievementConfigRecord>) => Promise<void>;
+}) {
+  const [values, setValues] = useState(() =>
+    createAchievementFormState(initial),
+  );
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const targetMeta =
+    achievementTargetOptions.find((item) => item.value === values.target_type) ||
+    achievementTargetOptions[0];
+  const rewardGroups = groupItemOptions(
+    itemOptions,
+    (option) => option.type !== 1,
+  );
+  const rewardSelectOptions = rewardGroups.map((group) => ({
+    label: group.label,
+    options: group.options.map((option) => ({
+      label: option.label,
+      value: String(option.value),
+      disabled: option.disabled,
+    })),
+  }));
+
+  async function submit() {
+    setLoading(true);
+    setError("");
+    try {
+      await onSubmit({
+        ...values,
+        target_value: Number(values.target_value || 1),
+        sort_order: Number(values.sort_order || 0),
+        target_scope: normalizeAchievementScopeForSubmit(values),
+        starts_at: fromDateTimeLocal(String(values.starts_at || "")),
+        ends_at: fromDateTimeLocal(String(values.ends_at || "")),
+      } as Partial<AchievementConfigRecord>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={
+        <div>
+          <span className="eyebrow">成就配置</span>
+          <Typography.Title level={4}>
+            {initial ? "编辑成就" : "新增成就"}
+          </Typography.Title>
+        </div>
+      }
+      open
+      width={920}
+      onCancel={onCancel}
+      onOk={submit}
+      okText="保存成就"
+      cancelText="取消"
+      confirmLoading={loading}
+      destroyOnHidden
+    >
+      <Space
+        direction="vertical"
+        size={16}
+        className="full-width admin-form-stack"
+      >
+        <Card size="small" className="admin-form-card form-section-card" title="基础信息">
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="成就编码">
+              <Input
+                value={values.code}
+                placeholder="first-ssr"
+                onChange={(event) =>
+                  setValues({ ...values, code: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="名称">
+              <Input
+                value={values.name}
+                placeholder="首次 SSR"
+                onChange={(event) =>
+                  setValues({ ...values, name: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="分类">
+              <Input
+                value={values.category}
+                placeholder="抽卡"
+                onChange={(event) =>
+                  setValues({ ...values, category: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="状态">
+              <Select
+                value={values.enabled ? "true" : "false"}
+                onChange={(value) =>
+                  setValues({ ...values, enabled: value === "true" })
+                }
+                options={[
+                  { label: "上线", value: "true" },
+                  { label: "下线", value: "false" },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item className="form-field full-width" label="说明">
+              <Input.TextArea
+                value={values.description}
+                placeholder="玩家达成时看到的说明"
+                autoSize={{ minRows: 3, maxRows: 6 }}
+                onChange={(event) =>
+                  setValues({ ...values, description: event.target.value })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
+
+        <Card size="small" className="admin-form-card form-section-card" title="目标条件">
+          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+            <Form.Item className="form-field" label="目标类型">
+              <Select
+                value={values.target_type}
+                options={achievementTargetOptions.map((item) => ({
+                  label: item.label,
+                  value: item.value,
+                }))}
+                onChange={(value) =>
+                  setValues({
+                    ...values,
+                    target_type: value,
+                    target_scope: {},
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="目标值">
+              <InputNumber
+                className="full-width-control"
+                min={1}
+                value={Number(values.target_value || 1)}
+                onChange={(value) =>
+                  setValues({ ...values, target_value: Number(value || 1) })
+                }
+              />
+            </Form.Item>
+            {targetMeta.needsRarity && (
+              <Form.Item className="form-field" label="稀有度">
+                <Select
+                  value={values.target_scope?.rarity || "N"}
+                  options={rarityOptions}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      target_scope: {
+                        ...(values.target_scope || {}),
+                        rarity: String(value),
+                      },
+                    })
+                  }
+                />
+              </Form.Item>
+            )}
+            {targetMeta.supportsPool && (
+              <Form.Item className="form-field" label="卡池范围">
+                <Select
+                  allowClear
+                  placeholder="全部卡池"
+                  value={
+                    values.target_scope?.poolId
+                      ? String(values.target_scope.poolId)
+                      : undefined
+                  }
+                  options={poolOptions.map((option) => ({
+                    label: option.label,
+                    value: String(option.value),
+                  }))}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      target_scope: {
+                        ...(values.target_scope || {}),
+                        poolId: value ? Number(value) : undefined,
+                      },
+                    })
+                  }
+                />
+              </Form.Item>
+            )}
+            <Form.Item className="form-field" label="排序">
+              <InputNumber
+                className="full-width-control"
+                min={0}
+                value={Number(values.sort_order || 0)}
+                onChange={(value) =>
+                  setValues({ ...values, sort_order: Number(value || 0) })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="开始时间">
+              <Input
+                type="datetime-local"
+                value={String(values.starts_at || "")}
+                onChange={(event) =>
+                  setValues({ ...values, starts_at: event.target.value })
+                }
+              />
+            </Form.Item>
+            <Form.Item className="form-field" label="结束时间">
+              <Input
+                type="datetime-local"
+                value={String(values.ends_at || "")}
+                onChange={(event) =>
+                  setValues({ ...values, ends_at: event.target.value })
+                }
+              />
+            </Form.Item>
+          </Form>
+        </Card>
+
+        <Card
+          size="small"
+          className="admin-form-card form-section-card"
+          title="达成奖励"
+          extra={<Tag color="blue">{formatRewards(values.rewards)}</Tag>}
+        >
+          <Space direction="vertical" size={12} className="full-width">
+            <Form layout="vertical">
+              <Form.Item label="奖励星穹币">
+                <InputNumber
+                  className="full-width-control"
+                  min={0}
+                  value={values.rewards.points}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        points: Number(value || 0),
+                      },
+                    })
+                  }
+                />
+              </Form.Item>
+            </Form>
+            {values.rewards.items.map((item, index) => (
+              <Space
+                className="reward-item-row antd-reward-row"
+                key={index}
+                wrap
+              >
+                <Select
+                  className="reward-item-select"
+                  value={item.itemId ? String(item.itemId) : undefined}
+                  placeholder="选择奖励物品"
+                  options={rewardSelectOptions}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        itemId: Number(value),
+                      }),
+                    })
+                  }
+                />
+                <InputNumber
+                  className="reward-num-input"
+                  min={1}
+                  value={item.num}
+                  onChange={(value) =>
+                    setValues({
+                      ...values,
+                      rewards: updateRewardItem(values.rewards, index, {
+                        num: Number(value || 1),
+                      }),
+                    })
+                  }
+                />
+                <Button
+                  onClick={() =>
+                    setValues({
+                      ...values,
+                      rewards: {
+                        ...values.rewards,
+                        items: values.rewards.items.filter(
+                          (_, i) => i !== index,
+                        ),
+                      },
+                    })
+                  }
+                >
+                  移除
+                </Button>
+              </Space>
+            ))}
+            <Button
+              onClick={() =>
+                setValues({
+                  ...values,
+                  rewards: {
+                    ...values.rewards,
+                    items: [...values.rewards.items, { itemId: 0, num: 1 }],
+                  },
+                })
+              }
+            >
+              添加奖励物品
+            </Button>
+          </Space>
+        </Card>
+        {error && <Alert type="error" message={error} showIcon />}
+      </Space>
+    </Modal>
+  );
+}
+
+function UserAchievementsPage() {
+  return (
+    <AdminTable
+      title="玩家成就记录"
+      endpoint="/admin/user-achievements"
+      fields={userAchievementFields}
+      searchPlaceholder="按 UID 查询"
+      keywordParam="uid"
+      renderCell={(field, row) => {
+        if (field.key === "achieved") {
+          return (
+            <Tag color={row.achieved ? "success" : "default"}>
+              {row.achieved ? "已达成" : "进行中"}
+            </Tag>
+          );
+        }
+        if (field.key === "progress") {
+          const target = Number(row.targetValue || 0);
+          const progress = Number(row.progress || 0);
+          return target > 0 ? `${progress} / ${target}` : String(progress);
+        }
+        return null;
+      }}
+    />
+  );
+}
+
 function ExchangeShopModal({
   initial,
   itemOptions,
@@ -5554,6 +6205,54 @@ function createLaunchActivityFormState(
   };
 }
 
+function createAchievementFormState(
+  initial: AchievementConfigRecord | null,
+): AchievementConfigRecord {
+  return {
+    id: initial?.id || 0,
+    code: initial?.code || "",
+    name: initial?.name || "",
+    description: initial?.description || "",
+    category: initial?.category || "常规",
+    target_type: initial?.target_type || "total_draws",
+    targetTypeLabel: initial?.targetTypeLabel,
+    target_value: Number(initial?.target_value || 1),
+    target_scope: {
+      ...(initial?.target_scope || {}),
+      rarity: initial?.target_scope?.rarity || "N",
+    },
+    rewards: {
+      points: Number(initial?.rewards?.points || 0),
+      items: Array.isArray(initial?.rewards?.items)
+        ? initial!.rewards.items.map((item) => ({
+            itemId: Number(item.itemId),
+            num: Number(item.num),
+          }))
+        : [],
+    },
+    sort_order: Number(initial?.sort_order || 0),
+    enabled: initial?.enabled !== false,
+    starts_at: toDateTimeLocal(initial?.starts_at),
+    ends_at: toDateTimeLocal(initial?.ends_at),
+    createdAt: initial?.createdAt,
+    updatedAt: initial?.updatedAt,
+  };
+}
+
+function normalizeAchievementScopeForSubmit(values: AchievementConfigRecord) {
+  const targetMeta = achievementTargetOptions.find(
+    (item) => item.value === values.target_type,
+  );
+  const scope: Record<string, string | number> = {};
+  if (targetMeta?.needsRarity) {
+    scope.rarity = String(values.target_scope?.rarity || "N");
+  }
+  if (targetMeta?.supportsPool && values.target_scope?.poolId) {
+    scope.poolId = Number(values.target_scope.poolId);
+  }
+  return Object.keys(scope).length > 0 ? scope : null;
+}
+
 function createItemFormState(initial: Record<string, any>) {
   return {
     drop_name: String(initial.drop_name || ""),
@@ -5983,6 +6682,18 @@ function formatRewards(rewards: RedeemRewards | undefined) {
     parts.push(`物品 ${items.length} 项`);
   }
   return parts.join("，") || "未配置";
+}
+
+function formatAchievementScope(row: Partial<AchievementConfigRecord>) {
+  const scope = row.target_scope || {};
+  const parts: string[] = [];
+  if (scope.rarity) {
+    parts.push(`稀有度 ${scope.rarity}`);
+  }
+  if (scope.poolId) {
+    parts.push(`卡池 #${scope.poolId}`);
+  }
+  return parts.join("，") || "全部范围";
 }
 
 function formatCosts(costs: ExchangeCostItem[] | undefined) {
