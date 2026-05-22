@@ -488,13 +488,12 @@ async function loginWithOpenId() {
   busy.auth = true;
   try {
     saveApiBase();
-    const returnToUrl = new URL(window.location.href);
-    returnToUrl.search = "";
-    returnToUrl.hash = "";
+    const oauthOrigin = window.location.origin;
+    const returnToUrl = new URL(window.location.pathname, oauthOrigin);
     const data = await request<LoginUrlResponse>(
       `/apis/login-url${toQuery({
         returnTo: returnToUrl.toString(),
-        realm: window.location.origin,
+        realm: oauthOrigin,
       })}`,
     );
     window.location.href = data.url;
@@ -1645,7 +1644,7 @@ function leaderboardRankLabel(rank?: number) {
               <input
                 v-model="apiBase"
                 type="url"
-                placeholder="http://localhost:3000"
+                placeholder="http://localhost:7001"
                 @blur="saveApiBase"
               />
             </label>

@@ -85,11 +85,22 @@ export interface GachaPoolConfig {
     };
   };
   source?: "database" | "env";
+  scope?: "pool" | "global" | "fallback";
   updatedAt?: string | null;
   [key: string]: unknown;
 }
 
+export interface PoolGachaConfigDetail {
+  effective: GachaPoolConfig;
+  individualConfig?: GachaPoolConfig | null;
+  defaultConfig: GachaPoolConfig;
+  fallbackConfig: GachaPoolConfig;
+  hasIndividualConfig?: boolean;
+}
+
 export interface GachaConfigData {
+  defaultConfig?: GachaPoolConfig;
+  fallbackConfig?: GachaPoolConfig;
   pools?: Record<string, GachaPoolConfig>;
   defaults?: Record<string, GachaPoolConfig>;
   poolNames?: Record<string, string>;

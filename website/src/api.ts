@@ -1,17 +1,27 @@
 import type { ApiResponse } from "./types";
 
-const DEFAULT_API_BASE = "http://localhost:3000";
+const DEFAULT_API_BASE = "http://localhost:7001";
 const API_BASE_KEY = "kesini_website_api_base";
 const TOKEN_KEY = "kesini_website_token";
 const USER_KEY = "kesini_website_user";
 
+function normalizeBase(value: string | null | undefined) {
+  return value?.trim().replace(/\/+$/, "") || "";
+}
+
 export function getApiBase() {
-  const envBase = import.meta.env.VITE_API_BASE;
-  return localStorage.getItem(API_BASE_KEY) || envBase || DEFAULT_API_BASE;
+  const envBase = normalizeBase(import.meta.env.VITE_API_BASE);
+  if (envBase) {
+    return envBase;
+  }
+  return (
+    normalizeBase(localStorage.getItem(API_BASE_KEY)) ||
+    DEFAULT_API_BASE
+  );
 }
 
 export function setApiBase(value: string) {
-  localStorage.setItem(API_BASE_KEY, value.replace(/\/$/, ""));
+  localStorage.setItem(API_BASE_KEY, normalizeBase(value));
 }
 
 export function getToken() {

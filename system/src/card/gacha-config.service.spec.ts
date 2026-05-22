@@ -35,17 +35,28 @@ function createConfigService(repository: any) {
 }
 
 describe("GachaConfigService", () => {
-  it("数据库启用配置会覆盖环境变量默认配置", async () => {
+  it("启用的单池配置会覆盖全局默认配置", async () => {
     const repository = createRepository({
-      findOne: jest.fn().mockResolvedValue({
-        pool_id: 1,
-        enabled: true,
-        rarity_probabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
-        up_cards: null,
-        pity_system: { enabled: false },
-        single_draw_cost: 12,
-        ten_draw_cost: 108,
-      }),
+      find: jest.fn().mockResolvedValue([
+        {
+          pool_id: 0,
+          enabled: true,
+          rarity_probabilities: { N: 1, R: 0, SR: 0, SSR: 0, UR: 0 },
+          up_cards: null,
+          pity_system: { enabled: true },
+          single_draw_cost: 10,
+          ten_draw_cost: 100,
+        },
+        {
+          pool_id: 1,
+          enabled: true,
+          rarity_probabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
+          up_cards: null,
+          pity_system: { enabled: false },
+          single_draw_cost: 12,
+          ten_draw_cost: 108,
+        },
+      ]),
     });
     const service = createConfigService(repository);
 
@@ -59,30 +70,65 @@ describe("GachaConfigService", () => {
     );
   });
 
-  it("数据库配置关闭时回退环境变量默认配置", async () => {
+  it("单池配置关闭时回退启用的全局默认配置", async () => {
     const repository = createRepository({
-      findOne: jest.fn().mockResolvedValue({
-        pool_id: 1,
-        enabled: false,
-        rarity_probabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
-      }),
+      find: jest.fn().mockResolvedValue([
+        {
+          pool_id: 0,
+          enabled: true,
+          rarity_probabilities: { N: 0, R: 1, SR: 0, SSR: 0, UR: 0 },
+          up_cards: null,
+          pity_system: { enabled: false },
+          single_draw_cost: 8,
+          ten_draw_cost: 80,
+        },
+        {
+          pool_id: 1,
+          enabled: false,
+          rarity_probabilities: { N: 0, R: 0, SR: 0, SSR: 1, UR: 0 },
+          single_draw_cost: 12,
+          ten_draw_cost: 108,
+        },
+      ]),
     });
     const service = createConfigService(repository);
 
     await expect(service.getConfigByPoolId(1)).resolves.toEqual(
       expect.objectContaining({
         poolId: 1,
-        rarityProbabilities: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
+        rarityProbabilities: { N: 0, R: 1, SR: 0, SSR: 0, UR: 0 },
+        pitySystem: { enabled: false },
+        drawCosts: { once: 8, ten: 80 },
+      }),
+    );
+  });
+
+  it("没有全局默认配置时回退代码默认配置", async () => {
+    const repository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+    });
+    const service = createConfigService(repository);
+
+    await expect(service.getConfigByPoolId(99)).resolves.toEqual(
+      expect.objectContaining({
+        poolId: 99,
+        rarityProbabilities: {
+          N: 0.5,
+          R: 0.3,
+          SR: 0.15,
+          SSR: 0.045,
+          UR: 0.005,
+        },
         drawCosts: { once: 10, ten: 100 },
       }),
     );
   });
 
-  it("保存配置时会写入默认抽卡积分消耗", async () => {
+  it("保存全局默认配置时允许 poolId 为 0 并写入默认抽卡积分消耗", async () => {
     const repository = createRepository();
     const service = createConfigService(repository);
 
-    await service.savePoolConfig(1, {
+    await service.savePoolConfig(0, {
       rarityProbabilities: { N: 1 },
     } as any);
 
@@ -98,7 +144,7 @@ describe("GachaConfigService", () => {
     const service = createConfigService(createRepository());
 
     await expect(
-      service.savePoolConfig(1, {
+      service.savePoolConfig(0, {
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 0, ten: 100 },
       } as any),

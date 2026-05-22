@@ -21,8 +21,8 @@ function createRepository(overrides: Record<string, any> = {}) {
 function createService(repositories: Record<string, any> = {}) {
   const gachaService =
     repositories.gachaService || {
-      getAllPoolConfigs: jest.fn(async () => ({ 1: { poolId: 1 } })),
-      getPoolConfigsByPoolIds: jest.fn(async () => ({ 1: { poolId: 1 } })),
+      getAllPoolConfigs: jest.fn(async () => ({ 0: { poolId: 0 } })),
+      getPoolConfigsByPoolIds: jest.fn(async () => ({ 0: { poolId: 0 } })),
       getEnvConfigByPoolId: jest.fn((poolId: number) => ({
         poolId,
         rarityProbabilities: { N: 1 },
@@ -32,6 +32,55 @@ function createService(repositories: Record<string, any> = {}) {
         poolId,
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 10, ten: 100 },
+      })),
+      getGlobalDefaultConfigView: jest.fn(async () => ({
+        poolId: 0,
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 10, ten: 100 },
+        enabled: false,
+        source: "env",
+        scope: "fallback",
+        updatedAt: null,
+      })),
+      getFallbackConfigView: jest.fn(() => ({
+        poolId: 0,
+        rarityProbabilities: { N: 1 },
+        drawCosts: { once: 10, ten: 100 },
+        enabled: false,
+        source: "env",
+        scope: "fallback",
+        updatedAt: null,
+      })),
+      getPoolConfigDetail: jest.fn(async (poolId: number) => ({
+        effective: {
+          poolId,
+          rarityProbabilities: { N: 1 },
+          drawCosts: { once: 10, ten: 100 },
+          enabled: false,
+          source: "env",
+          scope: "fallback",
+          updatedAt: null,
+        },
+        individualConfig: null,
+        defaultConfig: {
+          poolId: 0,
+          rarityProbabilities: { N: 1 },
+          drawCosts: { once: 10, ten: 100 },
+          enabled: false,
+          source: "env",
+          scope: "fallback",
+          updatedAt: null,
+        },
+        fallbackConfig: {
+          poolId: 0,
+          rarityProbabilities: { N: 1 },
+          drawCosts: { once: 10, ten: 100 },
+          enabled: false,
+          source: "env",
+          scope: "fallback",
+          updatedAt: null,
+        },
+        hasIndividualConfig: false,
       })),
       savePoolConfig: jest.fn(async (_poolId, config) => config),
     };
@@ -242,7 +291,14 @@ describe("AdminService", () => {
     });
 
     await expect(service.getUser(1)).resolves.toBe(user);
-    await expect(service.getPool(2)).resolves.toBe(pool);
+    await expect(service.getPool(2)).resolves.toEqual(
+      expect.objectContaining({
+        ...pool,
+        gachaConfig: expect.objectContaining({
+          hasIndividualConfig: false,
+        }),
+      }),
+    );
     await expect(service.getCard(3)).resolves.toBe(card);
     await expect(service.getDropItem(4)).resolves.toEqual({
       ...dropItem,
@@ -441,40 +497,45 @@ describe("AdminService", () => {
     });
   });
 
-  it("获取抽卡配置会同时返回环境默认配置", async () => {
-    const poolRepository = createRepository({
-      find: jest.fn().mockResolvedValue([{ id: 2, pool_name: "限定卡池" }]),
-    });
+  it("获取抽卡配置只返回全局默认配置和代码兜底", async () => {
     const gachaService = {
-      getPoolConfigsByPoolIds: jest.fn().mockResolvedValue({
-        2: { poolId: 2, source: "database" },
+      getGlobalDefaultConfigView: jest.fn().mockResolvedValue({
+        poolId: 0,
+        source: "database",
+        enabled: true,
       }),
-      getEnvConfigByPoolId: jest.fn().mockReturnValue({
-        poolId: 2,
+      getFallbackConfigView: jest.fn().mockReturnValue({
+        poolId: 0,
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 10, ten: 100 },
+        source: "env",
+        enabled: false,
       }),
     };
     const service = createService({
-      pool: poolRepository,
       gachaService,
     });
 
     await expect(service.getGachaConfig()).resolves.toEqual(
       expect.objectContaining({
-        pools: { 2: { poolId: 2, source: "database" } },
+        defaultConfig: { poolId: 0, source: "database", enabled: true },
+        fallbackConfig: expect.objectContaining({
+          poolId: 0,
+          source: "env",
+          enabled: false,
+        }),
+        pools: { 0: { poolId: 0, source: "database", enabled: true } },
         defaults: {
-          "2": expect.objectContaining({
-            poolId: 2,
+          0: expect.objectContaining({
+            poolId: 0,
             source: "env",
             enabled: false,
           }),
         },
-        poolNames: { "2": "限定卡池" },
       }),
     );
-    expect(gachaService.getPoolConfigsByPoolIds).toHaveBeenCalledWith([2]);
-    expect(gachaService.getEnvConfigByPoolId).toHaveBeenCalledWith(2);
+    expect(gachaService.getGlobalDefaultConfigView).toHaveBeenCalled();
+    expect(gachaService.getFallbackConfigView).toHaveBeenCalled();
   });
 
   it("复制抽卡配置会保存到选中的目标卡池", async () => {

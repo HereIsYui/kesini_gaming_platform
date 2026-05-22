@@ -11,6 +11,7 @@ import {
 import { ConfigurationService } from "../config/configuration.service";
 
 const ALLOWED_RARITIES: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
+export const GLOBAL_DEFAULT_POOL_ID = 0;
 export const DEFAULT_DRAW_COSTS: DrawCosts = {
   once: 10,
   ten: 100,
@@ -26,7 +27,16 @@ export type EditableGachaConfig = Omit<GachaConfig, "upCards" | "pitySystem"> & 
 export interface GachaConfigView extends GachaConfig {
   enabled: boolean;
   source: "database" | "env";
+  scope: "pool" | "global" | "fallback";
   updatedAt: Date | null;
+}
+
+export interface PoolGachaConfigDetail {
+  effective: GachaConfigView;
+  individualConfig: GachaConfigView | null;
+  defaultConfig: GachaConfigView;
+  fallbackConfig: GachaConfigView;
+  hasIndividualConfig: boolean;
 }
 
 @Injectable()
@@ -93,47 +103,38 @@ export class GachaConfigService {
    * 获取默认配置
    */
   getDefaultConfig(): GachaConfig {
-    return this.getStandardPoolConfig();
+    return {
+      ...this.getStandardPoolConfig(),
+      poolId: GLOBAL_DEFAULT_POOL_ID,
+    };
   }
 
   /**
-   * 根据卡池ID获取配置
+   * 获取代码/环境兜底默认配置。历史上这里按卡池 ID/type 返回不同配置，
+   * 现在只保留一套全局默认，再把 poolId 映射成调用方需要的目标卡池。
    */
   getEnvConfigByPoolId(poolId: number): GachaConfig {
-    switch (poolId) {
-      case 0: // 常驻卡池
-      case 1:
-        return this.getStandardPoolConfig();
-      case 2: // 限定卡池
-        return this.getLimitedPoolConfig();
-      case 3: // 新手卡池
-        return this.getBeginnerPoolConfig();
-      case 4: // 活动卡池
-        return this.getEventPoolConfig();
-      default:
-        // 如果是未知的卡池ID，返回默认配置
-        return this.getDefaultConfig();
-    }
+    const normalizedPoolId =
+      Number.isInteger(poolId) && poolId >= 0
+        ? poolId
+        : GLOBAL_DEFAULT_POOL_ID;
+    return {
+      ...this.getDefaultConfig(),
+      poolId: normalizedPoolId,
+    };
   }
 
   /**
-   * 根据卡池ID获取最终生效配置，数据库配置优先于环境变量
+   * 根据卡池ID获取最终生效配置：单池配置 > 全局默认 > 代码/环境兜底。
    */
   async getConfigByPoolId(poolId: number): Promise<GachaConfig> {
-    const normalizedPoolId = poolId === 0 ? this.getDefaultConfig().poolId! : poolId;
-    const envConfig = this.getEnvConfigByPoolId(normalizedPoolId);
-    const dbConfig = await this.gachaPoolConfigRepository.findOne({
-      where: { pool_id: normalizedPoolId },
-    });
-
-    if (!dbConfig?.enabled) {
-      return {
-        ...envConfig,
-        poolId: normalizedPoolId,
-      };
+    const normalizedPoolId = this.normalizeReadablePoolId(poolId);
+    if (normalizedPoolId === GLOBAL_DEFAULT_POOL_ID) {
+      return this.getGlobalDefaultConfigView();
     }
 
-    return this.toGachaConfig(dbConfig, envConfig);
+    const detail = await this.getPoolConfigDetail(normalizedPoolId);
+    return detail.effective;
   }
 
   /**
@@ -151,40 +152,12 @@ export class GachaConfigService {
   }
 
   /**
-   * 获取所有可用的卡池类型及其概率配置
+   * 获取默认抽卡配置。后台“默认抽卡配置”页只展示这一项。
    */
   async getAllPoolConfigs(): Promise<Record<number, GachaConfigView>> {
-    const envConfigs: Record<number, GachaConfig> = {
-      1: this.getStandardPoolConfig(),
-      2: this.getLimitedPoolConfig(),
-      3: this.getBeginnerPoolConfig(),
-      4: this.getEventPoolConfig(),
+    return {
+      [GLOBAL_DEFAULT_POOL_ID]: await this.getGlobalDefaultConfigView(),
     };
-    const poolIds = Object.keys(envConfigs).map(Number);
-    const dbConfigs = await this.gachaPoolConfigRepository.find({
-      where: poolIds.length ? { pool_id: In(poolIds) } : {},
-      order: { pool_id: "ASC" },
-    });
-    const dbConfigMap = new Map(
-      dbConfigs.map((config) => [config.pool_id, config]),
-    );
-
-    return poolIds.reduce(
-      (result, poolId) => {
-        const dbConfig = dbConfigMap.get(poolId);
-        const envConfig = envConfigs[poolId];
-        const enabled = dbConfig?.enabled === true;
-        result[poolId] = {
-          ...(enabled ? this.toGachaConfig(dbConfig, envConfig) : envConfig),
-          poolId,
-          enabled,
-          source: enabled ? "database" : "env",
-          updatedAt: dbConfig?.updatedAt || null,
-        };
-        return result;
-      },
-      {} as Record<number, GachaConfigView>,
-    );
   }
 
   async getPoolConfigsByPoolIds(
@@ -203,43 +176,105 @@ export class GachaConfigService {
     }
 
     const dbConfigs = await this.gachaPoolConfigRepository.find({
-      where: { pool_id: In(normalizedPoolIds) },
+      where: { pool_id: In([GLOBAL_DEFAULT_POOL_ID, ...normalizedPoolIds]) },
       order: { pool_id: "ASC" },
     });
     const dbConfigMap = new Map(
       dbConfigs.map((config) => [config.pool_id, config]),
     );
+    const fallbackConfig = this.getFallbackConfigView(GLOBAL_DEFAULT_POOL_ID);
+    const defaultConfig = this.resolveGlobalDefaultConfig(
+      dbConfigMap.get(GLOBAL_DEFAULT_POOL_ID),
+      fallbackConfig,
+    );
 
     return normalizedPoolIds.reduce(
       (result, poolId) => {
         const dbConfig = dbConfigMap.get(poolId);
-        const envConfig = this.getEnvConfigByPoolId(poolId);
-        const enabled = dbConfig?.enabled === true;
-        result[poolId] = {
-          ...(enabled ? this.toGachaConfig(dbConfig, envConfig) : envConfig),
+        result[poolId] = this.resolveEffectivePoolConfig(
           poolId,
-          enabled,
-          source: enabled ? "database" : "env",
-          updatedAt: dbConfig?.updatedAt || null,
-          drawCosts: enabled
-            ? this.toDrawCosts(dbConfig, envConfig.drawCosts)
-            : this.normalizeDrawCosts(envConfig.drawCosts),
-        };
+          dbConfig,
+          defaultConfig,
+        );
         return result;
       },
       {} as Record<number, GachaConfigView>,
     );
   }
 
-  async savePoolConfig(
-    poolId: number,
-    input: EditableGachaConfig,
-  ): Promise<GachaConfigView> {
+  async getGlobalDefaultConfigView(): Promise<GachaConfigView> {
+    const dbConfig = await this.gachaPoolConfigRepository.findOne({
+      where: { pool_id: GLOBAL_DEFAULT_POOL_ID },
+    });
+    return this.resolveGlobalDefaultConfig(
+      dbConfig || undefined,
+      this.getFallbackConfigView(GLOBAL_DEFAULT_POOL_ID),
+    );
+  }
+
+  getFallbackConfigView(poolId = GLOBAL_DEFAULT_POOL_ID): GachaConfigView {
+    return {
+      ...this.getEnvConfigByPoolId(poolId),
+      enabled: false,
+      source: "env",
+      scope: "fallback",
+      updatedAt: null,
+    };
+  }
+
+  async getPoolConfigDetail(poolId: number): Promise<PoolGachaConfigDetail> {
     if (!Number.isInteger(poolId) || poolId <= 0) {
       throw new Error("卡池ID无效");
     }
 
-    const envConfig = this.getEnvConfigByPoolId(poolId);
+    const dbConfigs = await this.gachaPoolConfigRepository.find({
+      where: { pool_id: In([GLOBAL_DEFAULT_POOL_ID, poolId]) },
+      order: { pool_id: "ASC" },
+    });
+    const dbConfigMap = new Map(
+      dbConfigs.map((config) => [config.pool_id, config]),
+    );
+    const fallbackConfig = this.getFallbackConfigView(GLOBAL_DEFAULT_POOL_ID);
+    const defaultConfig = this.resolveGlobalDefaultConfig(
+      dbConfigMap.get(GLOBAL_DEFAULT_POOL_ID),
+      fallbackConfig,
+    );
+    const individualDbConfig = dbConfigMap.get(poolId);
+    const effective = this.resolveEffectivePoolConfig(
+      poolId,
+      individualDbConfig,
+      defaultConfig,
+    );
+    const individualConfig = individualDbConfig
+      ? this.toGachaConfigView(
+          individualDbConfig,
+          this.withPoolId(defaultConfig, poolId),
+          poolId,
+          "pool",
+        )
+      : null;
+
+    return {
+      effective,
+      individualConfig,
+      defaultConfig,
+      fallbackConfig,
+      hasIndividualConfig: individualDbConfig?.enabled === true,
+    };
+  }
+
+  async savePoolConfig(
+    poolId: number,
+    input: EditableGachaConfig,
+  ): Promise<GachaConfigView> {
+    if (!Number.isInteger(poolId) || poolId < 0) {
+      throw new Error("卡池ID无效");
+    }
+
+    const fallbackConfig =
+      poolId === GLOBAL_DEFAULT_POOL_ID
+        ? this.getFallbackConfigView(GLOBAL_DEFAULT_POOL_ID)
+        : this.withPoolId(await this.getGlobalDefaultConfigView(), poolId);
     const existing = await this.gachaPoolConfigRepository.findOne({
       where: { pool_id: poolId },
     });
@@ -249,7 +284,7 @@ export class GachaConfigService {
             once: existing.single_draw_cost,
             ten: existing.ten_draw_cost,
           }
-        : envConfig.drawCosts,
+        : fallbackConfig.drawCosts,
     );
     const nextConfig: EditableGachaConfig = {
       poolId,
@@ -257,15 +292,15 @@ export class GachaConfigService {
       rarityProbabilities:
         input.rarityProbabilities ||
         existing?.rarity_probabilities ||
-        envConfig.rarityProbabilities,
+        fallbackConfig.rarityProbabilities,
       upCards:
         input.upCards === null
           ? undefined
-          : input.upCards || existing?.up_cards || envConfig.upCards,
+          : input.upCards || existing?.up_cards || fallbackConfig.upCards,
       pitySystem:
         input.pitySystem === null
           ? undefined
-          : input.pitySystem || existing?.pity_system || envConfig.pitySystem,
+          : input.pitySystem || existing?.pity_system || fallbackConfig.pitySystem,
       drawCosts: input.drawCosts || inheritedDrawCosts,
     };
 
@@ -282,12 +317,12 @@ export class GachaConfigService {
       ten_draw_cost: nextConfig.drawCosts!.ten,
     });
     const saved = await this.gachaPoolConfigRepository.save(entity);
-    return {
-      ...this.toGachaConfig(saved, envConfig),
-      enabled: saved.enabled,
-      source: saved.enabled ? "database" : "env",
-      updatedAt: saved.updatedAt || null,
-    };
+    return this.toGachaConfigView(
+      saved,
+      fallbackConfig,
+      poolId,
+      poolId === GLOBAL_DEFAULT_POOL_ID ? "global" : "pool",
+    );
   }
 
   validateEditableConfig(config: EditableGachaConfig): void {
@@ -327,6 +362,70 @@ export class GachaConfigService {
     if (config.drawCosts) {
       this.assertDrawCosts(config.drawCosts);
     }
+  }
+
+  private normalizeReadablePoolId(poolId: number): number {
+    if (!Number.isInteger(poolId) || poolId < 0) {
+      throw new Error("卡池ID无效");
+    }
+    return poolId;
+  }
+
+  private resolveGlobalDefaultConfig(
+    dbConfig: GachaPoolConfig | undefined,
+    fallback: GachaConfigView,
+  ): GachaConfigView {
+    if (dbConfig?.enabled === true) {
+      return this.toGachaConfigView(
+        dbConfig,
+        fallback,
+        GLOBAL_DEFAULT_POOL_ID,
+        "global",
+      );
+    }
+    return {
+      ...fallback,
+      updatedAt: dbConfig?.updatedAt || null,
+    };
+  }
+
+  private resolveEffectivePoolConfig(
+    poolId: number,
+    dbConfig: GachaPoolConfig | undefined,
+    defaultConfig: GachaConfigView,
+  ): GachaConfigView {
+    if (dbConfig?.enabled === true) {
+      return this.toGachaConfigView(
+        dbConfig,
+        this.withPoolId(defaultConfig, poolId),
+        poolId,
+        "pool",
+      );
+    }
+    return this.withPoolId(defaultConfig, poolId);
+  }
+
+  private withPoolId(config: GachaConfigView, poolId: number): GachaConfigView {
+    return {
+      ...config,
+      poolId,
+    };
+  }
+
+  private toGachaConfigView(
+    dbConfig: GachaPoolConfig,
+    fallback: GachaConfig,
+    poolId: number,
+    scope: GachaConfigView["scope"],
+  ): GachaConfigView {
+    return {
+      ...this.toGachaConfig(dbConfig, fallback),
+      poolId,
+      enabled: dbConfig.enabled,
+      source: dbConfig.enabled ? "database" : "env",
+      scope: dbConfig.enabled ? scope : "fallback",
+      updatedAt: dbConfig.updatedAt || null,
+    };
   }
 
   private toGachaConfig(

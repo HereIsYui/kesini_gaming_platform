@@ -24,8 +24,11 @@
 
 ```bash
 NODE_ENV=development          # 运行环境
-PORT=3000                   # 应用端口
-BASE_URL=http://localhost:3000 # 基础URL
+PORT=7001                   # 应用端口
+# API public base 是浏览器端构建配置：
+# website: VITE_API_BASE
+# backend: PUBLIC_API_BASE
+# OAuth 回跳地址由浏览器当前域名生成。
 ```
 
 ### JWT配置
@@ -72,65 +75,38 @@ REDIS_PASSWORD=            # Redis密码（可选）
 
 成交时按挂单创建时保存的手续费率结算，后续修改手续费不会影响已上架挂单的预计实收。
 
-### 抽卡概率配置
+### 抽卡默认配置
 
-所有概率配置都使用JSON格式，且概率总和应该等于1.0（100%）。
+抽卡配置采用“全局默认 + 卡池单独配置”：
 
-#### 标准卡池概率
+- `gacha_pool_config.pool_id = 0`：后台“默认抽卡配置”保存的一套全局默认。
+- `gacha_pool_config.pool_id > 0`：后台“卡池管理”中保存的单个卡池覆盖配置。
+- 单池配置启用时优先使用；未启用或不存在时继承全局默认；全局默认不存在或未启用时使用下面的代码/环境兜底。
+
+概率配置使用 JSON 格式，概率总和应该等于 1.0（100%）。
+
+#### 全局默认概率兜底
 
 ```bash
 STANDARD_POOL_RARITY_PROBABILITIES={"N":0.5,"R":0.3,"SR":0.15,"SSR":0.045,"UR":0.005}
 ```
 
-#### 限定卡池概率
-
-```bash
-LIMITED_POOL_RARITY_PROBABILITIES={"N":0.45,"R":0.3,"SR":0.18,"SSR":0.06,"UR":0.01}
-```
-
-#### 新手卡池概率
-
-```bash
-BEGINNER_POOL_RARITY_PROBABILITIES={"N":0.3,"R":0.35,"SR":0.25,"SSR":0.08,"UR":0.02}
-```
-
-#### 活动卡池概率
-
-```bash
-EVENT_POOL_RARITY_PROBABILITIES={"N":0.4,"R":0.35,"SR":0.2,"SSR":0.045,"UR":0.005}
-```
-
-### UP卡配置
-
-#### 限定卡池UP配置
-
-```bash
-LIMITED_POOL_UP_CONFIG={"enabled":true,"cardIds":[101,102,103],"upRate":0.5}
-```
-
-#### 活动卡池UP配置
-
-```bash
-EVENT_POOL_UP_CONFIG={"enabled":true,"cardIds":[201,202,203,204],"upRate":0.75}
-```
-
-### 保底配置
+### 保底默认配置
 
 ```bash
 STANDARD_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
-LIMITED_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
-BEGINNER_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":50,"guaranteedRarity":"SSR"}}
-EVENT_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
 ```
 
-## 卡池类型说明
+### UP 与价格
 
-| 卡池ID | 类型     | 说明               |
-| ------ | -------- | ------------------ |
-| 0/1    | 常驻卡池 | 标准概率           |
-| 2      | 限定卡池 | 包含UP卡           |
-| 3      | 新手卡池 | 高概率             |
-| 4      | 活动卡池 | 限时活动，包含UP卡 |
+UP 配置、单抽价格和十连价格通过后台保存到 `gacha_pool_config`。默认兜底价格为单抽 `10`、十连 `100`。
+
+## 卡池配置说明
+
+| pool_id | 说明 |
+| ------- | ---- |
+| 0 | 全局默认抽卡配置 |
+| > 0 | 指定卡池的单独抽卡配置 |
 
 ## 使用方式
 
@@ -150,16 +126,16 @@ constructor(
 // 使用配置
 const jwtSecret = this.configService.jwtSecret;
 const dbConfig = this.configService.databaseConfig;
-const standardPool = this.gachaConfigService.getStandardPoolConfig();
+const fallbackDefault = this.gachaConfigService.getDefaultConfig();
 ```
 
 ### 获取特定卡池配置
 
 ```typescript
-// 根据卡池ID获取配置
+// 根据卡池ID获取最终生效配置：单池配置 > 全局默认 > 代码/环境兜底
 const poolConfig = this.gachaConfigService.getConfigByPoolId(poolId);
 
-// 获取所有卡池配置
+// 获取后台“默认抽卡配置”页使用的全局默认配置
 const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 ```
 

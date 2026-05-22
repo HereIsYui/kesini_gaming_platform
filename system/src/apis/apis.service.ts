@@ -23,6 +23,7 @@ export class ApisService {
    * 生成 OpenID 登录链接
    */
   generateLoginUrl(params: { returnTo: string; realm: string }) {
+    const { returnTo, realm } = this.validateLoginUrlParams(params);
     const baseParams = {
       "openid.ns": "http://specs.openid.net/auth/2.0",
       "openid.mode": "checkid_setup",
@@ -30,15 +31,10 @@ export class ApisService {
       "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
     };
 
-    // 验证 realm 是 return_to 的前缀
-    if (!params.returnTo.startsWith(params.realm)) {
-      throw new Error("realm 必须是 return_to 的前缀");
-    }
-
     const queryParams = new URLSearchParams({
       ...baseParams,
-      "openid.return_to": params.returnTo,
-      "openid.realm": params.realm,
+      "openid.return_to": returnTo,
+      "openid.realm": realm,
     });
 
     return {
@@ -165,6 +161,7 @@ export class ApisService {
         "openid.claimed_id": callbackData["openid.claimed_id"],
         "openid.response_nonce": callbackData["openid.response_nonce"],
         "openid.assoc_handle": callbackData["openid.assoc_handle"],
+        "openid.signed": callbackData["openid.signed"],
         "openid.sig": callbackData["openid.sig"],
       };
 
@@ -185,17 +182,69 @@ export class ApisService {
       const result: Record<string, string> = {};
 
       lines.forEach((line: string) => {
-        const [key, value] = line.split(":");
-        if (key && value) {
+        const separatorIndex = line.indexOf(":");
+        if (separatorIndex > -1) {
+          const key = line.slice(0, separatorIndex);
+          const value = line.slice(separatorIndex + 1);
           result[key.trim()] = value.trim();
         }
       });
 
       return result["is_valid"] === "true";
     } catch (error) {
-      this.logger.error("签名验证失败:", error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error("签名验证失败:", message);
       return false;
     }
+  }
+
+  private validateLoginUrlParams(params: {
+    returnTo: string;
+    realm: string;
+  }): { returnTo: string; realm: string } {
+    const returnToUrl = this.parseHttpUrl(params.returnTo, "returnTo");
+    const realmUrl = this.parseHttpUrl(params.realm, "realm");
+    const normalizedReturnTo = returnToUrl.toString();
+    const normalizedRealm =
+      realmUrl.pathname === "/" && !realmUrl.search && !realmUrl.hash
+        ? realmUrl.origin
+        : realmUrl.toString();
+
+    if (process.env.NODE_ENV === "production") {
+      if (returnToUrl.protocol !== "https:" || realmUrl.protocol !== "https:") {
+        throw new Error("生产环境 OAuth 回调地址必须使用 HTTPS");
+      }
+    }
+
+    const realmPrefix = normalizedRealm.endsWith("/")
+      ? normalizedRealm
+      : `${normalizedRealm}/`;
+    if (
+      normalizedReturnTo !== normalizedRealm &&
+      !normalizedReturnTo.startsWith(realmPrefix)
+    ) {
+      throw new Error("realm 必须是 return_to 的前缀");
+    }
+
+    return {
+      returnTo: normalizedReturnTo,
+      realm: normalizedRealm,
+    };
+  }
+
+  private parseHttpUrl(value: string, fieldName: string): URL {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new Error(`${fieldName} 必须是有效的 URL`);
+    }
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error(`${fieldName} 只支持 HTTP 或 HTTPS URL`);
+    }
+
+    return url;
   }
 
   /**

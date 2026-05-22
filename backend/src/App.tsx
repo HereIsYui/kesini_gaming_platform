@@ -90,6 +90,7 @@ import type {
   LaunchActivityConfigRecord,
   LoginResponse,
   PageResult,
+  PoolGachaConfigDetail,
   RedeemCodeRecord,
   RedeemRewards,
   RechargeConfigRecord,
@@ -648,20 +649,11 @@ export function App() {
       {
         key: "pools",
         label: "卡池管理",
-        description: "维护卡池名称、描述和基础类型。",
+        description: "维护卡池基础信息和单独抽卡配置。",
         group: "内容配置",
         icon: Layers,
         render: () => (
-          <AdminTable
-            title="卡池管理"
-            endpoint="/admin/pools"
-            fields={poolFields}
-            editable
-            creatable
-            deletable
-            detailFetchable
-            searchPlaceholder="搜索卡池名称或描述"
-          />
+          <PoolManagementPanel fields={poolFields} options={adminOptions} />
         ),
       },
       {
@@ -869,8 +861,8 @@ export function App() {
       },
       {
         key: "gacha-config",
-        label: "抽卡配置",
-        description: "维护概率、UP、保底和单抽/十连积分价格。",
+        label: "默认抽卡配置",
+        description: "维护未设置单独配置卡池继承的默认概率、UP、保底和价格。",
         group: "系统配置",
         icon: Settings,
         render: () => <ConfigPage options={adminOptions} />,
@@ -1106,9 +1098,10 @@ function LoginPage({
     setApiBase(apiBase);
     setLoading(true);
     try {
-      const returnTo = `${window.location.origin}${window.location.pathname}`;
+      const oauthOrigin = window.location.origin;
+      const returnTo = new URL(window.location.pathname, oauthOrigin).toString();
       const data = await request<{ url: string }>(
-        `/apis/login-url${toQuery({ returnTo, realm: window.location.origin })}`,
+        `/apis/login-url${toQuery({ returnTo, realm: oauthOrigin })}`,
       );
       window.location.href = data.url;
     } catch (err) {
@@ -1146,7 +1139,7 @@ function LoginPage({
               <Input
                 value={apiBase}
                 onChange={(event) => setApiBaseState(event.target.value)}
-                placeholder="http://localhost:3000"
+                placeholder="http://localhost:7001"
               />
             </Form.Item>
             <Button
@@ -1351,6 +1344,103 @@ function Dashboard({ admin }: { admin: AdminMeResponse | null }) {
   );
 }
 
+function PoolManagementPanel({
+  fields,
+  options,
+}: {
+  fields: FieldConfig[];
+  options: AdminOptions | null;
+}) {
+  const { message } = AntApp.useApp();
+  const [editingGacha, setEditingGacha] = useState<{
+    poolId: number;
+    poolName: string;
+    detail: PoolGachaConfigDetail;
+  } | null>(null);
+  const [loadingPoolId, setLoadingPoolId] = useState<number | null>(null);
+
+  async function openGachaConfig(row: Record<string, any>) {
+    const poolId = Number(row.id);
+    if (!Number.isInteger(poolId) || poolId <= 0) {
+      message.error("卡池ID无效");
+      return;
+    }
+    setLoadingPoolId(poolId);
+    try {
+      const pool = await request<Record<string, any>>(`/admin/pools/${poolId}`);
+      const detail = pool.gachaConfig as PoolGachaConfigDetail | undefined;
+      if (!detail) {
+        throw new Error("卡池抽卡配置详情缺失");
+      }
+      setEditingGacha({
+        poolId,
+        poolName: String(pool.pool_name || row.pool_name || `卡池 #${poolId}`),
+        detail,
+      });
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "读取抽卡配置失败");
+    } finally {
+      setLoadingPoolId(null);
+    }
+  }
+
+  const modalConfig = editingGacha
+    ? getPoolGachaModalConfig(editingGacha.poolId, editingGacha.detail)
+    : null;
+
+  return (
+    <>
+      <AdminTable
+        title="卡池管理"
+        endpoint="/admin/pools"
+        fields={fields}
+        editable
+        creatable
+        deletable
+        detailFetchable
+        searchPlaceholder="搜索卡池名称或描述"
+        extraActions={(row) => (
+          <Button
+            size="small"
+            loading={loadingPoolId === Number(row.id)}
+            onClick={() => openGachaConfig(row)}
+          >
+            抽卡配置
+          </Button>
+        )}
+      />
+      {editingGacha && modalConfig && (
+        <GachaConfigModal
+          mode="pool"
+          poolKey={String(editingGacha.poolId)}
+          config={modalConfig}
+          defaultConfig={editingGacha.detail.defaultConfig}
+          poolName={editingGacha.poolName}
+          options={options}
+          onCancel={() => setEditingGacha(null)}
+          onSubmit={async (poolId, values) => {
+            const {
+              poolId: _poolId,
+              source: _source,
+              scope: _scope,
+              updatedAt: _updatedAt,
+              ...payload
+            } = values;
+            await request(`/admin/config/gacha/${poolId}`, {
+              method: "PATCH",
+              body: JSON.stringify(payload),
+            });
+            message.success(
+              values.enabled === false ? "已改为继承默认配置" : "已保存单独配置",
+            );
+            setEditingGacha(null);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function AdminTable({
   title,
   endpoint,
@@ -1364,6 +1454,7 @@ function AdminTable({
   enableRarityFilter,
   poolFilterOptions,
   renderEditor,
+  extraActions,
 }: {
   title: string;
   endpoint: string;
@@ -1381,6 +1472,7 @@ function AdminTable({
     onCancel: () => void;
     onSubmit: (values: Record<string, any>) => Promise<void>;
   }) => ReactNode;
+  extraActions?: (row: Record<string, any>) => ReactNode;
 }) {
   const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
@@ -1492,7 +1584,7 @@ function AdminTable({
       {
         title: "操作",
         key: "actions",
-        width: 210,
+        width: extraActions ? 300 : 210,
         render: (_: unknown, row: Record<string, any>) => (
           <Space size={8} wrap>
             <Button
@@ -1502,6 +1594,7 @@ function AdminTable({
             >
               详情
             </Button>
+            {extraActions?.(row)}
             {editable && (
               <Button size="small" onClick={() => setEditing(row)}>
                 编辑
@@ -1519,7 +1612,7 @@ function AdminTable({
         ),
       },
     ],
-    [fields, editable, deletable],
+    [fields, editable, deletable, extraActions],
   );
 
   return (
@@ -4200,12 +4293,7 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
   const [data, setData] = useState<GachaConfigData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [keyword, setKeyword] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [editing, setEditing] = useState<{
-    poolKey: string;
-    config: GachaPoolConfig;
-  } | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -4220,71 +4308,28 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
     load();
   }, [load]);
 
-  const poolEntries = Object.entries(data?.pools || {}).sort(
-    ([left], [right]) => Number(left) - Number(right),
-  );
-  const filteredPoolEntries = poolEntries.filter(([poolKey, config]) => {
-    const poolName =
-      data?.poolNames?.[poolKey] || poolNameById(Number(poolKey));
-    const query = keyword.trim().toLowerCase();
-    const matchesKeyword =
-      !query || `${poolKey} ${poolName}`.toLowerCase().includes(query);
-    const matchesSource =
-      sourceFilter === "all" ||
-      (sourceFilter === "database" && config.source === "database") ||
-      (sourceFilter === "env" && config.source !== "database");
-    return matchesKeyword && matchesSource;
-  });
+  const defaultConfig =
+    data?.defaultConfig || data?.pools?.["0"];
+  const fallbackConfig =
+    data?.fallbackConfig || data?.defaults?.["0"];
 
   return (
     <>
       <Panel
-        title="卡池配置工作台"
+        title="默认抽卡配置"
         icon={<Settings size={18} />}
         action={<RefreshButton onClick={load} loading={loading} />}
         className="table-panel"
       >
-        <Space className="table-toolbar" wrap>
-          <Input
-            className="toolbar-search"
-            prefix={<Search size={16} />}
-            allowClear
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder="搜索卡池名称或 ID"
-          />
-          <Select
-            className="toolbar-control"
-            value={sourceFilter}
-            onChange={setSourceFilter}
-            options={[
-              { label: "全部配置来源", value: "all" },
-              { label: "只看数据库配置", value: "database" },
-              { label: "只看环境默认", value: "env" },
-            ]}
-          />
-          <Space className="toolbar-actions" wrap>
-            <Button
-              icon={<RefreshCw size={15} />}
-              onClick={load}
-              disabled={loading}
-            >
-              刷新
-            </Button>
-          </Space>
-        </Space>
         {error && <StateBox type="error">{error}</StateBox>}
         {!data && !error && <StateBox>正在加载配置...</StateBox>}
-        {data && poolEntries.length === 0 && <StateBox>暂无抽卡配置</StateBox>}
-        {data && poolEntries.length > 0 && filteredPoolEntries.length === 0 && (
-          <StateBox>没有符合筛选条件的卡池配置</StateBox>
-        )}
-        {data && filteredPoolEntries.length > 0 && (
+        {data && !defaultConfig && <StateBox>暂无默认抽卡配置</StateBox>}
+        {defaultConfig && (
           <div className="table-wrap config-workbench">
             <table className="config-table">
               <thead>
                 <tr>
-                  <th>卡池</th>
+                  <th>配置</th>
                   <th>配置来源</th>
                   <th>积分消耗</th>
                   <th>概率合计</th>
@@ -4295,76 +4340,67 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredPoolEntries.map(([poolKey, config]) => {
-                  const drawCosts = config.drawCosts || { once: 10, ten: 100 };
-                  const probabilityTotal = getProbabilityTotal(
-                    config.rarityProbabilities,
-                  );
-                  const sourceText =
-                    config.source === "database" && config.enabled !== false
-                      ? "数据库配置"
-                      : "环境默认";
-                  return (
-                    <tr key={poolKey}>
-                      <td data-label="卡池">
-                        <div className="config-pool-cell">
-                          <strong>
-                            {data.poolNames?.[poolKey] ||
-                              poolNameById(Number(poolKey))}
-                          </strong>
-                          <span>#{config.poolId || poolKey}</span>
-                        </div>
-                      </td>
-                      <td data-label="配置来源">
-                        <Badge>{sourceText}</Badge>
-                      </td>
-                      <td data-label="积分消耗">
-                        <span className="cell-text">
-                          单抽 {drawCosts.once ?? 10} / 十连{" "}
-                          {drawCosts.ten ?? 100}
-                        </span>
-                      </td>
-                      <td data-label="概率合计">
-                        <span
-                          className={
-                            Math.abs(probabilityTotal - 1) < 0.0001
-                              ? "config-ok"
-                              : "config-warning"
-                          }
-                        >
-                          {(probabilityTotal * 100).toFixed(2)}%
-                        </span>
-                      </td>
-                      <td data-label="UP 状态">
-                        <span
-                          className="cell-text"
-                          title={summarizeUpConfig(config.upCards)}
-                        >
-                          {summarizeUpConfig(config.upCards)}
-                        </span>
-                      </td>
-                      <td data-label="保底摘要">
-                        <span
-                          className="cell-text"
-                          title={summarizePityConfig(config.pitySystem)}
-                        >
-                          {summarizePityConfig(config.pitySystem)}
-                        </span>
-                      </td>
-                      <td data-label="更新时间">
-                        {config.updatedAt ? formatDate(config.updatedAt) : "-"}
-                      </td>
-                      <td data-label="操作">
-                        <Button
-                          size="small"
-                          onClick={() => setEditing({ poolKey, config })}
-                        >
-                          编辑
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                <tr>
+                  <td data-label="配置">
+                    <div className="config-pool-cell">
+                      <strong>全局默认配置</strong>
+                      <span>未设置单独配置的卡池会继承这一套配置</span>
+                    </div>
+                  </td>
+                  <td data-label="配置来源">
+                    <Badge>{getGachaSourceText(defaultConfig)}</Badge>
+                  </td>
+                  <td data-label="积分消耗">
+                    <span className="cell-text">
+                      单抽 {defaultConfig.drawCosts?.once ?? 10} / 十连{" "}
+                      {defaultConfig.drawCosts?.ten ?? 100}
+                    </span>
+                  </td>
+                  <td data-label="概率合计">
+                    <span
+                      className={
+                        Math.abs(
+                          getProbabilityTotal(defaultConfig.rarityProbabilities) -
+                            1,
+                        ) < 0.0001
+                          ? "config-ok"
+                          : "config-warning"
+                      }
+                    >
+                      {(
+                        getProbabilityTotal(defaultConfig.rarityProbabilities) *
+                        100
+                      ).toFixed(2)}
+                      %
+                    </span>
+                  </td>
+                  <td data-label="UP 状态">
+                    <span
+                      className="cell-text"
+                      title={summarizeUpConfig(defaultConfig.upCards)}
+                    >
+                      {summarizeUpConfig(defaultConfig.upCards)}
+                    </span>
+                  </td>
+                  <td data-label="保底摘要">
+                    <span
+                      className="cell-text"
+                      title={summarizePityConfig(defaultConfig.pitySystem)}
+                    >
+                      {summarizePityConfig(defaultConfig.pitySystem)}
+                    </span>
+                  </td>
+                  <td data-label="更新时间">
+                    {defaultConfig.updatedAt
+                      ? formatDate(defaultConfig.updatedAt)
+                      : "-"}
+                  </td>
+                  <td data-label="操作">
+                    <Button size="small" onClick={() => setEditing(true)}>
+                      编辑
+                    </Button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -4389,20 +4425,20 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
           </div>
         )}
       </Panel>
-      {editing && (
+      {editing && defaultConfig && (
         <GachaConfigModal
-          poolKey={editing.poolKey}
-          config={editing.config}
-          defaultConfig={data?.defaults?.[editing.poolKey]}
-          poolName={data?.poolNames?.[editing.poolKey]}
+          mode="default"
+          poolKey="0"
+          config={defaultConfig}
+          defaultConfig={fallbackConfig}
+          poolName="全局默认配置"
           options={options}
-          allPools={poolEntries}
-          poolNames={data?.poolNames || {}}
-          onCancel={() => setEditing(null)}
+          onCancel={() => setEditing(false)}
           onSubmit={async (poolId, values) => {
             const {
               poolId: _poolId,
               source: _source,
+              scope: _scope,
               updatedAt: _updatedAt,
               ...payload
             } = values;
@@ -4410,14 +4446,7 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
               method: "PATCH",
               body: JSON.stringify(payload),
             });
-            setEditing(null);
-            load();
-          }}
-          onCopy={async (poolId, targetPoolIds) => {
-            await request(`/admin/config/gacha/${poolId}/copy`, {
-              method: "POST",
-              body: JSON.stringify({ targetPoolIds }),
-            });
+            setEditing(false);
             load();
           }}
         />
@@ -4427,46 +4456,40 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
 }
 
 function GachaConfigModal({
+  mode,
   poolKey,
   config,
   defaultConfig,
   poolName,
   options,
-  allPools,
-  poolNames,
   onCancel,
   onSubmit,
-  onCopy,
 }: {
+  mode: "default" | "pool";
   poolKey: string;
   config: GachaPoolConfig;
   defaultConfig?: GachaPoolConfig;
   poolName?: string;
   options: AdminOptions | null;
-  allPools: Array<[string, GachaPoolConfig]>;
-  poolNames: Record<string, string>;
   onCancel: () => void;
   onSubmit: (poolId: number, values: GachaPoolConfig) => Promise<void>;
-  onCopy: (poolId: number, targetPoolIds: number[]) => Promise<void>;
 }) {
-  const { modal } = AntApp.useApp();
   const [values, setValues] = useState<GachaFormState>(() =>
     createGachaFormState(poolKey, config),
   );
   const [activeTab, setActiveTab] = useState("base");
   const [upKeyword, setUpKeyword] = useState("");
   const [upRarity, setUpRarity] = useState("");
-  const [copyTargets, setCopyTargets] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  const [copyLoading, setCopyLoading] = useState(false);
   const currentDefault = defaultConfig || config;
+  const inheritedPoolConfig = mode === "pool" && values.enabled === false;
   const probabilityTotal = getProbabilityTotal(values.rarityProbabilities);
   const probabilityPercentTotal = probabilityTotal * 100;
   const probabilityIsValid = Math.abs(probabilityTotal - 1) < 0.0001;
   const poolCardOptions = (options?.cards || []).filter(
-    (card) => Number(card.pool) === values.poolId,
+    (card) => mode === "default" || Number(card.pool) === values.poolId,
   );
   const filteredUpCards = poolCardOptions.filter((card) => {
     const matchesKeyword =
@@ -4489,9 +4512,6 @@ function GachaConfigModal({
   );
   const selectedUnknownUpCardIds = (values.upCards?.cardIds || []).filter(
     (cardId) => !selectedKnownUpCardIds.has(cardId),
-  );
-  const otherPools = allPools.filter(
-    ([targetPoolKey]) => targetPoolKey !== poolKey,
   );
   const configTabs = [
     { key: "base", label: "基础价格" },
@@ -4543,7 +4563,25 @@ function GachaConfigModal({
       enabled: true,
     });
     setError("");
-    setNotice("已填入环境默认配置，保存后将作为数据库配置生效。");
+    setNotice(
+      mode === "default"
+        ? "已填入代码兜底默认，保存后将作为全局默认配置生效。"
+        : "已填入全局默认配置，保存后将作为当前卡池的单独配置生效。",
+    );
+  }
+
+  function setConfigEnabled(enabled: boolean) {
+    if (mode === "pool") {
+      setValues({
+        ...createGachaFormState(poolKey, currentDefault),
+        enabled,
+      });
+      return;
+    }
+    setValues({
+      ...values,
+      enabled,
+    });
   }
 
   function toggleUpCard(cardId: number, checked: boolean) {
@@ -4561,16 +4599,6 @@ function GachaConfigModal({
         cardIds: Array.from(selected).sort((left, right) => left - right),
       },
     });
-  }
-
-  function toggleCopyTarget(poolId: string, checked: boolean) {
-    const selected = new Set(copyTargets);
-    if (checked) {
-      selected.add(poolId);
-    } else {
-      selected.delete(poolId);
-    }
-    setCopyTargets(Array.from(selected));
   }
 
   function validateForm() {
@@ -4632,50 +4660,17 @@ function GachaConfigModal({
     }
   }
 
-  async function copyConfigToTargets() {
-    setError("");
-    setNotice("");
-    const targetPoolIds = copyTargets
-      .map(Number)
-      .filter((poolId) => poolId > 0);
-    if (targetPoolIds.length === 0) {
-      setError("请选择要复制到的目标卡池");
-      return;
-    }
-    modal.confirm({
-      title: `确认复制到 ${targetPoolIds.length} 个卡池？`,
-      content: "复制的是服务器当前已生效配置，目标卡池数据库配置会被覆盖。",
-      okText: "确认复制",
-      cancelText: "取消",
-      async onOk() {
-        setCopyLoading(true);
-        try {
-          await onCopy(values.poolId, targetPoolIds);
-          setCopyTargets([]);
-          setNotice(
-            `已复制到：${targetPoolIds
-              .map(
-                (targetPoolId) =>
-                  poolNames[String(targetPoolId)] || poolNameById(targetPoolId),
-              )
-              .join("、")}`,
-          );
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "复制失败");
-        } finally {
-          setCopyLoading(false);
-        }
-      },
-    });
-  }
-
   return (
     <Modal
       title={
         <div>
-          <span className="eyebrow">抽卡配置</span>
+          <span className="eyebrow">
+            {mode === "default" ? "默认抽卡配置" : "卡池抽卡配置"}
+          </span>
           <Typography.Title level={4}>
-            编辑 {poolName || poolNameById(values.poolId)}
+            {mode === "default"
+              ? "编辑全局默认配置"
+              : `编辑 ${poolName || poolNameById(values.poolId)} 单独配置`}
           </Typography.Title>
         </div>
       }
@@ -4698,7 +4693,9 @@ function GachaConfigModal({
         size={14}
         className="full-width admin-form-stack"
       >
-        <Button onClick={fillFromDefault}>从环境默认填充</Button>
+        <Button onClick={fillFromDefault}>
+          {mode === "default" ? "从代码默认填充" : "从默认配置填充"}
+        </Button>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -4713,84 +4710,123 @@ function GachaConfigModal({
               <div className="section-title-row">
                 <h3>基础价格</h3>
                 <Badge>
-                  {values.enabled === false ? "回退环境默认" : "数据库配置"}
+                  {mode === "pool"
+                    ? values.enabled === false
+                      ? "继承默认"
+                      : "单独配置"
+                    : values.enabled === false
+                      ? "代码兜底"
+                      : "全局默认"}
                 </Badge>
               </div>
               <label className="form-field">
-                <span>启用数据库配置</span>
+                <span>{mode === "pool" ? "配置方式" : "启用全局默认"}</span>
                 <select
                   value={String(values.enabled !== false)}
                   onChange={(event) =>
-                    setValues({
-                      ...values,
-                      enabled: event.target.value === "true",
-                    })
+                    setConfigEnabled(event.target.value === "true")
                   }
                 >
-                  <option value="true">启用</option>
-                  <option value="false">关闭并回退环境默认</option>
+                  <option value="true">
+                    {mode === "pool" ? "启用单独配置" : "启用"}
+                  </option>
+                  <option value="false">
+                    {mode === "pool" ? "继承默认配置" : "关闭并使用代码兜底"}
+                  </option>
                 </select>
               </label>
-              <div className="admin-form-grid no-padding">
-                <label className="form-field">
-                  <span>单抽消耗</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={values.drawCosts?.once || 10}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        drawCosts: {
-                          once: Number(event.target.value),
-                          ten: values.drawCosts?.ten || 100,
-                        },
-                      })
-                    }
-                  />
-                </label>
-                <label className="form-field">
-                  <span>十连消耗</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={values.drawCosts?.ten || 100}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        drawCosts: {
-                          once: values.drawCosts?.once || 10,
-                          ten: Number(event.target.value),
-                        },
-                      })
-                    }
-                  />
-                </label>
-              </div>
+              {inheritedPoolConfig ? (
+                <StateBox>
+                  当前卡池继承默认抽卡配置，启用单独配置后可编辑价格、概率、UP 和保底。
+                </StateBox>
+              ) : (
+                <div className="admin-form-grid no-padding">
+                  <label className="form-field">
+                    <span>单抽消耗</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={values.drawCosts?.once || 10}
+                      onChange={(event) =>
+                        setValues({
+                          ...values,
+                          drawCosts: {
+                            once: Number(event.target.value),
+                            ten: values.drawCosts?.ten || 100,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>十连消耗</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={values.drawCosts?.ten || 100}
+                      onChange={(event) =>
+                        setValues({
+                          ...values,
+                          drawCosts: {
+                            once: values.drawCosts?.once || 10,
+                            ten: Number(event.target.value),
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              )}
               <DescriptionList
                 items={[
                   [
-                    "环境默认单抽",
+                    mode === "pool" ? "默认单抽" : "代码默认单抽",
                     `${currentDefault.drawCosts?.once ?? 10} 积分`,
                   ],
                   [
-                    "环境默认十连",
+                    mode === "pool" ? "默认十连" : "代码默认十连",
                     `${currentDefault.drawCosts?.ten ?? 100} 积分`,
                   ],
                   [
                     "当前配置来源",
-                    config.source === "database" && config.enabled !== false
-                      ? "数据库配置"
-                      : "环境默认",
+                    getGachaSourceText(config),
                   ],
                 ]}
               />
             </section>
           )}
 
-          {activeTab === "probability" && (
+          {activeTab !== "base" && inheritedPoolConfig && (
+            <section>
+              <div className="section-title-row">
+                <h3>继承默认配置</h3>
+                <Badge>未启用单独配置</Badge>
+              </div>
+              <StateBox>
+                当前卡池继承默认抽卡配置，启用单独配置后可编辑这一页。
+              </StateBox>
+              <DescriptionList
+                items={[
+                  [
+                    "积分消耗",
+                    `单抽 ${currentDefault.drawCosts?.once ?? 10}，十连 ${
+                      currentDefault.drawCosts?.ten ?? 100
+                    }`,
+                  ],
+                  [
+                    "概率合计",
+                    `${(getProbabilityTotal(currentDefault.rarityProbabilities) * 100).toFixed(2)}%`,
+                  ],
+                  ["UP 配置", summarizeUpConfig(currentDefault.upCards)],
+                  ["保底配置", summarizePityConfig(currentDefault.pitySystem)],
+                ]}
+              />
+            </section>
+          )}
+
+          {activeTab === "probability" && !inheritedPoolConfig && (
             <section>
               <div className="section-title-row">
                 <h3>稀有度概率</h3>
@@ -4805,7 +4841,7 @@ function GachaConfigModal({
                   type="button"
                   onClick={fillFromDefault}
                 >
-                  环境默认
+                  {mode === "default" ? "代码默认" : "默认配置"}
                 </button>
                 {probabilityTemplates.map((template) => (
                   <button
@@ -4871,7 +4907,7 @@ function GachaConfigModal({
             </section>
           )}
 
-          {activeTab === "up" && (
+          {activeTab === "up" && !inheritedPoolConfig && (
             <section>
               <div className="section-title-row">
                 <h3>UP 配置</h3>
@@ -4997,7 +5033,7 @@ function GachaConfigModal({
             </section>
           )}
 
-          {activeTab === "pity" && (
+          {activeTab === "pity" && !inheritedPoolConfig && (
             <section>
               <div className="section-title-row">
                 <h3>保底配置</h3>
@@ -5116,7 +5152,7 @@ function GachaConfigModal({
             </section>
           )}
 
-          {activeTab === "preview" && (
+          {activeTab === "preview" && !inheritedPoolConfig && (
             <section>
               <div className="section-title-row">
                 <h3>保存预览</h3>
@@ -5126,9 +5162,7 @@ function GachaConfigModal({
                 items={[
                   [
                     "保存效果",
-                    values.enabled === false
-                      ? "关闭数据库配置，抽卡回退环境默认"
-                      : "保存为数据库配置，并立即覆盖当前卡池抽卡配置",
+                    getGachaSaveEffectText(mode, values.enabled !== false),
                   ],
                   [
                     "积分消耗",
@@ -5141,48 +5175,6 @@ function GachaConfigModal({
                   ["保底配置", summarizePityConfig(values.pitySystem)],
                 ]}
               />
-              <div className="copy-config-box">
-                <div className="section-title-row">
-                  <div>
-                    <h3>复制到其他卡池</h3>
-                    <p className="muted-text">
-                      复制的是服务器当前已生效配置，不包含未保存修改，目标卡池数据库配置会被覆盖。
-                    </p>
-                  </div>
-                  <button
-                    className="secondary-button compact"
-                    type="button"
-                    onClick={copyConfigToTargets}
-                    disabled={copyLoading || copyTargets.length === 0}
-                  >
-                    {copyLoading ? "复制中..." : "复制配置"}
-                  </button>
-                </div>
-                <div className="copy-target-grid">
-                  {otherPools.length ? (
-                    otherPools.map(([targetPoolKey]) => (
-                      <label className="check-option" key={targetPoolKey}>
-                        <input
-                          type="checkbox"
-                          checked={copyTargets.includes(targetPoolKey)}
-                          onChange={(event) =>
-                            toggleCopyTarget(
-                              targetPoolKey,
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        <span>
-                          {poolNames[targetPoolKey] ||
-                            poolNameById(Number(targetPoolKey))}
-                        </span>
-                      </label>
-                    ))
-                  ) : (
-                    <span className="muted-text">暂无其他卡池可复制</span>
-                  )}
-                </div>
-              </div>
             </section>
           )}
         </div>
@@ -5514,6 +5506,51 @@ function summarizePityConfig(pitySystem?: GachaPoolConfig["pitySystem"]) {
       }`
     : "硬保底未配";
   return `${soft} / ${hard}`;
+}
+
+function getGachaSourceText(config?: GachaPoolConfig) {
+  if (!config) {
+    return "-";
+  }
+  if (config.scope === "pool" && config.enabled !== false) {
+    return "单独配置";
+  }
+  if (config.scope === "global" && config.enabled !== false) {
+    return "全局默认";
+  }
+  if (config.source === "database" && config.enabled !== false) {
+    return "数据库配置";
+  }
+  return "代码兜底";
+}
+
+function getGachaSaveEffectText(mode: "default" | "pool", enabled: boolean) {
+  if (mode === "default") {
+    return enabled
+      ? "保存为全局默认配置，未设置单独配置的卡池会继承它"
+      : "关闭全局默认配置，未设置单独配置的卡池回退代码兜底";
+  }
+  return enabled
+    ? "保存为当前卡池的单独配置"
+    : "关闭当前卡池的单独配置，改为继承默认配置";
+}
+
+function getPoolGachaModalConfig(
+  poolId: number,
+  detail: PoolGachaConfigDetail,
+): GachaPoolConfig {
+  if (detail.hasIndividualConfig && detail.individualConfig) {
+    return {
+      ...detail.individualConfig,
+      enabled: true,
+      poolId,
+    };
+  }
+  return {
+    ...detail.effective,
+    enabled: false,
+    poolId,
+  };
 }
 
 function normalizeDropItemSelectValue(value: unknown) {

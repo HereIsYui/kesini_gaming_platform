@@ -210,7 +210,11 @@ export class AdminService {
   }
 
   async getPool(id: number) {
-    return this.mustFind(this.poolRepository, id, "卡池不存在");
+    const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
+    return {
+      ...pool,
+      gachaConfig: await this.gachaConfigService.getPoolConfigDetail(id),
+    };
   }
 
   async listPools(query: PageQuery) {
@@ -522,27 +526,14 @@ export class AdminService {
   }
 
   async getGachaConfig() {
-    const pools = await this.poolRepository.find({
-      order: { id: "ASC" },
-    });
-    const poolIds = pools.map((pool) => pool.id);
+    const defaultConfig =
+      await this.gachaConfigService.getGlobalDefaultConfigView();
+    const fallbackConfig = this.gachaConfigService.getFallbackConfigView();
     return {
-      pools: await this.gachaConfigService.getPoolConfigsByPoolIds(poolIds),
-      defaults: Object.fromEntries(
-        poolIds.map((poolId) => [
-          String(poolId),
-          {
-            ...this.gachaConfigService.getEnvConfigByPoolId(poolId),
-            poolId,
-            enabled: false,
-            source: "env",
-            updatedAt: null,
-          },
-        ]),
-      ),
-      poolNames: Object.fromEntries(
-        pools.map((pool) => [String(pool.id), pool.pool_name]),
-      ),
+      defaultConfig,
+      fallbackConfig,
+      pools: { 0: defaultConfig },
+      defaults: { 0: fallbackConfig },
       adminUids: this.configService.adminUids,
     };
   }

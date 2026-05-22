@@ -33,9 +33,11 @@
 }
 ```
 
+前端应使用当前浏览器域名生成 `returnTo` 和 `realm`，不要把后端 API 地址作为 OAuth 回跳地址。
+
 **请求示例：**
 ```bash
-curl "http://localhost:3000/apis/login-url?returnTo=http://localhost:3000/callback&realm=http://localhost:3000"
+curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/callback&realm=https://web.example.com"
 ```
 
 **成功响应：**
@@ -67,6 +69,15 @@ curl "http://localhost:3000/apis/login-url?returnTo=http://localhost:3000/callba
 }
 ```
 
+**生产环境 HTTPS 校验失败：**
+```json
+{
+  "code": -1,
+  "msg": "生产环境 OAuth 回调地址必须使用 HTTPS",
+  "data": null
+}
+```
+
 ---
 
 ### 2. 处理登录回调
@@ -91,7 +102,7 @@ curl "http://localhost:3000/apis/login-url?returnTo=http://localhost:3000/callba
 
 **请求示例：**
 ```bash
-curl -X POST http://localhost:3000/apis/login \
+curl -X POST http://localhost:7001/apis/login \
   -H "Content-Type: application/json" \
   -d '{
     "openid.ns": "http://specs.openid.net/auth/2.0",
@@ -99,7 +110,7 @@ curl -X POST http://localhost:3000/apis/login \
     "openid.op_endpoint": "https://fishpi.cn",
     "openid.identity": "https://fishpi.cn/openid/id/123456",
     "openid.claimed_id": "https://fishpi.cn/openid/id/123456",
-    "openid.return_to": "http://localhost:3000/callback",
+    "openid.return_to": "https://web.example.com/callback",
     "openid.response_nonce": "2024-01-01T12:00:00Zabc123",
     "openid.assoc_handle": "handle123",
     "openid.signed": "...",
@@ -210,8 +221,11 @@ curl -X POST http://localhost:3000/apis/login \
 ```typescript
 // 1. 获取登录链接
 async function getLoginUrl() {
+  const apiBase = 'https://api.example.com';
+  const oauthOrigin = window.location.origin;
+  const returnTo = new URL(window.location.pathname, oauthOrigin).toString();
   const response = await fetch(
-    '/apis/login-url?returnTo=http://localhost:3000/callback&realm=http://localhost:3000'
+    `${apiBase}/apis/login-url?returnTo=${encodeURIComponent(returnTo)}&realm=${encodeURIComponent(oauthOrigin)}`
   );
   const result = await response.json();
   

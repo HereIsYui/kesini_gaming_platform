@@ -125,12 +125,12 @@ const drawResponse = await fetch('/card/draw/once', {
 
 ```bash
 # 登录获取token
-curl -X POST http://localhost:3000/apis/login \
+curl -X POST http://localhost:7001/apis/login \
   -H "Content-Type: application/json" \
   -d '{"openid.ns":"...", ...}'
 
 # 使用token抽卡
-curl -X POST http://localhost:3000/card/draw/once \
+curl -X POST http://localhost:7001/card/draw/once \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{"poolId":1}'
