@@ -1465,8 +1465,8 @@ function leaderboardRankLabel(rank?: number) {
             >
               <span>{{ pool.pool_name }}</span>
               <small>
-                {{ poolTypeLabel(pool.card_type) }} · 单抽
-                {{ pool.drawCosts?.once || 10 }}
+                {{ poolTypeLabel(pool.card_type) }} · 单抽消耗
+                {{ pool.drawCosts?.once || 10 }} 积分
               </small>
             </button>
             <div v-if="!busy.public && pools.length === 0" class="empty-inline">
@@ -1515,7 +1515,7 @@ function leaderboardRankLabel(rank?: number) {
                 @click="performDraw('once')"
               >
                 <Sparkles :size="18" />
-                单抽 · {{ selectedDrawCosts.once }}
+                单抽 · {{ selectedDrawCosts.once }} 积分
               </button>
               <button
                 class="primary-action golden"
@@ -1524,7 +1524,7 @@ function leaderboardRankLabel(rank?: number) {
                 @click="performDraw('ten')"
               >
                 <Ticket :size="18" />
-                十连 · {{ selectedDrawCosts.ten }}
+                十连 · {{ selectedDrawCosts.ten }} 积分
               </button>
               <button
                 class="secondary-action wide"
@@ -2730,12 +2730,13 @@ function leaderboardRankLabel(rank?: number) {
                     poolDetailPool?.card_type ?? selectedPool?.card_type,
                   )
                 }}
-                · 单抽
+                · 单抽消耗
                 {{
                   poolDetailPool?.drawCosts?.once || selectedDrawCosts.once
                 }}
-                · 十连
+                积分 · 十连消耗
                 {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
+                积分
               </span>
             </div>
             <button class="modal-close" type="button" @click="closePoolDetail">

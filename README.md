@@ -218,8 +218,15 @@ nginx -s reload
 
 - 后台“默认抽卡配置”只维护一套默认概率、UP、保底和单抽/十连价格。
 - 后台“卡池管理”中的“抽卡配置”按钮用于维护某个卡池的单独配置。
+- 后台“卡池管理”可以快速上线/下线卡池；下线后玩家端不展示，也不能继续抽取。
 - 未启用单独配置的卡池会继承全局默认。
 - 数据库仍使用 `gacha_pool_config` 表：`pool_id=0` 表示全局默认，`pool_id>0` 表示单个卡池覆盖。
+
+如果生产环境 `DB_SYNCHRONIZE=false`，升级前需要手动补字段：
+
+```sql
+ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
+```
 
 ## 管理员权限
 

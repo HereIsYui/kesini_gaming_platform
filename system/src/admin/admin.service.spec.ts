@@ -146,8 +146,41 @@ describe("AdminService", () => {
         pool_name: "常驻卡池",
         card_desc: "标准卡池",
         card_type: 0,
+        enabled: true,
       }),
     );
+  });
+
+  it("卡池列表会显示抽卡配置模式", async () => {
+    const poolRepository = createRepository({
+      findAndCount: jest.fn().mockResolvedValue([
+        [
+          { id: 1, pool_name: "常驻卡池" },
+          { id: 2, pool_name: "限定卡池" },
+        ],
+        2,
+      ]),
+    });
+    const gachaService = {
+      getPoolConfigsByPoolIds: jest.fn().mockResolvedValue({
+        1: { poolId: 1, scope: "global", enabled: true },
+        2: { poolId: 2, scope: "pool", enabled: true },
+      }),
+    };
+    const service = createService({
+      pool: poolRepository,
+      gachaService,
+    });
+
+    await expect(service.listPools({ page: 1, pageSize: 20 })).resolves.toEqual(
+      expect.objectContaining({
+        list: [
+          expect.objectContaining({ id: 1, gacha_config_mode: "默认配置" }),
+          expect.objectContaining({ id: 2, gacha_config_mode: "卡池配置" }),
+        ],
+      }),
+    );
+    expect(gachaService.getPoolConfigsByPoolIds).toHaveBeenCalledWith([1, 2]);
   });
 
   it("创建卡片会标准化多稀有度配置", async () => {

@@ -865,6 +865,7 @@ describe("CardService 抽卡积分扣除", () => {
     user: Partial<User>,
     drawCosts = { once: 10, ten: 100 },
     pointLedgerService?: any,
+    pool: Partial<PoolInfo> = {},
   ) {
     const poolRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
@@ -872,6 +873,8 @@ describe("CardService 抽卡积分扣除", () => {
         pool_name: "测试卡池",
         card_desc: "",
         card_type: 0,
+        enabled: true,
+        ...pool,
       }),
     });
     const cardRepository = createRepository({
@@ -1033,6 +1036,18 @@ describe("CardService 抽卡积分扣除", () => {
     expect(userCardRepository.save).not.toHaveBeenCalled();
     expect(historyRepository.save).not.toHaveBeenCalled();
     expect(pityRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("卡池下线后不能抽取", async () => {
+    const { service, userCardRepository } = createDrawService(
+      { point: 10 },
+      { once: 10, ten: 100 },
+      undefined,
+      { enabled: false },
+    );
+
+    await expect(service.drawOnce("u1", 1)).rejects.toThrow("已下线");
+    expect(userCardRepository.save).not.toHaveBeenCalled();
   });
 
   it("非 1 抽或 10 抽会在开启事务前拒绝", async () => {

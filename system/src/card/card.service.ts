@@ -27,6 +27,7 @@ import { GachaConfigService } from "./gacha-config.service";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
+const DEFAULT_DRAW_POOL_ID = 1;
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -114,6 +115,9 @@ export class CardService {
       });
       if (!pool) {
         throw new Error(`卡池ID ${effectivePoolId} 不存在`);
+      }
+      if (pool.enabled === false) {
+        throw new Error(`卡池 ${pool.pool_name} 已下线`);
       }
 
       const probabilities = this.getProbabilities(serverConfig);
@@ -354,7 +358,9 @@ export class CardService {
    * 获取所有卡池列表
    */
   async getAllPools(): Promise<PoolInfo[]> {
-    const pools = await this.poolRepository.find();
+    const pools = await this.poolRepository.find({
+      where: { enabled: true },
+    });
     return Promise.all(
       pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
     );
@@ -365,7 +371,7 @@ export class CardService {
    */
   async getPoolById(poolId: number): Promise<any | null> {
     const pool = await this.poolRepository.findOne({
-      where: { id: this.resolvePoolId(poolId) },
+      where: { id: this.resolvePoolId(poolId), enabled: true },
     });
     return pool ? this.decoratePoolWithDrawCosts(pool) : null;
   }
@@ -374,8 +380,15 @@ export class CardService {
    * 根据卡池ID获取该卡池的所有卡片
    */
   async getCardsByPool(poolId: number): Promise<CardItem[]> {
+    const effectivePoolId = this.resolvePoolId(poolId);
+    const pool = await this.poolRepository.findOne({
+      where: { id: effectivePoolId, enabled: true },
+    });
+    if (!pool) {
+      throw new Error("卡池不存在或已下线");
+    }
     return this.cardRepository.find({
-      where: { pool: this.resolvePoolId(poolId) },
+      where: { pool: effectivePoolId },
     });
   }
 
@@ -385,7 +398,7 @@ export class CardService {
    */
   async getPoolsByType(cardType: number): Promise<PoolInfo[]> {
     const pools = await this.poolRepository.find({
-      where: { card_type: cardType },
+      where: { card_type: cardType, enabled: true },
     });
     return Promise.all(
       pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
@@ -634,23 +647,21 @@ export class CardService {
   }
 
   private async resolveServerConfig(poolId?: number): Promise<GachaConfig> {
-    if (poolId === undefined || poolId === null || poolId === 0) {
-      return this.gachaConfigService.getConfigByPoolId(
-        this.gachaConfigService.getDefaultConfig().poolId!,
-      );
-    }
-
-    const config = await this.gachaConfigService.getConfigByPoolId(poolId);
+    const effectivePoolId =
+      poolId === undefined || poolId === null || poolId === 0
+        ? DEFAULT_DRAW_POOL_ID
+        : poolId;
+    const config = await this.gachaConfigService.getConfigByPoolId(
+      effectivePoolId,
+    );
     return {
       ...config,
-      poolId,
+      poolId: effectivePoolId,
     };
   }
 
   private resolvePoolId(poolId: number): number {
-    return poolId === 0
-      ? this.gachaConfigService.getDefaultConfig().poolId!
-      : poolId;
+    return poolId === 0 ? DEFAULT_DRAW_POOL_ID : poolId;
   }
 
   private getProbabilities(config: GachaConfig): Record<string, number> {

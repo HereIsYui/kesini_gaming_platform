@@ -22,6 +22,10 @@ export class PoolInfo {
   @Column()
   card_type: number;
 
+  // 是否上线，关闭后玩家端不可抽取
+  @Column({ default: true })
+  enabled: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

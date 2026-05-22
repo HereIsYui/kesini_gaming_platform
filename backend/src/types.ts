@@ -117,6 +117,7 @@ export interface FieldConfig {
   fullWidth?: boolean;
   placeholder?: string;
   readonly?: boolean;
+  defaultValue?: unknown;
 }
 
 export interface RedeemRewards {

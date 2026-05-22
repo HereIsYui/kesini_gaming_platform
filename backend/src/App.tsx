@@ -46,6 +46,7 @@ import {
   Modal,
   Progress,
   Select,
+  Segmented,
   Space,
   Spin,
   Statistic,
@@ -278,7 +279,19 @@ const poolFields: FieldConfig[] = [
     label: "类型",
     type: "select",
     options: poolTypeOptions,
+    defaultValue: 0,
   },
+  {
+    key: "enabled",
+    label: "状态",
+    type: "boolean",
+    options: [
+      { label: "上线", value: true },
+      { label: "下线", value: false },
+    ],
+    defaultValue: true,
+  },
+  { key: "gacha_config_mode", label: "抽卡配置", readonly: true },
 ];
 
 function createCardFields(options: AdminOptions | null): FieldConfig[] {
@@ -1358,6 +1371,7 @@ function PoolManagementPanel({
     detail: PoolGachaConfigDetail;
   } | null>(null);
   const [loadingPoolId, setLoadingPoolId] = useState<number | null>(null);
+  const [togglingPoolId, setTogglingPoolId] = useState<number | null>(null);
 
   async function openGachaConfig(row: Record<string, any>) {
     const poolId = Number(row.id);
@@ -1384,6 +1398,56 @@ function PoolManagementPanel({
     }
   }
 
+  async function togglePoolEnabled(
+    row: Record<string, any>,
+    enabled: boolean,
+    reload: () => void,
+  ) {
+    const poolId = Number(row.id);
+    setTogglingPoolId(poolId);
+    try {
+      await request(`/admin/pools/${poolId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      message.success(enabled ? "卡池已上线" : "卡池已下线");
+      reload();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "切换卡池状态失败");
+    } finally {
+      setTogglingPoolId(null);
+    }
+  }
+
+  function renderPoolCell(
+    field: FieldConfig,
+    row: Record<string, any>,
+    helpers: { reload: () => void },
+  ) {
+    if (field.key === "enabled") {
+      const checked = row.enabled !== false;
+      return (
+        <Switch
+          size="small"
+          checked={checked}
+          checkedChildren="上线"
+          unCheckedChildren="下线"
+          loading={togglingPoolId === Number(row.id)}
+          onChange={(nextChecked) =>
+            togglePoolEnabled(row, nextChecked, helpers.reload)
+          }
+        />
+      );
+    }
+    if (field.key === "card_type") {
+      return renderPoolTypeTag(row.card_type);
+    }
+    if (field.key === "gacha_config_mode") {
+      return renderGachaConfigModeTag(row.gacha_config_mode);
+    }
+    return null;
+  }
+
   const modalConfig = editingGacha
     ? getPoolGachaModalConfig(editingGacha.poolId, editingGacha.detail)
     : null;
@@ -1399,15 +1463,18 @@ function PoolManagementPanel({
         deletable
         detailFetchable
         searchPlaceholder="搜索卡池名称或描述"
-        extraActions={(row) => (
-          <Button
-            size="small"
-            loading={loadingPoolId === Number(row.id)}
-            onClick={() => openGachaConfig(row)}
-          >
-            抽卡配置
-          </Button>
-        )}
+        renderCell={renderPoolCell}
+        extraActions={(row) => {
+          return (
+            <Button
+              size="small"
+              loading={loadingPoolId === Number(row.id)}
+              onClick={() => openGachaConfig(row)}
+            >
+              抽卡配置
+            </Button>
+          );
+        }}
       />
       {editingGacha && modalConfig && (
         <GachaConfigModal
@@ -1454,6 +1521,7 @@ function AdminTable({
   enableRarityFilter,
   poolFilterOptions,
   renderEditor,
+  renderCell,
   extraActions,
 }: {
   title: string;
@@ -1472,7 +1540,15 @@ function AdminTable({
     onCancel: () => void;
     onSubmit: (values: Record<string, any>) => Promise<void>;
   }) => ReactNode;
-  extraActions?: (row: Record<string, any>) => ReactNode;
+  renderCell?: (
+    field: FieldConfig,
+    row: Record<string, any>,
+    helpers: { reload: () => void },
+  ) => ReactNode;
+  extraActions?: (
+    row: Record<string, any>,
+    helpers: { reload: () => void },
+  ) => ReactNode;
 }) {
   const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
@@ -1573,7 +1649,11 @@ function AdminTable({
         key: field.key,
         ellipsis: true,
         render: (_: unknown, row: Record<string, any>) => {
-          const value = formatValue(getValue(row, field.key));
+          const customCell = renderCell?.(field, row, { reload: load });
+          if (customCell !== undefined && customCell !== null) {
+            return customCell;
+          }
+          const value = formatFieldValue(field, getValue(row, field.key));
           return (
             <Typography.Text ellipsis title={value}>
               {value}
@@ -1594,7 +1674,7 @@ function AdminTable({
             >
               详情
             </Button>
-            {extraActions?.(row)}
+            {extraActions?.(row, { reload: load })}
             {editable && (
               <Button size="small" onClick={() => setEditing(row)}>
                 编辑
@@ -1612,7 +1692,7 @@ function AdminTable({
         ),
       },
     ],
-    [fields, editable, deletable, extraActions],
+    [fields, editable, deletable, extraActions, renderCell, load],
   );
 
   return (
@@ -1760,7 +1840,7 @@ function EditModal({
   const [values, setValues] = useState<Record<string, any>>(() =>
     fields.reduce(
       (result, field) => {
-        const value = getValue(initial, field.key) ?? "";
+        const value = getValue(initial, field.key) ?? field.defaultValue ?? "";
         result[field.key] =
           field.type === "multiSelect"
             ? parseMultiSelectValue(value)
@@ -1810,8 +1890,7 @@ function EditModal({
         >
           <Form layout="vertical" className="admin-form-grid antd-form-grid">
             {fields.map((field) => {
-              const fieldOptions =
-                field.type === "boolean" ? booleanOptions : field.options;
+              const fieldOptions = getFieldOptions(field);
               const shouldRenderSelect =
                 field.type === "select" ||
                 field.type === "boolean" ||
@@ -1859,6 +1938,60 @@ function EditModal({
                 );
               }
 
+              if (field.type === "boolean") {
+                const checkedLabel = getFieldOptionLabel(field, true, "是");
+                const uncheckedLabel = getFieldOptionLabel(field, false, "否");
+                return (
+                  <Form.Item
+                    className={fieldClass}
+                    key={field.key}
+                    label={field.label}
+                    extra={field.helper}
+                  >
+                    <Switch
+                      checked={values[field.key] !== false}
+                      checkedChildren={checkedLabel}
+                      unCheckedChildren={uncheckedLabel}
+                      onChange={(checked) =>
+                        setValues({
+                          ...values,
+                          [field.key]: checked,
+                        })
+                      }
+                    />
+                  </Form.Item>
+                );
+              }
+
+              if (field.key === "card_type" && fieldOptions.length > 0) {
+                return (
+                  <Form.Item
+                    className={fieldClass}
+                    key={field.key}
+                    label={field.label}
+                    extra={field.helper}
+                  >
+                    <Segmented
+                      value={coerceFieldValue(field, values[field.key])}
+                      onChange={(value) =>
+                        setValues({
+                          ...values,
+                          [field.key]: coerceFieldValue(field, value),
+                        })
+                      }
+                      options={fieldOptions.map((option) => ({
+                        label: option.label,
+                        value:
+                          typeof option.value === "boolean"
+                            ? String(option.value)
+                            : (option.value as string | number),
+                        disabled: option.disabled,
+                      }))}
+                    />
+                  </Form.Item>
+                );
+              }
+
               return (
                 <Form.Item
                   className={fieldClass}
@@ -1881,6 +2014,9 @@ function EditModal({
                   ) : shouldRenderSelect ? (
                     <Select
                       value={String(values[field.key] ?? "")}
+                      getPopupContainer={(trigger) =>
+                        trigger.parentElement || document.body
+                      }
                       onChange={(value) =>
                         setValues({
                           ...values,
@@ -5698,11 +5834,27 @@ function setPityRule(
   });
 }
 
-function coerceFieldValue(field: FieldConfig, value: string) {
-  const fieldOptions =
-    field.type === "boolean" ? booleanOptions : field.options || [];
+function getFieldOptions(field: FieldConfig) {
+  return field.type === "boolean"
+    ? field.options || booleanOptions
+    : field.options || [];
+}
+
+function getFieldOptionLabel(
+  field: FieldConfig,
+  value: unknown,
+  fallback: string,
+) {
+  const matchedOption = getFieldOptions(field).find(
+    (option) => String(option.value) === String(value),
+  );
+  return matchedOption?.label || fallback;
+}
+
+function coerceFieldValue(field: FieldConfig, value: unknown) {
+  const fieldOptions = getFieldOptions(field);
   const matchedOption = fieldOptions.find(
-    (option) => String(option.value) === value,
+    (option) => String(option.value) === String(value),
   );
   if (matchedOption) {
     return matchedOption.value;
@@ -5718,6 +5870,34 @@ function coerceFieldValue(field: FieldConfig, value: string) {
 
 function getValue(row: Record<string, any>, path: string) {
   return path.split(".").reduce((value, key) => value?.[key], row);
+}
+
+function renderPoolTypeTag(value: unknown) {
+  const option = poolTypeOptions.find(
+    (item) => String(item.value) === String(value),
+  );
+  const colorMap: Record<string, string> = {
+    "0": "blue",
+    "1": "orange",
+    "2": "purple",
+  };
+  return (
+    <Tag color={colorMap[String(value)] || "default"}>
+      {option?.label || `类型 ${String(value || "-")}`}
+    </Tag>
+  );
+}
+
+function renderGachaConfigModeTag(value: unknown) {
+  const mode = String(value || "默认配置");
+  return <Tag color={mode === "卡池配置" ? "purple" : "geekblue"}>{mode}</Tag>;
+}
+
+function formatFieldValue(field: FieldConfig, value: unknown) {
+  const matchedOption = getFieldOptions(field).find(
+    (option) => String(option.value) === String(value),
+  );
+  return matchedOption ? matchedOption.label : formatValue(value);
 }
 
 function formatValue(value: unknown) {
@@ -5854,7 +6034,7 @@ function getDetailItems(data: Record<string, any>, fields: FieldConfig[]) {
   const seen = new Set(fields.map((field) => field.key.split(".")[0]));
   const fieldItems: Array<[string, unknown]> = fields.map((field) => [
     field.label,
-    getValue(data, field.key),
+    formatFieldValue(field, getValue(data, field.key)),
   ]);
   const extraItems: Array<[string, unknown]> = Object.entries(data)
     .filter(([key, value]) => !seen.has(key) && isDetailValue(value))

@@ -211,9 +211,11 @@ export class AdminService {
 
   async getPool(id: number) {
     const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
+    const gachaConfig = await this.gachaConfigService.getPoolConfigDetail(id);
     return {
       ...pool,
-      gachaConfig: await this.gachaConfigService.getPoolConfigDetail(id),
+      gacha_config_mode: this.getGachaConfigMode(gachaConfig.effective),
+      gachaConfig,
     };
   }
 
@@ -225,7 +227,31 @@ export class AdminService {
           { card_desc: Like(`%${query.keyword}%`) },
         ]
       : {};
-    return this.findAndPage(this.poolRepository, where, page, pageSize);
+    const result = await this.findAndPage(
+      this.poolRepository,
+      where,
+      page,
+      pageSize,
+    );
+    const poolIds = result.list
+      .map((pool) => Number(pool.id))
+      .filter((poolId) => Number.isInteger(poolId) && poolId > 0);
+    if (poolIds.length === 0) {
+      return result;
+    }
+    const configs = await this.gachaConfigService.getPoolConfigsByPoolIds(
+      poolIds,
+    );
+    return {
+      ...result,
+      list: result.list.map((pool) => {
+        const config = configs[pool.id];
+        return {
+          ...pool,
+          gacha_config_mode: this.getGachaConfigMode(config),
+        };
+      }),
+    };
   }
 
   async createPool(body: Partial<PoolInfo>) {
@@ -235,6 +261,7 @@ export class AdminService {
       pool_name: body.pool_name,
       card_desc: body.card_desc,
       card_type: Number(body.card_type || 0),
+      enabled: body.enabled ?? true,
     });
     return this.poolRepository.save(pool);
   }
@@ -243,7 +270,7 @@ export class AdminService {
     const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
     Object.assign(
       pool,
-      this.pickDefined(body, ["pool_name", "card_desc", "card_type"]),
+      this.pickDefined(body, ["pool_name", "card_desc", "card_type", "enabled"]),
     );
     return this.poolRepository.save(pool);
   }
@@ -1396,6 +1423,12 @@ export class AdminService {
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
     return { page, pageSize };
+  }
+
+  private getGachaConfigMode(config?: GachaConfigView | null) {
+    return config?.scope === "pool" && config.enabled !== false
+      ? "卡池配置"
+      : "默认配置";
   }
 
   private async findAndPage<T extends ObjectLiteral>(

@@ -286,6 +286,10 @@ class PoolDto {
   @Type(() => Number)
   @IsInt()
   card_type?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 class CardDto {
