@@ -155,8 +155,18 @@ describe("AdminService", () => {
     const poolRepository = createRepository({
       findAndCount: jest.fn().mockResolvedValue([
         [
-          { id: 1, pool_name: "常驻卡池" },
-          { id: 2, pool_name: "限定卡池" },
+          {
+            id: 1,
+            pool_name: "常驻卡池",
+            card_type: 0,
+            enabled: true,
+          },
+          {
+            id: 2,
+            pool_name: "限定卡池",
+            card_type: 2,
+            enabled: false,
+          },
         ],
         2,
       ]),
@@ -175,12 +185,56 @@ describe("AdminService", () => {
     await expect(service.listPools({ page: 1, pageSize: 20 })).resolves.toEqual(
       expect.objectContaining({
         list: [
-          expect.objectContaining({ id: 1, gacha_config_mode: "默认配置" }),
-          expect.objectContaining({ id: 2, gacha_config_mode: "卡池配置" }),
+          expect.objectContaining({
+            id: 1,
+            card_type: 0,
+            enabled: true,
+            gacha_config_mode: "默认配置",
+          }),
+          expect.objectContaining({
+            id: 2,
+            card_type: 2,
+            enabled: false,
+            gacha_config_mode: "卡池配置",
+          }),
         ],
       }),
     );
     expect(gachaService.getPoolConfigsByPoolIds).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it("更新卡池会保留上下线状态和卡池类型", async () => {
+    const pool = {
+      id: 2,
+      pool_name: "限定卡池",
+      card_desc: "旧描述",
+      card_type: 2,
+      enabled: true,
+    };
+    const poolRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(pool),
+    });
+    const service = createService({ pool: poolRepository });
+
+    await expect(
+      service.updatePool(2, {
+        card_type: 1,
+        enabled: false,
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 2,
+        card_type: 1,
+        enabled: false,
+      }),
+    );
+    expect(poolRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 2,
+        card_type: 1,
+        enabled: false,
+      }),
+    );
   });
 
   it("创建卡片会标准化多稀有度配置", async () => {

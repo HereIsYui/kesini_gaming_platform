@@ -914,7 +914,7 @@ export class CardService {
       config.rarityProbabilities ||
       this.gachaConfigService.getDefaultConfig().rarityProbabilities!;
     if (!this.gachaConfigService.validateProbabilities(probabilities)) {
-      throw new Error("服务端抽卡概率配置无效");
+      throw new Error("抽取概率配置无效，请联系管理员");
     }
     return probabilities;
   }

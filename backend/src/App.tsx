@@ -276,7 +276,7 @@ const poolFields: FieldConfig[] = [
   },
   {
     key: "card_type",
-    label: "类型",
+    label: "卡池类型",
     type: "select",
     options: poolTypeOptions,
     defaultValue: 0,
@@ -291,7 +291,7 @@ const poolFields: FieldConfig[] = [
     ],
     defaultValue: true,
   },
-  { key: "gacha_config_mode", label: "抽卡配置", readonly: true },
+  { key: "gacha_config_mode", label: "配置来源", readonly: true },
 ];
 
 function createCardFields(options: AdminOptions | null): FieldConfig[] {
@@ -1474,7 +1474,7 @@ function PoolManagementPanel({
               loading={loadingPoolId === Number(row.id)}
               onClick={() => openGachaConfig(row)}
             >
-              抽卡配置
+              卡池配置
             </Button>
           );
         }}

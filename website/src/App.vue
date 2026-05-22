@@ -1349,13 +1349,6 @@ function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
   }
 }
 
-function resetCardFilters() {
-  rarityFilter.value = "";
-  poolFilter.value = "";
-  cardPage.value = 1;
-  void loadUserCards();
-}
-
 function normalizeRarity(value?: string): CardRarity {
   return rarityOrder.includes(value as CardRarity)
     ? (value as CardRarity)
@@ -1579,10 +1572,7 @@ function leaderboardRankLabel(rank?: number) {
               @click="activePoolId = pool.id"
             >
               <span>{{ pool.pool_name }}</span>
-              <small>
-                {{ poolTypeLabel(pool.card_type) }} · 单抽消耗
-                {{ pool.drawCosts?.once || 10 }} 星穹币
-              </small>
+              <small>{{ poolTypeLabel(pool.card_type) }} · 消耗见操作区</small>
             </button>
             <div v-if="!busy.public && pools.length === 0" class="empty-inline">
               暂无可用卡池
@@ -1827,13 +1817,6 @@ function leaderboardRankLabel(rank?: number) {
                   {{ pool.pool_name }}
                 </option>
               </select>
-              <button
-                class="secondary-action"
-                type="button"
-                @click="resetCardFilters"
-              >
-                重置
-              </button>
               <div
                 class="bulk-decompose-control"
                 @mouseenter="loadBulkDecomposePreview"
@@ -2905,9 +2888,9 @@ function leaderboardRankLabel(rank?: number) {
                     poolDetailPool?.card_type ?? selectedPool?.card_type,
                   )
                 }}
-                · 单抽消耗
+                · 抽取一次
                 {{ poolDetailPool?.drawCosts?.once || selectedDrawCosts.once }}
-                星穹币 · 十连消耗
+                星穹币 · 连续十次
                 {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
                 星穹币
               </span>
@@ -2921,7 +2904,7 @@ function leaderboardRankLabel(rank?: number) {
             <div v-if="poolDetailLoading" class="empty-state">
               <LoaderCircle :size="30" class="spin" />
               <strong>正在同步卡池详情</strong>
-              <span>正在读取卡片列表和服务端抽卡概率。</span>
+              <span>正在整理卡池内容与抽取信息。</span>
             </div>
             <div v-else-if="poolDetailError" class="empty-state">
               <Package :size="30" />
