@@ -260,6 +260,8 @@ EOF
 
 如果前端提示“当前前端未连接到业务接口”，通常是 `config.js` 里的 `API_BASE` 为空且静态站点没有把 `/card`、`/apis` 等接口路径反向代理到后端。请优先检查 `dist/config.js` 是否已写入后端 API 域名。
 
+本地调试时，`localhost`、`127.0.0.1`、常见局域网 IP 和 `.local` 域名会默认连接同主机 `7001` 端口；如果后端不在这个端口，请在 `website/public/config.js` 和 `backend/public/config.js` 中显式填写 `API_BASE`。
+
 ## 抽卡配置
 
 抽卡配置现在是“全局默认 + 卡池单独配置”：

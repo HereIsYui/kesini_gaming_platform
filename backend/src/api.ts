@@ -1,6 +1,7 @@
 import type { ApiResponse } from "./types";
 
 const DEV_API_BASE = "http://localhost:7001";
+const LOCAL_API_PORT = "7001";
 const API_BASE_KEY = "kesini_api_base";
 
 function getEnvValue(key: string) {
@@ -30,17 +31,28 @@ function getStoredApiBase() {
   return storedBase;
 }
 
-function isLocalBrowser() {
+function getLocalDebugApiBase() {
   if (typeof window === "undefined") {
-    return false;
+    return "";
   }
-  return /^(localhost|127\.0\.0\.1|::1|\[::1\])$/i.test(
-    window.location.hostname,
-  );
+  const hostname = window.location.hostname;
+  if (/^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1)$/i.test(hostname)) {
+    return DEV_API_BASE;
+  }
+  if (
+    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(hostname) ||
+    hostname.endsWith(".local")
+  ) {
+    const apiHost = hostname.includes(":") ? `[${hostname}]` : hostname;
+    return `http://${apiHost}:${LOCAL_API_PORT}`;
+  }
+  return "";
 }
 
 function getDevApiBase() {
-  return import.meta.env.DEV || isLocalBrowser() ? DEV_API_BASE : "";
+  return import.meta.env.DEV
+    ? getLocalDebugApiBase() || DEV_API_BASE
+    : getLocalDebugApiBase();
 }
 
 export function getApiBase() {
