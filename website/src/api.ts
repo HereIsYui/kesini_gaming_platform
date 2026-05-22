@@ -27,8 +27,17 @@ function getStoredApiBase() {
   return storedBase;
 }
 
+function isLocalBrowser() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return /^(localhost|127\.0\.0\.1|::1|\[::1\])$/i.test(
+    window.location.hostname,
+  );
+}
+
 function getDevApiBase() {
-  return import.meta.env.DEV ? DEV_API_BASE : "";
+  return import.meta.env.DEV || isLocalBrowser() ? DEV_API_BASE : "";
 }
 
 export function getApiBase() {
@@ -96,7 +105,17 @@ export async function request<T>(
     },
   });
 
-  const payload = (await response.json()) as ApiResponse<T>;
+  const raw = await response.text();
+  let payload: ApiResponse<T>;
+  try {
+    payload = JSON.parse(raw) as ApiResponse<T>;
+  } catch {
+    const contentType = response.headers.get("Content-Type") || "";
+    if (contentType.includes("text/html") || raw.trimStart().startsWith("<")) {
+      throw new Error("当前前端未连接到业务接口，请联系管理员检查发布配置");
+    }
+    throw new Error("接口返回格式异常，请稍后再试");
+  }
   if (!response.ok || payload.code !== 0) {
     throw new Error(payload.msg || "请求失败");
   }

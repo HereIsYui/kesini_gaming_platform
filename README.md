@@ -258,6 +258,8 @@ EOF
 - OAuth 登录跳转到 FishPi 时，URL 中的 `openid.return_to` 是当前前端 HTTPS 域名
 - OAuth 回调后前端能调用 `POST /apis/login` 完成登录
 
+如果前端提示“当前前端未连接到业务接口”，通常是 `config.js` 里的 `API_BASE` 为空且静态站点没有把 `/card`、`/apis` 等接口路径反向代理到后端。请优先检查 `dist/config.js` 是否已写入后端 API 域名。
+
 ## 抽卡配置
 
 抽卡配置现在是“全局默认 + 卡池单独配置”：
