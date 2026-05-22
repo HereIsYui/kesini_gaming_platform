@@ -473,7 +473,7 @@ export class GachaConfigService {
       !Number.isInteger(ten) ||
       ten <= 0
     ) {
-      throw new Error("抽卡积分消耗必须为正整数");
+      throw new Error("抽卡星穹币消耗必须为正整数");
     }
   }
 

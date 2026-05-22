@@ -235,7 +235,7 @@ export class TradeService {
       }
       if ((buyer.point || 0) < listing.price) {
         throw new Error(
-          `积分不足，需要${listing.price}，当前${buyer.point || 0}`,
+          `星穹币不足，需要${listing.price}，当前${buyer.point || 0}`,
         );
       }
 

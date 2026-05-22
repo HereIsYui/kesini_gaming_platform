@@ -193,6 +193,7 @@ export interface RechargeConfig {
   maxAmount: number;
   ratio: number;
   hasGoldFingerKey: boolean;
+  hasFishpiApiKey: boolean;
 }
 
 export interface RechargePointsResponse {
@@ -201,6 +202,21 @@ export interface RechargePointsResponse {
   fishpiCost: number;
   pointBefore: number;
   pointAfter: number;
+}
+
+export interface BulkDecomposeFragment {
+  itemId: number;
+  itemName: string;
+  count: number;
+}
+
+export interface BulkDecomposeResponse {
+  selectedRarities: Array<CardRarity | string>;
+  total: number;
+  countsByRarity: Partial<Record<CardRarity | string, number>>;
+  skippedListed: number;
+  decomposed?: number;
+  fragments?: BulkDecomposeFragment[];
 }
 
 export type PointLedgerSourceType =

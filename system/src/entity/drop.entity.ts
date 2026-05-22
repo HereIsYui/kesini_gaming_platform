@@ -16,7 +16,7 @@ export class DropItem {
   @Column()
   drop_desc: string;
 
-  // 物品类型：0 卡片碎片 1 虚拟积分 2 普通道具 3 其他
+  // 物品类型：0 卡片碎片 1 虚拟星穹币 2 普通道具 3 其他
   @Column()
   drop_type: number;
 

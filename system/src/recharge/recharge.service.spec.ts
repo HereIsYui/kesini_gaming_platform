@@ -36,6 +36,7 @@ function createEnabledConfig(overrides: Partial<RechargeConfig> = {}) {
     id: 1,
     enabled: true,
     gold_finger_key: "gold-key",
+    fishpi_api_key: "api-key",
     min_amount: 1,
     max_amount: 9999,
     recharge_ratio: 1,
@@ -50,11 +51,14 @@ describe("RechargeService", () => {
     mockedAxios.isAxiosError.mockImplementation((error: any) =>
       Boolean(error?.isAxiosError),
     );
+    mockedAxios.get.mockResolvedValue({ data: { userPoint: 9999 } });
   });
 
   it("配置关闭或缺少金手指密钥时拒绝充值", async () => {
     const configRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue(createEnabledConfig({ enabled: false })),
+      findOne: jest
+        .fn()
+        .mockResolvedValue(createEnabledConfig({ enabled: false })),
     });
     const { service } = createService(
       new Map<any, any>([
@@ -73,6 +77,13 @@ describe("RechargeService", () => {
     );
     await expect(service.recharge("u1", 10, "r2")).rejects.toThrow(
       "后台未配置鱼排金手指密钥",
+    );
+
+    configRepository.findOne.mockResolvedValue(
+      createEnabledConfig({ enabled: true, fishpi_api_key: "" }),
+    );
+    await expect(service.recharge("u1", 10, "r3")).rejects.toThrow(
+      "后台未配置鱼排查询密钥",
     );
   });
 
@@ -93,7 +104,7 @@ describe("RechargeService", () => {
     );
   });
 
-  it("鱼排扣分失败时不会增加本地积分并记录失败", async () => {
+  it("鱼排扣分失败时不会增加星穹币并记录失败", async () => {
     const user = { uid: "u1", name: "fish-user", point: 20 };
     let savedRecord: any = null;
     const recordRepository = createRepository({
@@ -124,7 +135,12 @@ describe("RechargeService", () => {
 
     const { service } = createService(
       new Map<any, any>([
-        [RechargeConfig, createRepository({ findOne: jest.fn().mockResolvedValue(createEnabledConfig()) })],
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
         [RechargeRecord, recordRepository],
         [User, userRepository],
       ]),
@@ -143,7 +159,152 @@ describe("RechargeService", () => {
     );
   });
 
-  it("鱼排扣分成功后增加本地积分并写入成功记录", async () => {
+  it("鱼排积分查询失败时不会调用扣分接口", async () => {
+    const user = { uid: "u1", name: "fish-user", point: 20 };
+    let savedRecord: any = null;
+    const recordRepository = createRepository({
+      create: jest.fn((value) => ({ id: 1, ...value })),
+      findOne: jest.fn(async ({ where }) => {
+        if (where.uid) {
+          return null;
+        }
+        if (where.id === 1) {
+          return savedRecord;
+        }
+        return null;
+      }),
+      save: jest.fn(async (value) => {
+        savedRecord = { ...value, id: value.id || 1 };
+        return savedRecord;
+      }),
+    });
+    mockedAxios.get.mockRejectedValue({
+      isAxiosError: true,
+      response: { data: { code: -1, msg: "查询失败" } },
+      message: "request failed",
+    });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, recordRepository],
+        [
+          User,
+          createRepository({ findOne: jest.fn().mockResolvedValue(user) }),
+        ],
+      ]),
+    );
+
+    await expect(service.recharge("u1", 10, "query-failed")).rejects.toThrow(
+      "查询失败",
+    );
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(savedRecord).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        failure_reason: "查询失败",
+      }),
+    );
+  });
+
+  it("鱼排积分为负数时不会调用扣分接口", async () => {
+    const user = { uid: "u1", name: "fish-user", point: 20 };
+    let savedRecord: any = null;
+    const recordRepository = createRepository({
+      create: jest.fn((value) => ({ id: 1, ...value })),
+      findOne: jest.fn(async ({ where }) => {
+        if (where.uid) {
+          return null;
+        }
+        if (where.id === 1) {
+          return savedRecord;
+        }
+        return null;
+      }),
+      save: jest.fn(async (value) => {
+        savedRecord = { ...value, id: value.id || 1 };
+        return savedRecord;
+      }),
+    });
+    mockedAxios.get.mockResolvedValue({ data: { userPoint: -1 } });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, recordRepository],
+        [
+          User,
+          createRepository({ findOne: jest.fn().mockResolvedValue(user) }),
+        ],
+      ]),
+    );
+
+    await expect(service.recharge("u1", 10, "negative")).rejects.toThrow(
+      "鱼排积分为负数，无法充值",
+    );
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("鱼排积分不足时不会调用扣分接口", async () => {
+    const user = { uid: "u1", name: "fish-user", point: 20 };
+    let savedRecord: any = null;
+    const recordRepository = createRepository({
+      create: jest.fn((value) => ({ id: 1, ...value })),
+      findOne: jest.fn(async ({ where }) => {
+        if (where.uid) {
+          return null;
+        }
+        if (where.id === 1) {
+          return savedRecord;
+        }
+        return null;
+      }),
+      save: jest.fn(async (value) => {
+        savedRecord = { ...value, id: value.id || 1 };
+        return savedRecord;
+      }),
+    });
+    mockedAxios.get.mockResolvedValue({ data: { userPoint: 9 } });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, recordRepository],
+        [
+          User,
+          createRepository({ findOne: jest.fn().mockResolvedValue(user) }),
+        ],
+      ]),
+    );
+
+    await expect(service.recharge("u1", 10, "insufficient")).rejects.toThrow(
+      "鱼排积分不足，需要10，当前9",
+    );
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(savedRecord).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        failure_reason: "鱼排积分不足，需要10，当前9",
+      }),
+    );
+  });
+
+  it("鱼排扣分成功后增加星穹币并写入成功记录", async () => {
     const user = { uid: "u1", name: "fish-user", point: 20 };
     let savedRecord: any = null;
     const recordRepository = createRepository({
@@ -172,7 +333,12 @@ describe("RechargeService", () => {
 
     const { service } = createService(
       new Map<any, any>([
-        [RechargeConfig, createRepository({ findOne: jest.fn().mockResolvedValue(createEnabledConfig()) })],
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
         [RechargeRecord, recordRepository],
         [User, userRepository],
       ]),
@@ -199,6 +365,14 @@ describe("RechargeService", () => {
         }),
       }),
     );
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      "https://fishpi.cn/user/fish-user?apiKey=api-key",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "Kesini-Gacha-Platform/1.0",
+        }),
+      }),
+    );
     expect(userRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ point: 50 }),
     );
@@ -211,7 +385,7 @@ describe("RechargeService", () => {
     );
   });
 
-  it("按后台充值比例扣鱼排积分并发放本地积分", async () => {
+  it("按后台充值比例扣鱼排积分并发放星穹币", async () => {
     const user = { uid: "u1", name: "fish-user", point: 20 };
     let savedRecord: any = null;
     const recordRepository = createRepository({
@@ -296,7 +470,12 @@ describe("RechargeService", () => {
     };
     const { service } = createService(
       new Map<any, any>([
-        [RechargeConfig, createRepository({ findOne: jest.fn().mockResolvedValue(createEnabledConfig()) })],
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
         [
           RechargeRecord,
           createRepository({
@@ -324,5 +503,6 @@ describe("RechargeService", () => {
       pointAfter: 15,
     });
     expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 });

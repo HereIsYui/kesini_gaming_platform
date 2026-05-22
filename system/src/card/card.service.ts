@@ -31,6 +31,16 @@ const DEFAULT_DRAW_POOL_ID = 1;
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
+type DecomposeFragmentSummary = {
+  itemId: number;
+  itemName: string;
+  count: number;
+};
+type DecomposeCandidate = {
+  userCard: UserCard;
+  card: CardItem;
+  rarity: CardRarity;
+};
 type LeaderboardMetricKey =
   | "totalCards"
   | "ssrCards"
@@ -579,7 +589,6 @@ export class CardService {
   async decomposeCard(uid: string, cardUuid: string) {
     return this.dataSource.transaction(async (manager) => {
       const userCardRepository = manager.getRepository(UserCard);
-      const inventoryRepository = manager.getRepository(UserInventory);
       const userCard = await userCardRepository.findOne({
         where: { uid, card_uuid: cardUuid, delete_flag: false },
         lock: { mode: "pessimistic_write" },
@@ -603,47 +612,284 @@ export class CardService {
         throw new Error("卡片不存在");
       }
 
-      const rarity =
-        (userCard.card_level as CardRarity | undefined) ||
-        this.getHighestRarity(card.card_level);
-      if (rarity === "UR") {
-        throw new Error("UR卡片不可以分解");
-      }
-
-      const fragmentRange = this.getDecomposeFragmentRange(rarity);
-      const fragmentCount = randomInt(fragmentRange.min, fragmentRange.max + 1);
-      const fragmentItem = await this.findFragmentItem(manager, card);
       const user = await this.getExistingUser(manager, uid);
+      const fragmentDrop = await this.createDecomposeFragmentDrop(
+        manager,
+        userCard,
+        card,
+      );
 
       userCard.delete_flag = true;
       await userCardRepository.save(userCard);
-
-      let userInventory = await inventoryRepository.findOne({
-        where: { user_id: user.id, item_id: fragmentItem.id },
-        lock: { mode: "pessimistic_write" },
-      });
-
-      if (!userInventory) {
-        userInventory = inventoryRepository.create({
-          user_id: user.id,
-          item_id: fragmentItem.id,
-          num: fragmentCount,
-        });
-      } else {
-        userInventory.num += fragmentCount;
-      }
-      await inventoryRepository.save(userInventory);
+      await this.applyFragmentGain(
+        manager,
+        user.id,
+        fragmentDrop.fragmentItem,
+        fragmentDrop.fragmentCount,
+      );
 
       return {
         data: {
           card_id: parseInt(userCard.card_id),
           card_name: card.card_name,
+          card_level: fragmentDrop.rarity,
           card_uuid: cardUuid,
-          fragments_gained: fragmentCount,
+          fragments_gained: fragmentDrop.fragmentCount,
         },
         msg: "分解成功",
       };
     });
+  }
+
+  async previewBulkDecompose(uid: string, rarities: string[]) {
+    const selectedRarities = this.normalizeDecomposeRarities(rarities);
+    const userCards = await this.userCardRepository.find({
+      where: { uid, delete_flag: false },
+    });
+    const cardIds = [
+      ...new Set(userCards.map((item) => Number(item.card_id)).filter(Boolean)),
+    ];
+    const cards =
+      cardIds.length > 0
+        ? await this.cardRepository.find({ where: { id: In(cardIds) } })
+        : [];
+    const activeListings = await this.findActiveListingsByCardUuids(
+      userCards.map((item) => item.card_uuid),
+    );
+    return this.createBulkDecomposePreview(
+      userCards,
+      cards,
+      activeListings,
+      selectedRarities,
+    );
+  }
+
+  async bulkDecomposeCards(uid: string, rarities: string[]) {
+    const selectedRarities = this.normalizeDecomposeRarities(rarities);
+    return this.dataSource.transaction(async (manager) => {
+      const userCardRepository = manager.getRepository(UserCard);
+      const user = await this.getExistingUser(manager, uid);
+      const userCards = await userCardRepository.find({
+        where: { uid, delete_flag: false },
+        lock: { mode: "pessimistic_write" },
+      });
+      const cardIds = [
+        ...new Set(
+          userCards.map((item) => Number(item.card_id)).filter(Boolean),
+        ),
+      ];
+      const cards =
+        cardIds.length > 0
+          ? await manager.getRepository(CardItem).find({
+              where: { id: In(cardIds) },
+            })
+          : [];
+      const activeListings =
+        userCards.length > 0
+          ? await manager.getRepository(TradeListing).find({
+              where: {
+                card_uuid: In(userCards.map((item) => item.card_uuid)),
+                status: "active",
+              },
+              lock: { mode: "pessimistic_write" },
+            })
+          : [];
+      const preview = this.createBulkDecomposePreview(
+        userCards,
+        cards,
+        activeListings,
+        selectedRarities,
+      );
+      const candidates = this.collectDecomposeCandidates(
+        userCards,
+        cards,
+        activeListings,
+        selectedRarities,
+      );
+      if (candidates.length === 0) {
+        return {
+          ...preview,
+          decomposed: 0,
+          fragments: [],
+        };
+      }
+
+      const fragmentMap = new Map<number, { item: DropItem; count: number }>();
+      for (const candidate of candidates) {
+        const fragmentDrop = await this.createDecomposeFragmentDrop(
+          manager,
+          candidate.userCard,
+          candidate.card,
+        );
+        const existing = fragmentMap.get(fragmentDrop.fragmentItem.id);
+        if (existing) {
+          existing.count += fragmentDrop.fragmentCount;
+        } else {
+          fragmentMap.set(fragmentDrop.fragmentItem.id, {
+            item: fragmentDrop.fragmentItem,
+            count: fragmentDrop.fragmentCount,
+          });
+        }
+        candidate.userCard.delete_flag = true;
+      }
+
+      await userCardRepository.save(
+        candidates.map((candidate) => candidate.userCard),
+      );
+      for (const { item, count } of fragmentMap.values()) {
+        await this.applyFragmentGain(manager, user.id, item, count);
+      }
+
+      return {
+        ...preview,
+        decomposed: candidates.length,
+        fragments: this.toFragmentSummary(fragmentMap),
+      };
+    });
+  }
+
+  private createBulkDecomposePreview(
+    userCards: UserCard[],
+    cards: CardItem[],
+    activeListings: TradeListing[],
+    selectedRarities: CardRarity[],
+  ) {
+    const candidates = this.collectDecomposeCandidates(
+      userCards,
+      cards,
+      activeListings,
+      selectedRarities,
+    );
+    const selectedSet = new Set(selectedRarities);
+    const activeListingSet = new Set(
+      activeListings.map((listing) => listing.card_uuid),
+    );
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const countsByRarity = this.createEmptyRarityCounts();
+    let skippedListed = 0;
+
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity || !selectedSet.has(rarity)) {
+        return;
+      }
+      if (activeListingSet.has(userCard.card_uuid)) {
+        skippedListed += 1;
+      }
+    });
+    candidates.forEach((candidate) => {
+      countsByRarity[candidate.rarity] += 1;
+    });
+
+    return {
+      selectedRarities,
+      total: candidates.length,
+      countsByRarity,
+      skippedListed,
+    };
+  }
+
+  private collectDecomposeCandidates(
+    userCards: UserCard[],
+    cards: CardItem[],
+    activeListings: TradeListing[],
+    selectedRarities: CardRarity[],
+  ): DecomposeCandidate[] {
+    const selectedSet = new Set(selectedRarities);
+    const activeListingSet = new Set(
+      activeListings.map((listing) => listing.card_uuid),
+    );
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    return userCards
+      .map((userCard) => {
+        const card = cardMap.get(Number(userCard.card_id));
+        if (!card || activeListingSet.has(userCard.card_uuid)) {
+          return null;
+        }
+        const rarity = this.getEffectiveUserCardRarity(userCard, card);
+        if (!rarity || !selectedSet.has(rarity)) {
+          return null;
+        }
+        return { userCard, card, rarity };
+      })
+      .filter((item): item is DecomposeCandidate => item !== null);
+  }
+
+  private normalizeDecomposeRarities(rarities: string[]): CardRarity[] {
+    const normalized = [
+      ...new Set(
+        (rarities || [])
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .map((item) => this.normalizeRarity(item)),
+      ),
+    ];
+    if (normalized.length === 0) {
+      throw new Error("请选择要分解的卡片等级");
+    }
+    if (normalized.includes("UR")) {
+      throw new Error("UR卡片不可以一键分解");
+    }
+    return normalized;
+  }
+
+  private async createDecomposeFragmentDrop(
+    manager: EntityManager,
+    userCard: UserCard,
+    card: CardItem,
+  ) {
+    const rarity =
+      this.getEffectiveUserCardRarity(userCard, card) ||
+      this.getHighestRarity(card.card_level);
+    if (rarity === "UR") {
+      throw new Error("UR卡片不可以分解");
+    }
+    const fragmentRange = this.getDecomposeFragmentRange(rarity);
+    const fragmentCount = randomInt(fragmentRange.min, fragmentRange.max + 1);
+    const fragmentItem = await this.findFragmentItem(manager, card);
+    return {
+      rarity,
+      fragmentCount,
+      fragmentItem,
+    };
+  }
+
+  private async applyFragmentGain(
+    manager: EntityManager,
+    userId: number,
+    fragmentItem: DropItem,
+    fragmentCount: number,
+  ) {
+    const inventoryRepository = manager.getRepository(UserInventory);
+    let userInventory = await inventoryRepository.findOne({
+      where: { user_id: userId, item_id: fragmentItem.id },
+      lock: { mode: "pessimistic_write" },
+    });
+
+    if (!userInventory) {
+      userInventory = inventoryRepository.create({
+        user_id: userId,
+        item_id: fragmentItem.id,
+        num: fragmentCount,
+      });
+    } else {
+      userInventory.num += fragmentCount;
+    }
+    await inventoryRepository.save(userInventory);
+  }
+
+  private toFragmentSummary(
+    fragmentMap: Map<number, { item: DropItem; count: number }>,
+  ): DecomposeFragmentSummary[] {
+    return Array.from(fragmentMap.values()).map(({ item, count }) => ({
+      itemId: item.id,
+      itemName: item.drop_name,
+      count,
+    }));
   }
 
   private async resolveServerConfig(poolId?: number): Promise<GachaConfig> {
@@ -651,9 +897,8 @@ export class CardService {
       poolId === undefined || poolId === null || poolId === 0
         ? DEFAULT_DRAW_POOL_ID
         : poolId;
-    const config = await this.gachaConfigService.getConfigByPoolId(
-      effectivePoolId,
-    );
+    const config =
+      await this.gachaConfigService.getConfigByPoolId(effectivePoolId);
     return {
       ...config,
       poolId: effectivePoolId,
@@ -687,7 +932,7 @@ export class CardService {
   ): Promise<void> {
     this.normalizeUserStats(user);
     if (user.point < cost) {
-      throw new Error(`积分不足，需要${cost}，当前${user.point}`);
+      throw new Error(`星穹币不足，需要${cost}，当前${user.point}`);
     }
     if (this.pointLedgerService) {
       await this.pointLedgerService.applyChange(manager, user, -cost, {

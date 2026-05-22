@@ -29,7 +29,7 @@ function createService(repositories: Map<any, any>) {
 }
 
 describe("RedeemService", () => {
-  it("兑换成功会发放积分、道具并写入领取记录", async () => {
+  it("兑换成功会发放星穹币、道具并写入领取记录", async () => {
     const code = {
       id: 1,
       code: "WELCOME",

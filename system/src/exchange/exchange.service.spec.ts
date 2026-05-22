@@ -38,7 +38,7 @@ describe("ExchangeService", () => {
       find: jest.fn().mockResolvedValue([
         {
           id: 1,
-          name: "代币换积分",
+          name: "代币换星穹币",
           enabled: true,
           delete_flag: false,
           costs: [{ itemId: 10, num: 2 }],
@@ -88,7 +88,7 @@ describe("ExchangeService", () => {
     ]);
   });
 
-  it("兑换成功后同时扣物品、发积分和物品、写兑换记录", async () => {
+  it("兑换成功后同时扣物品、发星穹币和物品、写兑换记录", async () => {
     const shopItem = {
       id: 1,
       name: "代币换碎片",
@@ -215,7 +215,7 @@ function createClaimService({
   const shopRepository = createRepository({
     findOne: jest.fn().mockResolvedValue({
       id: 1,
-      name: "代币换积分",
+      name: "代币换星穹币",
       enabled: true,
       delete_flag: false,
       costs: [{ itemId: 10, num: costNum }],

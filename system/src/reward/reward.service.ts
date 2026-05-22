@@ -23,7 +23,7 @@ export class RewardService {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isInteger(points) || points < 0) {
-      throw new Error("奖励积分必须为非负整数");
+      throw new Error("奖励星穹币必须为非负整数");
     }
 
     const items = Array.isArray(value.items) ? value.items : [];

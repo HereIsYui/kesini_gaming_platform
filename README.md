@@ -272,6 +272,7 @@ EOF
 
 ```sql
 ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
+ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
 ```
 
 ## 管理员权限

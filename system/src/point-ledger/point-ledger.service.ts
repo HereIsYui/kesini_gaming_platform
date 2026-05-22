@@ -23,7 +23,7 @@ export interface PointLedgerQuery {
 const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   draw_once: "单抽消耗",
   draw_ten: "十连消耗",
-  recharge: "积分充值",
+  recharge: "星穹币充值",
   redeem_code: "兑换码奖励",
   launch_activity: "开服福利",
   exchange_shop: "兑换商店",
@@ -45,7 +45,7 @@ export class PointLedgerService {
   ): Promise<PointLedgerRecord> {
     const changeAmount = Number(amount);
     if (!Number.isInteger(changeAmount) || changeAmount === 0) {
-      throw new Error("积分变动数量必须为非零整数");
+      throw new Error("星穹币变动数量必须为非零整数");
     }
 
     const userRepository = manager.getRepository(User);
@@ -54,7 +54,7 @@ export class PointLedgerService {
     const pointAfter = pointBefore + changeAmount;
     if (pointAfter < 0) {
       throw new Error(
-        `积分不足，需要${Math.abs(changeAmount)}，当前${pointBefore}`,
+        `星穹币不足，需要${Math.abs(changeAmount)}，当前${pointBefore}`,
       );
     }
 
@@ -99,7 +99,7 @@ export class PointLedgerService {
 
     if (sourceType) {
       if (!ALLOWED_SOURCE_TYPES.includes(sourceType)) {
-        throw new Error("积分来源类型参数无效");
+        throw new Error("星穹币来源类型参数无效");
       }
       builder.andWhere("record.source_type = :sourceType", { sourceType });
     }

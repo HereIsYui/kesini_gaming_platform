@@ -47,13 +47,12 @@ export interface PageQuery {
 
 const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
   0: { label: "卡片碎片", usage: "用于卡片合成和分解产出" },
-  1: { label: "虚拟积分", usage: "建议优先使用用户积分字段，不放入背包" },
+  1: { label: "虚拟星穹币", usage: "建议优先使用用户星穹币字段，不放入背包" },
   2: { label: "普通道具", usage: "可放入背包，也可作为兑换码奖励" },
   3: { label: "其他", usage: "预留类型，需结合业务说明使用" },
 };
 const CARD_RARITIES = ["N", "R", "SR", "SSR", "UR"];
-const DEFAULT_RECHARGE_MEMO_TEMPLATE =
-  "抽卡平台充值，兑换本地积分 {amount}";
+const DEFAULT_RECHARGE_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const DEFAULT_LAUNCH_ACTIVITY_KEY = "launch-2026";
 const DEFAULT_LAUNCH_ACTIVITY_NAME = "开服福利";
 const DEFAULT_LAUNCH_ACTIVITY_DESCRIPTION = "登录后可领取一次的开服福利。";
@@ -239,9 +238,8 @@ export class AdminService {
     if (poolIds.length === 0) {
       return result;
     }
-    const configs = await this.gachaConfigService.getPoolConfigsByPoolIds(
-      poolIds,
-    );
+    const configs =
+      await this.gachaConfigService.getPoolConfigsByPoolIds(poolIds);
     return {
       ...result,
       list: result.list.map((pool) => {
@@ -270,7 +268,12 @@ export class AdminService {
     const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
     Object.assign(
       pool,
-      this.pickDefined(body, ["pool_name", "card_desc", "card_type", "enabled"]),
+      this.pickDefined(body, [
+        "pool_name",
+        "card_desc",
+        "card_type",
+        "enabled",
+      ]),
     );
     return this.poolRepository.save(pool);
   }
@@ -396,7 +399,9 @@ export class AdminService {
     const item = await this.mustFind(this.dropRepository, id, "物品不存在");
     const normalized = this.normalizeDropItemInput({ ...item, ...body });
     const disabled =
-      body.disabled === undefined ? item.disabled === true : body.disabled === true;
+      body.disabled === undefined
+        ? item.disabled === true
+        : body.disabled === true;
     const defaultFragment =
       disabled || normalized.drop_type !== 0
         ? false
@@ -605,7 +610,8 @@ export class AdminService {
       throw new Error(`目标卡池不存在: ${missingPoolIds.join(",")}`);
     }
 
-    const sourceConfig = await this.gachaConfigService.getConfigByPoolId(poolId);
+    const sourceConfig =
+      await this.gachaConfigService.getConfigByPoolId(poolId);
     const nextConfig: EditableGachaConfig = {
       poolId,
       enabled: true,
@@ -635,7 +641,10 @@ export class AdminService {
     const { page, pageSize } = this.normalizePage(query);
     const where = query.keyword
       ? [
-          { code: Like(`%${query.keyword.trim().toUpperCase()}%`), delete_flag: false },
+          {
+            code: Like(`%${query.keyword.trim().toUpperCase()}%`),
+            delete_flag: false,
+          },
           { name: Like(`%${query.keyword}%`), delete_flag: false },
         ]
       : { delete_flag: false };
@@ -731,9 +740,7 @@ export class AdminService {
     return { deleted: true };
   }
 
-  async listRedeemUsages(
-    query: PageQuery & { uid?: string; codeId?: number },
-  ) {
+  async listRedeemUsages(query: PageQuery & { uid?: string; codeId?: number }) {
     const { page, pageSize } = this.normalizePage(query);
     const where: FindOptionsWhere<RedeemCodeUsage> = {};
     if (query.uid) {
@@ -816,7 +823,12 @@ export class AdminService {
     if (query.itemId !== undefined) {
       where.shop_item_id = query.itemId;
     }
-    return this.findAndPage(this.exchangeUsageRepository, where, page, pageSize);
+    return this.findAndPage(
+      this.exchangeUsageRepository,
+      where,
+      page,
+      pageSize,
+    );
   }
 
   async listTradeListings(
@@ -931,7 +943,8 @@ export class AdminService {
     const repository = this.mustTradeConfigRepository();
     const config = await this.ensureTradeConfig();
     Object.assign(config, {
-      enabled: body.enabled === undefined ? config.enabled : body.enabled === true,
+      enabled:
+        body.enabled === undefined ? config.enabled : body.enabled === true,
       fee_rate:
         body.fee_rate === undefined ? config.fee_rate : Number(body.fee_rate),
       min_price:
@@ -979,6 +992,10 @@ export class AdminService {
     const nextKey = String(body.gold_finger_key || "").trim();
     if (nextKey) {
       next.gold_finger_key = nextKey;
+    }
+    const nextApiKey = String(body.fishpi_api_key || "").trim();
+    if (nextApiKey) {
+      next.fishpi_api_key = nextApiKey;
     }
     this.assertRechargeConfig(next);
     return this.toRechargeConfigView(await repository.save(next));
@@ -1074,10 +1091,7 @@ export class AdminService {
       rewards:
         body.rewards === undefined
           ? config.rewards
-          : await this.normalizeRewards(
-              body.rewards,
-              "开服福利奖励不能为空",
-            ),
+          : await this.normalizeRewards(body.rewards, "开服福利奖励不能为空"),
     });
     this.assertLaunchActivityConfig(next);
     return this.toLaunchActivityConfigView(await repository.save(next));
@@ -1215,6 +1229,7 @@ export class AdminService {
         id: 1,
         enabled: false,
         gold_finger_key: "",
+        fishpi_api_key: "",
         min_amount: 1,
         max_amount: 9999,
         recharge_ratio: 1,
@@ -1226,7 +1241,9 @@ export class AdminService {
     config.min_amount = Number(config.min_amount || 1);
     config.max_amount = Number(config.max_amount || 9999);
     config.recharge_ratio = Number(config.recharge_ratio || 1);
-    config.memo_template = config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE;
+    config.memo_template =
+      config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE;
+    config.fishpi_api_key = config.fishpi_api_key || "";
     this.assertRechargeConfig(config);
     return config;
   }
@@ -1249,7 +1266,8 @@ export class AdminService {
     }
     config.enabled = config.enabled === true;
     config.activity_key = this.normalizeActivityKey(config.activity_key);
-    config.name = String(config.name || "").trim() || DEFAULT_LAUNCH_ACTIVITY_NAME;
+    config.name =
+      String(config.name || "").trim() || DEFAULT_LAUNCH_ACTIVITY_NAME;
     config.description = String(config.description || "").trim();
     config.starts_at = config.starts_at || null;
     config.ends_at = config.ends_at || null;
@@ -1262,7 +1280,11 @@ export class AdminService {
   }
 
   private assertTradeConfig(config: TradeConfig) {
-    if (!Number.isFinite(config.fee_rate) || config.fee_rate < 0 || config.fee_rate > 1) {
+    if (
+      !Number.isFinite(config.fee_rate) ||
+      config.fee_rate < 0 ||
+      config.fee_rate > 1
+    ) {
       throw new Error("交易手续费率必须在0-1之间");
     }
     if (!Number.isInteger(config.min_price) || config.min_price < 1) {
@@ -1313,6 +1335,7 @@ export class AdminService {
 
   private toRechargeConfigView(config: RechargeConfig) {
     const key = String(config.gold_finger_key || "").trim();
+    const apiKey = String(config.fishpi_api_key || "").trim();
     return {
       id: config.id,
       enabled: config.enabled === true,
@@ -1322,6 +1345,8 @@ export class AdminService {
       memo_template: config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE,
       hasGoldFingerKey: Boolean(key),
       maskedGoldFingerKey: this.maskSecret(key),
+      hasFishpiApiKey: Boolean(apiKey),
+      maskedFishpiApiKey: this.maskSecret(apiKey),
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -1492,7 +1517,7 @@ export class AdminService {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isFinite(points) || points < 0) {
-      throw new Error("奖励积分无效");
+      throw new Error("奖励星穹币无效");
     }
     const items = Array.isArray(value.items) ? value.items : [];
     const normalizedItems = items
@@ -1583,7 +1608,7 @@ export class AdminService {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isFinite(points) || points < 0) {
-      throw new Error("奖励积分无效");
+      throw new Error("奖励星穹币无效");
     }
     const items = Array.isArray(value.items) ? value.items : [];
     const normalizedItems = items
@@ -1656,7 +1681,9 @@ export class AdminService {
     const existingDefaults = await this.dropRepository.find({
       where: { default_fragment: true } as any,
     });
-    const needClear = existingDefaults.filter((existing) => existing.id !== exceptId);
+    const needClear = existingDefaults.filter(
+      (existing) => existing.id !== exceptId,
+    );
     if (needClear.length > 0) {
       await this.dropRepository.save(
         needClear.map((existing) => ({
@@ -1736,7 +1763,9 @@ export class AdminService {
       throw new Error("活动批次不能为空");
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(key)) {
-      throw new Error("活动批次只能包含字母、数字、下划线和中划线，且不超过64位");
+      throw new Error(
+        "活动批次只能包含字母、数字、下划线和中划线，且不超过64位",
+      );
     }
     return key;
   }
@@ -1759,7 +1788,7 @@ export class AdminService {
         throw new Error(`${label}已禁用: ${item.drop_name}`);
       }
       if (item.drop_type === 1) {
-        throw new Error(`${label}不能选择虚拟积分: ${item.drop_name}`);
+        throw new Error(`${label}不能选择虚拟星穹币: ${item.drop_name}`);
       }
     });
   }

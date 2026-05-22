@@ -118,7 +118,7 @@ describe("TradeService", () => {
     );
   });
 
-  it("购买成功会扣买家积分、给卖家实收并保持UUID不变", async () => {
+  it("购买成功会扣买家星穹币、给卖家实收并保持UUID不变", async () => {
     const listing = {
       id: 1,
       seller_uid: "seller",
@@ -216,7 +216,7 @@ describe("TradeService", () => {
     );
   });
 
-  it("积分不足时购买失败且不保存资产变更", async () => {
+  it("星穹币不足时购买失败且不保存资产变更", async () => {
     const listingRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
         id: 1,
@@ -267,7 +267,7 @@ describe("TradeService", () => {
       ]),
     );
 
-    await expect(service.buyListing("buyer", 1)).rejects.toThrow("积分不足");
+    await expect(service.buyListing("buyer", 1)).rejects.toThrow("星穹币不足");
     expect(userRepository.save).not.toHaveBeenCalled();
     expect(userCardRepository.save).not.toHaveBeenCalled();
     expect(listingRepository.save).not.toHaveBeenCalled();

@@ -211,7 +211,7 @@ const cardTypeOptions: SelectOption[] = [
 const dropTypeOptions: SelectOption[] = [
   { label: "卡片碎片", value: 0 },
   { label: "普通道具", value: 2 },
-  { label: "虚拟积分", value: 1 },
+  { label: "虚拟星穹币", value: 1 },
   { label: "其他", value: 3 },
 ];
 
@@ -370,7 +370,7 @@ const userFields: FieldConfig[] = [
   { key: "uid", label: "UID", readonly: true },
   { key: "name", label: "用户名" },
   { key: "nickname", label: "昵称" },
-  { key: "point", label: "积分", type: "number" },
+  { key: "point", label: "星穹币", type: "number" },
   {
     key: "is_admin",
     label: "管理员",
@@ -490,7 +490,7 @@ const rechargeRecordFields: FieldConfig[] = [
   { key: "statusLabel", label: "状态", readonly: true },
   { key: "uid", label: "UID", readonly: true },
   { key: "fishpi_user_name", label: "鱼排用户名", readonly: true },
-  { key: "amount", label: "到账积分", readonly: true },
+  { key: "amount", label: "到账星穹币", readonly: true },
   { key: "fishpi_cost", label: "扣除鱼排积分", readonly: true },
   { key: "point_before", label: "充值前", readonly: true },
   { key: "point_after", label: "充值后", readonly: true },
@@ -719,7 +719,7 @@ export function App() {
       {
         key: "users",
         label: "用户管理",
-        description: "查看用户资料、积分和管理员状态。",
+        description: "查看用户资料、星穹币和管理员状态。",
         group: "玩家资产",
         icon: Users,
         render: () => (
@@ -867,7 +867,7 @@ export function App() {
       {
         key: "recharge-records",
         label: "充值记录",
-        description: "追踪鱼排扣分充值请求和本地积分入账状态。",
+        description: "追踪鱼排扣分充值请求和星穹币入账状态。",
         group: "交易与支付",
         icon: Coins,
         render: () => <RechargeRecordsPage />,
@@ -1112,7 +1112,10 @@ function LoginPage({
     setLoading(true);
     try {
       const oauthOrigin = window.location.origin;
-      const returnTo = new URL(window.location.pathname, oauthOrigin).toString();
+      const returnTo = new URL(
+        window.location.pathname,
+        oauthOrigin,
+      ).toString();
       const data = await request<{ url: string }>(
         `/apis/login-url${toQuery({ returnTo, realm: oauthOrigin })}`,
       );
@@ -1498,7 +1501,9 @@ function PoolManagementPanel({
               body: JSON.stringify(payload),
             });
             message.success(
-              values.enabled === false ? "已改为继承默认配置" : "已保存单独配置",
+              values.enabled === false
+                ? "已改为继承默认配置"
+                : "已保存单独配置",
             );
             setEditingGacha(null);
           }}
@@ -2680,7 +2685,7 @@ function RedeemCodeModal({
         >
           <Space direction="vertical" size={12} className="full-width">
             <Form layout="vertical">
-              <Form.Item label="奖励积分">
+              <Form.Item label="奖励星穹币">
                 <InputNumber
                   className="full-width-control"
                   min={0}
@@ -2750,7 +2755,7 @@ function RedeemCodeModal({
               ))}
             </Space>
             <Typography.Text type="secondary">
-              积分请使用“奖励积分”字段；物品奖励主要选择卡片碎片或普通道具。
+              星穹币请使用“奖励星穹币”字段；物品奖励主要选择卡片碎片或普通道具。
             </Typography.Text>
             <Button
               onClick={() =>
@@ -3170,7 +3175,7 @@ function LaunchActivityConfigPanel({
         >
           <Space direction="vertical" size={12} className="full-width">
             <Form layout="vertical" className="single-field-form">
-              <Form.Item label="奖励积分">
+              <Form.Item label="奖励星穹币">
                 <InputNumber
                   className="full-width-control"
                   min={0}
@@ -3239,7 +3244,7 @@ function LaunchActivityConfigPanel({
               </Space>
             ))}
             <Typography.Text type="secondary">
-              奖励支持积分和背包物品，不直接发卡；虚拟积分物品不会出现在物品选择中。
+              奖励支持星穹币和背包物品，不直接发卡；虚拟星穹币物品不会出现在物品选择中。
             </Typography.Text>
             <Button
               onClick={() =>
@@ -3544,7 +3549,7 @@ function ExchangeShopModal({
             <Form.Item className="form-field" label="兑换项名称">
               <Input
                 value={values.name}
-                placeholder="例如：活动代币换积分"
+                placeholder="例如：活动代币换星穹币"
                 onChange={(event) =>
                   setValues({ ...values, name: event.target.value })
                 }
@@ -3688,7 +3693,7 @@ function ExchangeShopModal({
               </Space>
             ))}
             <Typography.Text type="secondary">
-              消耗项只支持背包物品，不能选择虚拟积分；积分消耗后续单独设计。
+              消耗项只支持背包物品，不能选择虚拟星穹币；星穹币消耗后续单独设计。
             </Typography.Text>
             <Button
               onClick={() =>
@@ -3711,7 +3716,7 @@ function ExchangeShopModal({
         >
           <Space direction="vertical" size={12} className="full-width">
             <Form layout="vertical">
-              <Form.Item label="奖励积分">
+              <Form.Item label="奖励星穹币">
                 <InputNumber
                   className="full-width-control"
                   min={0}
@@ -3779,7 +3784,7 @@ function ExchangeShopModal({
               </Space>
             ))}
             <Typography.Text type="secondary">
-              积分请使用“奖励积分”字段；虚拟积分物品不会出现在奖励物品选择里。
+              星穹币请使用“奖励星穹币”字段；虚拟星穹币物品不会出现在奖励物品选择里。
             </Typography.Text>
             <Button
               onClick={() =>
@@ -4044,7 +4049,7 @@ function RechargeRecordsPage() {
       render: (_, row) => `${row.amount} / 扣鱼排 ${row.fishpi_cost}`,
     },
     {
-      title: "积分变化",
+      title: "星穹币变化",
       width: 160,
       render: (_, row) => `${row.point_before} → ${row.point_after}`,
     },
@@ -4205,8 +4210,9 @@ function RechargeConfigPanel() {
     min_amount: 1,
     max_amount: 9999,
     recharge_ratio: 1,
-    memo_template: "抽卡平台充值，兑换本地积分 {amount}",
+    memo_template: "抽卡平台充值，兑换星穹币 {amount}",
     gold_finger_key: "",
+    fishpi_api_key: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -4224,8 +4230,9 @@ function RechargeConfigPanel() {
           max_amount: Number(data.max_amount || 9999),
           recharge_ratio: Number(data.recharge_ratio || 1),
           memo_template:
-            data.memo_template || "抽卡平台充值，兑换本地积分 {amount}",
+            data.memo_template || "抽卡平台充值，兑换星穹币 {amount}",
           gold_finger_key: "",
+          fishpi_api_key: "",
         });
       })
       .catch((err) => setError(err.message))
@@ -4252,6 +4259,10 @@ function RechargeConfigPanel() {
       if (nextKey) {
         body.gold_finger_key = nextKey;
       }
+      const nextApiKey = String(values.fishpi_api_key || "").trim();
+      if (nextApiKey) {
+        body.fishpi_api_key = nextApiKey;
+      }
       const next = await request<RechargeConfigRecord>(
         "/admin/config/recharge",
         {
@@ -4263,6 +4274,7 @@ function RechargeConfigPanel() {
       setValues({
         ...next,
         gold_finger_key: "",
+        fishpi_api_key: "",
       });
       setNotice("充值配置已保存");
     } catch (err) {
@@ -4331,7 +4343,7 @@ function RechargeConfigPanel() {
               </Form.Item>
               <Form.Item
                 label="充值比例"
-                extra="填写 2 表示扣 1 鱼排积分到账 2 本地抽卡积分。"
+                extra="填写 2 表示扣 1 鱼排积分到账 2 星穹币。"
               >
                 <InputNumber
                   className="full-width-control"
@@ -4340,7 +4352,7 @@ function RechargeConfigPanel() {
                   step={0.1}
                   precision={4}
                   addonBefore="1 鱼排积分 ="
-                  addonAfter="本地积分"
+                  addonAfter="星穹币"
                   value={Number(values.recharge_ratio || 1)}
                   onChange={(value) =>
                     setValues({
@@ -4379,8 +4391,27 @@ function RechargeConfigPanel() {
                 />
               </Form.Item>
               <Form.Item
+                label="鱼排 API Key"
+                extra="用于充值前查询鱼排用户余额；留空保存会保留原密钥。"
+              >
+                <Input.Password
+                  value={values.fishpi_api_key || ""}
+                  placeholder={
+                    config?.hasFishpiApiKey
+                      ? `已配置：${config.maskedFishpiApiKey}`
+                      : "请输入鱼排开放 API Key"
+                  }
+                  onChange={(event) =>
+                    setValues({
+                      ...values,
+                      fishpi_api_key: event.target.value,
+                    })
+                  }
+                />
+              </Form.Item>
+              <Form.Item
                 label="扣鱼排积分备注模板"
-                extra="可使用 {amount}/{points} 表示本地到账积分，{fishpiCost} 表示扣除鱼排积分。"
+                extra="可使用 {amount}/{points} 表示到账星穹币，{fishpiCost} 表示扣除鱼排积分。"
               >
                 <Input
                   value={values.memo_template}
@@ -4403,13 +4434,14 @@ function RechargeConfigPanel() {
               items={[
                 ["当前状态", config?.enabled ? "开启" : "关闭"],
                 ["密钥状态", config?.hasGoldFingerKey ? "已配置" : "未配置"],
+                ["查询密钥", config?.hasFishpiApiKey ? "已配置" : "未配置"],
                 [
                   "扣除范围",
                   `${config?.min_amount || 1} - ${config?.max_amount || 9999} 鱼排积分`,
                 ],
                 [
                   "兑换比例",
-                  `1 鱼排积分 = ${Number(config?.recharge_ratio || 1)} 本地积分`,
+                  `1 鱼排积分 = ${Number(config?.recharge_ratio || 1)} 星穹币`,
                 ],
               ]}
             />
@@ -4444,10 +4476,8 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
     load();
   }, [load]);
 
-  const defaultConfig =
-    data?.defaultConfig || data?.pools?.["0"];
-  const fallbackConfig =
-    data?.fallbackConfig || data?.defaults?.["0"];
+  const defaultConfig = data?.defaultConfig || data?.pools?.["0"];
+  const fallbackConfig = data?.fallbackConfig || data?.defaults?.["0"];
 
   return (
     <>
@@ -4467,7 +4497,7 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
                 <tr>
                   <th>配置</th>
                   <th>配置来源</th>
-                  <th>积分消耗</th>
+                  <th>星穹币消耗</th>
                   <th>概率合计</th>
                   <th>UP 状态</th>
                   <th>保底摘要</th>
@@ -4486,7 +4516,7 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
                   <td data-label="配置来源">
                     <Badge>{getGachaSourceText(defaultConfig)}</Badge>
                   </td>
-                  <td data-label="积分消耗">
+                  <td data-label="星穹币消耗">
                     <span className="cell-text">
                       单抽 {defaultConfig.drawCosts?.once ?? 10} / 十连{" "}
                       {defaultConfig.drawCosts?.ten ?? 100}
@@ -4496,8 +4526,9 @@ function ConfigPage({ options }: { options: AdminOptions | null }) {
                     <span
                       className={
                         Math.abs(
-                          getProbabilityTotal(defaultConfig.rarityProbabilities) -
-                            1,
+                          getProbabilityTotal(
+                            defaultConfig.rarityProbabilities,
+                          ) - 1,
                         ) < 0.0001
                           ? "config-ok"
                           : "config-warning"
@@ -4873,7 +4904,8 @@ function GachaConfigModal({
               </label>
               {inheritedPoolConfig ? (
                 <StateBox>
-                  当前卡池继承默认抽卡配置，启用单独配置后可编辑价格、概率、UP 和保底。
+                  当前卡池继承默认抽卡配置，启用单独配置后可编辑价格、概率、UP
+                  和保底。
                 </StateBox>
               ) : (
                 <div className="admin-form-grid no-padding">
@@ -4919,16 +4951,13 @@ function GachaConfigModal({
                 items={[
                   [
                     mode === "pool" ? "默认单抽" : "代码默认单抽",
-                    `${currentDefault.drawCosts?.once ?? 10} 积分`,
+                    `${currentDefault.drawCosts?.once ?? 10} 星穹币`,
                   ],
                   [
                     mode === "pool" ? "默认十连" : "代码默认十连",
-                    `${currentDefault.drawCosts?.ten ?? 100} 积分`,
+                    `${currentDefault.drawCosts?.ten ?? 100} 星穹币`,
                   ],
-                  [
-                    "当前配置来源",
-                    getGachaSourceText(config),
-                  ],
+                  ["当前配置来源", getGachaSourceText(config)],
                 ]}
               />
             </section>
@@ -4946,7 +4975,7 @@ function GachaConfigModal({
               <DescriptionList
                 items={[
                   [
-                    "积分消耗",
+                    "星穹币消耗",
                     `单抽 ${currentDefault.drawCosts?.once ?? 10}，十连 ${
                       currentDefault.drawCosts?.ten ?? 100
                     }`,
@@ -5301,7 +5330,7 @@ function GachaConfigModal({
                     getGachaSaveEffectText(mode, values.enabled !== false),
                   ],
                   [
-                    "积分消耗",
+                    "星穹币消耗",
                     `单抽 ${values.drawCosts?.once || 10}，十连 ${
                       values.drawCosts?.ten || 100
                     }`,
@@ -5545,7 +5574,7 @@ function getDropTypeLabel(type: number) {
 function getDropTypeUsage(type: number) {
   const usages: Record<number, string> = {
     0: "用于卡片合成和分解产出。创建卡片时可选择它作为分解产出碎片。",
-    1: "虚拟积分建议直接使用用户积分字段或兑换码奖励积分，不建议放入背包。",
+    1: "虚拟星穹币建议直接使用用户星穹币字段或兑换码奖励星穹币，不建议放入背包。",
     2: "可放入玩家背包，也可作为兑换码奖励发放。",
     3: "预留给后续玩法，请在说明里写清楚用途。",
   };
@@ -5947,7 +5976,7 @@ function formatRewards(rewards: RedeemRewards | undefined) {
   }
   const parts: string[] = [];
   if (Number(rewards.points || 0) > 0) {
-    parts.push(`积分 ${rewards.points}`);
+    parts.push(`星穹币 ${rewards.points}`);
   }
   const items = Array.isArray(rewards.items) ? rewards.items : [];
   if (items.length) {

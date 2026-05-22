@@ -32,7 +32,7 @@ export class ExchangeShopItem {
   @Column({ type: "json" })
   costs: ExchangeCostItem[];
 
-  // 兑换后发放的积分和背包物品
+  // 兑换后发放的星穹币和背包物品
   @Column({ type: "json" })
   rewards: RedeemRewards;
 

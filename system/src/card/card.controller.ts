@@ -19,6 +19,7 @@ import type { GachaResult, LeaderboardResponse } from "src/types/api";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { GetUser } from "src/auth/get-user.decorator";
 import {
+  IsArray,
   IsInt,
   IsIn,
   IsNotEmpty,
@@ -60,6 +61,12 @@ export class DecomposeCardDto {
   card_uuid: string;
 }
 
+export class BulkDecomposeDto {
+  @IsArray()
+  @IsIn(["N", "R", "SR", "SSR"], { each: true })
+  rarities: string[];
+}
+
 // 用户信息接口
 interface UserInfo {
   uid: string;
@@ -90,6 +97,13 @@ export class CardController {
       throw new Error(`${fieldName}参数无效`);
     }
     return parsed;
+  }
+
+  private parseRarityQuery(value?: string): string[] {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 
   /**
@@ -374,6 +388,54 @@ export class CardController {
       return ResponseDto.success(result.data, result.msg || "分解成功");
     } catch (error) {
       return ResponseDto.error(error.message || "分解失败");
+    }
+  }
+
+  /**
+   * 一键分解预览
+   * GET /card/decompose/bulk-preview?rarities=N,R
+   */
+  @Get("decompose/bulk-preview")
+  @UseGuards(JwtAuthGuard)
+  async previewBulkDecompose(
+    @Query("rarities") rarities: string | undefined,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      const result = await this.cardService.previewBulkDecompose(
+        user.uid,
+        this.parseRarityQuery(rarities),
+      );
+      return ResponseDto.success(result, "获取一键分解预览成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取一键分解预览失败");
+    }
+  }
+
+  /**
+   * 一键分解卡片
+   * POST /card/decompose/bulk
+   */
+  @Post("decompose/bulk")
+  @UseGuards(JwtAuthGuard)
+  async bulkDecomposeCards(
+    @Body() body: BulkDecomposeDto,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      const result = await this.cardService.bulkDecomposeCards(
+        user.uid,
+        body.rarities,
+      );
+      return ResponseDto.success(result, "一键分解成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "一键分解失败");
     }
   }
 }

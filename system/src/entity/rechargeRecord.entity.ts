@@ -30,11 +30,11 @@ export class RechargeRecord {
   @Column({ length: 80 })
   request_id: string;
 
-  // 充值到本地的抽卡积分
+  // 充值到本地的抽卡星穹币
   @Column()
   amount: number;
 
-  // 从鱼排扣除的积分，可能与 amount 按充值比例换算
+  // 从鱼排扣除的星穹币，可能与 amount 按充值比例换算
   @Column()
   fishpi_cost: number;
 

@@ -45,7 +45,7 @@ export interface GachaConfig {
   // 保底配置，只允许服务端生成
   pitySystem?: PitySystemConfig;
 
-  // 抽卡积分消耗，只允许服务端配置
+  // 抽卡星穹币消耗，只允许服务端配置
   drawCosts?: DrawCosts;
 
   // 后台展示用元信息
@@ -69,7 +69,7 @@ export interface GachaResult {
 // 用户抽卡统计
 export interface UserGachaStats {
   uid: string;
-  point: number; // 当前积分余额
+  point: number; // 当前星穹币余额
   totalDraws: number; // 总抽数
   cardCounts: {
     N: number;

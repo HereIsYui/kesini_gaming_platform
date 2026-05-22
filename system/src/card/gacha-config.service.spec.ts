@@ -124,7 +124,7 @@ describe("GachaConfigService", () => {
     );
   });
 
-  it("保存全局默认配置时允许 poolId 为 0 并写入默认抽卡积分消耗", async () => {
+  it("保存全局默认配置时允许 poolId 为 0 并写入默认抽卡星穹币消耗", async () => {
     const repository = createRepository();
     const service = createConfigService(repository);
 
@@ -140,7 +140,7 @@ describe("GachaConfigService", () => {
     );
   });
 
-  it("保存配置时拒绝非正整数抽卡积分消耗", async () => {
+  it("保存配置时拒绝非正整数抽卡星穹币消耗", async () => {
     const service = createConfigService(createRepository());
 
     await expect(
@@ -148,7 +148,7 @@ describe("GachaConfigService", () => {
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 0, ten: 100 },
       } as any),
-    ).rejects.toThrow("抽卡积分消耗必须为正整数");
+    ).rejects.toThrow("抽卡星穹币消耗必须为正整数");
   });
 
   it("保存配置时拒绝概率总和错误", async () => {

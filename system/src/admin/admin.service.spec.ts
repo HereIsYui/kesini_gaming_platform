@@ -771,10 +771,10 @@ describe("AdminService", () => {
     );
   });
 
-  it("兑换商店消耗不能选择虚拟积分物品", async () => {
+  it("兑换商店消耗不能选择虚拟星穹币物品", async () => {
     const dropRepository = createRepository({
       find: jest.fn().mockResolvedValue([
-        { id: 1, drop_name: "积分物品", drop_type: 1, disabled: false },
+        { id: 1, drop_name: "星穹币物品", drop_type: 1, disabled: false },
       ]),
     });
     const service = createService({ drop: dropRepository });
@@ -785,7 +785,7 @@ describe("AdminService", () => {
         costs: [{ itemId: 1, num: 1 }],
         rewards: { points: 10, items: [] },
       } as any),
-    ).rejects.toThrow("消耗物品不能选择虚拟积分");
+    ).rejects.toThrow("消耗物品不能选择虚拟星穹币");
   });
 
   it("删除兑换商店项会软删除并停用", async () => {

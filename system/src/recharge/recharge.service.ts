@@ -11,7 +11,11 @@ import { User } from "src/entity/user.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
-const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换本地积分 {amount}";
+const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
+const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
+const FISHPI_HEADERS = {
+  "User-Agent": "Kesini-Gacha-Platform/1.0",
+};
 
 export interface RechargeConfigView {
   enabled: boolean;
@@ -19,6 +23,7 @@ export interface RechargeConfigView {
   maxAmount: number;
   ratio: number;
   hasGoldFingerKey: boolean;
+  hasFishpiApiKey: boolean;
 }
 
 @Injectable()
@@ -37,18 +42,26 @@ export class RechargeService {
       maxAmount: Number(config.max_amount || 9999),
       ratio: this.getRechargeRatio(config),
       hasGoldFingerKey: Boolean(String(config.gold_finger_key || "").trim()),
+      hasFishpiApiKey: Boolean(String(config.fishpi_api_key || "").trim()),
     };
   }
 
   async recharge(uid: string, rawAmount: number, rawRequestId?: string) {
     const fishpiCost = this.normalizeAmount(rawAmount);
     const requestId = this.normalizeRequestId(rawRequestId);
+    const recordRepository = this.dataSource.getRepository(RechargeRecord);
+    const existing = await recordRepository.findOne({
+      where: { uid, request_id: requestId },
+    });
+    if (existing) {
+      return this.handleExistingRecord(existing);
+    }
+
     const config = await this.ensureConfig();
     this.assertRechargeAvailable(config, fishpiCost);
     const localAmount = this.calculateLocalAmount(fishpiCost, config);
 
     const userRepository = this.dataSource.getRepository(User);
-    const recordRepository = this.dataSource.getRepository(RechargeRecord);
     const user = await userRepository.findOne({ where: { uid } });
     if (!user) {
       throw new Error("用户不存在");
@@ -56,13 +69,6 @@ export class RechargeService {
     const fishpiUserName = String(user.name || "").trim();
     if (!fishpiUserName) {
       throw new Error("当前账号缺少鱼排用户名，无法充值");
-    }
-
-    const existing = await recordRepository.findOne({
-      where: { uid, request_id: requestId },
-    });
-    if (existing) {
-      return this.handleExistingRecord(existing);
     }
 
     const pending = await recordRepository.save(
@@ -82,12 +88,25 @@ export class RechargeService {
 
     let thirdPartyResponse: unknown;
     try {
-      thirdPartyResponse = await this.callFishpiDeduct(
+      const balanceResponse = await this.callFishpiUserInfo(
+        config,
+        fishpiUserName,
+      );
+      const userPoint = this.extractFishpiUserPoint(balanceResponse);
+      this.assertFishpiBalance(userPoint, fishpiCost);
+      const deductResponse = await this.callFishpiDeduct(
         config,
         fishpiUserName,
         fishpiCost,
         localAmount,
       );
+      thirdPartyResponse = {
+        balance: {
+          userName: fishpiUserName,
+          userPoint,
+        },
+        deduct: deductResponse,
+      };
     } catch (error) {
       await this.markRecord(pending.id, "failed", {
         third_party_response: this.getThirdPartyErrorResponse(error),
@@ -113,7 +132,7 @@ export class RechargeService {
           this.sanitizeThirdPartyResponse(thirdPartyResponse),
         failure_reason: this.getErrorMessage(error),
       });
-      throw new Error("鱼排积分已扣除，但本地积分入账失败，请联系管理员处理");
+      throw new Error("鱼排积分已扣除，但星穹币入账失败，请联系管理员处理");
     }
   }
 
@@ -127,6 +146,7 @@ export class RechargeService {
         id: 1,
         enabled: false,
         gold_finger_key: "",
+        fishpi_api_key: "",
         min_amount: 1,
         max_amount: 9999,
         recharge_ratio: 1,
@@ -138,6 +158,7 @@ export class RechargeService {
     config.max_amount = Number(config.max_amount || 9999);
     config.recharge_ratio = this.getRechargeRatio(config);
     config.memo_template = config.memo_template || DEFAULT_MEMO_TEMPLATE;
+    config.fishpi_api_key = config.fishpi_api_key || "";
     return config;
   }
 
@@ -182,7 +203,7 @@ export class RechargeService {
         {
           sourceType: "recharge",
           sourceId: record.request_id,
-          title: "积分充值",
+          title: "星穹币充值",
           metadata: {
             requestId: record.request_id,
             fishpiUserName: record.fishpi_user_name,
@@ -207,6 +228,37 @@ export class RechargeService {
     return recordRepository.save(record);
   }
 
+  private async callFishpiUserInfo(config: RechargeConfig, userName: string) {
+    const apiKey = String(config.fishpi_api_key || "").trim();
+    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(
+      userName,
+    )}?apiKey=${encodeURIComponent(apiKey)}`;
+    try {
+      const response = await axios.get(endpoint, {
+        timeout: 10000,
+        headers: FISHPI_HEADERS,
+      });
+      if (
+        response.data?.code !== undefined &&
+        !this.isFishpiSuccess(response.data)
+      ) {
+        throw new Error(
+          this.getFishpiErrorMessage(response.data, "鱼排积分查询失败"),
+        );
+      }
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = this.getFishpiErrorMessage(
+          error.response?.data,
+          "鱼排积分查询失败",
+        );
+        throw new Error(message || error.message || "鱼排积分查询失败");
+      }
+      throw error;
+    }
+  }
+
   private async callFishpiDeduct(
     config: RechargeConfig,
     userName: string,
@@ -224,7 +276,7 @@ export class RechargeService {
         timeout: 10000,
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "Kesini-Gacha-Platform/1.0",
+          ...FISHPI_HEADERS,
         },
       });
       if (!this.isFishpiSuccess(response.data)) {
@@ -247,6 +299,9 @@ export class RechargeService {
     if (!String(config.gold_finger_key || "").trim()) {
       throw new Error("后台未配置鱼排金手指密钥");
     }
+    if (!String(config.fishpi_api_key || "").trim()) {
+      throw new Error("后台未配置鱼排查询密钥");
+    }
     if (amount < Number(config.min_amount || 1)) {
       throw new Error(`充值金额不能小于${config.min_amount}`);
     }
@@ -263,11 +318,11 @@ export class RechargeService {
       return this.toRechargeResult(record);
     }
     if (record.status === "pending") {
-      throw new Error("该充值请求正在处理中，请稍后查看积分余额");
+      throw new Error("该充值请求正在处理中，请稍后查看星穹币余额");
     }
     if (record.status === "local_failed") {
       throw new Error(
-        "该充值请求已扣除鱼排积分但本地入账失败，请联系管理员处理",
+        "该充值请求已扣除鱼排积分但星穹币入账失败，请联系管理员处理",
       );
     }
     throw new Error(
@@ -297,7 +352,7 @@ export class RechargeService {
   private calculateLocalAmount(fishpiCost: number, config: RechargeConfig) {
     const localAmount = Math.floor(fishpiCost * this.getRechargeRatio(config));
     if (!Number.isInteger(localAmount) || localAmount < 1) {
-      throw new Error("当前充值比例下本地到账积分不能小于1");
+      throw new Error("当前充值比例下到账星穹币不能小于1");
     }
     return localAmount;
   }
@@ -318,18 +373,42 @@ export class RechargeService {
       .replace(/\{fishpiCost\}/g, String(fishpiCost));
   }
 
+  private extractFishpiUserPoint(data: any): number {
+    const payload = data?.data || data;
+    const rawPoint = payload?.userPoint;
+    const point = Number(rawPoint);
+    if (!Number.isFinite(point)) {
+      throw new Error("鱼排积分查询结果缺少 userPoint");
+    }
+    return point;
+  }
+
+  private assertFishpiBalance(userPoint: number, fishpiCost: number) {
+    if (userPoint < 0) {
+      throw new Error("鱼排积分为负数，无法充值");
+    }
+    if (userPoint < fishpiCost) {
+      throw new Error(
+        `鱼排积分不足，需要${fishpiCost}，当前${Math.floor(userPoint)}`,
+      );
+    }
+  }
+
   private isFishpiSuccess(data: any): boolean {
     return data?.code === 0 || data?.code === "0";
   }
 
-  private getFishpiErrorMessage(data: any): string {
+  private getFishpiErrorMessage(
+    data: any,
+    fallback = "鱼排积分扣除失败",
+  ): string {
     if (data?.msg) {
       return String(data.msg);
     }
     if (data?.message) {
       return String(data.message);
     }
-    return "鱼排积分扣除失败";
+    return fallback;
   }
 
   private getThirdPartyErrorResponse(error: unknown) {

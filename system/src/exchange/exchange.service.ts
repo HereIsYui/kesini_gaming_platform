@@ -250,7 +250,7 @@ export class ExchangeService {
     const value = (rewards || {}) as Partial<RedeemRewards>;
     const points = Number(value.points || 0);
     if (!Number.isFinite(points) || points < 0) {
-      throw new Error("奖励积分无效");
+      throw new Error("奖励星穹币无效");
     }
     const items = Array.isArray(value.items) ? value.items : [];
     const normalizedItems = items
@@ -364,7 +364,7 @@ export class ExchangeService {
         throw new Error(`${label}已禁用: ${item.drop_name}`);
       }
       if (item.drop_type === 1) {
-        throw new Error(`${label}不能选择虚拟积分: ${item.drop_name}`);
+        throw new Error(`${label}不能选择虚拟星穹币: ${item.drop_name}`);
       }
     });
     return itemMap;

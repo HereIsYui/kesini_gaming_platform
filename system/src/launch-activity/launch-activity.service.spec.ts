@@ -71,7 +71,7 @@ describe("LaunchActivityService", () => {
     await expect(service.claim("u1")).rejects.toThrow("开服福利已结束");
   });
 
-  it("领取成功会发放积分、物品并写入领取记录", async () => {
+  it("领取成功会发放星穹币、物品并写入领取记录", async () => {
     const user = { id: 5, uid: "u1", point: 10 };
     const configRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(createConfig()),

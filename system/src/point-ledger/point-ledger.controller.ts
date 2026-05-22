@@ -61,10 +61,10 @@ export class PointLedgerController {
     try {
       return ResponseDto.success(
         await this.pointLedgerService.listUserRecords(user.uid, query),
-        "获取积分流水成功",
+        "获取星穹币流水成功",
       );
     } catch (error) {
-      return ResponseDto.error(error.message || "获取积分流水失败");
+      return ResponseDto.error(error.message || "获取星穹币流水失败");
     }
   }
 }

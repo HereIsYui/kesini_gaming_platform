@@ -33,6 +33,7 @@ import {
 import type {
   CardItem,
   CardRarity,
+  BulkDecomposeResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
   GachaResult,
@@ -73,7 +74,7 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "synthesize", label: "合成", icon: WandSparkles },
-  { key: "points", label: "积分", icon: Coins },
+  { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
@@ -153,6 +154,14 @@ const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
 const synthesisRarityFilter = ref<CardRarity | "">("");
+const bulkDecomposeRarities = reactive<Record<CardRarity, boolean>>({
+  N: true,
+  R: true,
+  SR: false,
+  SSR: false,
+  UR: false,
+});
+const bulkDecomposePreview = ref<BulkDecomposeResponse | null>(null);
 const cardPage = ref(1);
 const tradePage = ref(1);
 const myTradePage = ref(1);
@@ -185,6 +194,8 @@ const busy = reactive({
   redeem: false,
   trade: false,
   recharge: false,
+  bulkDecompose: false,
+  bulkDecomposePreview: false,
   launchActivity: false,
 });
 
@@ -260,7 +271,7 @@ const rechargeRangeLabel = computed(() => {
 });
 const rechargeRatioLabel = computed(() => {
   const ratio = Number(rechargeConfig.value?.ratio || 1);
-  return `1 鱼排积分 = ${ratio} 本地抽卡积分`;
+  return `1 鱼排积分 = ${ratio} 星穹币`;
 });
 const rechargeLocalAmount = computed(() => {
   const amount = Number(rechargeAmount.value || 0);
@@ -330,7 +341,7 @@ const pointSourceOptions = [
   { value: "", label: "全部来源" },
   { value: "draw_once", label: "单抽消耗" },
   { value: "draw_ten", label: "十连消耗" },
-  { value: "recharge", label: "积分充值" },
+  { value: "recharge", label: "星穹币充值" },
   { value: "redeem_code", label: "兑换码奖励" },
   { value: "launch_activity", label: "开服福利" },
   { value: "exchange_shop", label: "兑换商店" },
@@ -338,6 +349,19 @@ const pointSourceOptions = [
   { value: "trade_sell", label: "交易出售" },
 ] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
+const bulkDecomposeSelectedRarities = computed(() =>
+  rarityOrder.filter(
+    (rarity) => rarity !== "UR" && bulkDecomposeRarities[rarity],
+  ),
+);
+const bulkDecomposeSelectedLabel = computed(() =>
+  bulkDecomposeSelectedRarities.value.length > 0
+    ? bulkDecomposeSelectedRarities.value.join(" / ")
+    : "未选择",
+);
+const bulkDecomposePreviewTotal = computed(
+  () => bulkDecomposePreview.value?.total || 0,
+);
 const tradeTotalPages = ref(1);
 const myTradeTotalPages = ref(1);
 const tradeRecordTotalPages = ref(1);
@@ -819,6 +843,10 @@ function openRechargeModal() {
     notify("error", "后台尚未配置充值密钥");
     return;
   }
+  if (!rechargeConfig.value.hasFishpiApiKey) {
+    notify("error", "后台尚未配置鱼排查询密钥");
+    return;
+  }
   rechargeAmount.value = Math.max(
     rechargeConfig.value.minAmount || 1,
     Math.min(
@@ -914,7 +942,7 @@ async function submitRecharge() {
     });
     notify(
       "success",
-      `充值成功：扣除鱼排积分 ${data.fishpiCost}，本地积分 ${data.pointBefore} → ${data.pointAfter}`,
+      `充值成功：扣除鱼排积分 ${data.fishpiCost}，星穹币 ${data.pointBefore} → ${data.pointAfter}`,
     );
     rechargeModalOpen.value = false;
     await loadPrivateData();
@@ -1022,6 +1050,92 @@ async function decomposeCard(card: { uuid: string; cardName: string }) {
   }
 }
 
+function toggleBulkDecomposeRarity(rarity: CardRarity) {
+  if (rarity === "UR") {
+    return;
+  }
+  bulkDecomposeRarities[rarity] = !bulkDecomposeRarities[rarity];
+  void loadBulkDecomposePreview();
+}
+
+async function loadBulkDecomposePreview() {
+  if (!isAuthed.value || bulkDecomposeSelectedRarities.value.length === 0) {
+    bulkDecomposePreview.value = null;
+    return null;
+  }
+  busy.bulkDecomposePreview = true;
+  try {
+    const data = await request<BulkDecomposeResponse>(
+      `/card/decompose/bulk-preview${toQuery({
+        rarities: bulkDecomposeSelectedRarities.value.join(","),
+      })}`,
+    );
+    bulkDecomposePreview.value = data;
+    return data;
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+    return null;
+  } finally {
+    busy.bulkDecomposePreview = false;
+  }
+}
+
+async function bulkDecomposeCards() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再分解卡片");
+    return;
+  }
+  const selectedRarities = [...bulkDecomposeSelectedRarities.value];
+  if (selectedRarities.length === 0) {
+    notify("error", "请至少选择一个可分解等级");
+    return;
+  }
+
+  const preview =
+    (await loadBulkDecomposePreview()) || bulkDecomposePreview.value;
+  if (!preview || preview.total <= 0) {
+    notify("info", "当前没有符合条件的可分解卡片");
+    return;
+  }
+  const detail = rarityOrder
+    .filter((rarity) => Number(preview.countsByRarity?.[rarity] || 0) > 0)
+    .map((rarity) => `${rarity} ${preview.countsByRarity?.[rarity] || 0} 张`)
+    .join("、");
+  const skippedText =
+    preview.skippedListed > 0
+      ? `；${preview.skippedListed} 张挂售中卡片会跳过`
+      : "";
+  if (
+    !window.confirm(
+      `确认一键分解 ${preview.total} 张卡片（${detail}）${skippedText}？`,
+    )
+  ) {
+    return;
+  }
+
+  busy.assets = true;
+  busy.bulkDecompose = true;
+  try {
+    const data = await request<BulkDecomposeResponse>("/card/decompose/bulk", {
+      method: "POST",
+      body: JSON.stringify({ rarities: selectedRarities }),
+    });
+    notify(
+      "success",
+      `一键分解完成：${data.decomposed || 0} 张，获得 ${formatFragmentSummary(
+        data.fragments,
+      )}`,
+    );
+    await loadPrivateData();
+    await loadBulkDecomposePreview();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.assets = false;
+    busy.bulkDecompose = false;
+  }
+}
+
 function openTradeListingModal(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
     notify("error", "请先登录后再挂售卡片");
@@ -1095,7 +1209,7 @@ async function buyTradeListing(listing: TradeListing) {
   }
   if (
     !window.confirm(
-      `确认花费 ${listing.price} 积分购买「${listing.cardName}」${listing.cardLevel} 吗？`,
+      `确认花费 ${listing.price} 星穹币购买「${listing.cardName}」${listing.cardLevel} 吗？`,
     )
   ) {
     return;
@@ -1282,7 +1396,7 @@ function cardTypeLabel(type?: number) {
 
 function itemTypeLabel(type?: number) {
   return (
-    ["卡片碎片", "虚拟积分", "普通道具", "其他"][Number(type || 0)] || "物品"
+    ["卡片碎片", "虚拟星穹币", "普通道具", "其他"][Number(type || 0)] || "物品"
   );
 }
 
@@ -1324,12 +1438,23 @@ function formatRewards(rewards?: {
   }
   const parts = [];
   if (Number(rewards.points || 0) > 0) {
-    parts.push(`${rewards.points} 积分`);
+    parts.push(`${rewards.points} 星穹币`);
   }
   rewards.items?.forEach((item) => {
     parts.push(`${item.itemName || `物品 ${item.itemId}`} x${item.num}`);
   });
   return parts.length > 0 ? parts.join("，") : "无奖励";
+}
+
+function formatFragmentSummary(
+  fragments?: Array<{ itemName?: string; itemId: number; count: number }>,
+) {
+  if (!fragments || fragments.length === 0) {
+    return "无碎片";
+  }
+  return fragments
+    .map((item) => `${item.itemName || `物品 ${item.itemId}`} x${item.count}`)
+    .join("，");
 }
 
 function formatCosts(
@@ -1440,8 +1565,7 @@ function leaderboardRankLabel(rank?: number) {
 
           <p class="pool-desc">
             {{
-              selectedPool?.card_desc ||
-              "选择喜欢的卡池，准备开启本次抽取。"
+              selectedPool?.card_desc || "选择喜欢的卡池，准备开启本次抽取。"
             }}
           </p>
 
@@ -1457,7 +1581,7 @@ function leaderboardRankLabel(rank?: number) {
               <span>{{ pool.pool_name }}</span>
               <small>
                 {{ poolTypeLabel(pool.card_type) }} · 单抽消耗
-                {{ pool.drawCosts?.once || 10 }} 积分
+                {{ pool.drawCosts?.once || 10 }} 星穹币
               </small>
             </button>
             <div v-if="!busy.public && pools.length === 0" class="empty-inline">
@@ -1485,18 +1609,18 @@ function leaderboardRankLabel(rank?: number) {
             <div class="draw-actions">
               <div class="cost-board">
                 <div>
-                  <span>积分余额</span>
+                  <span>星穹币余额</span>
                   <strong>{{
                     isAuthed ? (stats?.point ?? 0) : "未登录"
                   }}</strong>
                 </div>
                 <div>
                   <span>单抽</span>
-                  <strong>{{ selectedDrawCosts.once }} 积分</strong>
+                  <strong>{{ selectedDrawCosts.once }} 星穹币</strong>
                 </div>
                 <div>
                   <span>十连</span>
-                  <strong>{{ selectedDrawCosts.ten }} 积分</strong>
+                  <strong>{{ selectedDrawCosts.ten }} 星穹币</strong>
                 </div>
               </div>
               <button
@@ -1506,7 +1630,7 @@ function leaderboardRankLabel(rank?: number) {
                 @click="performDraw('once')"
               >
                 <Sparkles :size="18" />
-                单抽 · {{ selectedDrawCosts.once }} 积分
+                单抽 · {{ selectedDrawCosts.once }} 星穹币
               </button>
               <button
                 class="primary-action golden"
@@ -1515,7 +1639,7 @@ function leaderboardRankLabel(rank?: number) {
                 @click="performDraw('ten')"
               >
                 <Ticket :size="18" />
-                十连 · {{ selectedDrawCosts.ten }} 积分
+                十连 · {{ selectedDrawCosts.ten }} 星穹币
               </button>
               <button
                 class="secondary-action wide"
@@ -1564,7 +1688,7 @@ function leaderboardRankLabel(rank?: number) {
 
           <div v-if="isAuthed" class="point-card">
             <div class="point-card-head">
-              <span>积分余额</span>
+              <span>星穹币余额</span>
               <button
                 class="recharge-trigger"
                 type="button"
@@ -1625,7 +1749,7 @@ function leaderboardRankLabel(rank?: number) {
             </div>
             <div>
               <span>资产状态</span>
-              <strong>已同步当前积分、背包与收藏</strong>
+              <strong>已同步当前星穹币、背包与收藏</strong>
             </div>
           </div>
 
@@ -1710,6 +1834,78 @@ function leaderboardRankLabel(rank?: number) {
               >
                 重置
               </button>
+              <div
+                class="bulk-decompose-control"
+                @mouseenter="loadBulkDecomposePreview"
+                @focusin="loadBulkDecomposePreview"
+              >
+                <button
+                  class="danger-action bulk-decompose-trigger"
+                  type="button"
+                  :disabled="
+                    busy.assets ||
+                    !isAuthed ||
+                    bulkDecomposeSelectedRarities.length === 0
+                  "
+                  @click="bulkDecomposeCards"
+                >
+                  <LoaderCircle
+                    v-if="busy.bulkDecompose"
+                    :size="16"
+                    class="spin"
+                  />
+                  <Package v-else :size="16" />
+                  一键分解
+                </button>
+                <div
+                  class="bulk-decompose-popover"
+                  role="group"
+                  aria-label="一键分解等级选择"
+                >
+                  <div class="bulk-popover-head">
+                    <strong>分解等级</strong>
+                    <small>{{ bulkDecomposeSelectedLabel }}</small>
+                  </div>
+                  <div class="bulk-switch-list">
+                    <div
+                      v-for="rarity in rarityOrder"
+                      :key="rarity"
+                      class="bulk-switch-row"
+                      :class="{ disabled: rarity === 'UR' }"
+                    >
+                      <span>{{ rarity }}</span>
+                      <button
+                        class="switch-toggle"
+                        type="button"
+                        role="switch"
+                        :aria-label="`一键分解 ${rarity}`"
+                        :aria-checked="bulkDecomposeRarities[rarity]"
+                        :disabled="rarity === 'UR' || busy.bulkDecompose"
+                        @click="toggleBulkDecomposeRarity(rarity)"
+                      >
+                        <i></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="bulk-preview-line">
+                    <span>可分解</span>
+                    <strong>
+                      {{
+                        busy.bulkDecomposePreview
+                          ? "同步中"
+                          : `${bulkDecomposePreviewTotal} 张`
+                      }}
+                    </strong>
+                  </div>
+                  <div
+                    v-if="bulkDecomposePreview?.skippedListed"
+                    class="bulk-preview-line muted"
+                  >
+                    <span>挂售跳过</span>
+                    <strong>{{ bulkDecomposePreview.skippedListed }} 张</strong>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1754,7 +1950,7 @@ function leaderboardRankLabel(rank?: number) {
                     }}</span>
                     <span>{{ formatDate(card.obtainedAt) }}</span>
                     <span v-if="card.isListed"
-                      >交易中 · {{ card.tradePrice }}积分</span
+                      >交易中 · {{ card.tradePrice }}星穹币</span
                     >
                   </div>
                 </div>
@@ -1934,8 +2130,8 @@ function leaderboardRankLabel(rank?: number) {
       >
         <div class="section-head">
           <div>
-            <p class="eyebrow">积分流水</p>
-            <h2>积分变化记录</h2>
+            <p class="eyebrow">星穹币流水</p>
+            <h2>星穹币变化记录</h2>
           </div>
           <button
             class="secondary-action"
@@ -1950,7 +2146,7 @@ function leaderboardRankLabel(rank?: number) {
 
         <div v-if="!isAuthed" class="empty-state">
           <Coins :size="30" />
-          <strong>登录后查看积分流水</strong>
+          <strong>登录后查看星穹币流水</strong>
           <span>抽卡、充值、交易和活动奖励都会在这里记录。</span>
         </div>
         <div v-else class="points-content">
@@ -2012,8 +2208,8 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <div v-else-if="pointLedgerRows.length === 0" class="empty-state">
             <Coins :size="30" />
-            <strong>暂无积分流水</strong>
-            <span>新的积分收入和支出会从现在开始记录。</span>
+            <strong>暂无星穹币流水</strong>
+            <span>新的星穹币收入和支出会从现在开始记录。</span>
           </div>
           <div v-else class="point-ledger-list">
             <article
@@ -2107,7 +2303,7 @@ function leaderboardRankLabel(rank?: number) {
               >
             </article>
             <article>
-              <small>我的积分</small>
+              <small>我的星穹币</small>
               <strong>{{ stats?.point || 0 }}</strong>
             </article>
           </div>
@@ -2227,7 +2423,7 @@ function leaderboardRankLabel(rank?: number) {
                   <dl>
                     <div>
                       <dt>价格</dt>
-                      <dd>{{ listing.price }} 积分</dd>
+                      <dd>{{ listing.price }} 星穹币</dd>
                     </div>
                     <div>
                       <dt>卖家</dt>
@@ -2289,7 +2485,7 @@ function leaderboardRankLabel(rank?: number) {
                     {{ listing.poolName || "未知卡池" }}</span
                   >
                 </div>
-                <b>{{ listing.price }} 积分</b>
+                <b>{{ listing.price }} 星穹币</b>
                 <span>{{ tradeStatusLabel(listing.status) }}</span>
                 <button
                   class="secondary-action"
@@ -2338,7 +2534,7 @@ function leaderboardRankLabel(rank?: number) {
                     {{ record.poolName || "未知卡池" }}</span
                   >
                 </div>
-                <b>{{ record.price }} 积分</b>
+                <b>{{ record.price }} 星穹币</b>
                 <span v-if="record.role === 'seller'"
                   >实收 {{ record.sellerIncome }}，手续费
                   {{ record.feeAmount }}</span
@@ -2710,12 +2906,10 @@ function leaderboardRankLabel(rank?: number) {
                   )
                 }}
                 · 单抽消耗
-                {{
-                  poolDetailPool?.drawCosts?.once || selectedDrawCosts.once
-                }}
-                积分 · 十连消耗
+                {{ poolDetailPool?.drawCosts?.once || selectedDrawCosts.once }}
+                星穹币 · 十连消耗
                 {{ poolDetailPool?.drawCosts?.ten || selectedDrawCosts.ten }}
-                积分
+                星穹币
               </span>
             </div>
             <button class="modal-close" type="button" @click="closePoolDetail">
@@ -2857,13 +3051,13 @@ function leaderboardRankLabel(rank?: number) {
             <div class="launch-reward-card">
               <span>本次奖励</span>
               <strong>{{ formatRewards(launchActivityInfo.rewards) }}</strong>
-              <small>领取后会立即刷新积分和背包库存。</small>
+              <small>领取后会立即刷新星穹币和背包库存。</small>
             </div>
             <div class="launch-reward-grid">
               <article
                 v-if="Number(launchActivityInfo.rewards.points || 0) > 0"
               >
-                <span>积分</span>
+                <span>星穹币</span>
                 <strong>{{ launchActivityInfo.rewards.points }}</strong>
               </article>
               <article
@@ -2914,12 +3108,12 @@ function leaderboardRankLabel(rank?: number) {
           class="trade-listing-modal recharge-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="积分充值"
+          aria-label="星穹币充值"
         >
           <header class="result-modal-head">
             <div>
-              <p class="eyebrow">积分充值</p>
-              <h2>扣鱼排积分换本地积分</h2>
+              <p class="eyebrow">星穹币充值</p>
+              <h2>扣鱼排积分换星穹币</h2>
               <span>{{ rechargeRatioLabel }}</span>
             </div>
             <button
@@ -2954,13 +3148,13 @@ function leaderboardRankLabel(rank?: number) {
                 <dd>{{ rechargeAmount || 0 }}</dd>
               </div>
               <div>
-                <dt>本地到账积分</dt>
+                <dt>到账星穹币</dt>
                 <dd>{{ rechargeLocalAmount }}</dd>
               </div>
               <div>
                 <dt>说明</dt>
                 <dd>
-                  充值成功后会刷新积分余额；重复提交同一请求不会重复入账。
+                  充值成功后会刷新星穹币余额；重复提交同一请求不会重复入账。
                 </dd>
               </div>
             </dl>
@@ -3028,7 +3222,7 @@ function leaderboardRankLabel(rank?: number) {
                 :min="tradeConfig.minPrice"
                 :max="tradeConfig.maxPrice"
                 step="1"
-                placeholder="输入积分价格"
+                placeholder="输入星穹币价格"
               />
             </label>
             <dl>
@@ -3040,12 +3234,12 @@ function leaderboardRankLabel(rank?: number) {
                 <dt>手续费</dt>
                 <dd>
                   {{ formatPercent(tradeConfig.feeRate) }} · 预计
-                  {{ listingFeePreview.feeAmount }} 积分
+                  {{ listingFeePreview.feeAmount }} 星穹币
                 </dd>
               </div>
               <div>
                 <dt>预计实收</dt>
-                <dd>{{ listingFeePreview.sellerIncome }} 积分</dd>
+                <dd>{{ listingFeePreview.sellerIncome }} 星穹币</dd>
               </div>
               <div>
                 <dt>交易说明</dt>

@@ -13,7 +13,7 @@ function createRepository(overrides: Record<string, any> = {}) {
 }
 
 describe("PointLedgerService", () => {
-  it("积分变动会同步更新用户余额并写入流水", async () => {
+  it("星穹币变动会同步更新用户余额并写入流水", async () => {
     const user = { uid: "u1", point: 20 } as User;
     const userRepository = createRepository();
     const ledgerRepository = createRepository({
@@ -31,7 +31,7 @@ describe("PointLedgerService", () => {
       service.applyChange(manager as any, user, 30, {
         sourceType: "recharge",
         sourceId: "r1",
-        title: "积分充值",
+        title: "星穹币充值",
         metadata: { requestId: "r1" },
       }),
     ).resolves.toEqual(
@@ -72,7 +72,7 @@ describe("PointLedgerService", () => {
         sourceId: 1,
         title: "单抽",
       }),
-    ).rejects.toThrow("积分不足");
+    ).rejects.toThrow("星穹币不足");
     expect(userRepository.save).not.toHaveBeenCalled();
     expect(ledgerRepository.save).not.toHaveBeenCalled();
   });

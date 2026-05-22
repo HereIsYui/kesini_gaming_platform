@@ -18,6 +18,7 @@ import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { TradeListing } from "src/entity/tradeListing.entity";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -634,12 +635,10 @@ describe("CardService 排行榜", () => {
     expect(result.rankings.completedPools.me).toEqual(
       expect.objectContaining({ uid: "c", value: 1 }),
     );
-    expect(result.rankings.completedPools.list).toEqual(
-      [
-        expect.objectContaining({ uid: "a", value: 1 }),
-        expect.objectContaining({ uid: "c", value: 1 }),
-      ],
-    );
+    expect(result.rankings.completedPools.list).toEqual([
+      expect.objectContaining({ uid: "a", value: 1 }),
+      expect.objectContaining({ uid: "c", value: 1 }),
+    ]);
   });
 
   it("数量为 0 的用户不会出现在榜单和我的排名中", async () => {
@@ -854,7 +853,192 @@ describe("CardService 碎片合成", () => {
   });
 });
 
-describe("CardService 抽卡积分扣除", () => {
+describe("CardService 一键分解", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createBulkDecomposeService(
+    overrides: {
+      userCards?: Partial<UserCard>[];
+      activeListings?: Partial<TradeListing>[];
+    } = {},
+  ) {
+    const cards = [
+      { id: 1, card_name: "N卡", card_level: "N", drop_item: "" },
+      { id: 2, card_name: "R卡", card_level: "R", drop_item: "" },
+      { id: 3, card_name: "SR卡", card_level: "SR", drop_item: "" },
+      { id: 4, card_name: "UR卡", card_level: "UR", drop_item: "" },
+    ] as CardItem[];
+    const userCards = (overrides.userCards || [
+      {
+        id: 1,
+        uid: "u1",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "n-card",
+        delete_flag: false,
+      },
+      {
+        id: 2,
+        uid: "u1",
+        card_id: "2",
+        card_level: "R",
+        card_uuid: "r-card",
+        delete_flag: false,
+      },
+      {
+        id: 3,
+        uid: "u1",
+        card_id: "3",
+        card_level: "SR",
+        card_uuid: "sr-listed",
+        delete_flag: false,
+      },
+      {
+        id: 4,
+        uid: "u1",
+        card_id: "4",
+        card_level: "UR",
+        card_uuid: "ur-card",
+        delete_flag: false,
+      },
+    ]) as UserCard[];
+    const activeListings = (overrides.activeListings || [
+      { id: 1, card_uuid: "sr-listed", status: "active" },
+    ]) as TradeListing[];
+    const fragment = {
+      id: 5,
+      drop_name: "通用碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    } as DropItem;
+    const inventory = {
+      id: 1,
+      user_id: 1,
+      item_id: 5,
+      num: 10,
+    } as UserInventory;
+    const cardRepository = createRepository({
+      find: jest.fn(async () => cards),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
+    });
+    const userCardRepository = createRepository({
+      find: jest.fn(async () =>
+        userCards.filter((card) => card.uid === "u1" && !card.delete_flag),
+      ),
+    });
+    const tradeListingRepository = createRepository({
+      find: jest.fn(async () => activeListings),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? fragment : null,
+      ),
+    });
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(inventory),
+    });
+    const repositories = new Map<any, any>([
+      [CardItem, cardRepository],
+      [User, userRepository],
+      [UserCard, userCardRepository],
+      [TradeListing, tradeListingRepository],
+      [DropItem, dropRepository],
+      [UserInventory, inventoryRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const service = new CardService(
+      cardRepository as any,
+      createRepository() as any,
+      userRepository as any,
+      userCardRepository as any,
+      createRepository() as any,
+      dropRepository as any,
+      inventoryRepository as any,
+      createRepository() as any,
+      {} as any,
+      dataSource as any,
+    );
+
+    return {
+      service,
+      inventory,
+      inventoryRepository,
+      userCardRepository,
+    };
+  }
+
+  it("一键分解预览会统计可分解数量并排除挂售卡", async () => {
+    const { service } = createBulkDecomposeService();
+
+    const result = await service.previewBulkDecompose("u1", ["N", "R", "SR"]);
+
+    expect(result.total).toBe(2);
+    expect(result.skippedListed).toBe(1);
+    expect(result.countsByRarity).toEqual(
+      expect.objectContaining({ N: 1, R: 1, SR: 0 }),
+    );
+  });
+
+  it("一键分解会批量删除卡片并聚合碎片入账", async () => {
+    const { service, inventory, inventoryRepository, userCardRepository } =
+      createBulkDecomposeService();
+
+    const result = await service.bulkDecomposeCards("u1", ["N", "R"]);
+
+    expect(result.decomposed).toBe(2);
+    expect(result.fragments).toHaveLength(1);
+    expect(result.fragments[0]).toEqual(
+      expect.objectContaining({ itemId: 5, itemName: "通用碎片" }),
+    );
+    expect(result.fragments[0].count).toBeGreaterThanOrEqual(11);
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ card_uuid: "n-card", delete_flag: true }),
+        expect.objectContaining({ card_uuid: "r-card", delete_flag: true }),
+      ]),
+    );
+    expect(inventoryRepository.save).toHaveBeenCalledTimes(1);
+    expect(inventory.num).toBe(10 + result.fragments[0].count);
+  });
+
+  it("一键分解拒绝选择 UR", async () => {
+    const { service } = createBulkDecomposeService();
+
+    await expect(service.bulkDecomposeCards("u1", ["UR"])).rejects.toThrow(
+      "UR卡片不可以一键分解",
+    );
+  });
+
+  it("没有可分解卡片时返回 0 且不写入库存", async () => {
+    const { service, inventoryRepository } = createBulkDecomposeService();
+
+    const result = await service.bulkDecomposeCards("u1", ["SSR"]);
+
+    expect(result.decomposed).toBe(0);
+    expect(result.fragments).toEqual([]);
+    expect(inventoryRepository.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("CardService 抽卡星穹币扣除", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {
       create: jest.fn((value) => value),
@@ -962,7 +1146,7 @@ describe("CardService 抽卡积分扣除", () => {
     };
   }
 
-  it("单抽成功会在同一事务内扣除单抽积分", async () => {
+  it("单抽成功会在同一事务内扣除单抽星穹币", async () => {
     const { service, userRepository, userCardRepository } = createDrawService({
       point: 10,
     });
@@ -982,7 +1166,7 @@ describe("CardService 抽卡积分扣除", () => {
     );
   });
 
-  it("抽卡扣积分时会写入积分流水", async () => {
+  it("抽卡扣星穹币时会写入星穹币流水", async () => {
     const pointLedgerService = {
       applyChange: jest.fn(async (_manager, user, amount, context) => {
         const pointBefore = user.point || 0;
@@ -1014,7 +1198,7 @@ describe("CardService 抽卡积分扣除", () => {
     );
   });
 
-  it("十连成功会扣除十连积分", async () => {
+  it("十连成功会扣除十连星穹币", async () => {
     const { service, userRepository, userCardRepository } = createDrawService({
       point: 100,
     });
@@ -1030,12 +1214,12 @@ describe("CardService 抽卡积分扣除", () => {
     );
   });
 
-  it("积分不足时不会发卡、写历史或保存保底", async () => {
+  it("星穹币不足时不会发卡、写历史或保存保底", async () => {
     const { service, userCardRepository, historyRepository, pityRepository } =
       createDrawService({ point: 9 });
 
     await expect(service.drawOnce("u1", 1)).rejects.toThrow(
-      "积分不足，需要10，当前9",
+      "星穹币不足，需要10，当前9",
     );
     expect(userCardRepository.save).not.toHaveBeenCalled();
     expect(historyRepository.save).not.toHaveBeenCalled();

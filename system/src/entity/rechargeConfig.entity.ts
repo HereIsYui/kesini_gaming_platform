@@ -19,20 +19,24 @@ export class RechargeConfig {
   @Column({ length: 255, default: "" })
   gold_finger_key: string;
 
-  // 单次最小充值积分
+  // 鱼排开放 API Key，用于充值前查询用户鱼排积分
+  @Column({ length: 255, default: "" })
+  fishpi_api_key: string;
+
+  // 单次最小充值星穹币
   @Column({ default: 1 })
   min_amount: number;
 
-  // 单次最大充值积分
+  // 单次最大充值星穹币
   @Column({ default: 9999 })
   max_amount: number;
 
-  // 兑换比例：1 鱼排积分可兑换多少本地抽卡积分
+  // 兑换比例：1 鱼排积分可兑换多少星穹币
   @Column({ type: "decimal", precision: 10, scale: 4, default: 1 })
   recharge_ratio: number;
 
   // 提交给鱼排接口的备注模板，支持 {amount} 占位
-  @Column({ length: 255, default: "抽卡平台充值，兑换本地积分 {amount}" })
+  @Column({ length: 255, default: "抽卡平台充值，兑换星穹币 {amount}" })
   memo_template: string;
 
   @CreateDateColumn()
