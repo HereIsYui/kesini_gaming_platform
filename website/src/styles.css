@@ -980,22 +980,6 @@ h3 {
   white-space: nowrap;
 }
 
-.connection-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.045);
-  padding: 12px;
-}
-
-.connection-card.compact {
-  padding: 10px;
-}
-
-.connection-card.compact input {
-  min-height: 40px;
-}
-
-.connection-card label,
 .token-box,
 .redeem-input {
   display: grid;

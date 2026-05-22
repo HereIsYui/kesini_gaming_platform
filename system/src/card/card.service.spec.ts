@@ -635,14 +635,14 @@ describe("CardService 排行榜", () => {
       expect.objectContaining({ uid: "c", value: 1 }),
     );
     expect(result.rankings.completedPools.list).toEqual(
-      expect.arrayContaining([
+      [
         expect.objectContaining({ uid: "a", value: 1 }),
-        expect.objectContaining({ uid: "b", value: 0 }),
-      ]),
+        expect.objectContaining({ uid: "c", value: 1 }),
+      ],
     );
   });
 
-  it("当前用户不在榜单截断范围内时仍返回真实排名", async () => {
+  it("数量为 0 的用户不会出现在榜单和我的排名中", async () => {
     const { service } = createLeaderboardService();
 
     const result = await service.getLeaderboard("d", 2);
@@ -651,9 +651,7 @@ describe("CardService 排行榜", () => {
       "a",
       "c",
     ]);
-    expect(result.rankings.totalCards.me).toEqual(
-      expect.objectContaining({ uid: "d", rank: 4, value: 0 }),
-    );
+    expect(result.rankings.totalCards.me).toBeNull();
   });
 
   it("limit 超过 100 时会按 100 截断", async () => {
@@ -666,15 +664,21 @@ describe("CardService 排行榜", () => {
     }));
     const { service } = createLeaderboardService({
       users,
-      cards: [],
-      userCards: [],
+      cards: [{ id: 1, card_name: "N卡", card_level: "N", pool: 1 }],
+      userCards: users.map((user, index) => ({
+        id: index + 1,
+        uid: user.uid,
+        card_id: "1",
+        card_level: "N",
+        delete_flag: false,
+      })),
     });
 
     const result = await service.getLeaderboard("u119", 150);
 
     expect(result.rankings.totalCards.list).toHaveLength(100);
     expect(result.rankings.totalCards.me).toEqual(
-      expect.objectContaining({ uid: "u119", value: 0 }),
+      expect.objectContaining({ uid: "u119", value: 1 }),
     );
   });
 });

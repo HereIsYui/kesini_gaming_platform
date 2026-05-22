@@ -1152,7 +1152,7 @@ function LoginPage({
               <Input
                 value={apiBase}
                 onChange={(event) => setApiBaseState(event.target.value)}
-                placeholder="http://localhost:7001"
+                placeholder="https://api.example.com"
               />
             </Form.Item>
             <Button

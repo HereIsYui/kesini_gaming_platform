@@ -23,11 +23,9 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import {
   clearToken,
-  getApiBase,
   getStoredUser,
   getToken,
   request,
-  setApiBase,
   setStoredUser,
   setToken,
   toQuery,
@@ -115,7 +113,6 @@ type SynthesisCard = {
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 
-const apiBase = ref(getApiBase());
 const route = useRoute();
 const manualToken = ref("");
 const token = ref(getToken());
@@ -446,11 +443,6 @@ function createRechargeRequestId() {
   return `website-${random}`;
 }
 
-function saveApiBase() {
-  setApiBase(apiBase.value);
-  notify("success", "API 地址已保存");
-}
-
 async function handleOpenIdCallback() {
   const params = new URLSearchParams(window.location.search);
   if (!params.has("openid.mode")) {
@@ -487,7 +479,6 @@ async function handleOpenIdCallback() {
 async function loginWithOpenId() {
   busy.auth = true;
   try {
-    saveApiBase();
     const oauthOrigin = window.location.origin;
     const returnToUrl = new URL(window.location.pathname, oauthOrigin);
     const data = await request<LoginUrlResponse>(
@@ -1450,7 +1441,7 @@ function leaderboardRankLabel(rank?: number) {
           <p class="pool-desc">
             {{
               selectedPool?.card_desc ||
-              "选择一个卡池后即可开始抽取，所有概率与保底均由服务端控制。"
+              "选择喜欢的卡池，准备开启本次抽取。"
             }}
           </p>
 
@@ -1633,21 +1624,9 @@ function leaderboardRankLabel(rank?: number) {
               }}</strong>
             </div>
             <div>
-              <span>服务连接</span>
-              <strong>{{ apiBase }}</strong>
+              <span>资产状态</span>
+              <strong>已同步当前积分、背包与收藏</strong>
             </div>
-          </div>
-
-          <div class="connection-card" :class="{ compact: isAuthed }">
-            <label>
-              <span>{{ isAuthed ? "连接信息" : "API 地址" }}</span>
-              <input
-                v-model="apiBase"
-                type="url"
-                placeholder="http://localhost:7001"
-                @blur="saveApiBase"
-              />
-            </label>
           </div>
 
           <div v-if="!isAuthed" class="login-stack">
@@ -2466,8 +2445,8 @@ function leaderboardRankLabel(rank?: number) {
 
           <div v-if="!activeLeaderboardBoard?.list.length" class="empty-state">
             <Trophy :size="30" />
-            <strong>暂无排行榜数据</strong>
-            <span>玩家开始收集卡片后会在这里出现。</span>
+            <strong>当前暂无上榜玩家</strong>
+            <span>获得卡片后榜单会自动更新。</span>
           </div>
           <div v-else class="leaderboard-board">
             <div class="podium-grid">

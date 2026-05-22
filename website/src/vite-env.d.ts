@@ -7,3 +7,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface Window {
+  __KESINI_CONFIG__?: {
+    API_BASE?: string;
+  };
+}

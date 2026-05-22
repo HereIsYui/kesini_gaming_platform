@@ -1207,6 +1207,7 @@ export class CardService {
       .map(([uid, metrics]) =>
         this.createLeaderboardEntry(uid, metrics[metric], userMap.get(uid)),
       )
+      .filter((entry) => entry.value > 0)
       .sort((a, b) => b.value - a.value || a.uid.localeCompare(b.uid));
     const rankedEntries = this.assignLeaderboardRanks(entries);
 

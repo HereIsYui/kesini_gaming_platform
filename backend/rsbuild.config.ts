@@ -5,6 +5,15 @@ export default defineConfig({
   plugins: [pluginReact()],
   html: {
     title: "Kesini 后台管理",
+    tags: [
+      {
+        tag: "script",
+        attrs: { src: "/config.js" },
+        publicPath: false,
+        append: false,
+        head: false,
+      },
+    ],
   },
   source: {
     entry: {

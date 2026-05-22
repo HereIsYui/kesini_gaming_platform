@@ -1,6 +1,6 @@
 import type { ApiResponse } from "./types";
 
-const DEFAULT_API_BASE = "http://localhost:7001";
+const DEV_API_BASE = "http://localhost:7001";
 const API_BASE_KEY = "kesini_website_api_base";
 const TOKEN_KEY = "kesini_website_token";
 const USER_KEY = "kesini_website_user";
@@ -9,19 +9,47 @@ function normalizeBase(value: string | null | undefined) {
   return value?.trim().replace(/\/+$/, "") || "";
 }
 
+function getRuntimeApiBase() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return normalizeBase(window.__KESINI_CONFIG__?.API_BASE);
+}
+
+function getStoredApiBase() {
+  const storedBase = normalizeBase(localStorage.getItem(API_BASE_KEY));
+  if (
+    import.meta.env.PROD &&
+    /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|$)/i.test(storedBase)
+  ) {
+    return "";
+  }
+  return storedBase;
+}
+
+function getDevApiBase() {
+  return import.meta.env.DEV ? DEV_API_BASE : "";
+}
+
 export function getApiBase() {
+  const runtimeBase = getRuntimeApiBase();
+  if (runtimeBase) {
+    return runtimeBase;
+  }
   const envBase = normalizeBase(import.meta.env.VITE_API_BASE);
   if (envBase) {
     return envBase;
   }
-  return (
-    normalizeBase(localStorage.getItem(API_BASE_KEY)) ||
-    DEFAULT_API_BASE
-  );
+  return getStoredApiBase() || getDevApiBase();
 }
 
 export function setApiBase(value: string) {
-  localStorage.setItem(API_BASE_KEY, normalizeBase(value));
+  const normalized = normalizeBase(value);
+  if (normalized) {
+    localStorage.setItem(API_BASE_KEY, normalized);
+  } else {
+    localStorage.removeItem(API_BASE_KEY);
+  }
 }
 
 export function getToken() {

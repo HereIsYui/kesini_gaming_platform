@@ -12,9 +12,9 @@
 
 - API 服务默认端口：`7001`，可通过 `system/.env` 的 `PORT` 覆盖。
 - 玩家前端本地开发端口：`7002`。
-- 前后端分域部署时，只需要给前端配置 API 地址：
-  - 玩家前端：`VITE_API_BASE=https://api.example.com`
-  - 后台管理台：`PUBLIC_API_BASE=https://api.example.com`
+- 前后端分域部署时，只需要给前端配置 API 地址。生产环境推荐改静态资源目录里的 `config.js`，不依赖重新打包：
+  - 玩家前端：`website/dist/config.js`
+  - 后台管理台：`backend/dist/config.js`
 - OAuth 回跳地址不需要配置环境变量。前端会直接读取当前浏览器域名生成 `returnTo` 和 `realm`。
 - 生产环境 OAuth 回跳地址必须是 HTTPS；不要把后端 API 域名当作 OAuth 回跳域名。
 
@@ -65,23 +65,31 @@ REDIS_PASSWORD=
 
 `DB_SYNCHRONIZE` 生产环境建议设为 `false`。`REDIS_*` 是预留配置，当前应用启动时不会主动连接 Redis。
 
-### 玩家前端
+### 前端 API 地址
 
-在构建 `website` 前设置：
+推荐在发布到服务器后修改静态资源根目录的 `config.js`。玩家前端和后台管理台都使用同一种格式：
+
+```js
+window.__KESINI_CONFIG__ = {
+  API_BASE: "https://api.example.com",
+};
+```
+
+对应文件位置：
+
+- 玩家前端：`website/dist/config.js`
+- 后台管理台：`backend/dist/config.js`
+
+也可以在构建前设置环境变量作为兜底：
 
 ```bash
 VITE_API_BASE=https://api.example.com
-```
-
-### 后台管理台
-
-在构建 `backend` 前设置：
-
-```bash
 PUBLIC_API_BASE=https://api.example.com
 ```
 
-这些前端变量是构建时变量，部署后修改服务器环境变量不会改变已经打包出的静态文件，需要重新构建前端。
+这些前端环境变量是构建时变量。部署后再执行 `export VITE_API_BASE=...` 或 `export PUBLIC_API_BASE=...` 不会改变已经打包出的静态文件；如果要部署后直接生效，请改 `dist/config.js`。
+
+API 地址读取优先级为：`dist/config.js` > 构建时环境变量 > 浏览器本地保存地址 > 本地开发默认地址。生产环境会忽略浏览器里旧的 `http://localhost:7001` 保存值，避免部署后被本机缓存覆盖。
 
 ## 构建
 
@@ -156,6 +164,11 @@ server {
     root /var/www/kesini/website/dist;
     index index.html;
 
+    location = /config.js {
+        add_header Cache-Control "no-store";
+        try_files /config.js =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -167,6 +180,11 @@ server {
     root /var/www/kesini/backend/dist;
     index index.html;
 
+    location = /config.js {
+        add_header Cache-Control "no-store";
+        try_files /config.js =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -174,6 +192,14 @@ server {
 ```
 
 请按你的服务器实际情况补充 SSL 证书配置。
+
+宝塔面板的“伪静态”输入框通常已经位于站点的 `server` 块内部，不要把完整的 `server { ... }` 粘进去。前端站点只需要保留 SPA 回退规则：
+
+```nginx
+try_files $uri $uri/ /index.html;
+```
+
+如果你是在站点主配置文件里手动编辑，则使用上面示例中的 `location / { try_files $uri $uri/ /index.html; }`。
 
 ## OAuth 部署要点
 
@@ -201,13 +227,33 @@ nginx -t
 nginx -s reload
 ```
 
-如果只改了前端环境变量，例如 `VITE_API_BASE` 或 `PUBLIC_API_BASE`，也必须重新构建对应前端并重新发布 `dist/`。
+部署后设置 API 域名：
+
+```bash
+cat > /var/www/kesini/website/dist/config.js <<'EOF'
+window.__KESINI_CONFIG__ = {
+  API_BASE: "https://api.example.com",
+};
+EOF
+
+cat > /var/www/kesini/backend/dist/config.js <<'EOF'
+window.__KESINI_CONFIG__ = {
+  API_BASE: "https://api.example.com",
+};
+EOF
+```
+
+如果只改 `dist/config.js`，不需要重新构建前端；如果只改构建时环境变量，例如 `VITE_API_BASE` 或 `PUBLIC_API_BASE`，必须重新构建对应前端并重新发布 `dist/`。
+
+注意：以前在打包产物里 `grep http://localhost:7001` 可能会命中本地开发兜底值或输入框占位符，不能单独作为生产 API 地址是否生效的判断依据。现在生产地址优先看 `dist/config.js`，也可以在浏览器开发者工具的 Network 面板确认请求实际发往的域名。
 
 ## 验证清单
 
 - API：`curl https://api.example.com/` 返回 `Hello World!`
 - 玩家前端能访问 `https://web.example.com`
 - 后台管理台能访问 `https://admin.example.com`
+- `curl https://web.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
+- `curl https://admin.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
 - 玩家前端发起的 API 请求访问的是 `https://api.example.com`
 - OAuth 登录跳转到 FishPi 时，URL 中的 `openid.return_to` 是当前前端 HTTPS 域名
 - OAuth 回调后前端能调用 `POST /apis/login` 完成登录
