@@ -28,12 +28,20 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
+  ReactNode,
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
   Alert,
-  App as AntApp,
   Button,
   Card,
   Checkbox,
-  ConfigProvider,
   Descriptions,
   Drawer,
   Empty,
@@ -55,21 +63,10 @@ import {
   Table,
   Tabs,
   Tag,
+  Toast,
   Typography,
-  theme as antdTheme,
-} from "antd";
-import type { MenuProps, SelectProps, TableColumnsType } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import {
-  ReactNode,
-  Dispatch,
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+} from "./semi-adapter";
+import type { MenuProps, SelectProps, TableColumnsType } from "./semi-adapter";
 import {
   clearToken,
   getApiBase,
@@ -153,7 +150,7 @@ type AdminSelectProps<ValueType = any> = SelectProps<ValueType>;
 function AdminSelect<ValueType = any>({
   className,
   getPopupContainer,
-  popupMatchSelectWidth = false,
+  popupMatchSelectWidth = true,
   style,
   ...props
 }: AdminSelectProps<ValueType>) {
@@ -167,6 +164,28 @@ function AdminSelect<ValueType = any>({
     />
   );
 }
+
+const message = {
+  success(content: ReactNode) {
+    Toast.success({ content });
+  },
+  error(content: ReactNode) {
+    Toast.error({ content });
+  },
+};
+
+const modal = {
+  confirm(options: {
+    title?: ReactNode;
+    content?: ReactNode;
+    okText?: ReactNode;
+    cancelText?: ReactNode;
+    okButtonProps?: { danger?: boolean };
+    onOk?: () => void | Promise<void>;
+  }) {
+    Modal.confirm(options);
+  },
+};
 
 const defaultPageKey: PageKey = "dashboard";
 const pageKeys: PageKey[] = [
@@ -647,43 +666,9 @@ export function App() {
   const isNarrowLayout = screens.lg === false;
   const [navOpen, setNavOpen] = useState(false);
 
-  const antTheme = useMemo(
-    () => ({
-      algorithm:
-        theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-      token: {
-        borderRadius: 8,
-        colorPrimary: "#2563eb",
-        controlHeight: 40,
-        controlHeightLG: 44,
-        controlHeightSM: 32,
-        fontFamily:
-          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      },
-      components: {
-        Layout: {
-          bodyBg: theme === "dark" ? "#09090b" : "#f6f7f9",
-          headerBg: theme === "dark" ? "#111114" : "#ffffff",
-          siderBg: theme === "dark" ? "#0f0f12" : "#ffffff",
-        },
-        Menu: {
-          itemBorderRadius: 8,
-          itemHeight: 40,
-        },
-        Table: {
-          headerBg: theme === "dark" ? "#1d1d22" : "#f3f4f6",
-          rowHoverBg: theme === "dark" ? "#1d1d22" : "#f8fafc",
-        },
-        Select: {
-          zIndexPopup: 2100,
-        },
-      },
-    }),
-    [theme],
-  );
-
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.body.setAttribute("theme-mode", theme === "dark" ? "dark" : "light");
     localStorage.setItem("kesini_theme", theme);
   }, [theme]);
 
@@ -1027,12 +1012,8 @@ export function App() {
     />
   );
 
-  function withAntProvider(node: ReactNode) {
-    return (
-      <ConfigProvider locale={zhCN} theme={antTheme}>
-        <AntApp>{node}</AntApp>
-      </ConfigProvider>
-    );
+  function withUiProvider(node: ReactNode) {
+    return node;
   }
 
   const handleLogin = useCallback((nextToken: string) => {
@@ -1041,13 +1022,13 @@ export function App() {
   }, []);
 
   if (!token) {
-    return withAntProvider(
+    return withUiProvider(
       <LoginPage initialError={authError} onLogin={handleLogin} />,
     );
   }
 
   if (!admin) {
-    return withAntProvider(
+    return withUiProvider(
       <main className="login-screen">
         <section className="login-panel">
           <div className="brand-mark large">
@@ -1061,7 +1042,7 @@ export function App() {
     );
   }
 
-  return withAntProvider(
+  return withUiProvider(
     <Layout className="app-shell">
       {!isNarrowLayout && (
         <Layout.Sider className="sidebar" width={260}>
@@ -1465,7 +1446,6 @@ function PoolManagementPanel({
   fields: FieldConfig[];
   options: AdminOptions | null;
 }) {
-  const { message } = AntApp.useApp();
   const [editingGacha, setEditingGacha] = useState<{
     poolId: number;
     poolName: string;
@@ -1653,7 +1633,6 @@ function AdminTable({
     helpers: { reload: () => void },
   ) => ReactNode;
 }) {
-  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -1991,7 +1970,7 @@ function EditModal({
           className="admin-form-card form-section-card"
           title="基础信息"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             {fields.map((field) => {
               const fieldOptions = getFieldOptions(field);
               const shouldRenderSelect =
@@ -2075,7 +2054,12 @@ function EditModal({
                     extra={field.helper}
                   >
                     <Segmented
-                      value={coerceFieldValue(field, values[field.key])}
+                      value={
+                        coerceFieldValue(field, values[field.key]) as
+                          | string
+                          | number
+                          | undefined
+                      }
                       onChange={(value) =>
                         setValues({
                           ...values,
@@ -2269,7 +2253,7 @@ function ItemModal({
           className="admin-form-card form-section-card"
           title="物品信息"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="物品名称">
               <Input
                 value={values.drop_name}
@@ -2399,7 +2383,6 @@ function ItemModal({
 }
 
 function RedeemCodesPage({ options }: { options: AdminOptions | null }) {
-  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -2691,7 +2674,7 @@ function RedeemCodeModal({
           className="admin-form-card form-section-card"
           title="基础信息"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="兑换码">
               <Input
                 value={values.code}
@@ -2800,7 +2783,7 @@ function RedeemCodeModal({
             <Space direction="vertical" size={8} className="full-width">
               {values.rewards.items.map((item, index) => (
                 <Space
-                  className="reward-item-row antd-reward-row"
+                  className="reward-item-row"
                   key={index}
                   wrap
                 >
@@ -2874,7 +2857,6 @@ function RedeemCodeModal({
 }
 
 function ExchangeShopPage({ options }: { options: AdminOptions | null }) {
-  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -3196,7 +3178,7 @@ function LaunchActivityConfigPanel({
           className="admin-form-card form-section-card"
           title="活动规则"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="活动状态">
               <AdminSelect
                 value={values.enabled ? "true" : "false"}
@@ -3290,7 +3272,7 @@ function LaunchActivityConfigPanel({
             </Form>
             {values.rewards.items.map((item, index) => (
               <Space
-                className="reward-item-row antd-reward-row"
+                className="reward-item-row"
                 key={index}
                 wrap
               >
@@ -3554,7 +3536,6 @@ function LaunchActivityClaimsPage() {
 }
 
 function AchievementsPage({ options }: { options: AdminOptions | null }) {
-  const { message, modal } = AntApp.useApp();
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [keyword, setKeyword] = useState("");
@@ -3851,7 +3832,7 @@ function AchievementModal({
         className="full-width admin-form-stack"
       >
         <Card size="small" className="admin-form-card form-section-card" title="基础信息">
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="成就编码">
               <Input
                 value={values.code}
@@ -3880,7 +3861,7 @@ function AchievementModal({
               />
             </Form.Item>
             <Form.Item className="form-field" label="状态">
-              <Select
+              <AdminSelect
                 value={values.enabled ? "true" : "false"}
                 onChange={(value) =>
                   setValues({ ...values, enabled: value === "true" })
@@ -3905,9 +3886,9 @@ function AchievementModal({
         </Card>
 
         <Card size="small" className="admin-form-card form-section-card" title="目标条件">
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="目标类型">
-              <Select
+              <AdminSelect
                 value={values.target_type}
                 options={achievementTargetOptions.map((item) => ({
                   label: item.label,
@@ -3934,7 +3915,7 @@ function AchievementModal({
             </Form.Item>
             {targetMeta.needsRarity && (
               <Form.Item className="form-field" label="稀有度">
-                <Select
+                <AdminSelect
                   value={values.target_scope?.rarity || "N"}
                   options={rarityOptions}
                   onChange={(value) =>
@@ -3951,7 +3932,7 @@ function AchievementModal({
             )}
             {targetMeta.supportsPool && (
               <Form.Item className="form-field" label="卡池范围">
-                <Select
+                <AdminSelect
                   allowClear
                   placeholder="全部卡池"
                   value={
@@ -4033,11 +4014,11 @@ function AchievementModal({
             </Form>
             {values.rewards.items.map((item, index) => (
               <Space
-                className="reward-item-row antd-reward-row"
+                className="reward-item-row"
                 key={index}
                 wrap
               >
-                <Select
+                <AdminSelect
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
                   placeholder="选择奖励物品"
@@ -4216,7 +4197,7 @@ function ExchangeShopModal({
           className="admin-form-card form-section-card"
           title="基础信息"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="兑换项名称">
               <Input
                 value={values.name}
@@ -4320,7 +4301,7 @@ function ExchangeShopModal({
           <Space direction="vertical" size={12} className="full-width">
             {values.costs.map((item, index) => (
               <Space
-                className="reward-item-row antd-reward-row"
+                className="reward-item-row"
                 key={index}
                 wrap
               >
@@ -4406,7 +4387,7 @@ function ExchangeShopModal({
             </Form>
             {values.rewards.items.map((item, index) => (
               <Space
-                className="reward-item-row antd-reward-row"
+                className="reward-item-row"
                 key={index}
                 wrap
               >
@@ -4577,7 +4558,7 @@ function TradeConfigPanel() {
           className="admin-form-card form-section-card"
           title="交易规则"
         >
-          <Form layout="vertical" className="admin-form-grid antd-form-grid">
+          <Form layout="vertical" className="admin-form-grid">
             <Form.Item className="form-field" label="交易状态">
               <AdminSelect
                 value={String(values.enabled)}
@@ -5559,19 +5540,21 @@ function GachaConfigModal({
               </div>
               <label className="form-field">
                 <span>{mode === "pool" ? "配置方式" : "启用全局默认"}</span>
-                <select
+                <AdminSelect
                   value={String(values.enabled !== false)}
-                  onChange={(event) =>
-                    setConfigEnabled(event.target.value === "true")
-                  }
-                >
-                  <option value="true">
-                    {mode === "pool" ? "启用单独配置" : "启用"}
-                  </option>
-                  <option value="false">
-                    {mode === "pool" ? "继承默认配置" : "关闭并使用代码兜底"}
-                  </option>
-                </select>
+                  onChange={(value) => setConfigEnabled(value === "true")}
+                  options={[
+                    {
+                      label: mode === "pool" ? "启用单独配置" : "启用",
+                      value: "true",
+                    },
+                    {
+                      label:
+                        mode === "pool" ? "继承默认配置" : "关闭并使用代码兜底",
+                      value: "false",
+                    },
+                  ]}
+                />
               </label>
               {inheritedPoolConfig ? (
                 <StateBox>
@@ -5582,16 +5565,15 @@ function GachaConfigModal({
                 <div className="admin-form-grid no-padding">
                   <label className="form-field">
                     <span>单抽消耗</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
+                    <InputNumber
+                      min={1}
+                      step={1}
                       value={values.drawCosts?.once || 10}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setValues({
                           ...values,
                           drawCosts: {
-                            once: Number(event.target.value),
+                            once: Number(value || 0),
                             ten: values.drawCosts?.ten || 100,
                           },
                         })
@@ -5600,17 +5582,16 @@ function GachaConfigModal({
                   </label>
                   <label className="form-field">
                     <span>十连消耗</span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
+                    <InputNumber
+                      min={1}
+                      step={1}
                       value={values.drawCosts?.ten || 100}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setValues({
                           ...values,
                           drawCosts: {
                             once: values.drawCosts?.once || 10,
-                            ten: Number(event.target.value),
+                            ten: Number(value || 0),
                           },
                         })
                       }
@@ -5707,16 +5688,15 @@ function GachaConfigModal({
                       key={rarity}
                     >
                       <span>{rarity} 概率</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
+                      <InputNumber
+                        min={0}
+                        max={100}
+                        step={0.01}
                         value={Number((value * 100).toFixed(4))}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setProbabilityFromPercent(
                             rarity,
-                            Number(event.target.value),
+                            Number(value || 0),
                           )
                         }
                       />
@@ -5752,40 +5732,40 @@ function GachaConfigModal({
               <div className="admin-form-grid no-padding">
                 <label className="form-field">
                   <span>UP 状态</span>
-                  <select
+                  <AdminSelect
                     value={String(values.upCards?.enabled === true)}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setValues({
                         ...values,
                         upCards: {
-                          enabled: event.target.value === "true",
+                          enabled: value === "true",
                           cardIds: values.upCards?.cardIds || [],
                           upRate: values.upCards?.upRate || 0,
                         },
                       })
                     }
-                  >
-                    <option value="false">关闭</option>
-                    <option value="true">开启</option>
-                  </select>
+                    options={[
+                      { label: "关闭", value: "false" },
+                      { label: "开启", value: "true" },
+                    ]}
+                  />
                 </label>
                 <label className="form-field">
                   <span>UP 概率（百分比）</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    step={0.01}
                     value={Number(
                       ((values.upCards?.upRate || 0) * 100).toFixed(4),
                     )}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setValues({
                         ...values,
                         upCards: {
                           enabled: values.upCards?.enabled === true,
                           cardIds: values.upCards?.cardIds || [],
-                          upRate: Number(event.target.value) / 100,
+                          upRate: Number(value || 0) / 100,
                         },
                       })
                     }
@@ -5802,20 +5782,17 @@ function GachaConfigModal({
                       placeholder="搜索当前卡池卡片"
                     />
                   </label>
-                  <select
+                  <AdminSelect
                     value={upRarity}
-                    onChange={(event) => setUpRarity(event.target.value)}
-                  >
-                    <option value="">全部稀有度</option>
-                    {rarityOptions.map((option) => (
-                      <option
-                        key={String(option.value)}
-                        value={String(option.value)}
-                      >
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setUpRarity(value)}
+                    options={[
+                      { label: "全部稀有度", value: "" },
+                      ...rarityOptions.map((option) => ({
+                        label: option.label,
+                        value: String(option.value),
+                      })),
+                    ]}
+                  />
                 </div>
                 <div className="selected-up-cards">
                   {selectedUpCards.length || selectedUnknownUpCardIds.length ? (
@@ -5879,21 +5856,22 @@ function GachaConfigModal({
               </div>
               <label className="form-field">
                 <span>保底状态</span>
-                <select
+                <AdminSelect
                   value={String(values.pitySystem?.enabled !== false)}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setValues({
                       ...values,
                       pitySystem: {
                         ...(values.pitySystem || {}),
-                        enabled: event.target.value === "true",
+                        enabled: value === "true",
                       },
                     })
                   }
-                >
-                  <option value="true">开启</option>
-                  <option value="false">关闭</option>
-                </select>
+                  options={[
+                    { label: "开启", value: "true" },
+                    { label: "关闭", value: "false" },
+                  ]}
+                />
               </label>
               {values.pitySystem?.enabled === false ? (
                 <StateBox>
@@ -5906,39 +5884,33 @@ function GachaConfigModal({
                     <div className="admin-form-grid no-padding">
                       <label className="form-field">
                         <span>触发次数</span>
-                        <input
-                          type="number"
-                          min="1"
+                        <InputNumber
+                          min={1}
                           value={values.pitySystem?.softPity?.count || 10}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setPityRule(setValues, values, "softPity", {
-                              count: Number(event.target.value),
+                              count: Number(value || 0),
                             })
                           }
                         />
                       </label>
                       <label className="form-field">
                         <span>保底稀有度</span>
-                        <select
+                        <AdminSelect
                           value={
                             values.pitySystem?.softPity?.guaranteedRarity ||
                             "SR"
                           }
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setPityRule(setValues, values, "softPity", {
-                              guaranteedRarity: event.target.value,
+                              guaranteedRarity: value,
                             })
                           }
-                        >
-                          {rarityOptions.map((option) => (
-                            <option
-                              key={String(option.value)}
-                              value={String(option.value)}
-                            >
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={rarityOptions.map((option) => ({
+                            label: option.label,
+                            value: String(option.value),
+                          }))}
+                        />
                       </label>
                     </div>
                   </div>
@@ -5947,39 +5919,33 @@ function GachaConfigModal({
                     <div className="admin-form-grid no-padding">
                       <label className="form-field">
                         <span>触发次数</span>
-                        <input
-                          type="number"
-                          min="1"
+                        <InputNumber
+                          min={1}
                           value={values.pitySystem?.hardPity?.count || 90}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setPityRule(setValues, values, "hardPity", {
-                              count: Number(event.target.value),
+                              count: Number(value || 0),
                             })
                           }
                         />
                       </label>
                       <label className="form-field">
                         <span>保底稀有度</span>
-                        <select
+                        <AdminSelect
                           value={
                             values.pitySystem?.hardPity?.guaranteedRarity ||
                             "SSR"
                           }
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setPityRule(setValues, values, "hardPity", {
-                              guaranteedRarity: event.target.value,
+                              guaranteedRarity: value,
                             })
                           }
-                        >
-                          {rarityOptions.map((option) => (
-                            <option
-                              key={String(option.value)}
-                              value={String(option.value)}
-                            >
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={rarityOptions.map((option) => ({
+                            label: option.label,
+                            value: String(option.value),
+                          }))}
+                        />
                       </label>
                     </div>
                   </div>

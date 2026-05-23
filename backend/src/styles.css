@@ -113,6 +113,8 @@ select:focus-visible {
 }
 
 .app-shell {
+  display: flex;
+  align-items: stretch;
   min-height: 100dvh;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 240px),
@@ -137,7 +139,7 @@ select:focus-visible {
   color: var(--sidebar-foreground);
 }
 
-.sidebar .ant-layout-sider-children {
+.sidebar {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -232,12 +234,6 @@ select:focus-visible {
   background: transparent;
 }
 
-.admin-menu .ant-menu-item,
-.admin-menu .ant-menu-submenu-title {
-  margin-inline: 0;
-  width: 100%;
-}
-
 .nav-section {
   display: grid;
   gap: 6px;
@@ -327,6 +323,8 @@ select:focus-visible {
 }
 
 .main {
+  flex: 1 1 auto;
+  flex-direction: column;
   min-width: 0;
 }
 
@@ -343,10 +341,6 @@ select:focus-visible {
   background: color-mix(in srgb, var(--background) 88%, transparent);
   backdrop-filter: blur(14px);
   line-height: normal;
-}
-
-.topbar .ant-typography {
-  margin: 0;
 }
 
 .topbar-title {
@@ -448,6 +442,7 @@ select:focus-visible {
 
 .content {
   width: min(100%, 1440px);
+  flex: 1 1 auto;
   margin: 0 auto;
   padding: 24px;
 }
@@ -498,10 +493,6 @@ select:focus-visible {
   min-height: 108px;
 }
 
-.stat-card .ant-card-body {
-  padding: 16px;
-}
-
 .stat-icon {
   display: grid;
   width: 38px;
@@ -524,23 +515,6 @@ select:focus-visible {
 .panel {
   min-width: 0;
   overflow: hidden;
-}
-
-.panel .ant-card-head {
-  min-height: 54px;
-  background: color-mix(in srgb, var(--card) 92%, var(--muted));
-}
-
-.panel .ant-card-body {
-  padding: 16px;
-}
-
-.table-panel .ant-card-body {
-  padding: 0;
-}
-
-.table-panel .ant-table-wrapper {
-  padding: 0 0 8px;
 }
 
 .panel-header {
@@ -849,11 +823,6 @@ select:focus-visible {
   border-bottom: 0;
 }
 
-.activity-table .ant-list-item {
-  gap: 12px;
-  padding: 12px 0;
-}
-
 .mono {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
@@ -904,14 +873,6 @@ select:focus-visible {
   background: var(--muted);
 }
 
-.panel > .ant-card-body > .state-box:first-child:last-child {
-  margin: 0;
-}
-
-.table-panel > .ant-card-body > .state-box:first-child {
-  margin: 16px;
-}
-
 .state-box.error,
 .error-box {
   border-color: color-mix(in srgb, var(--destructive) 36%, var(--border));
@@ -956,10 +917,6 @@ select:focus-visible {
   border-color: var(--border);
 }
 
-.admin-form-card > .ant-card-body {
-  min-width: 0;
-}
-
 .admin-form-stack,
 .recharge-config-stack {
   display: grid;
@@ -990,54 +947,6 @@ select:focus-visible {
   gap: 4px;
 }
 
-.admin-form-grid .ant-form-item,
-.recharge-rule-grid .ant-form-item,
-.recharge-secret-grid .ant-form-item {
-  margin-bottom: 14px;
-}
-
-.admin-form-grid .ant-input,
-.admin-form-grid .ant-input-number,
-.admin-form-grid .ant-picker,
-.admin-form-grid .admin-select,
-.admin-form-grid .ant-input-affix-wrapper,
-.admin-form-grid .ant-input-number-group-wrapper,
-.single-field-form .ant-input-number,
-.single-field-form .ant-input-number-group-wrapper,
-.recharge-rule-grid .ant-input,
-.recharge-rule-grid .ant-input-number,
-.recharge-rule-grid .ant-input-number-group-wrapper,
-.recharge-rule-grid .admin-select,
-.recharge-secret-grid .ant-input,
-.recharge-secret-grid .ant-input-affix-wrapper {
-  width: 100%;
-}
-
-.admin-form-grid .ant-input,
-.admin-form-grid .ant-input-number,
-.admin-form-grid .ant-input-affix-wrapper,
-.admin-form-grid .ant-picker,
-.single-field-form .ant-input-number,
-.recharge-rule-grid .ant-input,
-.recharge-rule-grid .ant-input-number,
-.recharge-rule-grid .ant-picker,
-.recharge-secret-grid .ant-input,
-.recharge-secret-grid .ant-input-affix-wrapper {
-  height: 40px;
-  min-height: 40px;
-}
-
-.admin-form-grid .ant-input-number-input,
-.admin-form-grid .ant-picker-input,
-.admin-form-grid .ant-picker-input > input,
-.single-field-form .ant-input-number-input,
-.recharge-rule-grid .ant-input-number-input,
-.recharge-rule-grid .ant-picker-input,
-.recharge-rule-grid .ant-picker-input > input {
-  height: 40px;
-  line-height: 40px;
-}
-
 .admin-select {
   width: 100%;
   min-width: 0;
@@ -1047,20 +956,7 @@ select:focus-visible {
   width: min(220px, 100%);
 }
 
-.ant-select-dropdown {
-  z-index: 2100;
-}
-
-.admin-form-grid .ant-input[type="datetime-local"],
-.admin-form-grid input[type="datetime-local"] {
-  min-height: 40px;
-}
-
 .full-width-control {
-  width: 100%;
-}
-
-.antd-reward-row {
   width: 100%;
 }
 
@@ -1665,33 +1561,6 @@ select:focus-visible {
   gap: 8px;
 }
 
-.rarity-segment-grid .ant-checkbox-wrapper {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin: 0;
-  padding: 0 12px;
-  border: 1px solid var(--input);
-  border-radius: var(--radius);
-  background: var(--card);
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 700;
-  transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.rarity-segment-grid .ant-checkbox-wrapper-checked {
-  border-color: color-mix(in srgb, var(--primary) 72%, transparent);
-  background: color-mix(in srgb, var(--primary) 12%, var(--card));
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--primary) 24%, transparent);
-}
-
 .rarity-segment {
   min-height: 44px;
   display: inline-flex;
@@ -1766,20 +1635,6 @@ select:focus-visible {
   color: var(--foreground);
   font-size: 13px;
   font-weight: 700;
-}
-
-.form-field input:not(.ant-input-number-input),
-.form-field select {
-  width: 100%;
-  height: 40px;
-  min-height: 40px;
-}
-
-.form-field .ant-picker,
-.form-field .ant-input-number {
-  height: 40px;
-  min-height: 40px;
-  width: 100%;
 }
 
 .form-field .admin-select {
@@ -1901,31 +1756,6 @@ select:focus-visible {
   width: 100%;
 }
 
-.reward-item-row > .ant-space-item {
-  min-width: 0;
-}
-
-.reward-item-row > .ant-space-item:nth-child(2) {
-  width: 120px;
-}
-
-.reward-item-row > .ant-space-item:last-child {
-  justify-self: end;
-}
-
-.reward-item-row .admin-select,
-.reward-item-row .ant-input-number,
-.reward-item-row select,
-.reward-item-row input {
-  width: 100%;
-  height: 40px;
-  min-height: 40px;
-}
-
-.reward-item-row .ant-btn {
-  min-height: 40px;
-}
-
 .detail-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -1966,7 +1796,7 @@ select:focus-visible {
 
 @media (max-width: 1040px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .sidebar {
@@ -2213,17 +2043,6 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .reward-item-row > .ant-space-item,
-  .reward-item-row > .ant-space-item:nth-child(2),
-  .reward-item-row > .ant-space-item:last-child {
-    width: 100%;
-    justify-self: stretch;
-  }
-
-  .reward-item-row .ant-btn {
-    width: 100%;
-  }
-
   .config-grid {
     grid-template-columns: 1fr;
     padding: 12px;
@@ -2291,3 +2110,4 @@ select:focus-visible {
     font-size: 12px;
   }
 }
+

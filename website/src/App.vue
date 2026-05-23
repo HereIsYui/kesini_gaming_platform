@@ -2565,7 +2565,9 @@ function leaderboardRankLabel(rank?: number) {
                   <dl>
                     <div>
                       <dt>价格</dt>
-                      <dd>{{ listing.price }} 星穹币</dd>
+                      <dd class="trade-price-value">
+                        {{ listing.price }} 星穹币
+                      </dd>
                     </div>
                     <div>
                       <dt>卖家</dt>
