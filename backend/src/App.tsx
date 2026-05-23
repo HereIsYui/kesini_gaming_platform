@@ -58,7 +58,7 @@ import {
   Typography,
   theme as antdTheme,
 } from "antd";
-import type { MenuProps, TableColumnsType } from "antd";
+import type { MenuProps, SelectProps, TableColumnsType } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import {
   ReactNode,
@@ -147,6 +147,26 @@ type PageDefinition = {
   icon: LucideIcon;
   render: () => ReactNode;
 };
+
+type AdminSelectProps<ValueType = any> = SelectProps<ValueType>;
+
+function AdminSelect<ValueType = any>({
+  className,
+  getPopupContainer,
+  popupMatchSelectWidth = false,
+  style,
+  ...props
+}: AdminSelectProps<ValueType>) {
+  return (
+    <Select<ValueType>
+      {...props}
+      className={["admin-select", className].filter(Boolean).join(" ")}
+      getPopupContainer={getPopupContainer ?? (() => document.body)}
+      popupMatchSelectWidth={popupMatchSelectWidth}
+      style={style}
+    />
+  );
+}
 
 const defaultPageKey: PageKey = "dashboard";
 const pageKeys: PageKey[] = [
@@ -653,6 +673,9 @@ export function App() {
         Table: {
           headerBg: theme === "dark" ? "#1d1d22" : "#f3f4f6",
           rowHoverBg: theme === "dark" ? "#1d1d22" : "#f8fafc",
+        },
+        Select: {
+          zIndexPopup: 2100,
         },
       },
     }),
@@ -1791,7 +1814,7 @@ function AdminTable({
           placeholder={searchPlaceholder || "搜索"}
         />
         {poolFilterOptions && (
-          <Select
+          <AdminSelect
             value={poolId}
             style={{ width: 180 }}
             onChange={(value) => {
@@ -1808,7 +1831,7 @@ function AdminTable({
           />
         )}
         {enableRarityFilter && (
-          <Select
+          <AdminSelect
             value={rarity}
             style={{ width: 150 }}
             onChange={(value) => {
@@ -2092,11 +2115,8 @@ function EditModal({
                       }
                     />
                   ) : shouldRenderSelect ? (
-                    <Select
+                    <AdminSelect
                       value={String(values[field.key] ?? "")}
-                      getPopupContainer={(trigger) =>
-                        trigger.parentElement || document.body
-                      }
                       onChange={(value) =>
                         setValues({
                           ...values,
@@ -2260,7 +2280,7 @@ function ItemModal({
               />
             </Form.Item>
             <Form.Item className="form-field" label="物品类型">
-              <Select
+              <AdminSelect
                 value={String(values.drop_type)}
                 onChange={(value) =>
                   setValues({
@@ -2359,7 +2379,7 @@ function ItemModal({
               </>
             )}
             <Form.Item className="form-field" label="状态">
-              <Select
+              <AdminSelect
                 value={values.disabled ? "true" : "false"}
                 onChange={(value) =>
                   setValues({ ...values, disabled: value === "true" })
@@ -2694,7 +2714,7 @@ function RedeemCodeModal({
               />
             </Form.Item>
             <Form.Item className="form-field" label="状态">
-              <Select
+              <AdminSelect
                 value={values.enabled ? "true" : "false"}
                 onChange={(value) =>
                   setValues({ ...values, enabled: value === "true" })
@@ -2784,7 +2804,7 @@ function RedeemCodeModal({
                   key={index}
                   wrap
                 >
-                  <Select
+                  <AdminSelect
                     className="reward-item-select"
                     value={item.itemId ? String(item.itemId) : undefined}
                     placeholder="选择物品"
@@ -3178,7 +3198,7 @@ function LaunchActivityConfigPanel({
         >
           <Form layout="vertical" className="admin-form-grid antd-form-grid">
             <Form.Item className="form-field" label="活动状态">
-              <Select
+              <AdminSelect
                 value={values.enabled ? "true" : "false"}
                 onChange={(value) =>
                   setValues({ ...values, enabled: value === "true" })
@@ -3274,7 +3294,7 @@ function LaunchActivityConfigPanel({
                 key={index}
                 wrap
               >
-                <Select
+                <AdminSelect
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
                   placeholder="选择奖励物品"
@@ -4207,7 +4227,7 @@ function ExchangeShopModal({
               />
             </Form.Item>
             <Form.Item className="form-field" label="状态">
-              <Select
+              <AdminSelect
                 value={values.enabled ? "true" : "false"}
                 onChange={(value) =>
                   setValues({ ...values, enabled: value === "true" })
@@ -4304,7 +4324,7 @@ function ExchangeShopModal({
                 key={index}
                 wrap
               >
-                <Select
+                <AdminSelect
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
                   placeholder="选择消耗物品"
@@ -4390,7 +4410,7 @@ function ExchangeShopModal({
                 key={index}
                 wrap
               >
-                <Select
+                <AdminSelect
                   className="reward-item-select"
                   value={item.itemId ? String(item.itemId) : undefined}
                   placeholder="选择奖励物品"
@@ -4559,7 +4579,7 @@ function TradeConfigPanel() {
         >
           <Form layout="vertical" className="admin-form-grid antd-form-grid">
             <Form.Item className="form-field" label="交易状态">
-              <Select
+              <AdminSelect
                 value={String(values.enabled)}
                 onChange={(value) =>
                   setValues({ ...values, enabled: value === "true" })
@@ -4774,7 +4794,7 @@ function RechargeRecordsPage() {
           }}
           placeholder="鱼排用户名"
         />
-        <Select
+        <AdminSelect
           className="toolbar-control"
           value={status}
           onChange={(value) => {
@@ -4957,7 +4977,7 @@ function RechargeConfigPanel() {
               className="admin-form-grid recharge-rule-grid"
             >
               <Form.Item label="充值状态">
-                <Select
+                <AdminSelect
                   value={String(values.enabled)}
                   onChange={(value) =>
                     setValues({ ...values, enabled: value === "true" })

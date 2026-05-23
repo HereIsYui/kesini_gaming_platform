@@ -999,7 +999,7 @@ select:focus-visible {
 .admin-form-grid .ant-input,
 .admin-form-grid .ant-input-number,
 .admin-form-grid .ant-picker,
-.admin-form-grid .ant-select,
+.admin-form-grid .admin-select,
 .admin-form-grid .ant-input-affix-wrapper,
 .admin-form-grid .ant-input-number-group-wrapper,
 .single-field-form .ant-input-number,
@@ -1007,6 +1007,7 @@ select:focus-visible {
 .recharge-rule-grid .ant-input,
 .recharge-rule-grid .ant-input-number,
 .recharge-rule-grid .ant-input-number-group-wrapper,
+.recharge-rule-grid .admin-select,
 .recharge-secret-grid .ant-input,
 .recharge-secret-grid .ant-input-affix-wrapper {
   width: 100%;
@@ -1015,14 +1016,10 @@ select:focus-visible {
 .admin-form-grid .ant-input,
 .admin-form-grid .ant-input-number,
 .admin-form-grid .ant-input-affix-wrapper,
-.admin-form-grid .ant-select-single,
-.admin-form-grid .ant-select-single .ant-select-selector,
 .admin-form-grid .ant-picker,
 .single-field-form .ant-input-number,
 .recharge-rule-grid .ant-input,
 .recharge-rule-grid .ant-input-number,
-.recharge-rule-grid .ant-select-single,
-.recharge-rule-grid .ant-select-single .ant-select-selector,
 .recharge-rule-grid .ant-picker,
 .recharge-secret-grid .ant-input,
 .recharge-secret-grid .ant-input-affix-wrapper {
@@ -1030,53 +1027,28 @@ select:focus-visible {
   min-height: 40px;
 }
 
-.admin-form-grid .ant-select-single .ant-select-selector,
-.recharge-rule-grid .ant-select-single .ant-select-selector {
-  display: flex;
-  align-items: center;
-}
-
 .admin-form-grid .ant-input-number-input,
 .admin-form-grid .ant-picker-input,
 .admin-form-grid .ant-picker-input > input,
-.admin-form-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-search,
-.admin-form-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-search-input,
-.admin-form-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-item,
-.admin-form-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-placeholder,
 .single-field-form .ant-input-number-input,
 .recharge-rule-grid .ant-input-number-input,
 .recharge-rule-grid .ant-picker-input,
-.recharge-rule-grid .ant-picker-input > input,
-.recharge-rule-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-search,
-.recharge-rule-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-search-input,
-.recharge-rule-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-item,
-.recharge-rule-grid
-  .ant-select-single
-  .ant-select-selector
-  .ant-select-selection-placeholder {
+.recharge-rule-grid .ant-picker-input > input {
   height: 40px;
   line-height: 40px;
+}
+
+.admin-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-select.toolbar-control {
+  width: min(220px, 100%);
+}
+
+.ant-select-dropdown {
+  z-index: 2100;
 }
 
 .admin-form-grid .ant-input[type="datetime-local"],
@@ -1803,8 +1775,6 @@ select:focus-visible {
   min-height: 40px;
 }
 
-.form-field .ant-select-single,
-.form-field .ant-select-single .ant-select-selector,
 .form-field .ant-picker,
 .form-field .ant-input-number {
   height: 40px;
@@ -1812,9 +1782,8 @@ select:focus-visible {
   width: 100%;
 }
 
-.form-field .ant-select-single .ant-select-selector {
-  display: flex;
-  align-items: center;
+.form-field .admin-select {
+  width: 100%;
 }
 
 .form-field textarea {
@@ -1944,7 +1913,7 @@ select:focus-visible {
   justify-self: end;
 }
 
-.reward-item-row .ant-select,
+.reward-item-row .admin-select,
 .reward-item-row .ant-input-number,
 .reward-item-row select,
 .reward-item-row input {
