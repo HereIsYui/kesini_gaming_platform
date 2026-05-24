@@ -1,4 +1,4 @@
-# 配置管理说明
+﻿# 配置管理说明
 
 ## 概述
 
@@ -24,7 +24,7 @@
 
 ```bash
 NODE_ENV=development          # 运行环境
-PORT=7001                   # 应用端口
+PORT=3000                   # 应用端口
 # API public base 是浏览器端构建配置：
 # website: VITE_API_BASE
 # backend: PUBLIC_API_BASE
@@ -165,3 +165,4 @@ const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 1. 实现配置变更监听
 2. 使用配置管理服务（如Consul、ETCD）
 3. 添加配置刷新接口
+

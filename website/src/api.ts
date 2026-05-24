@@ -1,7 +1,7 @@
 import type { ApiResponse } from "./types";
 
-const DEV_API_BASE = "http://localhost:7001";
-const LOCAL_API_PORT = "7001";
+const DEV_API_BASE = "http://localhost:3000";
+const LOCAL_API_PORT = "3000";
 const API_BASE_KEY = "kesini_website_api_base";
 const TOKEN_KEY = "kesini_website_token";
 const USER_KEY = "kesini_website_user";

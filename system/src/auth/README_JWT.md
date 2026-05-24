@@ -1,4 +1,4 @@
-# JWT 认证系统使用指南
+﻿# JWT 认证系统使用指南
 
 ## 概述
 
@@ -125,12 +125,12 @@ const drawResponse = await fetch('/card/draw/once', {
 
 ```bash
 # 登录获取token
-curl -X POST http://localhost:7001/apis/login \
+curl -X POST http://localhost:3000/apis/login \
   -H "Content-Type: application/json" \
   -d '{"openid.ns":"...", ...}'
 
 # 使用token抽卡
-curl -X POST http://localhost:7001/card/draw/once \
+curl -X POST http://localhost:3000/card/draw/once \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{"poolId":1}'
@@ -141,3 +141,4 @@ curl -X POST http://localhost:7001/card/draw/once \
 1. **Token存储**: 客户端应安全存储JWT token
 2. **Token刷新**: Token过期后需要重新登录
 3. **环境配置**: 生产环境必须使用环境变量设置JWT_SECRET，缺失时应用会拒绝启动
+

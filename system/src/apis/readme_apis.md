@@ -1,4 +1,4 @@
-# APIs 模块接口文档
+﻿# APIs 模块接口文档
 
 ## 概述
 登录认证相关接口，使用 OpenID 协议进行第三方登录。
@@ -102,7 +102,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 
 **请求示例：**
 ```bash
-curl -X POST http://localhost:7001/apis/login \
+curl -X POST http://localhost:3000/apis/login \
   -H "Content-Type: application/json" \
   -d '{
     "openid.ns": "http://specs.openid.net/auth/2.0",
@@ -279,3 +279,4 @@ async function handleCallback() {
 4. 使用这些参数调用 `/apis/login` 接口
 
 完整的登录测试需要真实的第三方 OpenID 服务支持。
+

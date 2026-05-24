@@ -1,4 +1,4 @@
-# Kesini Gaming Platform
+﻿# Kesini Gaming Platform
 
 抽卡游戏平台工作区，包含 NestJS API 服务、玩家前端和后台管理台。
 
@@ -10,7 +10,7 @@
 
 ## 端口和地址
 
-- API 服务默认端口：`7001`，可通过 `system/.env` 的 `PORT` 覆盖。
+- API 服务默认端口：`3000`，可通过 `system/.env` 的 `PORT` 覆盖。
 - 玩家前端本地开发端口：`7002`。
 - 后台管理台本地开发端口：`7003`。
 - 前后端分域部署时，只需要给前端配置 API 地址。生产环境推荐改静态资源目录里的 `config.js`，不依赖重新打包：
@@ -30,7 +30,7 @@ npm run backend:dev
 
 本地默认访问：
 
-- API：`http://localhost:7001`
+- API：`http://localhost:3000`
 - 玩家前端：`http://localhost:7002`
 - 后台管理台：`http://localhost:7003`
 
@@ -44,7 +44,7 @@ npm run backend:dev
 
 ```bash
 NODE_ENV=production
-PORT=7001
+PORT=3000
 
 JWT_SECRET=change-this-to-a-strong-secret
 JWT_EXPIRES_IN=7d
@@ -90,7 +90,7 @@ PUBLIC_API_BASE=https://api.example.com
 
 这些前端环境变量是构建时变量。部署后再执行 `export VITE_API_BASE=...` 或 `export PUBLIC_API_BASE=...` 不会改变已经打包出的静态文件；如果要部署后直接生效，请改 `dist/config.js`。
 
-API 地址读取优先级为：`dist/config.js` > 构建时环境变量 > 浏览器本地保存地址 > 本地开发默认地址。生产环境会忽略浏览器里旧的 `http://localhost:7001` 保存值，避免部署后被本机缓存覆盖。
+API 地址读取优先级为：`dist/config.js` > 构建时环境变量 > 浏览器本地保存地址 > 本地开发默认地址。生产环境会忽略浏览器里旧的 `http://localhost:3000` 保存值，避免部署后被本机缓存覆盖。
 
 ## 构建
 
@@ -126,7 +126,7 @@ pm2 save
 API 启动后可验证：
 
 ```bash
-curl http://127.0.0.1:7001/
+curl http://127.0.0.1:3000/
 ```
 
 正常会返回：
@@ -139,7 +139,7 @@ Hello World!
 
 推荐使用三个 HTTPS 域名：
 
-- `https://api.example.com`：反向代理到 API 服务 `127.0.0.1:7001`
+- `https://api.example.com`：反向代理到 API 服务 `127.0.0.1:3000`
 - `https://web.example.com`：托管 `website/dist`
 - `https://admin.example.com`：托管 `backend/dist`
 
@@ -151,7 +151,7 @@ server {
     server_name api.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:7001;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -246,7 +246,7 @@ EOF
 
 如果只改 `dist/config.js`，不需要重新构建前端；如果只改构建时环境变量，例如 `VITE_API_BASE` 或 `PUBLIC_API_BASE`，必须重新构建对应前端并重新发布 `dist/`。
 
-注意：以前在打包产物里 `grep http://localhost:7001` 可能会命中本地开发兜底值或输入框占位符，不能单独作为生产 API 地址是否生效的判断依据。现在生产地址优先看 `dist/config.js`，也可以在浏览器开发者工具的 Network 面板确认请求实际发往的域名。
+注意：以前在打包产物里 `grep http://localhost:3000` 可能会命中本地开发兜底值或输入框占位符，不能单独作为生产 API 地址是否生效的判断依据。现在生产地址优先看 `dist/config.js`，也可以在浏览器开发者工具的 Network 面板确认请求实际发往的域名。
 
 ## 验证清单
 
@@ -261,7 +261,7 @@ EOF
 
 如果前端提示“当前前端未连接到业务接口”，通常是 `config.js` 里的 `API_BASE` 为空且静态站点没有把 `/card`、`/apis` 等接口路径反向代理到后端。请优先检查 `dist/config.js` 是否已写入后端 API 域名。
 
-本地调试时，`localhost`、`127.0.0.1`、常见局域网 IP 和 `.local` 域名会默认连接同主机 `7001` 端口；如果后端不在这个端口，请在 `website/public/config.js` 和 `backend/public/config.js` 中显式填写 `API_BASE`。
+本地调试时，`localhost`、`127.0.0.1`、常见局域网 IP 和 `.local` 域名会默认连接同主机 `3000` 端口；如果后端不在这个端口，请在 `website/public/config.js` 和 `backend/public/config.js` 中显式填写 `API_BASE`。
 
 ## 抽卡配置
 
@@ -345,3 +345,4 @@ CREATE TABLE achievement_event (
 - 抽卡接口：`system/src/card/README_GACHA.md`
 - JWT 使用：`system/src/auth/README_JWT.md`
 - 配置说明：`system/src/config/README.md`
+
