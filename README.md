@@ -6,12 +6,13 @@
 
 - `system/`：NestJS 后端 API，包含登录、抽卡、卡池、资产、交易、充值和后台管理接口。
 - `website/`：Vue 玩家前端，使用 Vite 构建。
-- `backend/`：React 后台管理台，使用 Rsbuild 构建。
+- `backend/`：Vue 后台管理台，使用 Vite + Element Plus 构建。
 
 ## 端口和地址
 
 - API 服务默认端口：`7001`，可通过 `system/.env` 的 `PORT` 覆盖。
 - 玩家前端本地开发端口：`7002`。
+- 后台管理台本地开发端口：`7003`。
 - 前后端分域部署时，只需要给前端配置 API 地址。生产环境推荐改静态资源目录里的 `config.js`，不依赖重新打包：
   - 玩家前端：`website/dist/config.js`
   - 后台管理台：`backend/dist/config.js`
@@ -31,9 +32,9 @@ npm run backend:dev
 
 - API：`http://localhost:7001`
 - 玩家前端：`http://localhost:7002`
-- 后台管理台：以 `backend/rsbuild.config.ts` 中的 `server.port` 为准
+- 后台管理台：`http://localhost:7003`
 
-如果同时启动 API 和后台管理台时端口冲突，请先调整 `backend/rsbuild.config.ts` 的开发端口；生产部署不依赖该开发端口。
+生产部署不依赖本地开发端口；线上只需要把 `website/dist` 和 `backend/dist` 分别托管为静态站点。
 
 ## 生产环境配置
 
@@ -80,7 +81,7 @@ window.__KESINI_CONFIG__ = {
 - 玩家前端：`website/dist/config.js`
 - 后台管理台：`backend/dist/config.js`
 
-也可以在构建前设置环境变量作为兜底：
+也可以在构建前设置环境变量作为兜底。玩家前端使用 `VITE_API_BASE`，后台管理台使用 `PUBLIC_API_BASE`：
 
 ```bash
 VITE_API_BASE=https://api.example.com

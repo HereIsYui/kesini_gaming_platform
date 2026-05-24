@@ -111,7 +111,17 @@ export interface GachaConfigData {
 export interface FieldConfig {
   key: string;
   label: string;
-  type?: "text" | "number" | "boolean" | "textarea" | "select" | "multiSelect";
+  type?:
+    | "text"
+    | "number"
+    | "boolean"
+    | "textarea"
+    | "select"
+    | "multiSelect"
+    | "datetime"
+    | "json"
+    | "rewards"
+    | "costs";
   options?: SelectOption[];
   helper?: string;
   fullWidth?: boolean;

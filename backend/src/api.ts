@@ -1,11 +1,11 @@
 import type { ApiResponse } from "./types";
 
-const DEV_API_BASE = "http://localhost:3000";
-const LOCAL_API_PORT = "3000";
+const DEV_API_BASE = "http://localhost:7001";
+const LOCAL_API_PORT = "7001";
 const API_BASE_KEY = "kesini_api_base";
 
 function getEnvValue(key: string) {
-  const value = (import.meta as any).env?.[key];
+  const value = import.meta.env?.[key];
   return typeof value === "string" ? value.trim() : "";
 }
 
