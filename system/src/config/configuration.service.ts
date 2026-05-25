@@ -183,11 +183,11 @@ export class ConfigurationService {
 
   private getDefaultProbabilities(): Record<string, number> {
     return {
-      N: 0.5,
-      R: 0.3,
+      N: 0.5025,
+      R: 0.3025,
       SR: 0.15,
       SSR: 0.045,
-      UR: 0.005,
+      UR: 0,
     };
   }
 

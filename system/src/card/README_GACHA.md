@@ -190,7 +190,7 @@ Authorization: Bearer <token>
 概率、UP 和保底都通过环境变量配置：
 
 ```bash
-STANDARD_POOL_RARITY_PROBABILITIES={"N":0.5,"R":0.3,"SR":0.15,"SSR":0.045,"UR":0.005}
+STANDARD_POOL_RARITY_PROBABILITIES={"N":0.5025,"R":0.3025,"SR":0.15,"SSR":0.045,"UR":0}
 LIMITED_POOL_UP_CONFIG={"enabled":true,"cardIds":[101,102,103],"upRate":0.5}
 STANDARD_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRarity":"SR"},"hardPity":{"count":90,"guaranteedRarity":"SSR"}}
 ```

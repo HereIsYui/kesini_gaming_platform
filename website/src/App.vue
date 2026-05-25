@@ -49,6 +49,7 @@ import type {
   PointLedgerRecord,
   PointLedgerRecordsResponse,
   PointLedgerSourceType,
+  SiteConfig,
   LoginResponse,
   LoginUrlResponse,
   PoolInfo,
@@ -122,6 +123,10 @@ const route = useRoute();
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
+const siteConfig = ref<SiteConfig>({
+  websiteTitle: "Kesini 抽卡站",
+  adminTitle: "Kesini 后台管理",
+});
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
@@ -455,6 +460,7 @@ const resultModalSubtitle = computed(() => {
 
 onMounted(async () => {
   await handleOpenIdCallback();
+  await loadSiteConfig();
   await loadPublicData();
   if (isAuthed.value) {
     await loadPrivateData();
@@ -618,6 +624,22 @@ async function loadPublicData() {
   } finally {
     busy.public = false;
   }
+}
+
+async function loadSiteConfig() {
+  try {
+    const data = await request<SiteConfig>("/apis/site-config");
+    siteConfig.value = {
+      websiteTitle: data.websiteTitle || "Kesini 抽卡站",
+      adminTitle: data.adminTitle || "Kesini 后台管理",
+    };
+  } catch {
+    siteConfig.value = {
+      websiteTitle: "Kesini 抽卡站",
+      adminTitle: "Kesini 后台管理",
+    };
+  }
+  document.title = siteConfig.value.websiteTitle;
 }
 
 async function loadPoolCards() {
@@ -1645,7 +1667,7 @@ function leaderboardRankLabel(rank?: number) {
       <RouterLink class="brand" :to="{ name: 'draw' }">
         <span class="brand-mark"><Sparkles :size="20" /></span>
         <span>
-          <strong>Kesini 抽卡站</strong>
+          <strong>{{ siteConfig.websiteTitle }}</strong>
           <small>星穹调度台</small>
         </span>
       </RouterLink>

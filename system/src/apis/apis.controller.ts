@@ -19,6 +19,18 @@ export class ApisController {
   constructor(private readonly apisService: ApisService) {}
 
   /**
+   * 公开站点配置
+   * GET /apis/site-config
+   */
+  @Get("/site-config")
+  async getSiteConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.apisService.getPublicSiteConfig(),
+      "获取站点配置成功",
+    );
+  }
+
+  /**
    * 登录接口
    * POST /apis/login
    */

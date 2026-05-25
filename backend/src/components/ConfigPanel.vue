@@ -7,7 +7,7 @@
           <h2>{{ title }}</h2>
           <p v-if="description" class="panel-description">{{ description }}</p>
         </div>
-        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button type="info" plain :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
       </div>
     </template>
 
@@ -93,6 +93,9 @@ const props = withDefaults(
     itemOptions: () => [],
   },
 );
+const emit = defineEmits<{
+  (event: "saved"): void;
+}>();
 
 const values = ref<Record<string, any>>({});
 const loading = ref(false);
@@ -154,6 +157,7 @@ async function save() {
     });
     buildDefault(next);
     ElMessage.success("配置已保存");
+    emit("saved");
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : "保存失败");
   } finally {

@@ -32,7 +32,7 @@ export interface GachaConfig {
 
   // 稀有度概率配置 (总和应为1)
   rarityProbabilities?: {
-    [rarity: string]: number; // 如 { 'N': 0.5, 'R': 0.3, 'SR': 0.15, 'SSR': 0.045, 'UR': 0.005 }
+    [rarity: string]: number; // 如 { 'N': 0.5025, 'R': 0.3025, 'SR': 0.15, 'SSR': 0.045, 'UR': 0 }
   };
 
   // UP卡配置 (指定UP的卡片ID和UP倍率)

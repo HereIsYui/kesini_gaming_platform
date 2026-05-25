@@ -14,10 +14,10 @@ function createConfigService(repository: any) {
   return new GachaConfigService(
     {
       gachaProbabilities: {
-        standard: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
-        limited: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
-        beginner: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
-        event: { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 },
+        standard: { N: 0.5025, R: 0.3025, SR: 0.15, SSR: 0.045, UR: 0 },
+        limited: { N: 0.5025, R: 0.3025, SR: 0.15, SSR: 0.045, UR: 0 },
+        beginner: { N: 0.5025, R: 0.3025, SR: 0.15, SSR: 0.045, UR: 0 },
+        event: { N: 0.5025, R: 0.3025, SR: 0.15, SSR: 0.045, UR: 0 },
       },
       gachaPityConfigs: {
         standard: { enabled: true },
@@ -113,11 +113,11 @@ describe("GachaConfigService", () => {
       expect.objectContaining({
         poolId: 99,
         rarityProbabilities: {
-          N: 0.5,
-          R: 0.3,
+          N: 0.5025,
+          R: 0.3025,
           SR: 0.15,
           SSR: 0.045,
-          UR: 0.005,
+          UR: 0,
         },
         drawCosts: { once: 10, ten: 100 },
       }),

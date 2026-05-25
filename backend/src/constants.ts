@@ -26,6 +26,7 @@ export type PageKey =
   | "trade-records"
   | "recharge-config"
   | "recharge-records"
+  | "site-config"
   | "gacha-config";
 
 export type NavGroup =
@@ -60,6 +61,7 @@ export const pageKeys: PageKey[] = [
   "trade-records",
   "recharge-config",
   "recharge-records",
+  "site-config",
   "gacha-config",
 ];
 
@@ -250,7 +252,13 @@ export const userFields: FieldConfig[] = [
 
 export const inventoryFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "user.uid", label: "UID", readonly: true },
+  {
+    key: "user.uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "user.uid", nameKey: "userName" },
+  },
   { key: "item.drop_name", label: "物品", readonly: true },
   { key: "item.typeLabel", label: "类型", readonly: true },
   { key: "num", label: "数量", type: "number" },
@@ -258,16 +266,63 @@ export const inventoryFields: FieldConfig[] = [
 
 export const pityFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
-  { key: "pool_id", label: "卡池ID", readonly: true },
-  { key: "draws_since_sr", label: "SR计数", type: "number" },
-  { key: "draws_since_ssr", label: "SSR计数", type: "number" },
-  { key: "draws_since_ur", label: "UR计数", type: "number" },
+  { key: "uid", label: "玩家", readonly: true, minWidth: 180 },
+  { key: "poolName", label: "卡池", readonly: true, minWidth: 180 },
+  { key: "gacha_config_mode", label: "配置来源", readonly: true },
+  {
+    key: "pity_overview",
+    label: "保底进度",
+    readonly: true,
+    detailHidden: true,
+    minWidth: 340,
+  },
+  {
+    key: "draws_since_sr",
+    label: "SR未出计数",
+    type: "number",
+    tableHidden: true,
+    helper: "连续未出 SR 及以上的抽数，抽到 SR/SSR/UR 后会归零。",
+  },
+  {
+    key: "draws_since_ssr",
+    label: "SSR未出计数",
+    type: "number",
+    tableHidden: true,
+    helper: "连续未出 SSR 及以上的抽数，抽到 SSR/UR 后会归零。",
+  },
+  {
+    key: "draws_since_ur",
+    label: "UR未出计数",
+    type: "number",
+    tableHidden: true,
+    helper: "连续未出 UR 的抽数，只有抽到 UR 后会归零。",
+  },
+];
+
+export const siteConfigFields: FieldConfig[] = [
+  {
+    key: "websiteTitle",
+    label: "玩家站标题",
+    placeholder: "例如：Kesini 抽卡站",
+    helper: "用于玩家端浏览器标题和页面品牌标题。",
+  },
+  {
+    key: "adminTitle",
+    label: "后台标题",
+    placeholder: "例如：Kesini 后台管理",
+    helper: "用于后台浏览器标题、登录页标题和侧栏品牌标题。",
+  },
 ];
 
 export const historyFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "count", label: "抽数", readonly: true },
   { key: "card_levels", label: "稀有度", readonly: true },
   { key: "createdAt", label: "时间", readonly: true },
@@ -289,7 +344,13 @@ export const redeemCodeFields: FieldConfig[] = [
 export const redeemUsageFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
   { key: "code", label: "兑换码", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "领取时间", readonly: true },
 ];
@@ -312,7 +373,13 @@ export const exchangeItemFields: FieldConfig[] = [
 export const exchangeUsageFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
   { key: "shop_item_name", label: "兑换项", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "count", label: "数量", readonly: true },
   { key: "cost_snapshot", label: "消耗快照", readonly: true },
   { key: "reward_snapshot", label: "奖励快照", readonly: true },
@@ -333,7 +400,13 @@ export const launchActivityClaimFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
   { key: "activity_key", label: "活动批次", readonly: true },
   { key: "activity_name", label: "活动名称", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "reward_snapshot", label: "奖励快照", readonly: true },
   { key: "createdAt", label: "领取时间", readonly: true },
 ];
@@ -368,7 +441,13 @@ export const achievementFields: FieldConfig[] = [
 
 export const userAchievementFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "achievementName", label: "成就", readonly: true },
   { key: "category", label: "分类", readonly: true },
   { key: "progress", label: "进度", readonly: true },
@@ -383,8 +462,20 @@ export const tradeListingFields: FieldConfig[] = [
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
   { key: "card_uuid", label: "卡片UUID", readonly: true },
-  { key: "seller_uid", label: "卖家UID", readonly: true },
-  { key: "buyer_uid", label: "买家UID", readonly: true },
+  {
+    key: "seller_uid",
+    label: "卖家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "seller_uid", nameKey: "sellerName" },
+  },
+  {
+    key: "buyer_uid",
+    label: "买家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "buyer_uid", nameKey: "buyerName", fallback: "未成交" },
+  },
   { key: "price", label: "价格", readonly: true },
   { key: "fee_rate", label: "手续费率", readonly: true },
   { key: "sellerIncome", label: "卖家实收", readonly: true },
@@ -397,8 +488,20 @@ export const tradeRecordFields: FieldConfig[] = [
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
   { key: "card_uuid", label: "卡片UUID", readonly: true },
-  { key: "seller_uid", label: "卖家UID", readonly: true },
-  { key: "buyer_uid", label: "买家UID", readonly: true },
+  {
+    key: "seller_uid",
+    label: "卖家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "seller_uid", nameKey: "sellerName" },
+  },
+  {
+    key: "buyer_uid",
+    label: "买家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "buyer_uid", nameKey: "buyerName", fallback: "未成交" },
+  },
   { key: "price", label: "成交价", readonly: true },
   { key: "fee_amount", label: "手续费", readonly: true },
   { key: "seller_income", label: "卖家实收", readonly: true },
@@ -415,7 +518,13 @@ export const tradeConfigFields: FieldConfig[] = [
 export const rechargeRecordFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
   { key: "statusLabel", label: "状态", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
   { key: "fishpi_user_name", label: "鱼排用户名", readonly: true },
   { key: "amount", label: "到账星穹币", readonly: true },
   { key: "fishpi_cost", label: "扣除鱼排积分", readonly: true },

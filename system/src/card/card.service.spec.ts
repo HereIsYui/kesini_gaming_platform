@@ -28,11 +28,11 @@ describe("CardService 抽卡核心规则", () => {
       getDefaultConfig: jest.fn(() => ({
         poolId: 1,
         rarityProbabilities: {
-          N: 0.5,
-          R: 0.3,
+          N: 0.5025,
+          R: 0.3025,
           SR: 0.15,
           SSR: 0.045,
-          UR: 0.005,
+          UR: 0,
         },
         pitySystem: {
           enabled: true,
@@ -43,11 +43,11 @@ describe("CardService 抽卡核心规则", () => {
       getConfigByPoolId: jest.fn(async (poolId: number) => ({
         poolId,
         rarityProbabilities: {
-          N: 0.5,
-          R: 0.3,
+          N: 0.5025,
+          R: 0.3025,
           SR: 0.15,
           SSR: 0.045,
-          UR: 0.005,
+          UR: 0,
         },
       })),
       validateProbabilities: jest.fn(

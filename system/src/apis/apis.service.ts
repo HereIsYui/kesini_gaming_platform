@@ -5,18 +5,24 @@ import { User } from "src/entity/user.entity";
 import { LoginData } from "src/types/api";
 import { Repository } from "typeorm";
 import { JwtUtilsService } from "src/utils/jwt";
+import { SiteConfigService } from "src/config/site-config.service";
 
 @Injectable()
 export class ApisService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
     private readonly jwtUtilsService: JwtUtilsService,
+    private readonly siteConfigService: SiteConfigService,
   ) {}
 
   private logger = new Logger(ApisService.name);
   private readonly OP_ENDPOINT = "https://fishpi.cn";
   login(data: any) {
     return this.handleCallback(data);
+  }
+
+  getPublicSiteConfig() {
+    return this.siteConfigService.getSiteConfig();
   }
 
   /**

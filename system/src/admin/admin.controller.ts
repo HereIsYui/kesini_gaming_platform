@@ -23,6 +23,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from "class-validator";
 import { GetUser } from "src/auth/get-user.decorator";
@@ -280,6 +281,18 @@ class LaunchActivityConfigPatchDto {
     points: number;
     items: Array<{ itemId: number; num: number }>;
   };
+}
+
+class SiteConfigPatchDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  websiteTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  adminTitle?: string;
 }
 
 class AchievementQueryDto extends PageDto {
@@ -1155,6 +1168,24 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateLaunchActivityConfig(body as any),
       "更新开服活动配置成功",
+    );
+  }
+
+  @Get("config/site")
+  async getSiteConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getSiteConfig(),
+      "获取站点配置成功",
+    );
+  }
+
+  @Patch("config/site")
+  async updateSiteConfig(
+    @Body() body: SiteConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateSiteConfig(body),
+      "更新站点配置成功",
     );
   }
 

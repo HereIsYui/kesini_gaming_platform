@@ -7,8 +7,8 @@
           <h2>{{ title }}</h2>
         </div>
         <div class="panel-actions">
-          <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-          <el-button :icon="Download" @click="exportCurrentPage">导出当前页</el-button>
+          <el-button type="info" plain :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+          <el-button type="info" plain :icon="Download" @click="exportCurrentPage">导出当前页</el-button>
           <el-button v-if="creatable" type="primary" @click="openCreate">
             新增
           </el-button>
@@ -59,8 +59,8 @@
           :value="String(option.value)"
         />
       </el-select>
-      <el-button @click="reloadFromFirstPage">查询</el-button>
-      <el-button @click="resetFilters">重置</el-button>
+      <el-button type="primary" @click="reloadFromFirstPage">查询</el-button>
+      <el-button plain @click="resetFilters">重置</el-button>
     </div>
 
     <el-alert v-if="error" :title="error" type="error" show-icon />
@@ -74,23 +74,29 @@
       empty-text="暂无数据"
     >
       <el-table-column
-        v-for="field in fields"
+        v-for="field in tableFields"
         :key="field.key"
         :label="field.label"
-        min-width="150"
+        :min-width="field.minWidth || 150"
         show-overflow-tooltip
       >
         <template #default="{ row }">
           <slot name="cell" :field="field" :row="row" :reload="load">
-            <span>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+            <UserIdentity
+              v-if="field.identity"
+              :uid="toIdentityValue(getValue(row, field.identity.uidKey))"
+              :name="toIdentityValue(field.identity.nameKey ? getValue(row, field.identity.nameKey) : '')"
+              :fallback="field.identity.fallback"
+            />
+            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
           </slot>
         </template>
       </el-table-column>
       <el-table-column label="操作" fixed="right" width="260">
         <template #default="{ row }">
           <div class="row-actions">
-            <el-button size="small" @click="openDetail(row)">详情</el-button>
-            <el-button v-if="editable" size="small" @click="openEdit(row)">
+            <el-button type="info" plain size="small" @click="openDetail(row)">详情</el-button>
+            <el-button v-if="editable" type="primary" plain size="small" @click="openEdit(row)">
               编辑
             </el-button>
             <slot name="actions" :row="row" :reload="load" />
@@ -217,7 +223,7 @@
   <el-dialog v-model="detailVisible" :title="`${title}详情`" width="720px">
     <el-descriptions :column="1" border>
       <el-descriptions-item
-        v-for="field in fields"
+        v-for="field in detailFields"
         :key="field.key"
         :label="field.label"
       >
@@ -244,6 +250,7 @@ import {
   parseFormJson,
 } from "../utils";
 import RewardEditor from "./RewardEditor.vue";
+import UserIdentity from "./UserIdentity.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -285,8 +292,14 @@ const detail = ref<Record<string, any> | null>(null);
 const detailVisible = ref(false);
 
 const rows = computed(() => data.value?.list || []);
+const tableFields = computed(() =>
+  props.fields.filter((field) => !field.tableHidden),
+);
 const editableFields = computed(() =>
-  props.fields.filter((field) => !field.readonly),
+  props.fields.filter((field) => !field.readonly && !field.formHidden),
+);
+const detailFields = computed(() =>
+  props.fields.filter((field) => !field.detailHidden),
 );
 
 function buildFilters() {
@@ -441,7 +454,17 @@ async function openDetail(row: Record<string, any>) {
 }
 
 function exportCurrentPage() {
-  exportRowsToCsv(props.title, rows.value, props.fields);
+  exportRowsToCsv(props.title, rows.value, tableFields.value);
+}
+
+function toIdentityValue(value: unknown) {
+  if (typeof value === "string" || typeof value === "number") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return String(value);
 }
 
 onMounted(load);

@@ -4,8 +4,8 @@
       <div class="brand-mark large">
         <el-icon><MagicStick /></el-icon>
       </div>
-      <p class="eyebrow">Kesini Gacha Admin</p>
-      <h1>后台管理</h1>
+      <p class="eyebrow">{{ siteConfig.websiteTitle }}</p>
+      <h1>{{ siteConfig.adminTitle }}</h1>
       <p class="login-copy">使用 OpenID 或已有 JWT 登录后台。</p>
 
       <el-form label-position="top" class="login-form">
@@ -41,9 +41,9 @@
   </main>
 
   <el-container v-else class="app-shell">
-    <el-aside class="sidebar" width="260px">
+    <el-aside class="sidebar" width="236px">
       <SidebarBrand />
-      <el-scrollbar>
+      <el-scrollbar class="sidebar-menu-scroll">
         <el-menu
           :default-active="active"
           class="admin-menu"
@@ -75,16 +75,47 @@
           <span>{{ activePage.description }}</span>
         </div>
         <div class="top-actions">
-          <el-tag type="success">API {{ apiBase }}</el-tag>
-          <el-button circle :icon="theme === 'light' ? Moon : Sunny" @click="toggleTheme" />
-          <el-button circle :icon="SwitchButton" @click="logout" />
+          <el-dropdown
+            v-if="admin?.user"
+            trigger="click"
+            popper-class="login-status-dropdown"
+            @command="handleUserCommand"
+          >
+            <button class="login-status" type="button">
+              <img
+                v-if="getOpenidAvatar(admin.user)"
+                :src="getOpenidAvatar(admin.user)"
+                :alt="getOpenidDisplayName(admin.user)"
+              />
+              <span v-else class="login-avatar-fallback">
+                {{ getOpenidInitial(admin.user) }}
+              </span>
+              <div class="login-status-text">
+                <strong>{{ getOpenidDisplayName(admin.user) }}</strong>
+                <span>已登录 · UID {{ admin.user.uid }}</span>
+              </div>
+              <el-icon class="login-status-arrow"><ArrowDown /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout" :icon="SwitchButton">
+                  退出登录
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="toggle-theme"
+                  :icon="theme === 'light' ? Moon : Sunny"
+                >
+                  {{ theme === "light" ? "切换为暗色模式" : "切换为亮色模式" }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </el-header>
 
       <el-main class="content">
         <DashboardPage
           v-if="active === 'dashboard'"
-          :admin="admin"
           :data="dashboardData || undefined"
           :loading="dashboardLoading"
           :error="dashboardError"
@@ -128,6 +159,8 @@
           <template #actions="{ row }">
             <el-button
               size="small"
+              type="primary"
+              plain
               :loading="loadingPoolId === Number(row.id)"
               @click="openPoolGacha(row)"
             >
@@ -198,10 +231,33 @@
           title="保底状态"
           endpoint="/admin/pity"
           :fields="pityFields"
+          :pool-filter-options="adminOptions?.pools || []"
           editable
           keyword-param="uid"
           search-placeholder="按 UID 查询"
-        />
+        >
+          <template #cell="{ field, row }">
+            <div v-if="field.key === 'uid'" class="identity-cell">
+              <strong>{{ row.userName || "未知用户" }}</strong>
+              <span>UID {{ row.uid || "-" }}</span>
+            </div>
+            <div v-else-if="field.key === 'poolName'" class="identity-cell">
+              <strong>{{ row.poolName || `卡池 #${row.pool_id || "-"}` }}</strong>
+              <span>ID {{ row.pool_id || "-" }}</span>
+            </div>
+            <el-tag
+              v-else-if="field.key === 'gacha_config_mode'"
+              :type="String(row.gacha_config_mode) === '卡池配置' ? 'success' : 'info'"
+            >
+              {{ row.gacha_config_mode || "默认配置" }}
+            </el-tag>
+            <PityProgress
+              v-else-if="field.key === 'pity_overview'"
+              :row="row"
+            />
+            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+          </template>
+        </AdminTable>
 
         <AdminTable
           v-else-if="active === 'redeem-codes'"
@@ -337,6 +393,15 @@
           v-else-if="active === 'gacha-config'"
           :options="adminOptions || undefined"
         />
+
+        <ConfigPanel
+          v-else-if="active === 'site-config'"
+          title="站点配置"
+          description="配置玩家站和后台管理台的浏览器标题与页面品牌标题。"
+          endpoint="/admin/config/site"
+          :fields="siteConfigFields"
+          @saved="loadSiteConfig"
+        />
       </el-main>
     </el-container>
   </el-container>
@@ -356,11 +421,13 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElButton, ElMessage } from "element-plus";
 import {
+  ArrowDown,
   Collection,
   Coin,
   DataAnalysis,
+  EditPen,
   Files,
   Goods,
   Histogram,
@@ -397,6 +464,7 @@ import {
   redeemCodeFields,
   redeemUsageFields,
   routeAliases,
+  siteConfigFields,
   tradeConfigFields,
   tradeListingFields,
   tradeRecordFields,
@@ -421,6 +489,7 @@ import type {
   GachaPoolConfig,
   PoolGachaConfigDetail,
   SelectOption,
+  SiteConfig,
 } from "./types";
 import {
   formatFieldValue,
@@ -437,6 +506,7 @@ import {
 import AdminTable from "./components/AdminTable.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import GachaConfigDialog from "./components/GachaConfigDialog.vue";
+import PityProgress from "./components/PityProgress.vue";
 
 type Theme = "light" | "dark";
 
@@ -448,6 +518,10 @@ const authError = ref("");
 const apiBaseInput = ref(getApiBase());
 const manualToken = ref("");
 const loginLoading = ref(false);
+const siteConfig = ref<SiteConfig>({
+  websiteTitle: "Kesini 抽卡站",
+  adminTitle: "Kesini 后台管理",
+});
 const theme = ref<Theme>((localStorage.getItem("kesini_theme") as Theme) || "light");
 const active = ref(readHashRoute().key);
 const dashboardData = ref<DashboardData | null>(null);
@@ -463,7 +537,6 @@ const editingPoolGacha = ref<{
   defaultConfig: GachaPoolConfig;
 } | null>(null);
 
-const apiBase = computed(getApiBase);
 const itemOptions = computed<SelectOption[]>(() => adminOptions.value?.dropItems || []);
 const cardFields = computed(() => {
   const fields = createCardFields(adminOptions.value?.pools || []);
@@ -640,6 +713,13 @@ const pageDefinitions = computed(() => [
     group: "系统配置",
     icon: Setting,
   },
+  {
+    key: "site-config",
+    label: "站点配置",
+    description: "配置玩家站和后台管理台的页面标题与品牌标题。",
+    group: "系统配置",
+    icon: Setting,
+  },
 ] satisfies Array<{
   key: PageKey;
   label: string;
@@ -733,6 +813,21 @@ async function loadDashboard() {
   }
 }
 
+async function loadSiteConfig() {
+  try {
+    const data = await request<SiteConfig>("/apis/site-config");
+    siteConfig.value = {
+      websiteTitle: data.websiteTitle || "Kesini 抽卡站",
+      adminTitle: data.adminTitle || "Kesini 后台管理",
+    };
+  } catch {
+    siteConfig.value = {
+      websiteTitle: "Kesini 抽卡站",
+      adminTitle: "Kesini 后台管理",
+    };
+  }
+}
+
 async function handleOpenidCallback() {
   const params = new URLSearchParams(window.location.search);
   if (!params.has("openid.mode")) {
@@ -802,6 +897,32 @@ function logout() {
   adminOptions.value = null;
 }
 
+function handleUserCommand(command: string | number | object) {
+  if (command === "logout") {
+    logout();
+    return;
+  }
+  if (command === "toggle-theme") {
+    toggleTheme();
+  }
+}
+
+function getOpenidDisplayName(user: AdminMeResponse["user"]) {
+  if (!user) {
+    return "后台账号";
+  }
+  return String(user.nickname || user.name || user.uid || "后台账号");
+}
+
+function getOpenidAvatar(user: AdminMeResponse["user"]) {
+  const avatar = user?.avatar;
+  return typeof avatar === "string" && avatar.trim() ? avatar.trim() : "";
+}
+
+function getOpenidInitial(user: AdminMeResponse["user"]) {
+  return getOpenidDisplayName(user).trim().slice(0, 1).toUpperCase() || "K";
+}
+
 async function togglePoolEnabled(
   row: Record<string, any>,
   enabled: boolean,
@@ -869,6 +990,7 @@ watch(
   theme,
   (nextTheme) => {
     document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
     document.body.setAttribute("theme-mode", nextTheme === "dark" ? "dark" : "light");
     localStorage.setItem("kesini_theme", nextTheme);
   },
@@ -879,10 +1001,18 @@ watch(active, (next) => {
     loadDashboard();
   }
 });
+watch(
+  () => siteConfig.value.adminTitle,
+  (title) => {
+    document.title = title || "Kesini 后台管理";
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   syncFromHash();
   window.addEventListener("hashchange", syncFromHash);
+  loadSiteConfig();
   handleOpenidCallback();
 });
 
@@ -893,9 +1023,12 @@ const SidebarBrand = defineComponent({
       h("div", { class: "sidebar-header" }, [
         h("div", { class: "brand" }, [
           h("div", { class: "brand-mark" }, [h(MagicStick)]),
-          h("div", [h("strong", "Kesini"), h("span", "Gacha Admin")]),
+          h("div", [
+            h("strong", siteConfig.value.adminTitle || "Kesini 后台管理"),
+            h("span", "运营控制台"),
+          ]),
         ]),
-        h("span", { class: "sidebar-pill" }, "运营控制台"),
+        h("span", { class: "sidebar-pill" }, "Admin"),
       ]);
   },
 });
@@ -903,7 +1036,6 @@ const SidebarBrand = defineComponent({
 const DashboardPage = defineComponent({
   name: "DashboardPage",
   props: {
-    admin: { type: Object, default: null },
     data: { type: Object, default: null },
     loading: { type: Boolean, default: false },
     error: { type: String, default: "" },
@@ -911,57 +1043,75 @@ const DashboardPage = defineComponent({
   emits: ["reload"],
   setup(props, { emit }) {
     return () =>
-      h("div", { class: "dashboard-grid" }, [
-        h(
-          "div",
-          { class: "dashboard-main" },
-          [
-            h("div", { class: "stat-grid" },
-              Object.entries((props.data as DashboardData | null)?.counters || {}).map(
-                ([key, value]) =>
-                  h("div", { class: "stat-card", key }, [
-                    h("span", counterLabel(key)),
-                    h("strong", String(value)),
-                  ]),
-              ),
-            ),
-            props.error
-              ? h("div", { class: "state-box error" }, props.error)
-              : props.loading
-                ? h("div", { class: "state-box" }, "正在加载总览...")
-                : h("div", { class: "panel-card plain-card" }, [
-                    h("div", { class: "panel-header" }, [
-                      h("div", [h("p", { class: "eyebrow" }, "最近动态"), h("h2", "抽卡记录")]),
-                      h("button", { class: "link-button", onClick: () => emit("reload") }, "刷新"),
-                    ]),
-                    h(
-                      "div",
-                      { class: "activity-list" },
-                      ((props.data as DashboardData | null)?.recentHistories || []).map(
-                        (item, index) =>
-                          h("div", { class: "activity-item", key: index }, [
-                            h("strong", String(item.uid || "未知用户")),
-                            h("span", `${String(item.count || 0)} 抽 · ${String(item.card_levels || "-")}`),
-                          ]),
-                      ),
-                    ),
-                  ]),
-          ],
-        ),
-        h("div", { class: "side-stack" }, [
-          h("div", { class: "panel-card plain-card" }, [
-            h("p", { class: "eyebrow" }, "管理员"),
-            h("h2", String((props.admin as AdminMeResponse | null)?.user?.nickname || (props.admin as AdminMeResponse | null)?.user?.name || "后台账号")),
-            h("p", String((props.admin as AdminMeResponse | null)?.user?.uid || "-")),
-          ]),
-          h("div", { class: "panel-card plain-card" }, [
-            h("p", { class: "eyebrow" }, "稀有度库存"),
-            ...Object.entries((props.data as DashboardData | null)?.rarityTotals || {}).map(([key, value]) =>
-              h("div", { class: "rarity-row", key }, [
-                h("span", key),
+      h("div", { class: "dashboard-page" }, [
+        h("div", { class: "stat-grid" },
+          Object.entries((props.data as DashboardData | null)?.counters || {}).map(
+            ([key, value]) =>
+              h("div", { class: "stat-card", key }, [
+                h("span", counterLabel(key)),
                 h("strong", String(value)),
               ]),
-            ),
+          ),
+        ),
+        h("div", { class: "dashboard-grid" }, [
+          h(
+            "div",
+            { class: "dashboard-main" },
+            [
+              props.error
+                ? h("div", { class: "state-box error" }, props.error)
+                : props.loading
+                  ? h("div", { class: "state-box" }, "正在加载总览...")
+                  : h("div", { class: "panel-card plain-card" }, [
+                      h("div", { class: "panel-header" }, [
+                        h("div", [h("p", { class: "eyebrow" }, "最近动态"), h("h2", "抽卡记录")]),
+                        h("button", { class: "link-button", onClick: () => emit("reload") }, "刷新"),
+                      ]),
+                      h(
+                        "div",
+                        { class: "activity-list" },
+                        ((props.data as DashboardData | null)?.recentHistories || []).length
+                          ? ((props.data as DashboardData | null)?.recentHistories || []).map(
+                              (item, index) =>
+                                h("div", { class: "activity-item", key: index }, [
+                                  h("div", { class: "activity-user" }, [
+                                    h("strong", String(item.userName || "未知用户")),
+                                    h("span", `UID ${String(item.uid || "-")}`),
+                                  ]),
+                                  h("div", { class: "activity-detail" }, [
+                                    h("strong", `${String(item.count || 0)} 抽`),
+                                    h("span", String(item.card_levels || "-")),
+                                    h("time", item.createdAt ? formatDate(item.createdAt) : "-"),
+                                  ]),
+                                ]),
+                            )
+                          : [h("div", { class: "state-box compact" }, "暂无抽卡记录")],
+                      ),
+                    ]),
+            ],
+          ),
+          h("div", { class: "side-stack" }, [
+            h("div", { class: "panel-card plain-card" }, [
+              h("p", { class: "eyebrow" }, "运营状态"),
+              h("h2", "数据已同步"),
+              h("div", { class: "status-list" }, [
+                statusItem("统计口径", "全量数据"),
+                statusItem(
+                  "最近记录",
+                  `${((props.data as DashboardData | null)?.recentHistories || []).length} 条`,
+                ),
+                statusItem("刷新方式", "手动刷新"),
+              ]),
+            ]),
+            h("div", { class: "panel-card plain-card" }, [
+              h("p", { class: "eyebrow" }, "稀有度库存"),
+              ...Object.entries((props.data as DashboardData | null)?.rarityTotals || {}).map(([key, value]) =>
+                h("div", { class: "rarity-row", key }, [
+                  h("span", key),
+                  h("strong", String(value)),
+                ]),
+              ),
+            ]),
           ]),
         ]),
       ]);
@@ -1043,7 +1193,16 @@ const GachaConfigPage = defineComponent({
                 ])
               : h("div", { class: "state-box" }, "暂无默认配置，保存后会写入 pool_id=0。"),
           h("div", { class: "config-actions" }, [
-            h("button", { class: "primary-button", onClick: () => (dialogVisible.value = true) }, "编辑默认配置"),
+            h(
+              ElButton,
+              {
+                class: "config-edit-button",
+                type: "primary",
+                icon: EditPen,
+                onClick: () => (dialogVisible.value = true),
+              },
+              () => "编辑默认配置",
+            ),
           ]),
         ]),
         editableDefaultConfig.value
@@ -1076,6 +1235,13 @@ function counterLabel(key: string) {
 
 function summaryItem(label: string, value: string) {
   return h("div", { class: "summary-item" }, [
+    h("span", label),
+    h("strong", value),
+  ]);
+}
+
+function statusItem(label: string, value: string) {
+  return h("div", { class: "status-item" }, [
     h("span", label),
     h("strong", value),
   ]);

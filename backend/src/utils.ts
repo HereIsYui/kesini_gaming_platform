@@ -246,11 +246,11 @@ export function createGachaFormState(
     poolId: Number(config.poolId || poolKey),
     enabled: config.enabled !== false,
     rarityProbabilities: {
-      N: Number(config.rarityProbabilities?.N ?? 0.5),
-      R: Number(config.rarityProbabilities?.R ?? 0.3),
+      N: Number(config.rarityProbabilities?.N ?? 0.5025),
+      R: Number(config.rarityProbabilities?.R ?? 0.3025),
       SR: Number(config.rarityProbabilities?.SR ?? 0.15),
       SSR: Number(config.rarityProbabilities?.SSR ?? 0.045),
-      UR: Number(config.rarityProbabilities?.UR ?? 0.005),
+      UR: Number(config.rarityProbabilities?.UR ?? 0),
     },
     drawCosts: {
       once: Number(config.drawCosts?.once || 10),

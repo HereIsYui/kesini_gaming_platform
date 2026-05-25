@@ -6,7 +6,7 @@
 
     <div class="reward-row-header">
       <span>{{ mode === "costs" ? "消耗物品" : "奖励物品" }}</span>
-      <el-button size="small" @click="addItem">添加物品</el-button>
+      <el-button type="primary" plain size="small" @click="addItem">添加物品</el-button>
     </div>
 
     <div v-if="items.length" class="reward-row-list">

@@ -88,7 +88,7 @@ REDIS_PASSWORD=            # Redis密码（可选）
 #### 全局默认概率兜底
 
 ```bash
-STANDARD_POOL_RARITY_PROBABILITIES={"N":0.5,"R":0.3,"SR":0.15,"SSR":0.045,"UR":0.005}
+STANDARD_POOL_RARITY_PROBABILITIES={"N":0.5025,"R":0.3025,"SR":0.15,"SSR":0.045,"UR":0}
 ```
 
 ### 保底默认配置

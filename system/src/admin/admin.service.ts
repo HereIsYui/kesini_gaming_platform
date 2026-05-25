@@ -14,6 +14,11 @@ import {
   GachaConfigService,
 } from "src/card/gacha-config.service";
 import { ConfigurationService } from "src/config/configuration.service";
+import {
+  DEFAULT_SITE_CONFIG,
+  SiteConfigService,
+  SiteConfigView,
+} from "src/config/site-config.service";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import {
@@ -110,6 +115,8 @@ export class AdminService {
     @Optional()
     @InjectRepository(LaunchActivityClaim)
     private readonly launchActivityClaimRepository?: Repository<LaunchActivityClaim>,
+    @Optional()
+    private readonly siteConfigService?: SiteConfigService,
   ) {}
 
   async getMe(uid: string) {
@@ -132,6 +139,15 @@ export class AdminService {
           take: 8,
         }),
       ]);
+    const historyUids = Array.from(
+      new Set(recentHistories.map((history) => history.uid).filter(Boolean)),
+    );
+    const historyUsers = historyUids.length
+      ? await this.userRepository.find({ where: { uid: In(historyUids) } })
+      : [];
+    const historyUserMap = new Map(
+      historyUsers.map((user) => [user.uid, user]),
+    );
 
     const totalHistory = await this.historyRepository
       .createQueryBuilder("history")
@@ -161,7 +177,13 @@ export class AdminService {
         SSR: Number(rarityTotals?.SSR || 0),
         UR: Number(rarityTotals?.UR || 0),
       },
-      recentHistories,
+      recentHistories: recentHistories.map((history) => {
+        const user = historyUserMap.get(history.uid);
+        return {
+          ...history,
+          userName: this.getUserDisplayName(user),
+        };
+      }),
     };
   }
 
@@ -485,11 +507,11 @@ export class AdminService {
       pageSize,
     );
     if (!query.rarity) {
-      return result;
+      return this.attachUserDisplayToUidRows(result);
     }
 
     const rarity = query.rarity.trim().toUpperCase();
-    return {
+    return this.attachUserDisplayToUidRows({
       ...result,
       list: result.list.filter((history) =>
         history.card_levels
@@ -497,7 +519,7 @@ export class AdminService {
           .map((level) => level.trim().toUpperCase())
           .includes(rarity),
       ),
-    };
+    });
   }
 
   async listInventories(query: PageQuery & { uid?: string }) {
@@ -541,7 +563,47 @@ export class AdminService {
     if (query.poolId !== undefined) {
       where.pool_id = query.poolId;
     }
-    return this.findAndPage(this.pityRepository, where, page, pageSize);
+    const result = await this.findAndPage(
+      this.pityRepository,
+      where,
+      page,
+      pageSize,
+    );
+    const pityRows = result.list as UserGachaPity[];
+    const poolIds = [
+      ...new Set(
+        pityRows
+          .map((pity) => Number(pity.pool_id))
+          .filter((poolId) => Number.isInteger(poolId) && poolId > 0),
+      ),
+    ];
+    const uids = [
+      ...new Set(pityRows.map((pity) => pity.uid).filter(Boolean)),
+    ];
+    const [pools, users, configs] = await Promise.all([
+      poolIds.length
+        ? this.poolRepository.find({ where: { id: In(poolIds) } })
+        : Promise.resolve([] as PoolInfo[]),
+      uids.length
+        ? this.userRepository.find({ where: { uid: In(uids) } })
+        : Promise.resolve([] as User[]),
+      poolIds.length
+        ? this.gachaConfigService.getPoolConfigsByPoolIds(poolIds)
+        : Promise.resolve({} as Record<number, GachaConfigView>),
+    ]);
+    const poolMap = new Map(pools.map((pool) => [pool.id, pool]));
+    const userMap = new Map(users.map((user) => [user.uid, user]));
+    return {
+      ...result,
+      list: pityRows.map((pity) =>
+        this.toPityView(
+          pity,
+          poolMap.get(pity.pool_id),
+          userMap.get(pity.uid),
+          configs[pity.pool_id],
+        ),
+      ),
+    };
   }
 
   async updatePity(id: number, body: Partial<UserGachaPity>) {
@@ -572,6 +634,20 @@ export class AdminService {
 
   async updateGachaConfig(poolId: number, body: EditableGachaConfig) {
     return this.gachaConfigService.savePoolConfig(poolId, body);
+  }
+
+  async getSiteConfig() {
+    if (!this.siteConfigService) {
+      return DEFAULT_SITE_CONFIG;
+    }
+    return this.siteConfigService.getSiteConfig();
+  }
+
+  async updateSiteConfig(body: Partial<SiteConfigView>) {
+    if (!this.siteConfigService) {
+      throw new Error("站点配置服务未初始化");
+    }
+    return this.siteConfigService.updateSiteConfig(body);
   }
 
   async copyGachaConfig(poolId: number, targetPoolIds: number[]) {
@@ -749,7 +825,9 @@ export class AdminService {
     if (query.codeId !== undefined) {
       where.code_id = query.codeId;
     }
-    return this.findAndPage(this.redeemUsageRepository, where, page, pageSize);
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(this.redeemUsageRepository, where, page, pageSize),
+    );
   }
 
   async listExchangeItems(query: PageQuery) {
@@ -823,11 +901,13 @@ export class AdminService {
     if (query.itemId !== undefined) {
       where.shop_item_id = query.itemId;
     }
-    return this.findAndPage(
-      this.exchangeUsageRepository,
-      where,
-      page,
-      pageSize,
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(
+        this.exchangeUsageRepository,
+        where,
+        page,
+        pageSize,
+      ),
     );
   }
 
@@ -1049,12 +1129,13 @@ export class AdminService {
     }
 
     const [list, total] = await queryBuilder.getManyAndCount();
-    return {
+    const decorated = await this.attachUserDisplayToUidRows({
       list: list.map((record) => this.decorateRechargeRecord(record)),
       total,
       page,
       pageSize,
-    };
+    });
+    return decorated;
   }
 
   async getLaunchActivityConfig() {
@@ -1108,12 +1189,55 @@ export class AdminService {
     if (query.activityKey) {
       where.activity_key = Like(`%${query.activityKey}%`);
     }
-    return this.findAndPage(
-      this.mustLaunchActivityClaimRepository(),
-      where,
-      page,
-      pageSize,
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(
+        this.mustLaunchActivityClaimRepository(),
+        where,
+        page,
+        pageSize,
+      ),
     );
+  }
+
+  private getUserDisplayName(user?: User | null) {
+    return String(user?.nickname || user?.name || user?.uid || "");
+  }
+
+  private async getUserDisplayMapByUids(values: Array<string | null | undefined>) {
+    const uids = [
+      ...new Set(
+        values
+          .map((uid) => String(uid || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (uids.length === 0) {
+      return new Map<string, string>();
+    }
+    const users = await this.userRepository.find({ where: { uid: In(uids) } });
+    return new Map(
+      users.map((user) => [user.uid, this.getUserDisplayName(user)]),
+    );
+  }
+
+  private async attachUserDisplayToUidRows<
+    T extends { uid?: string | null },
+  >(result: {
+    list: T[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }) {
+    const displayMap = await this.getUserDisplayMapByUids(
+      result.list.map((item) => item.uid),
+    );
+    return {
+      ...result,
+      list: result.list.map((item) => ({
+        ...item,
+        userName: displayMap.get(String(item.uid || "")) || "",
+      })),
+    };
   }
 
   private async attachInventoryInfo(result: {
@@ -1133,16 +1257,21 @@ export class AdminService {
         : Promise.resolve([] as DropItem[]),
     ]);
 
+    const userMap = new Map(users.map((user) => [user.id, user]));
     return {
       ...result,
-      list: result.list.map((inventory) => ({
-        ...inventory,
-        user: users.find((user) => user.id === inventory.user_id) || null,
-        item:
-          this.decorateNullableDropItem(
-            items.find((item) => item.id === inventory.item_id) || null,
-          ) || null,
-      })),
+      list: result.list.map((inventory) => {
+        const user = userMap.get(inventory.user_id) || null;
+        return {
+          ...inventory,
+          user,
+          userName: this.getUserDisplayName(user),
+          item:
+            this.decorateNullableDropItem(
+              items.find((item) => item.id === inventory.item_id) || null,
+            ) || null,
+        };
+      }),
     };
   }
 
@@ -1158,6 +1287,9 @@ export class AdminService {
     const pools = poolIds.length
       ? await this.poolRepository.find({ where: { id: In(poolIds) } })
       : [];
+    const userDisplayMap = await this.getUserDisplayMapByUids(
+      list.flatMap((item) => [item.seller_uid, item.buyer_uid]),
+    );
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const poolMap = new Map(pools.map((pool) => [pool.id, pool]));
     return list.map((listing) => {
@@ -1173,6 +1305,8 @@ export class AdminService {
         cardType: card?.card_type || 0,
         poolId: card?.pool || null,
         poolName: pool?.pool_name || "",
+        sellerName: userDisplayMap.get(String(listing.seller_uid || "")) || "",
+        buyerName: userDisplayMap.get(String(listing.buyer_uid || "")) || "",
         feeAmount,
         sellerIncome: Number(listing.price || 0) - feeAmount,
       };
@@ -1180,6 +1314,9 @@ export class AdminService {
   }
 
   private async attachTradeRecordInfo(list: TradeRecord[]) {
+    const userDisplayMap = await this.getUserDisplayMapByUids(
+      list.flatMap((record) => [record.seller_uid, record.buyer_uid]),
+    );
     return list.map((record) => ({
       ...record,
       cardName: record.card_snapshot?.cardName || `卡片#${record.card_id}`,
@@ -1187,6 +1324,8 @@ export class AdminService {
       cardType: record.card_snapshot?.cardType || 0,
       poolId: record.card_snapshot?.poolId || null,
       poolName: record.card_snapshot?.poolName || "",
+      sellerName: userDisplayMap.get(String(record.seller_uid || "")) || "",
+      buyerName: userDisplayMap.get(String(record.buyer_uid || "")) || "",
     }));
   }
 
@@ -1454,6 +1593,68 @@ export class AdminService {
     return config?.scope === "pool" && config.enabled !== false
       ? "卡池配置"
       : "默认配置";
+  }
+
+  private toPityView(
+    pity: UserGachaPity,
+    pool: PoolInfo | undefined,
+    user: User | undefined,
+    config: GachaConfigView | undefined,
+  ) {
+    return {
+      ...pity,
+      userName: this.getUserDisplayName(user),
+      poolName: pool?.pool_name || `卡池 #${pity.pool_id}`,
+      gacha_config_mode: this.getGachaConfigMode(config),
+      pitySystem: config?.pitySystem || null,
+      pity_overview: this.getPityOverviewText(pity, config?.pitySystem),
+    };
+  }
+
+  private getPityOverviewText(
+    pity: UserGachaPity,
+    pitySystem: GachaConfigView["pitySystem"] | undefined,
+  ) {
+    if (!pitySystem) {
+      return "未读取到保底配置";
+    }
+    if (pitySystem.enabled === false) {
+      return "当前卡池未开启保底";
+    }
+    const rules = [
+      { label: "硬保底", rule: pitySystem.hardPity },
+      { label: "软保底", rule: pitySystem.softPity },
+    ].filter((item) => item.rule?.count && item.rule?.guaranteedRarity);
+    if (rules.length === 0) {
+      return "当前卡池未配置具体保底规则";
+    }
+    return rules
+      .map(({ label, rule }) => {
+        const current = this.getPityCounterByRarity(
+          pity,
+          rule!.guaranteedRarity,
+        );
+        const remaining = Math.max(0, Number(rule!.count) - current);
+        const state =
+          remaining <= 0
+            ? "已满足"
+            : remaining === 1
+              ? "下抽触发"
+              : `还差 ${remaining} 抽`;
+        return `${label}${rule!.guaranteedRarity}: 已垫 ${current}/${rule!.count}，${state}`;
+      })
+      .join("；");
+  }
+
+  private getPityCounterByRarity(pity: UserGachaPity, rarity: string) {
+    const rank = CARD_RARITIES.indexOf(rarity);
+    if (rank >= CARD_RARITIES.indexOf("UR")) {
+      return Number(pity.draws_since_ur || 0);
+    }
+    if (rank >= CARD_RARITIES.indexOf("SSR")) {
+      return Number(pity.draws_since_ssr || 0);
+    }
+    return Number(pity.draws_since_sr || 0);
   }
 
   private async findAndPage<T extends ObjectLiteral>(

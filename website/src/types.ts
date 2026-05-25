@@ -23,6 +23,11 @@ export interface LoginUrlResponse {
   url: string;
 }
 
+export interface SiteConfig {
+  websiteTitle: string;
+  adminTitle: string;
+}
+
 export type CardRarity = "N" | "R" | "SR" | "SSR" | "UR";
 
 export interface PoolInfo {

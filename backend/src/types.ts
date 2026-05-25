@@ -36,7 +36,14 @@ export interface DashboardData {
     totalDraws: number;
   };
   rarityTotals: Record<string, number>;
-  recentHistories: Record<string, unknown>[];
+  recentHistories: Array<{
+    uid?: string;
+    userName?: string;
+    count?: number;
+    card_levels?: string;
+    createdAt?: string;
+    [key: string]: unknown;
+  }>;
 }
 
 export interface SelectOption {
@@ -108,6 +115,11 @@ export interface GachaConfigData {
   [key: string]: unknown;
 }
 
+export interface SiteConfig {
+  websiteTitle: string;
+  adminTitle: string;
+}
+
 export interface FieldConfig {
   key: string;
   label: string;
@@ -125,9 +137,18 @@ export interface FieldConfig {
   options?: SelectOption[];
   helper?: string;
   fullWidth?: boolean;
+  minWidth?: number | string;
   placeholder?: string;
   readonly?: boolean;
+  tableHidden?: boolean;
+  formHidden?: boolean;
+  detailHidden?: boolean;
   defaultValue?: unknown;
+  identity?: {
+    uidKey: string;
+    nameKey?: string;
+    fallback?: string;
+  };
 }
 
 export interface RedeemRewards {

@@ -10,6 +10,7 @@ import { DropItem } from "./entity/drop.entity";
 import { User } from "./entity/user.entity";
 import { UserGachaPity } from "./entity/userGachaPity.entity";
 import { GachaPoolConfig } from "./entity/gachaPoolConfig.entity";
+import { SystemConfig } from "./entity/systemConfig.entity";
 import { RedeemCode } from "./entity/redeemCode.entity";
 import { RedeemCodeUsage } from "./entity/redeemCodeUsage.entity";
 import { RechargeConfig } from "./entity/rechargeConfig.entity";
@@ -30,6 +31,7 @@ import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
 import { ConfigurationModule } from "./config/configuration.module";
 import { ConfigurationService } from "./config/configuration.service";
+import { SiteConfigModule } from "./config/site-config.module";
 import { AdminModule } from "./admin/admin.module";
 import { RedeemModule } from "./redeem/redeem.module";
 import { ExchangeModule } from "./exchange/exchange.module";
@@ -53,6 +55,7 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
       User,
       UserGachaPity,
       GachaPoolConfig,
+      SystemConfig,
       RedeemCode,
       RedeemCodeUsage,
       RechargeConfig,
@@ -70,6 +73,7 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
       UserAchievement,
     ]),
     ConfigurationModule,
+    SiteConfigModule,
     ApisModule,
     CardModule,
     AdminModule,

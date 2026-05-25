@@ -45,11 +45,13 @@
               v-for="template in probabilityTemplates"
               :key="template.label"
               size="small"
+              type="primary"
+              plain
               @click="applyTemplate(template.values)"
             >
               {{ template.label }}
             </el-button>
-            <el-button size="small" @click="normalizeProbabilities">自动归一化</el-button>
+            <el-button size="small" type="success" plain @click="normalizeProbabilities">自动归一化</el-button>
           </div>
           <el-form label-position="top" class="probability-grid">
             <el-form-item v-for="option in rarityOptions" :key="String(option.value)" :label="`${option.label} 概率`">

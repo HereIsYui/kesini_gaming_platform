@@ -22,7 +22,7 @@ export class GachaPoolConfig {
   @Column({ default: true })
   enabled: boolean;
 
-  // 稀有度概率，如 { N: 0.5, R: 0.3, SR: 0.15, SSR: 0.045, UR: 0.005 }
+  // 稀有度概率，如 { N: 0.5025, R: 0.3025, SR: 0.15, SSR: 0.045, UR: 0 }
   @Column({ type: "json" })
   rarity_probabilities: Record<string, number>;
 

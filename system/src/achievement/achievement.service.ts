@@ -388,12 +388,19 @@ export class AchievementService {
         })
       : [];
     const configMap = new Map(configs.map((config) => [config.id, config]));
+    const uids = [...new Set(records.map((record) => record.uid).filter(Boolean))];
+    const users = uids.length
+      ? await this.dataSource.getRepository(User).find({ where: { uid: In(uids) } })
+      : [];
+    const userMap = new Map(users.map((user) => [user.uid, user]));
     return {
       list: records.map((record) => {
         const config = configMap.get(record.achievement_id);
+        const user = userMap.get(record.uid);
         return {
           id: record.id,
           uid: record.uid,
+          userName: user?.nickname || user?.name || user?.uid || "",
           achievementId: record.achievement_id,
           achievementCode: record.achievement_code,
           achievementName: config?.name || record.achievement_code,

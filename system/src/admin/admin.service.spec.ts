@@ -304,6 +304,37 @@ describe("AdminService", () => {
     );
   });
 
+  it("抽卡历史列表会补充用户昵称", async () => {
+    const historyRepository = createRepository({
+      findAndCount: jest.fn().mockResolvedValue([
+        [{ id: 1, uid: "1001", card_levels: "SSR", count: 1 }],
+        1,
+      ]),
+    });
+    const userRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { uid: "1001", name: "fishpi-user", nickname: "鱼排玩家" },
+      ]),
+    });
+    const service = createService({
+      history: historyRepository,
+      user: userRepository,
+    });
+
+    await expect(
+      service.listHistories({ page: 1, pageSize: 20 }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        list: [
+          expect.objectContaining({
+            uid: "1001",
+            userName: "鱼排玩家",
+          }),
+        ],
+      }),
+    );
+  });
+
   it("后台选项会按轻量结构返回卡池、卡片和物品", async () => {
     const poolRepository = createRepository({
       find: jest.fn().mockResolvedValue([
