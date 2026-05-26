@@ -121,8 +121,16 @@ type PoolCatalogCard = {
   card: CardItem;
   rarities: CardRarity[];
 };
+type CardIntroTarget = {
+  name: string;
+  desc?: string | null;
+  rarity?: string;
+  type?: string;
+  extra?: string;
+};
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const BAG_PAGE_SIZE = 24;
+const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
 const manualToken = ref("");
@@ -188,6 +196,7 @@ const tradeSort = ref("newest");
 const tradeMinPrice = ref("");
 const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const listingPrice = ref("");
 const redeemCode = ref("");
 const rechargeModalOpen = ref(false);
@@ -1237,6 +1246,26 @@ function closeResultModal() {
   resultModalOpen.value = false;
 }
 
+function cardIntroText(desc?: string | null) {
+  const text = String(desc || "").trim();
+  return text || "暂无介绍";
+}
+
+function hasCardIntroDetail(desc?: string | null) {
+  return cardIntroText(desc).length > CARD_DESC_DETAIL_THRESHOLD;
+}
+
+function openCardIntro(target: CardIntroTarget) {
+  cardIntroTarget.value = {
+    ...target,
+    desc: cardIntroText(target.desc),
+  };
+}
+
+function closeCardIntro() {
+  cardIntroTarget.value = null;
+}
+
 async function synthesizeCard(item: SynthesisCard) {
   if (!isAuthed.value) {
     notify("error", "请先登录后再合成卡片");
@@ -2183,7 +2212,7 @@ function leaderboardRankLabel(rank?: number) {
                 <div class="card-sigil"></div>
                 <div class="card-content">
                   <h3>{{ card.cardName }}</h3>
-                  <p>{{ card.cardDesc || "暂无介绍" }}</p>
+                  <p>{{ cardIntroText(card.cardDesc) }}</p>
                   <div class="tag-row">
                     <span>{{
                       poolTypeLabel(
@@ -2194,6 +2223,21 @@ function leaderboardRankLabel(rank?: number) {
                     <span v-if="card.listedCount"
                       >挂售 {{ card.listedCount }}</span
                     >
+                    <button
+                      v-if="hasCardIntroDetail(card.cardDesc)"
+                      class="tag-action"
+                      type="button"
+                      @click="
+                        openCardIntro({
+                          name: card.cardName,
+                          desc: card.cardDesc,
+                          rarity: String(card.cardLevel),
+                          type: cardTypeLabel(card.cardType),
+                        })
+                      "
+                    >
+                      详情
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2339,10 +2383,25 @@ function leaderboardRankLabel(rank?: number) {
               <div class="card-sigil"></div>
               <div class="card-content">
                 <h3>{{ item.card.card_name }}</h3>
-                <p>{{ item.card.card_desc || "暂无介绍" }}</p>
+                <p>{{ cardIntroText(item.card.card_desc) }}</p>
                 <div class="tag-row">
                   <span>{{ item.costLabel }}</span>
                   <span>#{{ item.card.id }}</span>
+                  <button
+                    v-if="hasCardIntroDetail(item.card.card_desc)"
+                    class="tag-action"
+                    type="button"
+                    @click="
+                      openCardIntro({
+                        name: item.card.card_name,
+                        desc: item.card.card_desc,
+                        rarity: item.rarity,
+                        type: cardTypeLabel(item.card.card_type),
+                      })
+                    "
+                  >
+                    详情
+                  </button>
                 </div>
               </div>
             </div>
@@ -2654,7 +2713,22 @@ function leaderboardRankLabel(rank?: number) {
                   <small>{{ listing.poolName || "未知卡池" }}</small>
                 </div>
                 <div class="trade-card-body">
-                  <p>{{ listing.cardDesc || "暂无介绍" }}</p>
+                  <p>{{ cardIntroText(listing.cardDesc) }}</p>
+                  <button
+                    v-if="hasCardIntroDetail(listing.cardDesc)"
+                    class="tag-action intro-inline-action"
+                    type="button"
+                    @click="
+                      openCardIntro({
+                        name: listing.cardName,
+                        desc: listing.cardDesc,
+                        rarity: listing.cardLevel,
+                        extra: listing.poolName || '未知卡池',
+                      })
+                    "
+                  >
+                    详情
+                  </button>
                   <dl>
                     <div>
                       <dt>价格</dt>
@@ -3352,10 +3426,24 @@ function leaderboardRankLabel(rank?: number) {
                       </span>
                     </div>
                     <strong>{{ item.card.card_name }}</strong>
-                    <p>{{ item.card.card_desc || "暂无介绍" }}</p>
+                    <p>{{ cardIntroText(item.card.card_desc) }}</p>
                     <div class="tag-row">
                       <span>{{ cardTypeLabel(item.card.card_type) }}</span>
                       <span>#{{ item.card.id }}</span>
+                      <button
+                        v-if="hasCardIntroDetail(item.card.card_desc)"
+                        class="tag-action"
+                        type="button"
+                        @click="
+                          openCardIntro({
+                            name: item.card.card_name,
+                            desc: item.card.card_desc,
+                            type: cardTypeLabel(item.card.card_type),
+                          })
+                        "
+                      >
+                        详情
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -3626,6 +3714,42 @@ function leaderboardRankLabel(rank?: number) {
 
     <Teleport to="body">
       <div
+        v-if="cardIntroTarget"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeCardIntro"
+      >
+        <section
+          class="trade-listing-modal card-intro-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="卡片介绍"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡片介绍</p>
+              <h2>{{ cardIntroTarget.name }}</h2>
+              <span>
+                {{
+                  [cardIntroTarget.rarity, cardIntroTarget.type, cardIntroTarget.extra]
+                    .filter(Boolean)
+                    .join(" · ")
+                }}
+              </span>
+            </div>
+            <button class="modal-close" type="button" @click="closeCardIntro">
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body card-intro-body">
+            <p>{{ cardIntroTarget.desc }}</p>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
         v-if="resultModalOpen"
         class="result-modal-backdrop"
         role="presentation"
@@ -3688,11 +3812,26 @@ function leaderboardRankLabel(rank?: number) {
                 <div class="card-sigil"></div>
                 <div class="card-content">
                   <h3>{{ card.cardName }}</h3>
-                  <p>{{ card.cardDesc || "暂无卡片介绍" }}</p>
+                  <p>{{ cardIntroText(card.cardDesc) }}</p>
                   <div class="tag-row">
                     <span v-if="card.isUp">UP</span>
                     <span v-if="card.isPity">保底</span>
                     <span>#{{ card.cardId }}</span>
+                    <button
+                      v-if="hasCardIntroDetail(card.cardDesc)"
+                      class="tag-action"
+                      type="button"
+                      @click="
+                        openCardIntro({
+                          name: card.cardName,
+                          desc: card.cardDesc,
+                          rarity: card.rarity,
+                          type: cardTypeLabel(card.cardType),
+                        })
+                      "
+                    >
+                      详情
+                    </button>
                   </div>
                 </div>
               </div>

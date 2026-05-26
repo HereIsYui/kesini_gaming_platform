@@ -1667,6 +1667,36 @@ h3 {
   font-size: 11px;
 }
 
+.tag-action {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border: 1px solid rgba(150, 242, 255, 0.26);
+  border-radius: 999px;
+  color: var(--primary-strong);
+  background: rgba(150, 242, 255, 0.08);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.owned-card .tag-action,
+.synthesis-card .tag-action {
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.tag-action:hover {
+  border-color: rgba(150, 242, 255, 0.48);
+  background: rgba(150, 242, 255, 0.14);
+}
+
+.intro-inline-action {
+  justify-self: start;
+  margin-top: -2px;
+}
+
 .redeem-panel {
   display: grid;
   gap: 14px;
@@ -2149,6 +2179,18 @@ h3 {
   gap: 14px;
   overflow: auto;
   padding: 18px 20px;
+}
+
+.card-intro-modal {
+  width: min(520px, 100%);
+}
+
+.card-intro-body p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .launch-activity-modal {
