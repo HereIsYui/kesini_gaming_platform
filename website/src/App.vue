@@ -122,6 +122,7 @@ type PoolCatalogCard = {
   rarities: CardRarity[];
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
+const BAG_PAGE_SIZE = 24;
 
 const route = useRoute();
 const manualToken = ref("");
@@ -204,6 +205,7 @@ const busy = reactive({
   auth: false,
   drawing: false,
   assets: false,
+  cardsMore: false,
   leaderboard: false,
   points: false,
   shop: false,
@@ -394,6 +396,10 @@ const pointSourceOptions = [
   { value: "trade_sell", label: "交易出售" },
 ] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
+const bagHasMore = computed(
+  () => Boolean(userCards.value) && cardPage.value < totalPages.value,
+);
+const bagLoadedCount = computed(() => userCards.value?.list.length || 0);
 const bulkDecomposeSelectedRarities = computed(() =>
   rarityOrder.filter(
     (rarity) => rarity !== "UR" && bulkDecomposeRarities[rarity],
@@ -475,6 +481,7 @@ watch(activePoolId, async (poolId) => {
     poolFilter.value = poolId;
     cardPage.value = 1;
     if (isAuthed.value && activeSection.value === "bag") {
+      userCards.value = null;
       await loadUserCards();
     }
   }
@@ -735,36 +742,78 @@ function ensureBagPoolFilter() {
   }
 }
 
-async function loadUserCards() {
+async function loadUserCards(options: { append?: boolean } = {}) {
   if (!isAuthed.value) {
     return;
   }
   ensureBagPoolFilter();
+  const append = options.append === true;
+  if (append && (busy.assets || busy.cardsMore || !bagHasMore.value)) {
+    return;
+  }
   if (!poolFilter.value) {
     userCards.value = {
       list: [],
       dropItems: [],
       total: 0,
-      page: cardPage.value,
-      pageSize: 12,
+      page: 1,
+      pageSize: BAG_PAGE_SIZE,
       totalPages: 0,
     };
+    cardPage.value = 1;
     return;
   }
-  busy.assets = true;
+  const requestedRarity = rarityFilter.value;
+  const requestedPoolId = poolFilter.value;
+  const page = append ? cardPage.value + 1 : 1;
+  if (append) {
+    busy.cardsMore = true;
+  } else {
+    busy.assets = true;
+  }
   try {
-    userCards.value = await request<UserCardsResponse>(
+    const data = await request<UserCardsResponse>(
       `/card/user/cards${toQuery({
-        rarity: rarityFilter.value,
-        poolId: poolFilter.value,
+        rarity: requestedRarity,
+        poolId: requestedPoolId,
         grouped: true,
-        page: cardPage.value,
-        pageSize: 12,
+        page,
+        pageSize: BAG_PAGE_SIZE,
       })}`,
     );
+    if (
+      requestedRarity !== rarityFilter.value ||
+      requestedPoolId !== poolFilter.value
+    ) {
+      return;
+    }
+    if (append && userCards.value) {
+      userCards.value = {
+        ...data,
+        list: [...userCards.value.list, ...data.list],
+        dropItems: data.dropItems,
+      };
+    } else {
+      userCards.value = data;
+    }
+    cardPage.value = data.page || page;
   } finally {
-    busy.assets = false;
+    if (append) {
+      busy.cardsMore = false;
+    } else {
+      busy.assets = false;
+    }
   }
+}
+
+function resetUserCards() {
+  cardPage.value = 1;
+  userCards.value = null;
+  void loadUserCards();
+}
+
+function loadMoreUserCards() {
+  void loadUserCards({ append: true });
 }
 
 async function loadLaunchActivity() {
@@ -1315,7 +1364,7 @@ function openTradeListingModal(card: UserCardsResponse["list"][number]) {
     return;
   }
   if (Number(card.sellableCount ?? (card.canSell ? 1 : 0)) <= 0) {
-    notify("info", "暂无可挂售卡片");
+    notify("info", "暂无可售卡片");
     return;
   }
   if (!card.canSell) {
@@ -1484,15 +1533,6 @@ function pointMetadataSummary(record: PointLedgerRecord) {
     default:
       return record.title;
   }
-}
-
-function changeCardPage(delta: number) {
-  const next = Math.min(Math.max(1, cardPage.value + delta), totalPages.value);
-  if (next === cardPage.value) {
-    return;
-  }
-  cardPage.value = next;
-  void loadUserCards();
 }
 
 function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
@@ -2000,10 +2040,7 @@ function leaderboardRankLabel(rank?: number) {
             <div class="filter-row">
               <select
                 v-model="rarityFilter"
-                @change="
-                  cardPage = 1;
-                  loadUserCards();
-                "
+                @change="resetUserCards"
               >
                 <option value="">全部稀有度</option>
                 <option
@@ -2016,10 +2053,7 @@ function leaderboardRankLabel(rank?: number) {
               </select>
               <select
                 v-model="poolFilter"
-                @change="
-                  cardPage = 1;
-                  loadUserCards();
-                "
+                @change="resetUserCards"
               >
                 <option v-for="pool in pools" :key="pool.id" :value="pool.id">
                   {{ pool.pool_name }}
@@ -2125,15 +2159,26 @@ function leaderboardRankLabel(rank?: number) {
               v-for="(card, index) in userCards.list"
               :key="`${card.cardId || card.id}-${card.cardLevel}`"
               class="result-card owned-card"
-              :class="rarityClass(card.cardLevel)"
+              :class="[
+                rarityClass(card.cardLevel),
+                { 'is-stacked': Number(card.count || 1) > 1 },
+              ]"
               :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
             >
               <div class="card-face">
                 <div class="result-card-top">
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
-                  <span class="card-type-pill">{{
-                    cardTypeLabel(card.cardType)
-                  }}</span>
+                  <div class="owned-card-top-right">
+                    <span class="card-type-pill">{{
+                      cardTypeLabel(card.cardType)
+                    }}</span>
+                    <span
+                      v-if="Number(card.count || 1) > 1"
+                      class="card-stack-count"
+                    >
+                      x{{ card.count }}
+                    </span>
+                  </div>
                 </div>
                 <div class="card-sigil"></div>
                 <div class="card-content">
@@ -2146,8 +2191,6 @@ function leaderboardRankLabel(rank?: number) {
                           ?.card_type,
                       )
                     }}</span>
-                    <span>{{ formatDate(card.latestObtainedAt || card.obtainedAt) }}</span>
-                    <span>x{{ card.count || 1 }}</span>
                     <span v-if="card.listedCount"
                       >挂售 {{ card.listedCount }}</span
                     >
@@ -2156,7 +2199,7 @@ function leaderboardRankLabel(rank?: number) {
               </div>
               <div class="card-actions">
                 <span class="stack-count-badge">
-                  可挂售 {{ card.sellableCount || 0 }}
+                  可售 {{ card.sellableCount || 0 }}
                 </span>
                 <button
                   class="secondary-action"
@@ -2170,24 +2213,22 @@ function leaderboardRankLabel(rank?: number) {
             </article>
           </div>
 
-          <div class="pager">
+          <div v-if="bagLoadedCount" class="load-more-row">
             <button
+              v-if="bagHasMore"
+              class="secondary-action"
               type="button"
-              :disabled="cardPage <= 1"
-              @click="changeCardPage(-1)"
+              :disabled="busy.cardsMore"
+              @click="loadMoreUserCards"
             >
-              <ChevronLeft :size="16" />
-              上一页
+              <LoaderCircle
+                v-if="busy.cardsMore"
+                :size="16"
+                class="spin"
+              />
+              {{ busy.cardsMore ? "加载中" : "更多" }}
             </button>
-            <span>第 {{ cardPage }} / {{ totalPages }} 页</span>
-            <button
-              type="button"
-              :disabled="cardPage >= totalPages"
-              @click="changeCardPage(1)"
-            >
-              下一页
-              <ChevronRight :size="16" />
-            </button>
+            <span v-else class="load-more-done">已全部</span>
           </div>
         </div>
 
@@ -3516,7 +3557,7 @@ function leaderboardRankLabel(rank?: number) {
               <h2>{{ listingTarget.cardName }}</h2>
               <span>
                 {{ listingTarget.cardLevel }} · 共
-                {{ listingTarget.count || 1 }} 张 · 可挂售
+                {{ listingTarget.count || 1 }} 张 · 可售
                 {{ listingTarget.sellableCount || 0 }} 张
               </span>
             </div>

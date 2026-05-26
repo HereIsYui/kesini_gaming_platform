@@ -1255,6 +1255,29 @@ h3 {
   gap: 8px;
 }
 
+.owned-card-top-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.card-stack-count {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(8, 12, 22, 0.72);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .card-type-pill {
   display: inline-flex;
   min-height: 26px;
@@ -1406,6 +1429,8 @@ h3 {
 
 .owned-card,
 .synthesis-card {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
@@ -1415,6 +1440,36 @@ h3 {
   background: rgba(255, 255, 255, 0.035);
   padding: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.owned-card > *,
+.synthesis-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.owned-card.is-stacked::before,
+.owned-card.is-stacked::after {
+  content: "";
+  position: absolute;
+  inset: 10px 0 62px 14px;
+  z-index: 0;
+  border: 1px solid rgba(196, 220, 255, 0.14);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025)),
+    rgba(255, 255, 255, 0.035);
+  pointer-events: none;
+}
+
+.owned-card.is-stacked::before {
+  opacity: 0.48;
+  transform: translate(10px, -7px) rotate(2.4deg);
+}
+
+.owned-card.is-stacked::after {
+  opacity: 0.7;
+  transform: translate(6px, -4px) rotate(1.2deg);
 }
 
 .owned-card .card-face,
@@ -1438,7 +1493,8 @@ h3 {
 .owned-card .rarity-badge,
 .synthesis-card .rarity-badge,
 .owned-card .card-type-pill,
-.synthesis-card .card-type-pill {
+.synthesis-card .card-type-pill,
+.owned-card .card-stack-count {
   min-height: 22px;
   padding: 0 7px;
   font-size: 11px;
@@ -1494,7 +1550,9 @@ h3 {
   border: 1px solid rgba(196, 220, 255, 0.14);
   border-radius: calc(var(--radius) - 2px);
   color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.035);
   font-size: 12px;
+  font-weight: 800;
 }
 
 .catalog-card {
@@ -2785,6 +2843,31 @@ h3 {
   color: var(--text);
   background: rgba(255, 255, 255, 0.07);
   padding: 0 12px;
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.load-more-row button {
+  min-width: 132px;
+  justify-content: center;
+  gap: 7px;
+}
+
+.load-more-done {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  border: 1px solid rgba(196, 220, 255, 0.12);
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .mobile-nav {
