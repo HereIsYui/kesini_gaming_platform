@@ -202,6 +202,7 @@ const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
+const activeBagActionKey = ref("");
 const listingPrice = ref("");
 const redeemCode = ref("");
 const rechargeModalOpen = ref(false);
@@ -863,6 +864,7 @@ async function loadUserCards(options: { append?: boolean } = {}) {
 function resetUserCards() {
   cardPage.value = 1;
   userCards.value = null;
+  activeBagActionKey.value = "";
   void loadUserCards();
 }
 
@@ -1354,6 +1356,14 @@ async function shareCard(card: {
 
 function closeShareText() {
   shareTextTarget.value = "";
+}
+
+function bagActionKey(card: UserCardsResponse["list"][number]) {
+  return `${card.cardId || card.id || card.cardName}-${card.cardLevel}-${card.poolId}`;
+}
+
+function openBagCardActions(card: UserCardsResponse["list"][number]) {
+  activeBagActionKey.value = bagActionKey(card);
 }
 
 async function copyShareText() {
@@ -2170,7 +2180,7 @@ function leaderboardRankLabel(rank?: number) {
 
       <section
         v-if="activeSection === 'bag'"
-        class="collection-grid"
+        class="collection-grid bag-layout"
         data-section="bag"
       >
         <div class="panel collection-panel">
@@ -2283,6 +2293,22 @@ function leaderboardRankLabel(rank?: number) {
             </div>
           </div>
 
+          <div v-if="isAuthed" class="inventory-strip" aria-label="物品库存">
+            <template v-if="inventoryItems.length">
+              <article
+                v-for="item in inventoryItems"
+                :key="item.id"
+                class="inventory-chip"
+                :title="item.desc || item.name"
+              >
+                <strong>{{ item.name }}</strong>
+                <span>{{ itemTypeLabel(item.type) }}</span>
+                <b>x{{ item.num }}</b>
+              </article>
+            </template>
+            <span v-else class="inventory-empty-chip">暂无物品</span>
+          </div>
+
           <div v-if="!isAuthed" class="empty-state">
             <UserRound :size="30" />
             <strong>登录后查看背包</strong>
@@ -2303,9 +2329,18 @@ function leaderboardRankLabel(rank?: number) {
               class="result-card owned-card"
               :class="[
                 rarityClass(card.cardLevel),
-                { 'is-stacked': Number(card.count || 1) > 1 },
+                {
+                  'is-stacked': Number(card.count || 1) > 1,
+                  'actions-open': activeBagActionKey === bagActionKey(card),
+                },
               ]"
               :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
+              role="group"
+              tabindex="0"
+              @click="openBagCardActions(card)"
+              @focusin="openBagCardActions(card)"
+              @keydown.enter.prevent="openBagCardActions(card)"
+              @keydown.space.prevent="openBagCardActions(card)"
             >
               <div class="card-face">
                 <div class="result-card-top">
@@ -2336,65 +2371,64 @@ function leaderboardRankLabel(rank?: number) {
                     <span v-if="card.listedCount"
                       >挂售 {{ card.listedCount }}</span
                     >
-                    <button
-                      v-if="hasCardIntroDetail(card.cardDesc)"
-                      class="tag-action"
-                      type="button"
-                      @click="
-                        openCardIntro({
-                          name: card.cardName,
-                          desc: card.cardDesc,
-                          rarity: String(card.cardLevel),
-                          type: cardTypeLabel(card.cardType),
-                        })
-                      "
-                    >
-                      详情
-                    </button>
-                    <button
-                      class="tag-action"
-                      type="button"
-                      @click="
-                        shareCard({
-                          cardName: card.cardName,
-                          cardDesc: card.cardDesc,
-                          rarity: String(card.cardLevel),
-                          poolId: card.poolId,
-                        })
-                      "
-                    >
-                      分享
-                    </button>
                   </div>
                 </div>
-              </div>
-              <div class="card-actions">
-                <span class="stack-count-badge">
-                  可售 {{ card.sellableCount || 0 }}
-                </span>
-                <button
-                  class="secondary-action"
-                  type="button"
-                  :disabled="!card.canSell || Number(card.sellableCount || 0) <= 0"
-                  @click="openTradeListingModal(card)"
-                >
-                  {{ card.canSell && Number(card.sellableCount || 0) > 0 ? "挂售" : "无可售" }}
-                </button>
-                <button
-                  class="secondary-action"
-                  type="button"
-                  @click="
-                    shareCard({
-                      cardName: card.cardName,
-                      cardDesc: card.cardDesc,
-                      cardLevel: String(card.cardLevel),
-                      poolId: card.poolId,
-                    })
-                  "
-                >
-                  <Share2 :size="15" />
-                  分享
-                </button>
+                <div class="card-action-overlay" aria-label="卡片操作">
+                  <span class="card-action-stock">
+                    可售 {{ card.sellableCount || 0 }}
+                  </span>
+                  <button
+                    v-if="hasCardIntroDetail(card.cardDesc)"
+                    class="card-icon-action"
+                    type="button"
+                    title="详情"
+                    aria-label="详情"
+                    @click.stop="
+                      openCardIntro({
+                        name: card.cardName,
+                        desc: card.cardDesc,
+                        rarity: String(card.cardLevel),
+                        type: cardTypeLabel(card.cardType),
+                      })
+                    "
+                  >
+                    <Package :size="16" />
+                  </button>
+                  <button
+                    class="card-icon-action"
+                    type="button"
+                    :title="
+                      card.canSell && Number(card.sellableCount || 0) > 0
+                        ? '挂售'
+                        : '无可售'
+                    "
+                    :aria-label="
+                      card.canSell && Number(card.sellableCount || 0) > 0
+                        ? '挂售'
+                        : '无可售'
+                    "
+                    :disabled="!card.canSell || Number(card.sellableCount || 0) <= 0"
+                    @click.stop="openTradeListingModal(card)"
+                  >
+                    <Store :size="16" />
+                  </button>
+                  <button
+                    class="card-icon-action"
+                    type="button"
+                    title="分享"
+                    aria-label="分享"
+                    @click.stop="
+                      shareCard({
+                        cardName: card.cardName,
+                        cardDesc: card.cardDesc,
+                        cardLevel: String(card.cardLevel),
+                        poolId: card.poolId,
+                      })
+                    "
+                  >
+                    <Share2 :size="16" />
+                  </button>
+                </div>
               </div>
             </article>
           </div>
@@ -2418,27 +2452,6 @@ function leaderboardRankLabel(rank?: number) {
           </div>
         </div>
 
-        <aside class="panel inventory-panel">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">背包</p>
-              <h2>物品库存</h2>
-            </div>
-          </div>
-          <div v-if="inventoryItems.length === 0" class="empty-mini">
-            暂无背包物品
-          </div>
-          <div v-else class="inventory-list">
-            <article v-for="item in inventoryItems" :key="item.id">
-              <div>
-                <strong>{{ item.name }}</strong>
-                <span>{{ itemTypeLabel(item.type) }}</span>
-              </div>
-              <b>x{{ item.num }}</b>
-              <p>{{ item.desc || "暂无说明" }}</p>
-            </article>
-          </div>
-        </aside>
       </section>
 
       <section
