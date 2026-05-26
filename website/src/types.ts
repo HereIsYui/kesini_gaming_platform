@@ -49,6 +49,7 @@ export interface CardItem {
   card_level: string;
   drop_item?: string;
   card_desc: string;
+  card_image?: string;
   card_type: number;
   pool: number;
   createdAt?: string;
@@ -58,6 +59,7 @@ export interface GachaResult {
   cardId: number;
   cardName: string;
   cardDesc: string;
+  cardImage?: string;
   rarity: CardRarity | string;
   cardType: number;
   poolId: number;
@@ -93,6 +95,7 @@ export interface UserCardRecord {
   cardId?: number;
   cardName: string;
   cardDesc: string;
+  cardImage?: string;
   cardLevel: CardRarity | string;
   cardType: number;
   poolId: number;
@@ -356,6 +359,7 @@ export interface TradeListing {
   cardId: number;
   cardName: string;
   cardDesc?: string;
+  cardImage?: string;
   cardType: number;
   cardLevel: CardRarity | string;
   poolId?: number;
@@ -379,6 +383,7 @@ export interface TradeRecord {
   cardUuid: string;
   cardId: number;
   cardName: string;
+  cardImage?: string;
   cardLevel: CardRarity | string;
   poolId?: number;
   poolName?: string;

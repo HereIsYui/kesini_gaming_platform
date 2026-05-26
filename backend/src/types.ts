@@ -132,10 +132,12 @@ export interface FieldConfig {
     | "multiSelect"
     | "datetime"
     | "json"
+    | "imageUpload"
     | "rewards"
     | "costs";
   options?: SelectOption[];
   helper?: string;
+  uploadEndpoint?: string;
   fullWidth?: boolean;
   minWidth?: number | string;
   placeholder?: string;

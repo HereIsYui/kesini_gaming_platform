@@ -1,4 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
+import { mkdir, writeFile } from "fs/promises";
+import { extname, resolve } from "path";
+import { randomUUID } from "crypto";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   Between,
@@ -49,6 +52,13 @@ export interface PageQuery {
   pageSize?: number;
   keyword?: string;
 }
+
+type UploadedImageFile = {
+  originalname?: string;
+  mimetype?: string;
+  size?: number;
+  buffer?: Buffer;
+};
 
 const DROP_TYPE_META: Record<number, { label: string; usage: string }> = {
   0: { label: "卡片碎片", usage: "用于卡片合成和分解产出" },
@@ -230,6 +240,35 @@ export class AdminService {
     };
   }
 
+  async saveCardImage(file: UploadedImageFile | undefined) {
+    if (!file?.buffer || !file.size) {
+      throw new Error("请选择图片");
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      throw new Error("图片不能超过2MB");
+    }
+    const extensionByMime: Record<string, string> = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+    };
+    const extension = extensionByMime[String(file.mimetype || "").toLowerCase()];
+    if (!extension) {
+      throw new Error("仅支持 JPG、PNG、WEBP 图片");
+    }
+
+    const publicRoot = process.env.FILE_ROOT
+      ? resolve(process.env.FILE_ROOT)
+      : resolve(__dirname, "..", "..", "public");
+    const uploadDir = resolve(publicRoot, "card-images");
+    await mkdir(uploadDir, { recursive: true });
+    const fileName = `${Date.now()}-${randomUUID()}${extension}`;
+    await writeFile(resolve(uploadDir, fileName), file.buffer);
+    return {
+      url: `/file/card-images/${fileName}`,
+    };
+  }
+
   async getPool(id: number) {
     const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
     const gachaConfig = await this.gachaConfigService.getPoolConfigDetail(id);
@@ -360,6 +399,7 @@ export class AdminService {
       card_level: this.normalizeCardLevels(body.card_level),
       drop_item: body.drop_item || "",
       card_desc: body.card_desc || "",
+      card_image: this.normalizeOptionalString(body.card_image),
       card_type: Number(body.card_type || 0),
       pool: Number(body.pool || 1),
     });
@@ -383,6 +423,9 @@ export class AdminService {
     }
     if (body.card_desc !== undefined) {
       updates.card_desc = this.normalizeOptionalString(body.card_desc);
+    }
+    if (body.card_image !== undefined) {
+      updates.card_image = this.normalizeOptionalString(body.card_image);
     }
     if (body.card_type !== undefined) {
       updates.card_type = this.normalizeIntegerInput(

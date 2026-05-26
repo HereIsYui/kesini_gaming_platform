@@ -9,6 +9,7 @@ import {
 export interface TradeCardSnapshot {
   cardName: string;
   cardDesc: string;
+  cardImage?: string;
   cardType: number;
   poolId: number;
   poolName?: string;

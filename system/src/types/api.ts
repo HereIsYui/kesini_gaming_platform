@@ -58,6 +58,7 @@ export interface GachaResult {
   cardId: number;
   cardName: string;
   cardDesc: string;
+  cardImage?: string;
   rarity: string;
   cardType: number; // 卡片类型
   poolId: number; // 所属卡池

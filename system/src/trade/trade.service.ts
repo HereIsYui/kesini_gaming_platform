@@ -423,6 +423,7 @@ export class TradeService {
           card_snapshot: {
             cardName: card.card_name,
             cardDesc: card.card_desc,
+            cardImage: card.card_image || "",
             cardType: card.card_type,
             poolId: card.pool,
             poolName: pool?.pool_name,
@@ -488,6 +489,7 @@ export class TradeService {
         cardUuid: record.card_uuid,
         cardId: record.card_id,
         cardName: record.card_snapshot?.cardName || `卡片#${record.card_id}`,
+        cardImage: record.card_snapshot?.cardImage || "",
         cardLevel: record.card_level,
         poolId: record.card_snapshot?.poolId,
         poolName: record.card_snapshot?.poolName || "",
@@ -627,6 +629,7 @@ export class TradeService {
         cardId: listing.card_id,
         cardName: card?.card_name || `卡片#${listing.card_id}`,
         cardDesc: card?.card_desc || "",
+        cardImage: card?.card_image || "",
         cardType: card?.card_type || 0,
         cardLevel: listing.card_level,
         poolId: card?.pool,

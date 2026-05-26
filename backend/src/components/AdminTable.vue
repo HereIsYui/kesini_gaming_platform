@@ -82,8 +82,16 @@
       >
         <template #default="{ row }">
           <slot name="cell" :field="field" :row="row" :reload="load">
+            <div v-if="field.type === 'imageUpload'" class="table-image-cell">
+              <img
+                v-if="assetUrl(getValue(row, field.key))"
+                :src="assetUrl(getValue(row, field.key))"
+                alt="卡片图片"
+              />
+              <span v-else>未配置</span>
+            </div>
             <UserIdentity
-              v-if="field.identity"
+              v-else-if="field.identity"
               :uid="toIdentityValue(getValue(row, field.identity.uidKey))"
               :name="toIdentityValue(field.identity.nameKey ? getValue(row, field.identity.nameKey) : '')"
               :fallback="field.identity.fallback"
@@ -199,6 +207,30 @@
             :rows="5"
             placeholder="填写 JSON"
           />
+          <div v-else-if="field.type === 'imageUpload'" class="image-upload-field">
+            <div class="image-upload-preview">
+              <img
+                v-if="assetUrl(formValues[field.key])"
+                :src="assetUrl(formValues[field.key])"
+                alt="卡片图片"
+              />
+              <span v-else>未配置</span>
+            </div>
+            <div class="image-upload-actions">
+              <label class="image-upload-button">
+                上传
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  :disabled="imageUploading"
+                  @change="handleImageUpload(field, $event)"
+                />
+              </label>
+              <el-button size="small" plain @click="formValues[field.key] = ''">
+                清空
+              </el-button>
+            </div>
+          </div>
           <RewardEditor
             v-else-if="field.type === 'rewards'"
             v-model="formValues[field.key]"
@@ -229,7 +261,17 @@
         :key="field.key"
         :label="field.label"
       >
-        {{ formatFieldValue(field, getValue(detail || {}, field.key)) }}
+        <div v-if="field.type === 'imageUpload'" class="detail-image-cell">
+          <img
+            v-if="assetUrl(getValue(detail || {}, field.key))"
+            :src="assetUrl(getValue(detail || {}, field.key))"
+            alt="卡片图片"
+          />
+          <span v-else>未配置</span>
+        </div>
+        <template v-else>
+          {{ formatFieldValue(field, getValue(detail || {}, field.key)) }}
+        </template>
       </el-descriptions-item>
     </el-descriptions>
     <pre class="detail-json">{{ detail }}</pre>
@@ -240,7 +282,7 @@
 import { computed, onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Download, Refresh, Search } from "@element-plus/icons-vue";
-import { request, toQuery } from "../api";
+import { getApiBase, request, toQuery } from "../api";
 import { rarityOptions } from "../constants";
 import type { FieldConfig, PageResult, SelectOption } from "../types";
 import {
@@ -289,6 +331,7 @@ const data = ref<PageResult<Record<string, any>> | null>(null);
 const error = ref("");
 const loading = ref(false);
 const saving = ref(false);
+const imageUploading = ref(false);
 const editing = ref<Record<string, any> | null>(null);
 const formVisible = ref(false);
 const formValues = ref<Record<string, any>>({});
@@ -411,6 +454,53 @@ function serializeFieldValue(field: FieldConfig, value: unknown) {
     return value === "" || value === null || value === undefined ? null : value;
   }
   return value === "" || value === null || value === undefined ? "" : value;
+}
+
+function assetUrl(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (/^(https?:|data:|blob:)/i.test(raw)) {
+    return raw;
+  }
+  return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
+async function handleImageUpload(field: FieldConfig, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) {
+    return;
+  }
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    ElMessage.error("仅支持 JPG、PNG、WEBP 图片");
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.error("图片不能超过2MB");
+    return;
+  }
+
+  imageUploading.value = true;
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const result = await request<{ url: string }>(
+      field.uploadEndpoint || "/admin/uploads/card-image",
+      {
+        method: "POST",
+        body,
+      },
+    );
+    formValues.value[field.key] = result.url;
+    ElMessage.success("已上传");
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "上传失败");
+  } finally {
+    imageUploading.value = false;
+  }
 }
 
 async function saveForm() {

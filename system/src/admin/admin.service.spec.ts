@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { AdminService } from "./admin.service";
 
 function createRepository(overrides: Record<string, any> = {}) {
@@ -269,6 +272,7 @@ describe("AdminService", () => {
     await service.createCard({
       card_name: "多稀有度卡",
       card_level: "SSR,N,R,N",
+      card_image: "/file/card-images/demo.webp",
       pool: 1,
     } as any);
 
@@ -276,8 +280,52 @@ describe("AdminService", () => {
       expect.objectContaining({
         card_name: "多稀有度卡",
         card_level: "N,R,SSR",
+        card_image: "/file/card-images/demo.webp",
       }),
     );
+  });
+
+  it("卡片图片上传会保存文件并返回访问路径", async () => {
+    const previousFileRoot = process.env.FILE_ROOT;
+    const tempDir = await mkdtemp(join(tmpdir(), "kesini-upload-"));
+    process.env.FILE_ROOT = tempDir;
+    const service = createService();
+
+    try {
+      const result = await service.saveCardImage({
+        originalname: "card.png",
+        mimetype: "image/png",
+        size: 4,
+        buffer: Buffer.from("test"),
+      });
+
+      expect(result.url).toMatch(/^\/file\/card-images\/.+\.png$/);
+      const saved = await readFile(
+        join(tempDir, result.url.replace("/file/", "")),
+        "utf8",
+      );
+      expect(saved).toBe("test");
+    } finally {
+      if (previousFileRoot === undefined) {
+        delete process.env.FILE_ROOT;
+      } else {
+        process.env.FILE_ROOT = previousFileRoot;
+      }
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("卡片图片上传会拒绝非图片", async () => {
+    const service = createService();
+
+    await expect(
+      service.saveCardImage({
+        originalname: "card.txt",
+        mimetype: "text/plain",
+        size: 4,
+        buffer: Buffer.from("test"),
+      }),
+    ).rejects.toThrow("仅支持 JPG、PNG、WEBP 图片");
   });
 
   it("创建卡片会拒绝空稀有度或非法稀有度", async () => {
@@ -313,6 +361,7 @@ describe("AdminService", () => {
       card_name: "测试卡",
       card_level: "N",
       card_desc: "旧描述",
+      card_image: "old.png",
       drop_item: "1",
       card_type: 0,
       pool: 1,
@@ -324,12 +373,14 @@ describe("AdminService", () => {
 
     await service.updateCard(10, {
       card_desc: null,
+      card_image: null,
       drop_item: null,
     } as any);
 
     expect(cardRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         card_desc: "",
+        card_image: "",
         drop_item: "",
       }),
     );

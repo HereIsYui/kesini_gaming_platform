@@ -169,6 +169,13 @@ export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
     { key: "id", label: "ID", readonly: true },
     { key: "card_name", label: "卡片名称", placeholder: "例如：星辉少女" },
     {
+      key: "card_image",
+      label: "卡片图片",
+      type: "imageUpload",
+      uploadEndpoint: "/admin/uploads/card-image",
+      minWidth: 120,
+    },
+    {
       key: "card_level",
       label: "可出现稀有度",
       type: "multiSelect",

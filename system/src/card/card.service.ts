@@ -46,6 +46,7 @@ type UserCardGroup = {
   cardId: number;
   cardName: string;
   cardDesc: string;
+  cardImage: string;
   cardLevel: CardRarity;
   cardType: number;
   poolId: number;
@@ -198,6 +199,7 @@ export class CardService {
           cardId: card.id,
           cardName: card.card_name,
           cardDesc: card.card_desc,
+          cardImage: card.card_image || "",
           rarity,
           cardType: card.card_type,
           poolId: card.pool,
@@ -530,6 +532,7 @@ export class CardService {
           uuid: userCard.card_uuid,
           cardName: card.card_name,
           cardDesc: card.card_desc,
+          cardImage: card.card_image || "",
           cardLevel:
             userCard.card_level || this.getHighestRarity(card.card_level),
           cardType: card.card_type,
@@ -620,6 +623,7 @@ export class CardService {
           cardId: card.id,
           cardName: card.card_name,
           cardDesc: card.card_desc,
+          cardImage: card.card_image || "",
           cardLevel: rarity,
           cardType: card.card_type,
           poolId: card.pool,

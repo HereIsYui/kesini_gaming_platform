@@ -3,7 +3,7 @@ import { AppModule } from "./app.module";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import servestatic from "serve-static";
 import { existsSync } from "fs";
-import { isAbsolute, join, resolve } from "path";
+import { isAbsolute, resolve } from "path";
 import * as dotenv from "dotenv";
 
 // 加载 system 目录下的环境变量，避免 workspace 启动时读取错文件。
@@ -34,7 +34,14 @@ async function bootstrap() {
     }),
   );
 
-  app.use("/file", servestatic(join(__dirname, "/public")));
+  app.use(
+    "/file",
+    servestatic(
+      process.env.FILE_ROOT
+        ? resolve(process.env.FILE_ROOT)
+        : resolve(systemRoot, "public"),
+    ),
+  );
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

@@ -24,6 +24,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import {
   clearToken,
+  getApiBase,
   getStoredUser,
   getToken,
   request,
@@ -1313,6 +1314,24 @@ function closeCardIntro() {
   cardIntroTarget.value = null;
 }
 
+function cardImageUrl(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (/^(https?:|data:|blob:)/i.test(raw)) {
+    return raw;
+  }
+  return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
+function hideBrokenCardImage(event: Event) {
+  const image = event.target as HTMLImageElement | null;
+  if (image) {
+    image.hidden = true;
+  }
+}
+
 function getPoolName(poolId?: number | null) {
   return pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || "";
 }
@@ -2343,6 +2362,13 @@ function leaderboardRankLabel(rank?: number) {
               @keydown.space.prevent="openBagCardActions(card)"
             >
               <div class="card-face">
+                <img
+                  v-if="cardImageUrl(card.cardImage)"
+                  class="card-art-image"
+                  :src="cardImageUrl(card.cardImage)"
+                  :alt="card.cardName"
+                  @error="hideBrokenCardImage"
+                />
                 <div class="result-card-top">
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
                   <div class="owned-card-top-right">
@@ -2529,6 +2555,13 @@ function leaderboardRankLabel(rank?: number) {
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
             <div class="card-face">
+              <img
+                v-if="cardImageUrl(item.card.card_image)"
+                class="card-art-image"
+                :src="cardImageUrl(item.card.card_image)"
+                :alt="item.card.card_name"
+                @error="hideBrokenCardImage"
+              />
               <div class="result-card-top">
                 <span class="rarity-badge">{{ item.rarity }}</span>
                 <span class="card-type-pill">{{
@@ -2863,6 +2896,13 @@ function leaderboardRankLabel(rank?: number) {
                 :class="rarityClass(listing.cardLevel)"
               >
                 <div class="trade-card-art">
+                  <img
+                    v-if="cardImageUrl(listing.cardImage)"
+                    class="trade-card-image"
+                    :src="cardImageUrl(listing.cardImage)"
+                    :alt="listing.cardName"
+                    @error="hideBrokenCardImage"
+                  />
                   <span class="rarity-badge">{{ listing.cardLevel }}</span>
                   <strong>{{ listing.cardName }}</strong>
                   <small>{{ listing.poolName || "未知卡池" }}</small>
@@ -3621,6 +3661,13 @@ function leaderboardRankLabel(rank?: number) {
                     :key="item.card.id"
                     class="pool-detail-card"
                   >
+                    <img
+                      v-if="cardImageUrl(item.card.card_image)"
+                      class="pool-detail-card-image"
+                      :src="cardImageUrl(item.card.card_image)"
+                      :alt="item.card.card_name"
+                      @error="hideBrokenCardImage"
+                    />
                     <div class="catalog-rarity-list">
                       <span
                         v-for="rarity in item.rarities"
@@ -4050,6 +4097,13 @@ function leaderboardRankLabel(rank?: number) {
               :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
             >
               <div class="card-face">
+                <img
+                  v-if="cardImageUrl(card.cardImage)"
+                  class="card-art-image"
+                  :src="cardImageUrl(card.cardImage)"
+                  :alt="card.cardName"
+                  @error="hideBrokenCardImage"
+                />
                 <div class="result-card-top">
                   <span class="rarity-badge">{{ card.rarity }}</span>
                   <span class="card-type-pill">{{

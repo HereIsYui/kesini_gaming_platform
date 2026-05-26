@@ -26,6 +26,10 @@ export class CardItem {
   @Column()
   card_desc: string;
 
+  // 卡片图片，相对 /file 的访问路径或空字符串
+  @Column({ length: 500, default: "" })
+  card_image: string;
+
   // 卡片类型 0 普通卡 1 限定卡 2 纪念卡 3 活动卡 4 隐藏卡
   @Column()
   card_type: number;

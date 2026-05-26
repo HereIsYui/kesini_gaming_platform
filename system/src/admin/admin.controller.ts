@@ -8,10 +8,12 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseFilters,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { Type } from "class-transformer";
 import {
   IsBoolean,
@@ -411,6 +413,11 @@ class CardDto {
   card_desc?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  card_image?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   card_type?: number;
@@ -676,6 +683,21 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.getOptions(),
       "获取后台选项成功",
+    );
+  }
+
+  @Post("uploads/card-image")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  async uploadCardImage(
+    @UploadedFile() file: any,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.saveCardImage(file),
+      "上传成功",
     );
   }
 
