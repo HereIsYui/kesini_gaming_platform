@@ -265,6 +265,7 @@
           endpoint="/admin/redeem-codes"
           :fields="redeemCodeFields"
           :item-options="itemOptions"
+          :card-options="adminOptions?.cards || []"
           editable
           creatable
           deletable

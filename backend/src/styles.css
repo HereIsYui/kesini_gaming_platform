@@ -840,9 +840,17 @@ body {
   min-width: 0;
 }
 
+.reward-card-row {
+  grid-template-columns: minmax(180px, 1fr) 110px 120px auto;
+}
+
 .reward-item-select {
   width: 100%;
   min-width: 0;
+}
+
+.reward-rarity-select {
+  width: 100%;
 }
 
 .dashboard-grid {

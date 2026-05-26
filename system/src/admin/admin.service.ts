@@ -1870,13 +1870,41 @@ export class AdminService {
         throw new Error("奖励物品数量无效");
       }
     });
-    if (points === 0 && normalizedItems.length === 0) {
+    const cards = Array.isArray(value.cards) ? value.cards : [];
+    const normalizedCards = cards
+      .map((card) => ({
+        cardId: Number(card.cardId),
+        rarity: String(card.rarity || "").trim().toUpperCase(),
+        num: Number(card.num),
+      }))
+      .filter((card) => card.cardId > 0 || card.num > 0 || card.rarity);
+    normalizedCards.forEach((card) => {
+      if (!Number.isInteger(card.cardId) || card.cardId <= 0) {
+        throw new Error("奖励卡片ID无效");
+      }
+      if (!CARD_RARITIES.includes(card.rarity)) {
+        throw new Error("奖励卡片稀有度无效");
+      }
+      if (!Number.isInteger(card.num) || card.num <= 0) {
+        throw new Error("奖励卡片数量无效");
+      }
+    });
+    if (
+      points === 0 &&
+      normalizedItems.length === 0 &&
+      normalizedCards.length === 0
+    ) {
       throw new Error(emptyMessage);
     }
     await this.assertRewardItemsAvailable(
       normalizedItems.map((item) => item.itemId),
     );
-    return { points, items: normalizedItems };
+    await this.assertRewardCardsAvailable(normalizedCards);
+    return {
+      points,
+      items: normalizedItems,
+      ...(normalizedCards.length > 0 ? { cards: normalizedCards } : {}),
+    };
   }
 
   private async normalizeExchangeItemInput(body: Partial<ExchangeShopItem>) {
@@ -2089,6 +2117,34 @@ export class AdminService {
       }
       if (item.disabled) {
         throw new Error(`奖励物品已禁用: ${item.drop_name}`);
+      }
+    });
+  }
+
+  private async assertRewardCardsAvailable(
+    cards: Array<{ cardId: number; rarity: string }>,
+  ) {
+    const uniqueCardIds = [
+      ...new Set(cards.map((card) => Number(card.cardId))),
+    ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+    if (uniqueCardIds.length === 0) {
+      return;
+    }
+    const cardItems = await this.cardRepository.find({
+      where: { id: In(uniqueCardIds) },
+    });
+    const cardMap = new Map(cardItems.map((card) => [card.id, card]));
+    cards.forEach((rewardCard) => {
+      const card = cardMap.get(Number(rewardCard.cardId));
+      if (!card) {
+        throw new Error(`奖励卡片不存在: ${rewardCard.cardId}`);
+      }
+      const rarities = String(card.card_level || "")
+        .split(",")
+        .map((rarity) => rarity.trim().toUpperCase())
+        .filter(Boolean);
+      if (!rarities.includes(rewardCard.rarity)) {
+        throw new Error(`奖励卡片稀有度无效: ${card.card_name}`);
       }
     });
   }

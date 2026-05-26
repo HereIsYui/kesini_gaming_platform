@@ -1,9 +1,16 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { EntityManager, Repository } from "typeorm";
+import { randomUUID } from "crypto";
+import { EntityManager, In, Repository } from "typeorm";
+import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
-import { RedeemRewards, RedeemRewardItem } from "src/entity/redeemCode.entity";
+import {
+  RedeemRewards,
+  RedeemRewardCard,
+  RedeemRewardItem,
+} from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
+import { UserCard } from "src/entity/userCard.entity";
 import {
   PointLedgerContext,
   PointLedgerService,
@@ -43,11 +50,40 @@ export class RewardService {
       }
     });
 
-    if (points === 0 && normalizedItems.length === 0) {
+    const cards = Array.isArray(value.cards) ? value.cards : [];
+    const normalizedCards = cards
+      .map((card) => ({
+        cardId: Number(card.cardId),
+        rarity: String(card.rarity || "").trim().toUpperCase(),
+        num: Number(card.num),
+      }))
+      .filter((card) => card.cardId > 0 || card.num > 0 || card.rarity);
+
+    normalizedCards.forEach((card) => {
+      if (!Number.isInteger(card.cardId) || card.cardId <= 0) {
+        throw new Error("奖励卡片ID无效");
+      }
+      if (!this.isRarity(card.rarity)) {
+        throw new Error("奖励卡片稀有度无效");
+      }
+      if (!Number.isInteger(card.num) || card.num <= 0) {
+        throw new Error("奖励卡片数量无效");
+      }
+    });
+
+    if (
+      points === 0 &&
+      normalizedItems.length === 0 &&
+      normalizedCards.length === 0
+    ) {
       throw new Error(emptyMessage);
     }
 
-    return { points, items: normalizedItems };
+    return {
+      points,
+      items: normalizedItems,
+      ...(normalizedCards.length > 0 ? { cards: normalizedCards } : {}),
+    };
   }
 
   async assertRewardItemsAvailable(
@@ -65,6 +101,29 @@ export class RewardService {
         throw new Error(`奖励物品已禁用: ${dropItem.drop_name}`);
       }
     }
+  }
+
+  async assertRewardCardsAvailable(
+    cardRepository: Repository<CardItem>,
+    cards: RedeemRewardCard[] = [],
+  ) {
+    const cardIds = [...new Set(cards.map((card) => Number(card.cardId)))].filter(
+      (cardId) => Number.isInteger(cardId) && cardId > 0,
+    );
+    if (cardIds.length === 0) {
+      return;
+    }
+    const cardItems = await cardRepository.find({ where: { id: In(cardIds) } });
+    const cardMap = new Map(cardItems.map((card) => [card.id, card]));
+    cards.forEach((rewardCard) => {
+      const card = cardMap.get(Number(rewardCard.cardId));
+      if (!card) {
+        throw new Error(`奖励卡片不存在: ${rewardCard.cardId}`);
+      }
+      if (!this.cardSupportsRarity(card, rewardCard.rarity)) {
+        throw new Error(`奖励卡片稀有度无效: ${card.card_name}`);
+      }
+    });
   }
 
   async grantRewards(
@@ -93,6 +152,7 @@ export class RewardService {
     for (const item of rewards.items) {
       await this.grantInventoryItem(inventoryRepository, user, item);
     }
+    await this.grantRewardCards(manager, user, rewards.cards || []);
   }
 
   private async grantInventoryItem(
@@ -118,5 +178,67 @@ export class RewardService {
       inventory.num += item.num;
     }
     await inventoryRepository.save(inventory);
+  }
+
+  private async grantRewardCards(
+    manager: EntityManager,
+    user: User,
+    cards: RedeemRewardCard[],
+  ) {
+    if (!cards.length) {
+      return;
+    }
+    await this.assertRewardCardsAvailable(
+      manager.getRepository(CardItem),
+      cards,
+    );
+    const userCardRepository = manager.getRepository(UserCard);
+    const userRepository = manager.getRepository(User);
+    const userCards: UserCard[] = [];
+    const rarityCounts: Record<string, number> = {};
+
+    cards.forEach((rewardCard) => {
+      const count = Number(rewardCard.num || 0);
+      for (let index = 0; index < count; index += 1) {
+        userCards.push(
+          userCardRepository.create({
+            uid: user.uid,
+            card_id: String(rewardCard.cardId),
+            card_level: rewardCard.rarity,
+            can_sell: true,
+            can_lottery: true,
+            card_uuid: randomUUID(),
+            delete_flag: false,
+          }),
+        );
+      }
+      rarityCounts[rewardCard.rarity] =
+        (rarityCounts[rewardCard.rarity] || 0) + count;
+    });
+
+    if (userCards.length > 0) {
+      await userCardRepository.save(userCards);
+    }
+    this.applyUserRarityCounts(user, rarityCounts);
+    await userRepository.save(user);
+  }
+
+  private applyUserRarityCounts(user: User, counts: Record<string, number>) {
+    user.card_count_n = (user.card_count_n || 0) + (counts.N || 0);
+    user.card_count_r = (user.card_count_r || 0) + (counts.R || 0);
+    user.card_count_sr = (user.card_count_sr || 0) + (counts.SR || 0);
+    user.card_count_ssr = (user.card_count_ssr || 0) + (counts.SSR || 0);
+    user.card_count_ur = (user.card_count_ur || 0) + (counts.UR || 0);
+  }
+
+  private cardSupportsRarity(card: CardItem, rarity: string) {
+    return String(card.card_level || "")
+      .split(",")
+      .map((item) => item.trim().toUpperCase())
+      .includes(String(rarity || "").trim().toUpperCase());
+  }
+
+  private isRarity(value: string) {
+    return ["N", "R", "SR", "SSR", "UR"].includes(value);
   }
 }

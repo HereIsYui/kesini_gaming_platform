@@ -3,6 +3,8 @@ import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { CardItem } from "src/entity/card.entity";
+import { UserCard } from "src/entity/userCard.entity";
 import { RewardService } from "src/reward/reward.service";
 import { RedeemService } from "./redeem.service";
 
@@ -108,6 +110,135 @@ describe("RedeemService", () => {
 
     await expect(service.claim("u1", "WELCOME")).rejects.toThrow(
       "该兑换码已领取",
+    );
+  });
+
+  it("兑换码可以发放指定卡片奖励", async () => {
+    const code = {
+      id: 2,
+      code: "CARD",
+      name: "卡片礼包",
+      enabled: true,
+      used_count: 0,
+      total_limit: null,
+      rewards: {
+        points: 0,
+        items: [],
+        cards: [{ cardId: 9, rarity: "SSR", num: 2 }],
+      },
+      delete_flag: false,
+    };
+    const user = {
+      id: 5,
+      uid: "u1",
+      point: 0,
+      card_count_n: 0,
+      card_count_r: 0,
+      card_count_sr: 0,
+      card_count_ssr: 1,
+      card_count_ur: 0,
+    };
+    const redeemCodeRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(code),
+    });
+    const usageRepository = createRepository();
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+      ]),
+    });
+    const userCardRepository = createRepository();
+    const { service } = createService(
+      new Map<any, any>([
+        [RedeemCode, redeemCodeRepository],
+        [RedeemCodeUsage, usageRepository],
+        [User, userRepository],
+        [UserInventory, createRepository()],
+        [DropItem, createRepository()],
+        [CardItem, cardRepository],
+        [UserCard, userCardRepository],
+      ]),
+    );
+
+    await expect(service.claim("u1", "card")).resolves.toEqual({
+      code: "CARD",
+      rewards: {
+        points: 0,
+        items: [],
+        cards: [{ cardId: 9, rarity: "SSR", num: 2 }],
+      },
+    });
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          uid: "u1",
+          card_id: "9",
+          card_level: "SSR",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+        }),
+      ]),
+    );
+    expect(userCardRepository.save.mock.calls[0][0]).toHaveLength(2);
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_count_ssr: 3 }),
+    );
+    expect(usageRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reward_snapshot: {
+          points: 0,
+          items: [],
+          cards: [{ cardId: 9, rarity: "SSR", num: 2 }],
+        },
+      }),
+    );
+  });
+
+  it("兑换码卡片奖励会校验稀有度", async () => {
+    const redeemCodeRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 3,
+        code: "CARD",
+        name: "卡片礼包",
+        enabled: true,
+        used_count: 0,
+        total_limit: null,
+        rewards: {
+          points: 0,
+          items: [],
+          cards: [{ cardId: 9, rarity: "UR", num: 1 }],
+        },
+        delete_flag: false,
+      }),
+    });
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+      ]),
+    });
+    const { service } = createService(
+      new Map<any, any>([
+        [RedeemCode, redeemCodeRepository],
+        [RedeemCodeUsage, createRepository()],
+        [
+          User,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({ id: 5, uid: "u1" }),
+          }),
+        ],
+        [UserInventory, createRepository()],
+        [DropItem, createRepository()],
+        [CardItem, cardRepository],
+        [UserCard, createRepository()],
+      ]),
+    );
+
+    await expect(service.claim("u1", "CARD")).rejects.toThrow(
+      "奖励卡片稀有度无效",
     );
   });
 

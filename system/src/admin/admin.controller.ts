@@ -611,6 +611,7 @@ class ExchangeShopItemDto {
   rewards?: {
     points: number;
     items: Array<{ itemId: number; num: number }>;
+    cards?: Array<{ cardId: number; rarity: string; num: number }>;
   };
 
   @IsOptional()

@@ -337,7 +337,13 @@ export const redeemCodeFields: FieldConfig[] = [
   { key: "starts_at", label: "开始时间", type: "datetime" },
   { key: "ends_at", label: "结束时间", type: "datetime" },
   { key: "description", label: "描述", type: "textarea", fullWidth: true },
-  { key: "rewards", label: "奖励", type: "rewards", fullWidth: true },
+  {
+    key: "rewards",
+    label: "奖励",
+    type: "rewards",
+    fullWidth: true,
+    allowCardRewards: true,
+  },
   { key: "used_count", label: "已兑换", readonly: true },
 ];
 

@@ -144,6 +144,7 @@ export interface FieldConfig {
   formHidden?: boolean;
   detailHidden?: boolean;
   defaultValue?: unknown;
+  allowCardRewards?: boolean;
   identity?: {
     uidKey: string;
     nameKey?: string;
@@ -154,6 +155,12 @@ export interface FieldConfig {
 export interface RedeemRewards {
   points: number;
   items: Array<{ itemId: number; num: number; itemName?: string }>;
+  cards?: Array<{
+    cardId: number;
+    rarity: string;
+    num: number;
+    cardName?: string;
+  }>;
 }
 
 export interface ExchangeCostItem {

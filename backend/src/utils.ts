@@ -132,6 +132,17 @@ export function formatRewards(rewards: RedeemRewards | undefined) {
         .join("，"),
     );
   }
+  const cards = Array.isArray(rewards.cards) ? rewards.cards : [];
+  if (cards.length) {
+    parts.push(
+      cards
+        .map(
+          (card) =>
+            `${card.cardName || `卡片#${card.cardId}`} ${card.rarity} x${card.num}`,
+        )
+        .join("，"),
+    );
+  }
   return parts.join("；") || "未配置";
 }
 

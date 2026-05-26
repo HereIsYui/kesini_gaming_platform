@@ -883,6 +883,61 @@ describe("AdminService", () => {
     );
   });
 
+  it("创建兑换码支持卡片奖励", async () => {
+    const redeemCodeRepository = createRepository();
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+      ]),
+    });
+    const service = createService({
+      redeemCode: redeemCodeRepository,
+      card: cardRepository,
+    });
+
+    await service.createRedeemCode({
+      code: " card ",
+      name: "卡片礼包",
+      rewards: {
+        points: 0,
+        items: [],
+        cards: [{ cardId: 9, rarity: "SSR", num: 2 }],
+      },
+    } as any);
+
+    expect(redeemCodeRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "CARD",
+        rewards: {
+          points: 0,
+          items: [],
+          cards: [{ cardId: 9, rarity: "SSR", num: 2 }],
+        },
+      }),
+    );
+  });
+
+  it("创建兑换码会校验卡片奖励稀有度", async () => {
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+      ]),
+    });
+    const service = createService({ card: cardRepository });
+
+    await expect(
+      service.createRedeemCode({
+        code: "CARD",
+        name: "卡片礼包",
+        rewards: {
+          points: 0,
+          items: [],
+          cards: [{ cardId: 9, rarity: "UR", num: 1 }],
+        },
+      } as any),
+    ).rejects.toThrow("奖励卡片稀有度无效");
+  });
+
   it("兑换码奖励不能选择已禁用物品", async () => {
     const dropRepository = createRepository({
       find: jest.fn().mockResolvedValue([

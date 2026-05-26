@@ -1538,7 +1538,7 @@ h3 {
 
 .card-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2185,6 +2185,22 @@ h3 {
   width: min(520px, 100%);
 }
 
+.share-text-modal {
+  width: min(560px, 100%);
+}
+
+.share-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 13px;
+  line-height: 1.7;
+}
+
 .card-intro-body p {
   margin: 0;
   color: var(--text);
@@ -2637,6 +2653,47 @@ h3 {
   gap: 18px;
 }
 
+.achievement-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.45fr) minmax(160px, 0.6fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.achievement-filter-bar select,
+.achievement-filter-bar input {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0 12px;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 5px;
+}
+
+.segmented-control button {
+  min-height: 32px;
+  border: 0;
+  border-radius: calc(var(--radius) - 4px);
+  color: var(--text-muted);
+  background: transparent;
+  padding: 0 8px;
+}
+
+.segmented-control button.active {
+  color: var(--text);
+  background: rgba(150, 242, 255, 0.16);
+}
+
 .achievement-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3027,6 +3084,10 @@ h3 {
   padding: 22px;
   background: rgba(3, 6, 13, 0.72);
   backdrop-filter: blur(18px);
+}
+
+.share-modal-backdrop {
+  z-index: 110;
 }
 
 .result-modal {
@@ -3429,10 +3490,15 @@ h3 {
 
   .leaderboard-tabs,
   .points-overview,
+  .achievement-filter-bar,
   .achievement-summary,
   .achievement-grid,
   .podium-grid,
   .trade-config-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions {
     grid-template-columns: 1fr;
   }
 

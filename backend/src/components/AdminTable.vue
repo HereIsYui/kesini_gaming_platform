@@ -203,6 +203,8 @@
             v-else-if="field.type === 'rewards'"
             v-model="formValues[field.key]"
             :item-options="itemOptions"
+            :card-options="cardOptions"
+            :allow-cards="field.allowCardRewards === true"
           />
           <RewardEditor
             v-else-if="field.type === 'costs'"
@@ -266,11 +268,13 @@ const props = withDefaults(
     enableRarityFilter?: boolean;
     poolFilterOptions?: SelectOption[];
     itemOptions?: SelectOption[];
+    cardOptions?: SelectOption[];
   }>(),
   {
     keywordParam: "keyword",
     poolFilterOptions: () => [],
     itemOptions: () => [],
+    cardOptions: () => [],
   },
 );
 
@@ -362,7 +366,7 @@ function createDefaultForm(row?: Record<string, any>) {
       if (field.type === "rewards") {
         return [
           field.key,
-          cloneJson(raw || { points: 0, items: [] }),
+          cloneJson(raw || { points: 0, items: [], cards: [] }),
         ];
       }
       if (field.type === "costs") {

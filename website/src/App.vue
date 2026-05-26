@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   RefreshCw,
+  Share2,
   ShieldCheck,
   Sparkles,
   Store,
@@ -159,6 +160,9 @@ const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
 const pointRecords = ref<PointLedgerRecordsResponse | null>(null);
 const achievements = ref<AchievementRecord[]>([]);
+const achievementStatusFilter = ref<"all" | "achieved" | "progressing">("all");
+const achievementCategoryFilter = ref("");
+const achievementKeyword = ref("");
 const pointRecordPage = ref(1);
 const pointRecordTypeFilter = ref<"all" | "income" | "expense">("all");
 const pointRecordSourceFilter = ref<PointLedgerSourceType | "">("");
@@ -197,6 +201,7 @@ const tradeMinPrice = ref("");
 const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
+const shareTextTarget = ref("");
 const listingPrice = ref("");
 const redeemCode = ref("");
 const rechargeModalOpen = ref(false);
@@ -349,9 +354,48 @@ const leaderboardRows = computed<LeaderboardEntry[]>(
 const pointLedgerRows = computed<PointLedgerRecord[]>(
   () => pointRecords.value?.list || [],
 );
+const achievementCategories = computed(() =>
+  Array.from(
+    new Set(achievements.value.map((achievement) => achievement.category || "常规")),
+  ),
+);
+const filteredAchievements = computed(() => {
+  const keyword = achievementKeyword.value.trim().toLowerCase();
+  return achievements.value.filter((achievement) => {
+    if (
+      achievementStatusFilter.value === "achieved" &&
+      !achievement.achieved
+    ) {
+      return false;
+    }
+    if (
+      achievementStatusFilter.value === "progressing" &&
+      achievement.achieved
+    ) {
+      return false;
+    }
+    if (
+      achievementCategoryFilter.value &&
+      (achievement.category || "常规") !== achievementCategoryFilter.value
+    ) {
+      return false;
+    }
+    if (!keyword) {
+      return true;
+    }
+    return [
+      achievement.name,
+      achievement.description,
+      achievement.category,
+      achievement.targetLabel,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
+});
 const achievementGroups = computed(() => {
   const groups = new Map<string, AchievementRecord[]>();
-  achievements.value.forEach((achievement) => {
+  filteredAchievements.value.forEach((achievement) => {
     const category = achievement.category || "常规";
     if (!groups.has(category)) {
       groups.set(category, []);
@@ -365,6 +409,7 @@ const achievementGroups = computed(() => {
     ),
   }));
 });
+const achievementVisibleCount = computed(() => filteredAchievements.value.length);
 const achievementUnlockedCount = computed(
   () => achievements.value.filter((achievement) => achievement.achieved).length,
 );
@@ -1266,6 +1311,64 @@ function closeCardIntro() {
   cardIntroTarget.value = null;
 }
 
+function getPoolName(poolId?: number | null) {
+  return pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || "";
+}
+
+function buildCardShareText(card: {
+  cardName: string;
+  cardDesc?: string | null;
+  cardLevel?: string;
+  rarity?: string;
+  poolId?: number;
+}) {
+  const rarity = String(card.cardLevel || card.rarity || "").trim();
+  const poolName = getPoolName(card.poolId);
+  const lines = [
+    `**${rarity ? `[${rarity}] ` : ""}${card.cardName}**`,
+    "",
+    `> ${cardIntroText(card.cardDesc)}`,
+  ];
+  if (poolName) {
+    lines.push("", `卡池：${poolName}`);
+  }
+  lines.push("", `[进入抽卡站](${window.location.origin})`);
+  return lines.join("\n");
+}
+
+async function shareCard(card: {
+  cardName: string;
+  cardDesc?: string | null;
+  cardLevel?: string;
+  rarity?: string;
+  poolId?: number;
+}) {
+  const text = buildCardShareText(card);
+  try {
+    await navigator.clipboard.writeText(text);
+    notify("success", "已复制");
+  } catch {
+    shareTextTarget.value = text;
+  }
+}
+
+function closeShareText() {
+  shareTextTarget.value = "";
+}
+
+async function copyShareText() {
+  if (!shareTextTarget.value) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(shareTextTarget.value);
+    notify("success", "已复制");
+    closeShareText();
+  } catch {
+    notify("error", "复制失败");
+  }
+}
+
 async function synthesizeCard(item: SynthesisCard) {
   if (!isAuthed.value) {
     notify("error", "请先登录后再合成卡片");
@@ -1673,6 +1776,7 @@ function formatDate(value?: string | null) {
 function formatRewards(rewards?: {
   points?: number;
   items?: Array<{ itemName?: string; itemId: number; num: number }>;
+  cards?: Array<{ cardName?: string; cardId: number; rarity: string; num: number }>;
 }) {
   if (!rewards) {
     return "无奖励";
@@ -1683,6 +1787,9 @@ function formatRewards(rewards?: {
   }
   rewards.items?.forEach((item) => {
     parts.push(`${item.itemName || `物品 ${item.itemId}`} x${item.num}`);
+  });
+  rewards.cards?.forEach((card) => {
+    parts.push(`${card.cardName || `卡片 ${card.cardId}`} ${card.rarity} x${card.num}`);
   });
   return parts.length > 0 ? parts.join("，") : "无奖励";
 }
@@ -1702,6 +1809,12 @@ function achievementProgressText(achievement: AchievementRecord) {
   const target = Math.max(0, Number(achievement.targetValue || 0));
   const progress = Math.min(Math.max(0, Number(achievement.progress || 0)), target);
   return `${progress} / ${target}`;
+}
+
+function resetAchievementFilters() {
+  achievementStatusFilter.value = "all";
+  achievementCategoryFilter.value = "";
+  achievementKeyword.value = "";
 }
 
 function achievementScopeLabel(achievement: AchievementRecord) {
@@ -2238,6 +2351,20 @@ function leaderboardRankLabel(rank?: number) {
                     >
                       详情
                     </button>
+                    <button
+                      class="tag-action"
+                      type="button"
+                      @click="
+                        shareCard({
+                          cardName: card.cardName,
+                          cardDesc: card.cardDesc,
+                          rarity: String(card.cardLevel),
+                          poolId: card.poolId,
+                        })
+                      "
+                    >
+                      分享
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2252,6 +2379,21 @@ function leaderboardRankLabel(rank?: number) {
                   @click="openTradeListingModal(card)"
                 >
                   {{ card.canSell && Number(card.sellableCount || 0) > 0 ? "挂售" : "无可售" }}
+                </button>
+                <button
+                  class="secondary-action"
+                  type="button"
+                  @click="
+                    shareCard({
+                      cardName: card.cardName,
+                      cardDesc: card.cardDesc,
+                      cardLevel: String(card.cardLevel),
+                      poolId: card.poolId,
+                    })
+                  "
+                >
+                  <Share2 :size="15" />
+                  分享
                 </button>
               </div>
             </article>
@@ -3042,6 +3184,50 @@ function leaderboardRankLabel(rank?: number) {
           <span>新的目标开放后会出现在这里。</span>
         </div>
         <div v-else class="achievement-content">
+          <div class="achievement-filter-bar">
+            <div class="segmented-control">
+              <button
+                type="button"
+                :class="{ active: achievementStatusFilter === 'all' }"
+                @click="achievementStatusFilter = 'all'"
+              >
+                全部
+              </button>
+              <button
+                type="button"
+                :class="{ active: achievementStatusFilter === 'achieved' }"
+                @click="achievementStatusFilter = 'achieved'"
+              >
+                已达成
+              </button>
+              <button
+                type="button"
+                :class="{ active: achievementStatusFilter === 'progressing' }"
+                @click="achievementStatusFilter = 'progressing'"
+              >
+                进行中
+              </button>
+            </div>
+            <select v-model="achievementCategoryFilter">
+              <option value="">全部分类</option>
+              <option
+                v-for="category in achievementCategories"
+                :key="category"
+                :value="category"
+              >
+                {{ category }}
+              </option>
+            </select>
+            <input
+              v-model="achievementKeyword"
+              type="search"
+              placeholder="搜索成就"
+            />
+            <button class="secondary-action" type="button" @click="resetAchievementFilters">
+              重置
+            </button>
+          </div>
+
           <div class="achievement-summary">
             <article>
               <small>已达成</small>
@@ -3057,51 +3243,58 @@ function leaderboardRankLabel(rank?: number) {
             </article>
           </div>
 
-          <section
-            v-for="group in achievementGroups"
-            :key="group.category"
-            class="achievement-group"
-          >
-            <div class="achievement-group-head">
-              <h3>{{ group.category }}</h3>
-              <span>{{ group.list.length }} 项</span>
-            </div>
-            <div class="achievement-grid">
-              <article
-                v-for="achievement in group.list"
-                :key="achievement.id"
-                class="achievement-card"
-                :class="{ achieved: achievement.achieved }"
-                :style="{
-                  '--progress': `${achievementProgressPercent(achievement)}%`,
-                }"
-              >
-                <header>
-                  <span class="achievement-icon">
-                    <Trophy v-if="achievement.achieved" :size="17" />
-                    <ShieldCheck v-else :size="17" />
-                  </span>
-                  <div>
-                    <strong>{{ achievement.name }}</strong>
-                    <small>{{ achievement.targetLabel }}</small>
+          <div v-if="achievementVisibleCount === 0" class="empty-state compact">
+            <Trophy :size="26" />
+            <strong>暂无匹配</strong>
+            <span>换个条件试试</span>
+          </div>
+          <template v-else>
+            <section
+              v-for="group in achievementGroups"
+              :key="group.category"
+              class="achievement-group"
+            >
+              <div class="achievement-group-head">
+                <h3>{{ group.category }}</h3>
+                <span>{{ group.list.length }} 项</span>
+              </div>
+              <div class="achievement-grid">
+                <article
+                  v-for="achievement in group.list"
+                  :key="achievement.id"
+                  class="achievement-card"
+                  :class="{ achieved: achievement.achieved }"
+                  :style="{
+                    '--progress': `${achievementProgressPercent(achievement)}%`,
+                  }"
+                >
+                  <header>
+                    <span class="achievement-icon">
+                      <Trophy v-if="achievement.achieved" :size="17" />
+                      <ShieldCheck v-else :size="17" />
+                    </span>
+                    <div>
+                      <strong>{{ achievement.name }}</strong>
+                      <small>{{ achievement.targetLabel }}</small>
+                    </div>
+                    <b>{{ achievement.achieved ? "已达成" : "进行中" }}</b>
+                  </header>
+                  <p>{{ achievement.description || "完成目标后自动发放奖励。" }}</p>
+                  <div class="achievement-meta">
+                    <span>{{ achievementScopeLabel(achievement) }}</span>
+                    <span>{{ achievementProgressText(achievement) }}</span>
                   </div>
-                  <b>{{ achievement.achieved ? "已达成" : "进行中" }}</b>
-                </header>
-                <p>{{ achievement.description || "完成目标后自动发放奖励。" }}</p>
-                <div class="achievement-meta">
-                  <span>{{ achievementScopeLabel(achievement) }}</span>
-                  <span>{{ achievementProgressText(achievement) }}</span>
-                </div>
-                <div class="achievement-progress" aria-hidden="true">
-                  <i></i>
-                </div>
-                <footer>
-                  <span>奖励</span>
-                  <strong>{{ formatRewards(achievement.rewards) }}</strong>
-                </footer>
-              </article>
-            </div>
-          </section>
+                  <div class="achievement-progress" aria-hidden="true">
+                    <i></i>
+                  </div>
+                  <footer>
+                    <span>奖励</span>
+                    <strong>{{ formatRewards(achievement.rewards) }}</strong>
+                  </footer>
+                </article>
+              </div>
+            </section>
+          </template>
         </div>
       </section>
 
@@ -3744,6 +3937,47 @@ function leaderboardRankLabel(rank?: number) {
           <div class="trade-listing-body card-intro-body">
             <p>{{ cardIntroTarget.desc }}</p>
           </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="shareTextTarget"
+        class="result-modal-backdrop share-modal-backdrop"
+        role="presentation"
+        @click.self="closeShareText"
+      >
+        <section
+          class="trade-listing-modal share-text-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="分享文案"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">分享</p>
+              <h2>分享文案</h2>
+            </div>
+            <button class="modal-close" type="button" @click="closeShareText">
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body">
+            <textarea
+              class="share-textarea"
+              readonly
+              :value="shareTextTarget"
+            ></textarea>
+          </div>
+          <footer class="result-modal-actions">
+            <button class="secondary-action" type="button" @click="closeShareText">
+              关闭
+            </button>
+            <button class="primary-action" type="button" @click="copyShareText">
+              复制
+            </button>
+          </footer>
         </section>
       </div>
     </Teleport>

@@ -133,9 +133,17 @@ export interface RedeemRewardItem {
   itemName?: string;
 }
 
+export interface RedeemRewardCard {
+  cardId: number;
+  rarity: string;
+  num: number;
+  cardName?: string;
+}
+
 export interface RedeemRewards {
   points: number;
   items: RedeemRewardItem[];
+  cards?: RedeemRewardCard[];
 }
 
 export interface RedeemClaimResponse {
