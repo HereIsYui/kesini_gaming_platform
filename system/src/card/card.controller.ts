@@ -323,6 +323,7 @@ export class CardController {
     @Query("poolId") poolId?: string,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
+    @Query("grouped") grouped?: string,
   ): Promise<ResponseDto<any>> {
     if (!user || !user.uid) {
       return ResponseDto.error("用户身份验证失败");
@@ -335,6 +336,7 @@ export class CardController {
         this.parseOptionalInt(poolId, "poolId", 0),
         this.parseOptionalInt(page, "page", 1) || 1,
         this.parseOptionalInt(pageSize, "pageSize", 1, 100) || 10,
+        grouped === "true",
       );
       return ResponseDto.success(result, "获取用户卡片列表成功");
     } catch (error) {

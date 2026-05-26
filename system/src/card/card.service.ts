@@ -42,6 +42,20 @@ type DecomposeCandidate = {
   card: CardItem;
   rarity: CardRarity;
 };
+type UserCardGroup = {
+  cardId: number;
+  cardName: string;
+  cardDesc: string;
+  cardLevel: CardRarity;
+  cardType: number;
+  poolId: number;
+  count: number;
+  listedCount: number;
+  sellableCount: number;
+  canSell: boolean;
+  canLottery: boolean;
+  latestObtainedAt: Date | null;
+};
 type LeaderboardMetricKey =
   | "totalCards"
   | "ssrCards"
@@ -428,6 +442,7 @@ export class CardService {
     poolId?: number,
     page: number = 1,
     pageSize: number = 10,
+    grouped: boolean = false,
   ): Promise<{
     list: any[];
     dropItems: any[];
@@ -446,6 +461,9 @@ export class CardService {
     const dropItems = await this.getUserDropItems(user.id);
 
     const normalizedRarity = rarity ? this.normalizeRarity(rarity) : undefined;
+    if (grouped && (poolId === undefined || poolId === null)) {
+      throw new Error("请选择卡池");
+    }
     const poolCardIds =
       poolId === undefined ? undefined : await this.getCardIdsByPool(poolId);
     if (poolCardIds !== undefined && poolCardIds.length === 0) {
@@ -464,6 +482,15 @@ export class CardService {
     );
     if (whereConditions.length === 0) {
       return this.emptyUserCardsResult(page, pageSize, dropItems);
+    }
+
+    if (grouped) {
+      return this.getGroupedUserCardsResult(
+        whereConditions,
+        page,
+        pageSize,
+        dropItems,
+      );
     }
 
     const total = await this.userCardRepository.count({
@@ -525,6 +552,119 @@ export class CardService {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
+  }
+
+  private async getGroupedUserCardsResult(
+    whereConditions: any[],
+    page: number,
+    pageSize: number,
+    dropItems: any[],
+  ) {
+    const userCards = await this.userCardRepository.find({
+      where: whereConditions,
+      order: { id: "DESC" },
+    });
+    if (userCards.length === 0) {
+      return this.emptyUserCardsResult(page, pageSize, dropItems);
+    }
+
+    const cardIds = [
+      ...new Set(userCards.map((userCard) => Number(userCard.card_id))),
+    ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+    const cards =
+      cardIds.length > 0
+        ? await this.cardRepository.find({ where: { id: In(cardIds) } })
+        : [];
+    const activeListings = await this.findActiveListingsByCardUuids(
+      userCards.map((userCard) => userCard.card_uuid),
+    );
+    const groups = this.groupOwnedCards(userCards, cards, activeListings);
+    const total = groups.length;
+    const start = (page - 1) * pageSize;
+
+    return {
+      list: groups.slice(start, start + pageSize),
+      dropItems,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  private groupOwnedCards(
+    userCards: UserCard[],
+    cards: CardItem[],
+    activeListings: TradeListing[],
+  ): UserCardGroup[] {
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const activeListingSet = new Set(
+      activeListings.map((listing) => listing.card_uuid),
+    );
+    const groupMap = new Map<string, UserCardGroup>();
+
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        return;
+      }
+
+      const key = this.createPoolVersionKey(card.id, rarity);
+      let group = groupMap.get(key);
+      if (!group) {
+        group = {
+          cardId: card.id,
+          cardName: card.card_name,
+          cardDesc: card.card_desc,
+          cardLevel: rarity,
+          cardType: card.card_type,
+          poolId: card.pool,
+          count: 0,
+          listedCount: 0,
+          sellableCount: 0,
+          canSell: false,
+          canLottery: false,
+          latestObtainedAt: null,
+        };
+        groupMap.set(key, group);
+      }
+
+      const isListed = activeListingSet.has(userCard.card_uuid);
+      group.count += 1;
+      group.listedCount += isListed ? 1 : 0;
+      group.sellableCount += userCard.can_sell === true && !isListed ? 1 : 0;
+      group.canSell = group.sellableCount > 0;
+      group.canLottery = group.canLottery || userCard.can_lottery === true;
+      group.latestObtainedAt = this.pickLatestDate(
+        group.latestObtainedAt,
+        userCard.createdAt,
+      );
+    });
+
+    return Array.from(groupMap.values()).sort((left, right) => {
+      const rightTime = right.latestObtainedAt?.getTime() || 0;
+      const leftTime = left.latestObtainedAt?.getTime() || 0;
+      return (
+        rightTime - leftTime ||
+        right.cardId - left.cardId ||
+        this.getRarityRank(right.cardLevel) - this.getRarityRank(left.cardLevel)
+      );
+    });
+  }
+
+  private pickLatestDate(current: Date | null, next?: Date | string | null) {
+    const nextDate = next instanceof Date ? next : next ? new Date(next) : null;
+    if (!nextDate || Number.isNaN(nextDate.getTime())) {
+      return current;
+    }
+    if (!current || nextDate.getTime() > current.getTime()) {
+      return nextDate;
+    }
+    return current;
   }
 
   /**
@@ -723,10 +863,12 @@ export class CardService {
         selectedRarities,
       );
       const candidates = this.collectDecomposeCandidates(
-        userCards,
-        cards,
-        activeListings,
-        selectedRarities,
+        this.collectDecomposeCandidateGroups(
+          userCards,
+          cards,
+          activeListings,
+          selectedRarities,
+        ),
       );
       if (candidates.length === 0) {
         return {
@@ -785,11 +927,14 @@ export class CardService {
     activeListings: TradeListing[],
     selectedRarities: CardRarity[],
   ) {
-    const candidates = this.collectDecomposeCandidates(
+    const candidateGroups = this.collectDecomposeCandidateGroups(
       userCards,
       cards,
       activeListings,
       selectedRarities,
+    );
+    const candidates = this.collectDecomposeCandidates(
+      candidateGroups,
     );
     const selectedSet = new Set(selectedRarities);
     const activeListingSet = new Set(
@@ -821,33 +966,65 @@ export class CardService {
       total: candidates.length,
       countsByRarity,
       skippedListed,
+      reservedCount: candidateGroups.size,
     };
   }
 
   private collectDecomposeCandidates(
+    candidateGroups: Map<string, DecomposeCandidate[]>,
+  ): DecomposeCandidate[] {
+    return Array.from(candidateGroups.values()).flatMap((candidates) =>
+      [...candidates]
+        .sort((left, right) => this.compareUserCardsForKeep(left, right))
+        .slice(1),
+    );
+  }
+
+  private collectDecomposeCandidateGroups(
     userCards: UserCard[],
     cards: CardItem[],
     activeListings: TradeListing[],
     selectedRarities: CardRarity[],
-  ): DecomposeCandidate[] {
+  ): Map<string, DecomposeCandidate[]> {
     const selectedSet = new Set(selectedRarities);
     const activeListingSet = new Set(
       activeListings.map((listing) => listing.card_uuid),
     );
     const cardMap = new Map(cards.map((card) => [card.id, card]));
-    return userCards
-      .map((userCard) => {
-        const card = cardMap.get(Number(userCard.card_id));
-        if (!card || activeListingSet.has(userCard.card_uuid)) {
-          return null;
-        }
-        const rarity = this.getEffectiveUserCardRarity(userCard, card);
-        if (!rarity || !selectedSet.has(rarity)) {
-          return null;
-        }
-        return { userCard, card, rarity };
-      })
-      .filter((item): item is DecomposeCandidate => item !== null);
+    const groups = new Map<string, DecomposeCandidate[]>();
+
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card || activeListingSet.has(userCard.card_uuid)) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity || !selectedSet.has(rarity)) {
+        return;
+      }
+      const key = this.createPoolVersionKey(card.id, rarity);
+      const group = groups.get(key) || [];
+      group.push({ userCard, card, rarity });
+      groups.set(key, group);
+    });
+
+    return groups;
+  }
+
+  private compareUserCardsForKeep(
+    left: DecomposeCandidate,
+    right: DecomposeCandidate,
+  ) {
+    const rightTime = right.userCard.createdAt
+      ? new Date(right.userCard.createdAt).getTime()
+      : 0;
+    const leftTime = left.userCard.createdAt
+      ? new Date(left.userCard.createdAt).getTime()
+      : 0;
+    return (
+      rightTime - leftTime ||
+      Number(right.userCard.id || 0) - Number(left.userCard.id || 0)
+    );
   }
 
   private normalizeDecomposeRarities(rarities: string[]): CardRarity[] {

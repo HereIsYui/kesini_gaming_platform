@@ -332,7 +332,10 @@ describe("CardService 背包筛选", () => {
     );
   }
 
-  function createListService(customUserCards: Partial<UserCard>[] = []) {
+  function createListService(
+    customUserCards: Partial<UserCard>[] = [],
+    activeListings: Partial<TradeListing>[] = [],
+  ) {
     const cards = [
       {
         id: 1,
@@ -398,11 +401,14 @@ describe("CardService 背包筛选", () => {
         async (options?: any) =>
           filterByWhere(userCards, options?.where).length,
       ),
-      find: jest.fn(async (options?: any) =>
-        filterByWhere(userCards, options?.where)
+      find: jest.fn(async (options?: any) => {
+        const start = options?.skip || 0;
+        const end =
+          options?.take === undefined ? undefined : start + options.take;
+        return filterByWhere(userCards, options?.where)
           .sort((a, b) => b.id - a.id)
-          .slice(options?.skip || 0, (options?.skip || 0) + options?.take),
-      ),
+          .slice(start, end);
+      }),
     });
     const userRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
@@ -435,6 +441,16 @@ describe("CardService 背包筛选", () => {
         filterByWhere(userInventories, options?.where),
       ),
     });
+    const tradeListingRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(activeListings, options?.where),
+      ),
+    });
+    const dataSource = {
+      getRepository: jest.fn((entity) =>
+        entity === TradeListing ? tradeListingRepository : undefined,
+      ),
+    };
     const service = new CardService(
       cardRepository as any,
       createRepository() as any,
@@ -445,7 +461,7 @@ describe("CardService 背包筛选", () => {
       inventoryRepository as any,
       createRepository() as any,
       {} as any,
-      {} as any,
+      dataSource as any,
     );
 
     return { service };
@@ -525,6 +541,75 @@ describe("CardService 背包筛选", () => {
       "legacy-card",
       "ssr-card",
     ]);
+  });
+
+  it("堆叠背包会按卡池和稀有度聚合", async () => {
+    const { service } = createListService(
+      [
+        {
+          id: 4,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-card-2",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          createdAt: new Date("2026-01-04"),
+        },
+        {
+          id: 5,
+          uid: "u1",
+          card_id: "1",
+          card_level: "SSR",
+          card_uuid: "ssr-listed",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          createdAt: new Date("2026-01-05"),
+        },
+      ],
+      [{ id: 1, card_uuid: "ssr-listed", status: "active" }],
+    );
+
+    const result = await service.getUserCards(
+      "u1",
+      undefined,
+      1,
+      1,
+      20,
+      true,
+    );
+
+    expect(result.total).toBe(2);
+    expect(result.list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cardId: 1,
+          cardLevel: "N",
+          count: 2,
+          listedCount: 0,
+          sellableCount: 2,
+          canSell: true,
+        }),
+        expect.objectContaining({
+          cardId: 1,
+          cardLevel: "SSR",
+          count: 2,
+          listedCount: 1,
+          sellableCount: 1,
+          canSell: true,
+        }),
+      ]),
+    );
+  });
+
+  it("堆叠背包必须指定卡池", async () => {
+    const { service } = createListService();
+
+    await expect(
+      service.getUserCards("u1", undefined, undefined, 1, 20, true),
+    ).rejects.toThrow("请选择卡池");
   });
 
   it("非法稀有度仍会被拒绝", async () => {
@@ -884,6 +969,16 @@ describe("CardService 一键分解", () => {
         card_level: "N",
         card_uuid: "n-card",
         delete_flag: false,
+        createdAt: new Date("2026-01-01"),
+      },
+      {
+        id: 5,
+        uid: "u1",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "n-card-keep",
+        delete_flag: false,
+        createdAt: new Date("2026-01-05"),
       },
       {
         id: 2,
@@ -892,6 +987,16 @@ describe("CardService 一键分解", () => {
         card_level: "R",
         card_uuid: "r-card",
         delete_flag: false,
+        createdAt: new Date("2026-01-02"),
+      },
+      {
+        id: 6,
+        uid: "u1",
+        card_id: "2",
+        card_level: "R",
+        card_uuid: "r-card-keep",
+        delete_flag: false,
+        createdAt: new Date("2026-01-06"),
       },
       {
         id: 3,
@@ -991,6 +1096,7 @@ describe("CardService 一键分解", () => {
     const result = await service.previewBulkDecompose("u1", ["N", "R", "SR"]);
 
     expect(result.total).toBe(2);
+    expect(result.reservedCount).toBe(2);
     expect(result.skippedListed).toBe(1);
     expect(result.countsByRarity).toEqual(
       expect.objectContaining({ N: 1, R: 1, SR: 0 }),
@@ -1013,6 +1119,12 @@ describe("CardService 一键分解", () => {
       expect.arrayContaining([
         expect.objectContaining({ card_uuid: "n-card", delete_flag: true }),
         expect.objectContaining({ card_uuid: "r-card", delete_flag: true }),
+      ]),
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ card_uuid: "n-card-keep", delete_flag: true }),
+        expect.objectContaining({ card_uuid: "r-card-keep", delete_flag: true }),
       ]),
     );
     expect(inventoryRepository.save).toHaveBeenCalledTimes(1);

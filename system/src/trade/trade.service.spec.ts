@@ -108,6 +108,160 @@ describe("TradeService", () => {
     );
   });
 
+  it("堆叠挂售会选择未挂售的实体卡", async () => {
+    const listingRepository = createRepository({
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 8, card_uuid: "listed-card", status: "active" }]),
+      save: jest.fn(async (value) => ({ id: 2, createdAt: new Date(), ...value })),
+    });
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0.05,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+        [TradeListing, listingRepository],
+        [
+          UserCard,
+          createRepository({
+            find: jest.fn().mockResolvedValue([
+              {
+                uid: "seller",
+                card_uuid: "listed-card",
+                card_id: "7",
+                card_level: "SSR",
+                can_sell: true,
+                delete_flag: false,
+              },
+              {
+                uid: "seller",
+                card_uuid: "open-card",
+                card_id: "7",
+                card_level: "SSR",
+                can_sell: true,
+                delete_flag: false,
+              },
+            ]),
+          }),
+        ],
+        [
+          CardItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 7,
+              card_name: "测试卡",
+              card_desc: "描述",
+              card_type: 0,
+              card_level: "N,R,SR,SSR",
+              pool: 2,
+            }),
+          }),
+        ],
+        [
+          PoolInfo,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({ id: 2, pool_name: "测试池" }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(
+      service.createRandomListing("seller", {
+        cardId: 7,
+        rarity: "SSR",
+        poolId: 2,
+        price: 100,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 2,
+        cardUuid: "open-card",
+        price: 100,
+      }),
+    );
+    expect(listingRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_uuid: "open-card",
+        card_level: "SSR",
+      }),
+    );
+  });
+
+  it("堆叠挂售没有可用卡时返回错误", async () => {
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+        [
+          TradeListing,
+          createRepository({
+            find: jest
+              .fn()
+              .mockResolvedValue([{ id: 8, card_uuid: "listed-card", status: "active" }]),
+          }),
+        ],
+        [
+          UserCard,
+          createRepository({
+            find: jest.fn().mockResolvedValue([
+              {
+                uid: "seller",
+                card_uuid: "listed-card",
+                card_id: "7",
+                card_level: "SSR",
+                can_sell: true,
+                delete_flag: false,
+              },
+            ]),
+          }),
+        ],
+        [
+          CardItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 7,
+              card_name: "测试卡",
+              card_desc: "描述",
+              card_type: 0,
+              card_level: "SSR",
+              pool: 2,
+            }),
+          }),
+        ],
+        [PoolInfo, createRepository()],
+      ]),
+    );
+
+    await expect(
+      service.createRandomListing("seller", {
+        cardId: 7,
+        rarity: "SSR",
+        poolId: 2,
+        price: 100,
+      }),
+    ).rejects.toThrow("暂无可挂售卡片");
+  });
+
   it("重复挂售同一张卡会被拒绝", async () => {
     const { service } = createCreateListingService({
       activeListing: { id: 9, card_uuid: "card-uuid", status: "active" },

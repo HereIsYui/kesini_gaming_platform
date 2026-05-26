@@ -117,6 +117,10 @@ type SynthesisCard = {
   costLabel: string;
   disabled: boolean;
 };
+type PoolCatalogCard = {
+  card: CardItem;
+  rarities: CardRarity[];
+};
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 
 const route = useRoute();
@@ -266,15 +270,11 @@ const poolDetailProbabilityRows = computed(() => {
     };
   });
 });
-const poolDetailCardsByRarity = computed(() =>
-  rarityOrder
-    .map((rarity) => ({
-      rarity,
-      cards: poolDetailCards.value.filter((card) =>
-        parseCardRarities(card.card_level).includes(rarity),
-      ),
-    }))
-    .filter((group) => group.cards.length > 0),
+const poolDetailCatalogCards = computed<PoolCatalogCard[]>(() =>
+  poolDetailCards.value.map((card) => ({
+    card,
+    rarities: parseCardRarities(card.card_level),
+  })),
 );
 const rechargeRangeLabel = computed(() => {
   const config = rechargeConfig.value;
@@ -407,6 +407,9 @@ const bulkDecomposeSelectedLabel = computed(() =>
 const bulkDecomposePreviewTotal = computed(
   () => bulkDecomposePreview.value?.total || 0,
 );
+const bulkDecomposeReservedCount = computed(
+  () => bulkDecomposePreview.value?.reservedCount || 0,
+);
 const tradeTotalPages = ref(1);
 const myTradeTotalPages = ref(1);
 const tradeRecordTotalPages = ref(1);
@@ -467,7 +470,14 @@ onMounted(async () => {
   }
 });
 
-watch(activePoolId, async () => {
+watch(activePoolId, async (poolId) => {
+  if (poolId && (!poolFilter.value || activeSection.value === "bag")) {
+    poolFilter.value = poolId;
+    cardPage.value = 1;
+    if (isAuthed.value && activeSection.value === "bag") {
+      await loadUserCards();
+    }
+  }
   await loadPoolCards();
 });
 
@@ -618,6 +628,7 @@ async function loadPublicData() {
     if (!activePoolId.value && pools.value.length > 0) {
       activePoolId.value = pools.value[0].id;
     }
+    ensureBagPoolFilter();
     await loadPoolCards();
   } catch (error) {
     notify("error", getErrorMessage(error));
@@ -711,8 +722,33 @@ async function loadStats() {
   stats.value = await request<UserGachaStats>("/card/stats");
 }
 
+function ensureBagPoolFilter() {
+  const poolId = activePoolId.value || pools.value[0]?.id || null;
+  if (!poolFilter.value && poolId) {
+    poolFilter.value = poolId;
+  }
+  if (
+    poolFilter.value &&
+    !pools.value.some((pool) => pool.id === Number(poolFilter.value))
+  ) {
+    poolFilter.value = poolId || "";
+  }
+}
+
 async function loadUserCards() {
   if (!isAuthed.value) {
+    return;
+  }
+  ensureBagPoolFilter();
+  if (!poolFilter.value) {
+    userCards.value = {
+      list: [],
+      dropItems: [],
+      total: 0,
+      page: cardPage.value,
+      pageSize: 12,
+      totalPages: 0,
+    };
     return;
   }
   busy.assets = true;
@@ -721,6 +757,7 @@ async function loadUserCards() {
       `/card/user/cards${toQuery({
         rarity: rarityFilter.value,
         poolId: poolFilter.value,
+        grouped: true,
         page: cardPage.value,
         pageSize: 12,
       })}`,
@@ -1182,25 +1219,6 @@ async function synthesizeCard(item: SynthesisCard) {
   }
 }
 
-async function decomposeCard(card: { uuid: string; cardName: string }) {
-  if (!window.confirm(`分解后将移除「${card.cardName}」，确认继续吗？`)) {
-    return;
-  }
-  busy.assets = true;
-  try {
-    await request("/card/decompose", {
-      method: "POST",
-      body: JSON.stringify({ card_uuid: card.uuid }),
-    });
-    notify("success", "分解成功，碎片已进入背包");
-    await loadPrivateData();
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.assets = false;
-  }
-}
-
 function toggleBulkDecomposeRarity(rarity: CardRarity) {
   if (rarity === "UR") {
     return;
@@ -1256,9 +1274,13 @@ async function bulkDecomposeCards() {
     preview.skippedListed > 0
       ? `；${preview.skippedListed} 张挂售中卡片会跳过`
       : "";
+  const reservedText =
+    Number(preview.reservedCount || 0) > 0
+      ? `；保留 ${preview.reservedCount} 张`
+      : "";
   if (
     !window.confirm(
-      `确认一键分解 ${preview.total} 张卡片（${detail}）${skippedText}？`,
+      `确认分解 ${preview.total} 张卡片（${detail}）${skippedText}${reservedText}？`,
     )
   ) {
     return;
@@ -1292,8 +1314,8 @@ function openTradeListingModal(card: UserCardsResponse["list"][number]) {
     notify("error", "请先登录后再挂售卡片");
     return;
   }
-  if (card.isListed) {
-    notify("info", "这张卡片已经在交易中");
+  if (Number(card.sellableCount ?? (card.canSell ? 1 : 0)) <= 0) {
+    notify("info", "暂无可挂售卡片");
     return;
   }
   if (!card.canSell) {
@@ -1313,6 +1335,10 @@ async function createTradeListing() {
   if (!listingTarget.value) {
     return;
   }
+  if (!listingTarget.value.cardId) {
+    notify("error", "卡片无效");
+    return;
+  }
   const price = Number(listingPrice.value);
   if (!Number.isInteger(price)) {
     notify("error", "交易价格必须为整数");
@@ -1320,10 +1346,12 @@ async function createTradeListing() {
   }
   busy.trade = true;
   try {
-    await request("/trade/listings", {
+    await request("/trade/listings/random", {
       method: "POST",
       body: JSON.stringify({
-        cardUuid: listingTarget.value.uuid,
+        cardId: listingTarget.value.cardId,
+        rarity: listingTarget.value.cardLevel,
+        poolId: listingTarget.value.poolId,
         price,
       }),
     });
@@ -1732,7 +1760,7 @@ function leaderboardRankLabel(rank?: number) {
                 @click="openPoolDetail"
               >
                 <Package :size="16" />
-                卡池详情
+                图鉴
               </button>
             </div>
           </div>
@@ -1993,7 +2021,6 @@ function leaderboardRankLabel(rank?: number) {
                   loadUserCards();
                 "
               >
-                <option value="">全部卡池</option>
                 <option v-for="pool in pools" :key="pool.id" :value="pool.id">
                   {{ pool.pool_name }}
                 </option>
@@ -2068,6 +2095,13 @@ function leaderboardRankLabel(rank?: number) {
                     <span>挂售跳过</span>
                     <strong>{{ bulkDecomposePreview.skippedListed }} 张</strong>
                   </div>
+                  <div
+                    v-if="bulkDecomposeReservedCount"
+                    class="bulk-preview-line muted"
+                  >
+                    <span>默认保留</span>
+                    <strong>{{ bulkDecomposeReservedCount }} 张</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2089,7 +2123,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-else class="owned-grid">
             <article
               v-for="(card, index) in userCards.list"
-              :key="card.uuid"
+              :key="`${card.cardId || card.id}-${card.cardLevel}`"
               class="result-card owned-card"
               :class="rarityClass(card.cardLevel)"
               :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
@@ -2112,29 +2146,25 @@ function leaderboardRankLabel(rank?: number) {
                           ?.card_type,
                       )
                     }}</span>
-                    <span>{{ formatDate(card.obtainedAt) }}</span>
-                    <span v-if="card.isListed"
-                      >交易中 · {{ card.tradePrice }}星穹币</span
+                    <span>{{ formatDate(card.latestObtainedAt || card.obtainedAt) }}</span>
+                    <span>x{{ card.count || 1 }}</span>
+                    <span v-if="card.listedCount"
+                      >挂售 {{ card.listedCount }}</span
                     >
                   </div>
                 </div>
               </div>
               <div class="card-actions">
+                <span class="stack-count-badge">
+                  可挂售 {{ card.sellableCount || 0 }}
+                </span>
                 <button
                   class="secondary-action"
                   type="button"
-                  :disabled="card.isListed || !card.canSell"
+                  :disabled="!card.canSell || Number(card.sellableCount || 0) <= 0"
                   @click="openTradeListingModal(card)"
                 >
-                  {{ card.isListed ? "已挂售" : "挂售" }}
-                </button>
-                <button
-                  class="danger-action"
-                  type="button"
-                  :disabled="card.cardLevel === 'UR' || card.isListed"
-                  @click="decomposeCard(card)"
-                >
-                  分解
+                  {{ card.canSell && Number(card.sellableCount || 0) > 0 ? "挂售" : "无可售" }}
                 </button>
               </div>
             </article>
@@ -2448,7 +2478,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <Store :size="30" />
           <strong>登录后进入交易市场</strong>
-          <span>市场匿名展示，成交后卡片 UUID 保持不变。</span>
+          <span>市场匿名展示，成交后入背包。</span>
         </div>
         <div v-else class="trade-content">
           <div class="trade-config-strip">
@@ -2646,10 +2676,7 @@ function leaderboardRankLabel(rank?: number) {
                   <strong
                     >{{ listing.cardName }} · {{ listing.cardLevel }}</strong
                   >
-                  <span
-                    >{{ listing.cardUuid }} ·
-                    {{ listing.poolName || "未知卡池" }}</span
-                  >
+                  <span>{{ listing.poolName || "未知卡池" }}</span>
                 </div>
                 <b>{{ listing.price }} 星穹币</b>
                 <span>{{ tradeStatusLabel(listing.status) }}</span>
@@ -2695,10 +2722,7 @@ function leaderboardRankLabel(rank?: number) {
                     >{{ tradeRoleLabel(record.role) }} · {{ record.cardName }} ·
                     {{ record.cardLevel }}</strong
                   >
-                  <span
-                    >{{ record.cardUuid }} ·
-                    {{ record.poolName || "未知卡池" }}</span
-                  >
+                  <span>{{ record.poolName || "未知卡池" }}</span>
                 </div>
                 <b>{{ record.price }} 星穹币</b>
                 <span v-if="record.role === 'seller'"
@@ -3184,16 +3208,16 @@ function leaderboardRankLabel(rank?: number) {
           class="pool-detail-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="卡池详情"
+          aria-label="卡池图鉴"
         >
           <header class="result-modal-head">
             <div>
-              <p class="eyebrow">卡池详情</p>
+              <p class="eyebrow">卡池图鉴</p>
               <h2>
                 {{
                   poolDetailPool?.pool_name ||
                   selectedPool?.pool_name ||
-                  "卡池详情"
+                  "卡池图鉴"
                 }}
               </h2>
               <span>
@@ -3217,12 +3241,12 @@ function leaderboardRankLabel(rank?: number) {
           <div class="pool-detail-body">
             <div v-if="poolDetailLoading" class="empty-state">
               <LoaderCircle :size="30" class="spin" />
-              <strong>正在同步卡池详情</strong>
-              <span>正在整理卡池内容与抽取信息。</span>
+              <strong>正在同步图鉴</strong>
+              <span>正在整理卡池内容。</span>
             </div>
             <div v-else-if="poolDetailError" class="empty-state">
               <Package :size="30" />
-              <strong>卡池详情加载失败</strong>
+              <strong>图鉴加载失败</strong>
               <span>{{ poolDetailError }}</span>
             </div>
             <template v-else>
@@ -3233,7 +3257,7 @@ function leaderboardRankLabel(rank?: number) {
                     <h3>稀有度分布</h3>
                   </div>
                   <span class="type-pill"
-                    >{{ poolDetailCards.length }} 张基础卡片</span
+                    >{{ poolDetailCatalogCards.length }} 张卡片</span
                   >
                 </div>
                 <div class="pool-probability-list">
@@ -3255,11 +3279,11 @@ function leaderboardRankLabel(rank?: number) {
               <section class="pool-detail-section">
                 <div class="section-title-row">
                   <div>
-                    <p class="eyebrow">卡池卡片</p>
-                    <h3>全部可抽取卡片</h3>
+                    <p class="eyebrow">卡池图鉴</p>
+                    <h3>全部卡片</h3>
                   </div>
                   <span class="type-pill"
-                    >{{ poolDetailCardsByRarity.length }} 个稀有度分组</span
+                    >{{ poolDetailCatalogCards.length }} 张</span
                   >
                 </div>
                 <div
@@ -3268,38 +3292,31 @@ function leaderboardRankLabel(rank?: number) {
                 >
                   <Package :size="26" />
                   <strong>当前卡池暂无卡片</strong>
-                  <span>后台添加卡片后会显示在这里。</span>
+                  <span>暂无图鉴</span>
                 </div>
-                <div v-else class="pool-card-groups">
-                  <article
-                    v-for="group in poolDetailCardsByRarity"
-                    :key="group.rarity"
-                    class="pool-card-group"
+                <div v-else class="pool-detail-card-grid">
+                  <div
+                    v-for="item in poolDetailCatalogCards"
+                    :key="item.card.id"
+                    class="pool-detail-card"
                   >
-                    <header>
+                    <div class="catalog-rarity-list">
                       <span
+                        v-for="rarity in item.rarities"
+                        :key="`${item.card.id}-${rarity}`"
                         class="rarity-badge"
-                        :class="rarityClass(group.rarity)"
+                        :class="rarityClass(rarity)"
                       >
-                        {{ group.rarity }}
+                        {{ rarity }}
                       </span>
-                      <strong>{{ group.cards.length }} 张</strong>
-                    </header>
-                    <div class="pool-detail-card-grid">
-                      <div
-                        v-for="card in group.cards"
-                        :key="`${group.rarity}-${card.id}`"
-                        class="pool-detail-card"
-                      >
-                        <strong>{{ card.card_name }}</strong>
-                        <p>{{ card.card_desc || "暂无介绍" }}</p>
-                        <div class="tag-row">
-                          <span>{{ cardTypeLabel(card.card_type) }}</span>
-                          <span>#{{ card.id }}</span>
-                        </div>
-                      </div>
                     </div>
-                  </article>
+                    <strong>{{ item.card.card_name }}</strong>
+                    <p>{{ item.card.card_desc || "暂无介绍" }}</p>
+                    <div class="tag-row">
+                      <span>{{ cardTypeLabel(item.card.card_type) }}</span>
+                      <span>#{{ item.card.id }}</span>
+                    </div>
+                  </div>
                 </div>
               </section>
             </template>
@@ -3497,10 +3514,11 @@ function leaderboardRankLabel(rank?: number) {
             <div>
               <p class="eyebrow">卡片挂售</p>
               <h2>{{ listingTarget.cardName }}</h2>
-              <span
-                >{{ listingTarget.cardLevel }} · UUID
-                {{ listingTarget.uuid }}</span
-              >
+              <span>
+                {{ listingTarget.cardLevel }} · 共
+                {{ listingTarget.count || 1 }} 张 · 可挂售
+                {{ listingTarget.sellableCount || 0 }} 张
+              </span>
             </div>
             <button
               class="modal-close"
@@ -3539,8 +3557,8 @@ function leaderboardRankLabel(rank?: number) {
                 <dd>{{ listingFeePreview.sellerIncome }} 星穹币</dd>
               </div>
               <div>
-                <dt>交易说明</dt>
-                <dd>挂售后卡片会被锁定，取消或成交前不能分解。</dd>
+                <dt>挂售数量</dt>
+                <dd>本次挂售 1 张</dd>
               </div>
             </dl>
           </div>

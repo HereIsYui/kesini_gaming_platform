@@ -88,19 +88,24 @@ export interface UserGachaStats {
 }
 
 export interface UserCardRecord {
-  id: number;
-  uuid: string;
+  id?: number;
+  uuid?: string;
+  cardId?: number;
   cardName: string;
   cardDesc: string;
   cardLevel: CardRarity | string;
   cardType: number;
   poolId: number;
+  count?: number;
+  listedCount?: number;
+  sellableCount?: number;
   canSell: boolean;
   canLottery: boolean;
   isListed?: boolean;
   tradeListingId?: number | null;
   tradePrice?: number | null;
-  obtainedAt: string;
+  obtainedAt?: string;
+  latestObtainedAt?: string;
 }
 
 export interface InventoryItem {
@@ -220,6 +225,7 @@ export interface BulkDecomposeResponse {
   total: number;
   countsByRarity: Partial<Record<CardRarity | string, number>>;
   skippedListed: number;
+  reservedCount?: number;
   decomposed?: number;
   fragments?: BulkDecomposeFragment[];
 }

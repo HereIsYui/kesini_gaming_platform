@@ -78,6 +78,27 @@ class CreateTradeListingDto {
   price: number;
 }
 
+class CreateRandomTradeListingDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cardId: number;
+
+  @IsString()
+  rarity: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  poolId: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(999999)
+  price: number;
+}
+
 interface UserInfo {
   uid: string;
 }
@@ -118,6 +139,24 @@ export class TradeController {
     try {
       return ResponseDto.success(
         await this.tradeService.createListing(user.uid, body.cardUuid, body.price),
+        "挂售成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "挂售失败");
+    }
+  }
+
+  @Post("listings/random")
+  async createRandomListing(
+    @GetUser() user: UserInfo,
+    @Body() body: CreateRandomTradeListingDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.tradeService.createRandomListing(user.uid, body),
         "挂售成功",
       );
     } catch (error) {

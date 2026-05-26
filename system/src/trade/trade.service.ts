@@ -1,4 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common";
+import { randomInt } from "crypto";
 import { DataSource, EntityManager, FindOptionsWhere, In } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -152,6 +153,108 @@ export class TradeService {
       const pool = await poolRepository.findOne({ where: { id: card.pool } });
       const rarity =
         userCard.card_level || this.getHighestRarity(card.card_level || "");
+      const listing = listingRepository.create({
+        seller_uid: uid,
+        buyer_uid: null,
+        card_uuid: userCard.card_uuid,
+        card_id: card.id,
+        card_level: rarity,
+        price: normalizedPrice,
+        fee_rate: config.fee_rate,
+        status: "active",
+        sold_at: null,
+        cancelled_at: null,
+      });
+      const saved = await listingRepository.save(listing);
+      return (
+        await this.decorateListings(
+          [saved],
+          uid,
+          true,
+          manager,
+          [card],
+          pool ? [pool] : [],
+        )
+      )[0];
+    });
+  }
+
+  async createRandomListing(
+    uid: string,
+    input: {
+      cardId: number;
+      rarity: string;
+      poolId: number;
+      price: number;
+    },
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const config = await this.getTradeConfig(manager);
+      if (!config.enabled) {
+        throw new Error("交易市场暂未开启");
+      }
+
+      const normalizedPrice = this.normalizePrice(input.price, config);
+      const cardId = Number(input.cardId);
+      const poolId = Number(input.poolId);
+      if (!Number.isInteger(cardId) || cardId <= 0) {
+        throw new Error("卡片无效");
+      }
+      if (!Number.isInteger(poolId) || poolId <= 0) {
+        throw new Error("卡池无效");
+      }
+      const rarity = this.normalizeRarity(input.rarity);
+      const userCardRepository = manager.getRepository(UserCard);
+      const listingRepository = manager.getRepository(TradeListing);
+      const cardRepository = manager.getRepository(CardItem);
+      const poolRepository = manager.getRepository(PoolInfo);
+
+      const card = await cardRepository.findOne({ where: { id: cardId } });
+      if (!card) {
+        throw new Error("卡片不存在");
+      }
+      if (card.pool !== poolId) {
+        throw new Error("卡片不属于当前卡池");
+      }
+      if (!this.cardSupportsRarity(card, rarity)) {
+        throw new Error("卡片不支持该稀有度");
+      }
+
+      const userCards = await userCardRepository.find({
+        where: {
+          uid,
+          card_id: String(cardId),
+          can_sell: true,
+          delete_flag: false,
+        } as any,
+        lock: { mode: "pessimistic_write" },
+      });
+      const matchedUserCards = userCards.filter(
+        (userCard) => this.getUserCardRarity(userCard, card) === rarity,
+      );
+      if (matchedUserCards.length === 0) {
+        throw new Error("暂无可挂售卡片");
+      }
+
+      const activeListings = await listingRepository.find({
+        where: {
+          card_uuid: In(matchedUserCards.map((userCard) => userCard.card_uuid)),
+          status: "active",
+        },
+        lock: { mode: "pessimistic_write" },
+      });
+      const activeListingSet = new Set(
+        activeListings.map((listing) => listing.card_uuid),
+      );
+      const candidates = matchedUserCards.filter(
+        (userCard) => !activeListingSet.has(userCard.card_uuid),
+      );
+      if (candidates.length === 0) {
+        throw new Error("暂无可挂售卡片");
+      }
+
+      const userCard = candidates[randomInt(0, candidates.length)];
+      const pool = await poolRepository.findOne({ where: { id: card.pool } });
       const listing = listingRepository.create({
         seller_uid: uid,
         buyer_uid: null,
@@ -619,6 +722,16 @@ export class TradeService {
       .filter((level): level is CardRarity =>
         RARITY_ORDER.includes(level as CardRarity),
       );
+  }
+
+  private cardSupportsRarity(card: CardItem, rarity: CardRarity) {
+    return this.parseCardLevels(card.card_level).includes(rarity);
+  }
+
+  private getUserCardRarity(userCard: UserCard, card: CardItem) {
+    return userCard.card_level
+      ? this.normalizeRarity(userCard.card_level)
+      : this.getHighestRarity(card.card_level || "");
   }
 
   private getHighestRarity(cardLevel: string): CardRarity {
