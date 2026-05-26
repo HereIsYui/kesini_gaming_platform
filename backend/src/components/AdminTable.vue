@@ -390,19 +390,23 @@ function openEdit(row: Record<string, any>) {
 
 function serializeForm() {
   return editableFields.value.reduce<Record<string, any>>((result, field) => {
-    const value = formValues.value[field.key];
-    if (field.type === "multiSelect") {
-      const selected = Array.isArray(value) ? value.map(String) : [];
-      result[field.key] = selected.join(",");
-      return result;
-    }
-    if (field.type === "json") {
-      result[field.key] = parseFormJson(value);
-      return result;
-    }
-    result[field.key] = value === "" ? null : value;
+    result[field.key] = serializeFieldValue(field, formValues.value[field.key]);
     return result;
   }, {});
+}
+
+function serializeFieldValue(field: FieldConfig, value: unknown) {
+  if (field.type === "multiSelect") {
+    const selected = Array.isArray(value) ? value.map(String) : [];
+    return selected.join(",");
+  }
+  if (field.type === "json") {
+    return parseFormJson(value);
+  }
+  if (field.type === "datetime" || field.type === "number") {
+    return value === "" || value === null || value === undefined ? null : value;
+  }
+  return value === "" || value === null || value === undefined ? "" : value;
 }
 
 async function saveForm() {

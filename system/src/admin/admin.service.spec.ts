@@ -237,6 +237,31 @@ describe("AdminService", () => {
     );
   });
 
+  it("更新卡池允许清空描述但不允许清空名称", async () => {
+    const pool = {
+      id: 2,
+      pool_name: "限定卡池",
+      card_desc: "旧描述",
+      card_type: 2,
+      enabled: true,
+    };
+    const poolRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(pool),
+    });
+    const service = createService({ pool: poolRepository });
+
+    await service.updatePool(2, { card_desc: null } as any);
+
+    expect(poolRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_desc: "",
+      }),
+    );
+    await expect(
+      service.updatePool(2, { pool_name: "" } as any),
+    ).rejects.toThrow("卡池名称不能为空");
+  });
+
   it("创建卡片会标准化多稀有度配置", async () => {
     const cardRepository = createRepository();
     const service = createService({ card: cardRepository });
@@ -282,6 +307,49 @@ describe("AdminService", () => {
     );
   });
 
+  it("更新卡片允许清空描述和分解产出", async () => {
+    const card = {
+      id: 10,
+      card_name: "测试卡",
+      card_level: "N",
+      card_desc: "旧描述",
+      drop_item: "1",
+      card_type: 0,
+      pool: 1,
+    };
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const service = createService({ card: cardRepository });
+
+    await service.updateCard(10, {
+      card_desc: null,
+      drop_item: null,
+    } as any);
+
+    expect(cardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_desc: "",
+        drop_item: "",
+      }),
+    );
+  });
+
+  it("更新卡片会拒绝空名称和空稀有度", async () => {
+    const card = { id: 10, card_name: "测试卡", card_level: "N" };
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const service = createService({ card: cardRepository });
+
+    await expect(
+      service.updateCard(10, { card_name: "" } as any),
+    ).rejects.toThrow("卡片名称不能为空");
+    await expect(
+      service.updateCard(10, { card_level: "" } as any),
+    ).rejects.toThrow("卡片稀有度不能为空");
+  });
+
   it("更新用户只保存允许变更的字段", async () => {
     const user = { id: 1, uid: "u1", point: 0, is_admin: false };
     const userRepository = createRepository({
@@ -300,6 +368,34 @@ describe("AdminService", () => {
         uid: "u1",
         point: 100,
         is_admin: true,
+      }),
+    );
+  });
+
+  it("更新用户允许清空昵称和头像", async () => {
+    const user = {
+      id: 1,
+      uid: "u1",
+      name: "user",
+      nickname: "nick",
+      avatar: "avatar",
+      point: 0,
+      is_admin: false,
+    };
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const service = createService({ user: userRepository });
+
+    await service.updateUser(1, {
+      nickname: null,
+      avatar: null,
+    } as any);
+
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nickname: "",
+        avatar: "",
       }),
     );
   });
@@ -561,6 +657,31 @@ describe("AdminService", () => {
     );
   });
 
+  it("更新物品时空布尔值不会覆盖原状态", async () => {
+    const item = {
+      id: 2,
+      drop_name: "当前碎片",
+      drop_desc: "",
+      drop_type: 0,
+      drop_item_type: 0,
+      drop_item_value: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const dropRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(item),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await service.updateDropItem(2, { disabled: null } as any);
+
+    expect(dropRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        disabled: false,
+      }),
+    );
+  });
+
   it("被引用的物品删除时改为禁用", async () => {
     const item = { id: 7, drop_name: "通用碎片", drop_type: 0, disabled: false };
     const dropRepository = createRepository({
@@ -582,6 +703,31 @@ describe("AdminService", () => {
       expect.objectContaining({ disabled: true }),
     );
     expect(dropRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it("更新背包和保底会拒绝空数字", async () => {
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, num: 3 }),
+    });
+    const pityRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        draws_since_sr: 1,
+        draws_since_ssr: 2,
+        draws_since_ur: 3,
+      }),
+    });
+    const service = createService({
+      inventory: inventoryRepository,
+      pity: pityRepository,
+    });
+
+    await expect(
+      service.updateInventory(1, { num: null } as any),
+    ).rejects.toThrow("物品数量必须为非负整数");
+    await expect(
+      service.updatePity(1, { draws_since_ur: null } as any),
+    ).rejects.toThrow("保底计数必须为非负整数");
   });
 
   it("更新抽卡配置会委托配置服务校验和保存", async () => {
@@ -752,6 +898,72 @@ describe("AdminService", () => {
         rewards: { points: 0, items: [{ itemId: 1, num: 1 }] },
       } as any),
     ).rejects.toThrow("奖励物品已禁用");
+  });
+
+  it("更新兑换码允许清空描述但不允许清空名称", async () => {
+    const redeemCode = {
+      id: 1,
+      code: "WELCOME",
+      name: "欢迎礼包",
+      description: "旧描述",
+      enabled: true,
+      total_limit: null,
+      used_count: 0,
+      starts_at: null,
+      ends_at: null,
+      rewards: { points: 0, items: [] },
+      delete_flag: false,
+    };
+    const redeemCodeRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(redeemCode),
+    });
+    const service = createService({ redeemCode: redeemCodeRepository });
+
+    await service.updateRedeemCode(1, { description: null } as any);
+
+    expect(redeemCodeRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "",
+      }),
+    );
+    await expect(
+      service.updateRedeemCode(1, { name: "" } as any),
+    ).rejects.toThrow("兑换码名称不能为空");
+  });
+
+  it("交易和充值配置会拒绝空数字", async () => {
+    const tradeConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        enabled: true,
+        fee_rate: 0,
+        min_price: 1,
+        max_price: 999999,
+      }),
+    });
+    const rechargeConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        enabled: false,
+        gold_finger_key: "",
+        fishpi_api_key: "",
+        min_amount: 1,
+        max_amount: 9999,
+        recharge_ratio: 1,
+        memo_template: "抽卡平台充值，兑换星穹币 {amount}",
+      }),
+    });
+    const service = createService({
+      tradeConfig: tradeConfigRepository,
+      rechargeConfig: rechargeConfigRepository,
+    });
+
+    await expect(
+      service.updateTradeConfig({ min_price: null } as any),
+    ).rejects.toThrow("最低交易价格必须为正整数");
+    await expect(
+      service.updateRechargeConfig({ min_amount: null } as any),
+    ).rejects.toThrow("最低充值金额必须为正整数");
   });
 
   it("后台开服活动配置会保存奖励和活动批次", async () => {

@@ -288,15 +288,27 @@ export class AdminService {
 
   async updatePool(id: number, body: Partial<PoolInfo>) {
     const pool = await this.mustFind(this.poolRepository, id, "卡池不存在");
-    Object.assign(
-      pool,
-      this.pickDefined(body, [
-        "pool_name",
-        "card_desc",
-        "card_type",
-        "enabled",
-      ]),
-    );
+    const updates: Partial<PoolInfo> = {};
+    if (body.pool_name !== undefined) {
+      updates.pool_name = this.normalizeRequiredString(
+        body.pool_name,
+        "卡池名称不能为空",
+      );
+    }
+    if (body.card_desc !== undefined) {
+      updates.card_desc = this.normalizeOptionalString(body.card_desc);
+    }
+    if (body.card_type !== undefined) {
+      updates.card_type = this.normalizeIntegerInput(
+        body.card_type,
+        "卡池类型无效",
+        0,
+      );
+    }
+    if (body.enabled !== undefined && body.enabled !== null) {
+      updates.enabled = body.enabled === true;
+    }
+    Object.assign(pool, updates);
     return this.poolRepository.save(pool);
   }
 
@@ -356,16 +368,31 @@ export class AdminService {
 
   async updateCard(id: number, body: Partial<CardItem>) {
     const card = await this.mustFind(this.cardRepository, id, "卡片不存在");
-    const updates = this.pickDefined(body, [
-      "card_name",
-      "card_level",
-      "drop_item",
-      "card_desc",
-      "card_type",
-      "pool",
-    ]);
-    if (updates.card_level !== undefined) {
-      updates.card_level = this.normalizeCardLevels(updates.card_level);
+    const updates: Partial<CardItem> = {};
+    if (body.card_name !== undefined) {
+      updates.card_name = this.normalizeRequiredString(
+        body.card_name,
+        "卡片名称不能为空",
+      );
+    }
+    if (body.card_level !== undefined) {
+      updates.card_level = this.normalizeCardLevels(body.card_level);
+    }
+    if (body.drop_item !== undefined) {
+      updates.drop_item = this.normalizeOptionalString(body.drop_item);
+    }
+    if (body.card_desc !== undefined) {
+      updates.card_desc = this.normalizeOptionalString(body.card_desc);
+    }
+    if (body.card_type !== undefined) {
+      updates.card_type = this.normalizeIntegerInput(
+        body.card_type,
+        "卡片类型无效",
+        0,
+      );
+    }
+    if (body.pool !== undefined) {
+      updates.pool = this.normalizeIntegerInput(body.pool, "所属卡池无效", 1);
     }
     Object.assign(card, updates);
     return this.cardRepository.save(card);
@@ -421,13 +448,13 @@ export class AdminService {
     const item = await this.mustFind(this.dropRepository, id, "物品不存在");
     const normalized = this.normalizeDropItemInput({ ...item, ...body });
     const disabled =
-      body.disabled === undefined
+      body.disabled === undefined || body.disabled === null
         ? item.disabled === true
         : body.disabled === true;
     const defaultFragment =
       disabled || normalized.drop_type !== 0
         ? false
-        : body.default_fragment === undefined
+        : body.default_fragment === undefined || body.default_fragment === null
           ? item.default_fragment === true
           : body.default_fragment === true;
     await this.prepareDefaultFragment(
@@ -435,7 +462,8 @@ export class AdminService {
       defaultFragment,
       id,
     );
-    Object.assign(item, normalized, this.pickDefined(body, ["disabled"]), {
+    Object.assign(item, normalized, {
+      disabled,
       default_fragment: defaultFragment,
     });
     return this.dropRepository.save(item);
@@ -470,16 +498,27 @@ export class AdminService {
 
   async updateUser(id: number, body: Partial<User>) {
     const user = await this.mustFind(this.userRepository, id, "用户不存在");
-    Object.assign(
-      user,
-      this.pickDefined(body, [
-        "name",
-        "nickname",
-        "avatar",
-        "point",
-        "is_admin",
-      ]),
-    );
+    const updates: Partial<User> = {};
+    if (body.name !== undefined) {
+      updates.name = this.normalizeOptionalString(body.name);
+    }
+    if (body.nickname !== undefined) {
+      updates.nickname = this.normalizeOptionalString(body.nickname);
+    }
+    if (body.avatar !== undefined) {
+      updates.avatar = this.normalizeOptionalString(body.avatar);
+    }
+    if (body.point !== undefined) {
+      updates.point = this.normalizeIntegerInput(
+        body.point,
+        "星穹币必须为非负整数",
+        0,
+      );
+    }
+    if (body.is_admin !== undefined && body.is_admin !== null) {
+      updates.is_admin = body.is_admin === true;
+    }
+    Object.assign(user, updates);
     return this.userRepository.save(user);
   }
 
@@ -550,7 +589,13 @@ export class AdminService {
       id,
       "背包记录不存在",
     );
-    Object.assign(inventory, this.pickDefined(body, ["num"]));
+    if (body.num !== undefined) {
+      inventory.num = this.normalizeIntegerInput(
+        body.num,
+        "物品数量必须为非负整数",
+        0,
+      );
+    }
     return this.inventoryRepository.save(inventory);
   }
 
@@ -608,14 +653,27 @@ export class AdminService {
 
   async updatePity(id: number, body: Partial<UserGachaPity>) {
     const pity = await this.mustFind(this.pityRepository, id, "保底记录不存在");
-    Object.assign(
-      pity,
-      this.pickDefined(body, [
-        "draws_since_sr",
-        "draws_since_ssr",
-        "draws_since_ur",
-      ]),
-    );
+    if (body.draws_since_sr !== undefined) {
+      pity.draws_since_sr = this.normalizeIntegerInput(
+        body.draws_since_sr,
+        "保底计数必须为非负整数",
+        0,
+      );
+    }
+    if (body.draws_since_ssr !== undefined) {
+      pity.draws_since_ssr = this.normalizeIntegerInput(
+        body.draws_since_ssr,
+        "保底计数必须为非负整数",
+        0,
+      );
+    }
+    if (body.draws_since_ur !== undefined) {
+      pity.draws_since_ur = this.normalizeIntegerInput(
+        body.draws_since_ur,
+        "保底计数必须为非负整数",
+        0,
+      );
+    }
     return this.pityRepository.save(pity);
   }
 
@@ -783,10 +841,19 @@ export class AdminService {
       }
     }
 
-    const next = Object.assign(
-      code,
-      this.pickDefined(body, ["name", "description", "enabled"]),
-    );
+    const next = code;
+    if (body.name !== undefined) {
+      next.name = this.normalizeRequiredString(
+        body.name,
+        "兑换码名称不能为空",
+      );
+    }
+    if (body.description !== undefined) {
+      next.description = this.normalizeOptionalString(body.description);
+    }
+    if (body.enabled !== undefined && body.enabled !== null) {
+      next.enabled = body.enabled === true;
+    }
     next.code = nextCode;
     if (body.total_limit !== undefined) {
       next.total_limit = this.normalizeTotalLimit(body.total_limit);
@@ -869,6 +936,10 @@ export class AdminService {
     const normalized = await this.normalizeExchangeItemInput({
       ...item,
       ...body,
+      enabled:
+        body.enabled === undefined || body.enabled === null
+          ? item.enabled
+          : body.enabled,
     });
     if (
       normalized.total_limit !== null &&
@@ -1024,17 +1095,32 @@ export class AdminService {
     const config = await this.ensureTradeConfig();
     Object.assign(config, {
       enabled:
-        body.enabled === undefined ? config.enabled : body.enabled === true,
+        body.enabled === undefined || body.enabled === null
+          ? config.enabled
+          : body.enabled === true,
       fee_rate:
-        body.fee_rate === undefined ? config.fee_rate : Number(body.fee_rate),
+        body.fee_rate === undefined
+          ? config.fee_rate
+          : this.normalizeNumberInput(
+              body.fee_rate,
+              "交易手续费率必须在0-1之间",
+            ),
       min_price:
         body.min_price === undefined
           ? config.min_price
-          : Number(body.min_price),
+          : this.normalizeIntegerInput(
+              body.min_price,
+              "最低交易价格必须为正整数",
+              1,
+            ),
       max_price:
         body.max_price === undefined
           ? config.max_price
-          : Number(body.max_price),
+          : this.normalizeIntegerInput(
+              body.max_price,
+              "最高交易价格必须大于等于最低价格且不超过999999",
+              1,
+            ),
     });
     this.assertTradeConfig(config);
     return repository.save(config);
@@ -1050,19 +1136,32 @@ export class AdminService {
     const config = await this.ensureRechargeConfig();
     const next = Object.assign(config, {
       enabled:
-        body.enabled === undefined ? config.enabled : body.enabled === true,
+        body.enabled === undefined || body.enabled === null
+          ? config.enabled
+          : body.enabled === true,
       min_amount:
         body.min_amount === undefined
           ? config.min_amount
-          : Number(body.min_amount),
+          : this.normalizeIntegerInput(
+              body.min_amount,
+              "最低充值金额必须为正整数",
+              1,
+            ),
       max_amount:
         body.max_amount === undefined
           ? config.max_amount
-          : Number(body.max_amount),
+          : this.normalizeIntegerInput(
+              body.max_amount,
+              "最高充值金额必须大于等于最低充值金额",
+              1,
+            ),
       recharge_ratio:
         body.recharge_ratio === undefined
           ? config.recharge_ratio
-          : Number(body.recharge_ratio),
+          : this.normalizeNumberInput(
+              body.recharge_ratio,
+              "充值比例必须大于0且不超过100",
+            ),
       memo_template:
         body.memo_template === undefined
           ? config.memo_template
@@ -1148,7 +1247,9 @@ export class AdminService {
     const config = await this.ensureLaunchActivityConfig();
     const next = Object.assign(config, {
       enabled:
-        body.enabled === undefined ? config.enabled : body.enabled === true,
+        body.enabled === undefined || body.enabled === null
+          ? config.enabled
+          : body.enabled === true,
       activity_key:
         body.activity_key === undefined
           ? config.activity_key
@@ -1688,6 +1789,40 @@ export class AdminService {
     if (value === undefined || value === null || value === "") {
       throw new Error(message);
     }
+  }
+
+  private normalizeRequiredString(value: unknown, message: string) {
+    const text = this.normalizeOptionalString(value);
+    if (!text) {
+      throw new Error(message);
+    }
+    return text;
+  }
+
+  private normalizeOptionalString(value: unknown) {
+    return String(value ?? "").trim();
+  }
+
+  private normalizeIntegerInput(value: unknown, message: string, min = 0) {
+    if (value === undefined || value === null || value === "") {
+      throw new Error(message);
+    }
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < min) {
+      throw new Error(message);
+    }
+    return number;
+  }
+
+  private normalizeNumberInput(value: unknown, message: string) {
+    if (value === undefined || value === null || value === "") {
+      throw new Error(message);
+    }
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      throw new Error(message);
+    }
+    return number;
   }
 
   private pickDefined<T extends Record<string, any>>(
