@@ -26,7 +26,7 @@ export class CardItem {
   @Column()
   card_desc: string;
 
-  // 卡片图片，相对 /file 的访问路径或空字符串
+  // 卡面素材，相对 /file 的访问路径或空字符串
   @Column({ length: 500, default: "" })
   card_image: string;
 

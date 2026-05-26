@@ -689,7 +689,7 @@ export class AdminController {
   @Post("uploads/card-image")
   @UseInterceptors(
     FileInterceptor("file", {
-      limits: { fileSize: 2 * 1024 * 1024 },
+      limits: { fileSize: 10 * 1024 * 1024 },
     }),
   )
   async uploadCardImage(

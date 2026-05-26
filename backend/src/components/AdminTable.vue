@@ -83,10 +83,18 @@
         <template #default="{ row }">
           <slot name="cell" :field="field" :row="row" :reload="load">
             <div v-if="field.type === 'imageUpload'" class="table-image-cell">
-              <img
-                v-if="assetUrl(getValue(row, field.key))"
+              <video
+                v-if="isMediaVideo(getValue(row, field.key))"
                 :src="assetUrl(getValue(row, field.key))"
-                alt="卡片图片"
+                muted
+                loop
+                autoplay
+                playsinline
+              />
+              <img
+                v-else-if="assetUrl(getValue(row, field.key))"
+                :src="assetUrl(getValue(row, field.key))"
+                alt="卡面素材"
               />
               <span v-else>未配置</span>
             </div>
@@ -209,10 +217,18 @@
           />
           <div v-else-if="field.type === 'imageUpload'" class="image-upload-field">
             <div class="image-upload-preview">
-              <img
-                v-if="assetUrl(formValues[field.key])"
+              <video
+                v-if="isMediaVideo(formValues[field.key])"
                 :src="assetUrl(formValues[field.key])"
-                alt="卡片图片"
+                muted
+                loop
+                autoplay
+                playsinline
+              />
+              <img
+                v-else-if="assetUrl(formValues[field.key])"
+                :src="assetUrl(formValues[field.key])"
+                alt="卡面素材"
               />
               <span v-else>未配置</span>
             </div>
@@ -221,7 +237,7 @@
                 上传
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
                   :disabled="imageUploading"
                   @change="handleImageUpload(field, $event)"
                 />
@@ -262,10 +278,18 @@
         :label="field.label"
       >
         <div v-if="field.type === 'imageUpload'" class="detail-image-cell">
-          <img
-            v-if="assetUrl(getValue(detail || {}, field.key))"
+          <video
+            v-if="isMediaVideo(getValue(detail || {}, field.key))"
             :src="assetUrl(getValue(detail || {}, field.key))"
-            alt="卡片图片"
+            muted
+            loop
+            autoplay
+            playsinline
+          />
+          <img
+            v-else-if="assetUrl(getValue(detail || {}, field.key))"
+            :src="assetUrl(getValue(detail || {}, field.key))"
+            alt="卡面素材"
           />
           <span v-else>未配置</span>
         </div>
@@ -467,6 +491,10 @@ function assetUrl(value: unknown) {
   return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
 }
 
+function isMediaVideo(value: unknown) {
+  return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
+}
+
 async function handleImageUpload(field: FieldConfig, event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -474,12 +502,18 @@ async function handleImageUpload(field: FieldConfig, event: Event) {
   if (!file) {
     return;
   }
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    ElMessage.error("仅支持 JPG、PNG、WEBP 图片");
+  const isImage = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+  const isVideo = ["video/mp4", "video/webm"].includes(file.type);
+  if (!isImage && !isVideo) {
+    ElMessage.error("仅支持 JPG、PNG、WEBP、MP4、WEBM 文件");
     return;
   }
-  if (file.size > 2 * 1024 * 1024) {
+  if (isImage && file.size > 2 * 1024 * 1024) {
     ElMessage.error("图片不能超过2MB");
+    return;
+  }
+  if (isVideo && file.size > 10 * 1024 * 1024) {
+    ElMessage.error("视频不能超过10MB");
     return;
   }
 

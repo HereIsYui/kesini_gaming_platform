@@ -1314,7 +1314,7 @@ function closeCardIntro() {
   cardIntroTarget.value = null;
 }
 
-function cardImageUrl(value?: string | null) {
+function cardMediaUrl(value?: string | null) {
   const raw = String(value || "").trim();
   if (!raw) {
     return "";
@@ -1325,10 +1325,14 @@ function cardImageUrl(value?: string | null) {
   return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
 }
 
-function hideBrokenCardImage(event: Event) {
-  const image = event.target as HTMLImageElement | null;
-  if (image) {
-    image.hidden = true;
+function isCardVideo(value?: string | null) {
+  return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
+}
+
+function hideBrokenCardMedia(event: Event) {
+  const media = event.target as HTMLImageElement | HTMLVideoElement | null;
+  if (media) {
+    media.hidden = true;
   }
 }
 
@@ -2362,28 +2366,40 @@ function leaderboardRankLabel(rank?: number) {
               @keydown.space.prevent="openBagCardActions(card)"
             >
               <div class="card-face">
-                <img
-                  v-if="cardImageUrl(card.cardImage)"
-                  class="card-art-image"
-                  :src="cardImageUrl(card.cardImage)"
-                  :alt="card.cardName"
-                  @error="hideBrokenCardImage"
-                />
-                <div class="result-card-top">
-                  <span class="rarity-badge">{{ card.cardLevel }}</span>
-                  <div class="owned-card-top-right">
-                    <span class="card-type-pill">{{
-                      cardTypeLabel(card.cardType)
-                    }}</span>
-                    <span
-                      v-if="Number(card.count || 1) > 1"
-                      class="card-stack-count"
-                    >
-                      x{{ card.count }}
-                    </span>
+                <div class="card-media-frame">
+                  <video
+                    v-if="isCardVideo(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    :alt="card.cardName"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <div class="card-sigil"></div>
+                  <div class="result-card-top">
+                    <span class="rarity-badge">{{ card.cardLevel }}</span>
+                    <div class="owned-card-top-right">
+                      <span class="card-type-pill">{{
+                        cardTypeLabel(card.cardType)
+                      }}</span>
+                      <span
+                        v-if="Number(card.count || 1) > 1"
+                        class="card-stack-count"
+                      >
+                        x{{ card.count }}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div class="card-sigil"></div>
                 <div class="card-content">
                   <h3>{{ card.cardName }}</h3>
                   <p>{{ cardIntroText(card.cardDesc) }}</p>
@@ -2555,20 +2571,32 @@ function leaderboardRankLabel(rank?: number) {
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
             <div class="card-face">
-              <img
-                v-if="cardImageUrl(item.card.card_image)"
-                class="card-art-image"
-                :src="cardImageUrl(item.card.card_image)"
-                :alt="item.card.card_name"
-                @error="hideBrokenCardImage"
-              />
-              <div class="result-card-top">
-                <span class="rarity-badge">{{ item.rarity }}</span>
-                <span class="card-type-pill">{{
-                  cardTypeLabel(item.card.card_type)
-                }}</span>
+              <div class="card-media-frame">
+                <video
+                  v-if="isCardVideo(item.card.card_image)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(item.card.card_image)"
+                  muted
+                  loop
+                  autoplay
+                  playsinline
+                  @error="hideBrokenCardMedia"
+                />
+                <img
+                  v-else-if="cardMediaUrl(item.card.card_image)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(item.card.card_image)"
+                  :alt="item.card.card_name"
+                  @error="hideBrokenCardMedia"
+                />
+                <div class="card-sigil"></div>
+                <div class="result-card-top">
+                  <span class="rarity-badge">{{ item.rarity }}</span>
+                  <span class="card-type-pill">{{
+                    cardTypeLabel(item.card.card_type)
+                  }}</span>
+                </div>
               </div>
-              <div class="card-sigil"></div>
               <div class="card-content">
                 <h3>{{ item.card.card_name }}</h3>
                 <p>{{ cardIntroText(item.card.card_desc) }}</p>
@@ -2896,14 +2924,27 @@ function leaderboardRankLabel(rank?: number) {
                 :class="rarityClass(listing.cardLevel)"
               >
                 <div class="trade-card-art">
-                  <img
-                    v-if="cardImageUrl(listing.cardImage)"
-                    class="trade-card-image"
-                    :src="cardImageUrl(listing.cardImage)"
-                    :alt="listing.cardName"
-                    @error="hideBrokenCardImage"
-                  />
-                  <span class="rarity-badge">{{ listing.cardLevel }}</span>
+                  <div class="card-media-frame trade-media-frame">
+                    <video
+                      v-if="isCardVideo(listing.cardImage)"
+                      class="card-art-media"
+                      :src="cardMediaUrl(listing.cardImage)"
+                      muted
+                      loop
+                      autoplay
+                      playsinline
+                      @error="hideBrokenCardMedia"
+                    />
+                    <img
+                      v-else-if="cardMediaUrl(listing.cardImage)"
+                      class="card-art-media"
+                      :src="cardMediaUrl(listing.cardImage)"
+                      :alt="listing.cardName"
+                      @error="hideBrokenCardMedia"
+                    />
+                    <div class="card-sigil"></div>
+                    <span class="rarity-badge">{{ listing.cardLevel }}</span>
+                  </div>
                   <strong>{{ listing.cardName }}</strong>
                   <small>{{ listing.poolName || "未知卡池" }}</small>
                 </div>
@@ -3661,13 +3702,26 @@ function leaderboardRankLabel(rank?: number) {
                     :key="item.card.id"
                     class="pool-detail-card"
                   >
-                    <img
-                      v-if="cardImageUrl(item.card.card_image)"
-                      class="pool-detail-card-image"
-                      :src="cardImageUrl(item.card.card_image)"
-                      :alt="item.card.card_name"
-                      @error="hideBrokenCardImage"
-                    />
+                    <div class="card-media-frame pool-detail-media-frame">
+                      <video
+                        v-if="isCardVideo(item.card.card_image)"
+                        class="card-art-media"
+                        :src="cardMediaUrl(item.card.card_image)"
+                        muted
+                        loop
+                        autoplay
+                        playsinline
+                        @error="hideBrokenCardMedia"
+                      />
+                      <img
+                        v-else-if="cardMediaUrl(item.card.card_image)"
+                        class="card-art-media"
+                        :src="cardMediaUrl(item.card.card_image)"
+                        :alt="item.card.card_name"
+                        @error="hideBrokenCardMedia"
+                      />
+                      <div class="card-sigil"></div>
+                    </div>
                     <div class="catalog-rarity-list">
                       <span
                         v-for="rarity in item.rarities"
@@ -4097,20 +4151,32 @@ function leaderboardRankLabel(rank?: number) {
               :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
             >
               <div class="card-face">
-                <img
-                  v-if="cardImageUrl(card.cardImage)"
-                  class="card-art-image"
-                  :src="cardImageUrl(card.cardImage)"
-                  :alt="card.cardName"
-                  @error="hideBrokenCardImage"
-                />
-                <div class="result-card-top">
-                  <span class="rarity-badge">{{ card.rarity }}</span>
-                  <span class="card-type-pill">{{
-                    cardTypeLabel(card.cardType)
-                  }}</span>
+                <div class="card-media-frame">
+                  <video
+                    v-if="isCardVideo(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    :alt="card.cardName"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <div class="card-sigil"></div>
+                  <div class="result-card-top">
+                    <span class="rarity-badge">{{ card.rarity }}</span>
+                    <span class="card-type-pill">{{
+                      cardTypeLabel(card.cardType)
+                    }}</span>
+                  </div>
                 </div>
-                <div class="card-sigil"></div>
                 <div class="card-content">
                   <h3>{{ card.cardName }}</h3>
                   <p>{{ cardIntroText(card.cardDesc) }}</p>

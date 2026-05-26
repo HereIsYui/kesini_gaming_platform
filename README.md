@@ -248,7 +248,7 @@ EOF
 
 注意：以前在打包产物里 `grep http://localhost:3000` 可能会命中本地开发兜底值或输入框占位符，不能单独作为生产 API 地址是否生效的判断依据。现在生产地址优先看 `dist/config.js`，也可以在浏览器开发者工具的 Network 面板确认请求实际发往的域名。
 
-卡片图片会上传到 `system/public/card-images`，接口通过 `/file/card-images/...` 访问。生产部署时需要把 `system/public` 作为持久化目录保留，避免重新发布或重启时丢失已上传图片；也可以用 `FILE_ROOT=/data/kesini/public` 指定单独的持久化目录。
+卡面素材支持图片和视频：图片最大 2MB，视频最大 10MB，会上传到 `system/public/card-images` 或 `system/public/card-videos`，接口通过 `/file/...` 访问。生产部署时需要把 `system/public` 作为持久化目录保留，避免重新发布或重启时丢失已上传素材；也可以用 `FILE_ROOT=/data/kesini/public` 指定单独的持久化目录。
 
 ## 验证清单
 

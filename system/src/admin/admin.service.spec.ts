@@ -315,6 +315,36 @@ describe("AdminService", () => {
     }
   });
 
+  it("卡面视频上传会保存到视频目录", async () => {
+    const previousFileRoot = process.env.FILE_ROOT;
+    const tempDir = await mkdtemp(join(tmpdir(), "kesini-upload-"));
+    process.env.FILE_ROOT = tempDir;
+    const service = createService();
+
+    try {
+      const result = await service.saveCardImage({
+        originalname: "card.mp4",
+        mimetype: "video/mp4",
+        size: 4,
+        buffer: Buffer.from("test"),
+      });
+
+      expect(result.url).toMatch(/^\/file\/card-videos\/.+\.mp4$/);
+      const saved = await readFile(
+        join(tempDir, result.url.replace("/file/", "")),
+        "utf8",
+      );
+      expect(saved).toBe("test");
+    } finally {
+      if (previousFileRoot === undefined) {
+        delete process.env.FILE_ROOT;
+      } else {
+        process.env.FILE_ROOT = previousFileRoot;
+      }
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("卡片图片上传会拒绝非图片", async () => {
     const service = createService();
 
@@ -325,7 +355,28 @@ describe("AdminService", () => {
         size: 4,
         buffer: Buffer.from("test"),
       }),
-    ).rejects.toThrow("仅支持 JPG、PNG、WEBP 图片");
+    ).rejects.toThrow("仅支持 JPG、PNG、WEBP、MP4、WEBM 文件");
+  });
+
+  it("卡面素材上传会按类型限制大小", async () => {
+    const service = createService();
+
+    await expect(
+      service.saveCardImage({
+        originalname: "card.png",
+        mimetype: "image/png",
+        size: 2 * 1024 * 1024 + 1,
+        buffer: Buffer.from("test"),
+      }),
+    ).rejects.toThrow("图片不能超过2MB");
+    await expect(
+      service.saveCardImage({
+        originalname: "card.mp4",
+        mimetype: "video/mp4",
+        size: 10 * 1024 * 1024 + 1,
+        buffer: Buffer.from("test"),
+      }),
+    ).rejects.toThrow("视频不能超过10MB");
   });
 
   it("创建卡片会拒绝空稀有度或非法稀有度", async () => {

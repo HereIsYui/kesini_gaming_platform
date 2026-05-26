@@ -53,7 +53,7 @@ export interface PageQuery {
   keyword?: string;
 }
 
-type UploadedImageFile = {
+type UploadedCardMediaFile = {
   originalname?: string;
   mimetype?: string;
   size?: number;
@@ -240,32 +240,64 @@ export class AdminService {
     };
   }
 
-  async saveCardImage(file: UploadedImageFile | undefined) {
+  async saveCardImage(file: UploadedCardMediaFile | undefined) {
     if (!file?.buffer || !file.size) {
-      throw new Error("请选择图片");
+      throw new Error("请选择文件");
     }
-    if (file.size > 2 * 1024 * 1024) {
-      throw new Error("图片不能超过2MB");
-    }
-    const extensionByMime: Record<string, string> = {
-      "image/jpeg": ".jpg",
-      "image/png": ".png",
-      "image/webp": ".webp",
+    const mediaByMime: Record<
+      string,
+      { extension: string; directory: string; maxSize: number; label: string }
+    > = {
+      "image/jpeg": {
+        extension: ".jpg",
+        directory: "card-images",
+        maxSize: 2 * 1024 * 1024,
+        label: "图片",
+      },
+      "image/png": {
+        extension: ".png",
+        directory: "card-images",
+        maxSize: 2 * 1024 * 1024,
+        label: "图片",
+      },
+      "image/webp": {
+        extension: ".webp",
+        directory: "card-images",
+        maxSize: 2 * 1024 * 1024,
+        label: "图片",
+      },
+      "video/mp4": {
+        extension: ".mp4",
+        directory: "card-videos",
+        maxSize: 10 * 1024 * 1024,
+        label: "视频",
+      },
+      "video/webm": {
+        extension: ".webm",
+        directory: "card-videos",
+        maxSize: 10 * 1024 * 1024,
+        label: "视频",
+      },
     };
-    const extension = extensionByMime[String(file.mimetype || "").toLowerCase()];
-    if (!extension) {
-      throw new Error("仅支持 JPG、PNG、WEBP 图片");
+    const media = mediaByMime[String(file.mimetype || "").toLowerCase()];
+    if (!media) {
+      throw new Error("仅支持 JPG、PNG、WEBP、MP4、WEBM 文件");
+    }
+    if (file.size > media.maxSize) {
+      throw new Error(
+        `${media.label}不能超过${media.maxSize / 1024 / 1024}MB`,
+      );
     }
 
     const publicRoot = process.env.FILE_ROOT
       ? resolve(process.env.FILE_ROOT)
       : resolve(__dirname, "..", "..", "public");
-    const uploadDir = resolve(publicRoot, "card-images");
+    const uploadDir = resolve(publicRoot, media.directory);
     await mkdir(uploadDir, { recursive: true });
-    const fileName = `${Date.now()}-${randomUUID()}${extension}`;
+    const fileName = `${Date.now()}-${randomUUID()}${media.extension}`;
     await writeFile(resolve(uploadDir, fileName), file.buffer);
     return {
-      url: `/file/card-images/${fileName}`,
+      url: `/file/${media.directory}/${fileName}`,
     };
   }
 
