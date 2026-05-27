@@ -9,12 +9,14 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
+  Moon,
   Package,
   RefreshCw,
   Share2,
   ShieldCheck,
   Sparkles,
   Store,
+  Sun,
   Ticket,
   Trophy,
   UserRound,
@@ -114,6 +116,7 @@ const leaderboardTabs: Array<{
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
 type DrawPhase = "idle" | "charging" | "burst";
+type ThemeMode = "dark" | "light";
 type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
@@ -130,10 +133,12 @@ type CardIntroTarget = {
   extra?: string;
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
+const THEME_KEY = "kesini_website_theme";
 const BAG_PAGE_SIZE = 24;
 const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
+const themeMode = ref<ThemeMode>(getStoredThemeMode());
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -547,6 +552,15 @@ const resultModalSubtitle = computed(() => {
     : `${lastResults.value.length} 次抽取完成`;
 });
 
+function getStoredThemeMode(): ThemeMode {
+  const stored = localStorage.getItem(THEME_KEY);
+  return stored === "light" ? "light" : "dark";
+}
+
+function toggleThemeMode() {
+  themeMode.value = themeMode.value === "dark" ? "light" : "dark";
+}
+
 onMounted(async () => {
   await handleOpenIdCallback();
   await loadSiteConfig();
@@ -555,6 +569,15 @@ onMounted(async () => {
     await loadPrivateData();
   }
 });
+
+watch(
+  themeMode,
+  (mode) => {
+    document.documentElement.dataset.theme = mode;
+    localStorage.setItem(THEME_KEY, mode);
+  },
+  { immediate: true },
+);
 
 watch(activePoolId, async (poolId) => {
   if (poolId && (!poolFilter.value || activeSection.value === "bag")) {
@@ -2015,6 +2038,17 @@ function leaderboardRankLabel(rank?: number) {
       </nav>
 
       <div class="top-actions">
+        <button
+          class="icon-button ghost theme-toggle"
+          type="button"
+          title="切换主题"
+          aria-label="切换主题"
+          @click="toggleThemeMode"
+        >
+          <Sun v-if="themeMode === 'dark'" :size="17" />
+          <Moon v-else :size="17" />
+          <span>{{ themeMode === "dark" ? "白色" : "暗色" }}</span>
+        </button>
         <button
           class="icon-button"
           type="button"
