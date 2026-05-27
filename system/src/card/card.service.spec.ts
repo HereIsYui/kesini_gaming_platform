@@ -767,6 +767,153 @@ describe("CardService 排行榜", () => {
   });
 });
 
+describe("CardService 玩家图鉴", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      ...overrides,
+    };
+  }
+
+  function createCatalogService(
+    options: {
+      cards?: Partial<CardItem>[];
+      userCards?: Partial<UserCard>[];
+      fragmentCount?: number;
+    } = {},
+  ) {
+    const cards = (
+      options.cards || [
+        {
+          id: 1,
+          card_name: "测试卡",
+          card_level: "N,R,SSR",
+          card_desc: "描述",
+          card_image: "/file/card-images/demo.webp",
+          card_type: 0,
+          pool: 2,
+          drop_item: "",
+        },
+        {
+          id: 2,
+          card_name: "UR卡",
+          card_level: "UR",
+          card_desc: "描述",
+          card_image: "",
+          card_type: 0,
+          pool: 2,
+          drop_item: "",
+        },
+      ]
+    ) as CardItem[];
+    const fragment = {
+      id: 5,
+      drop_name: "通用碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    } as DropItem;
+    const cardRepository = createRepository({
+      find: jest.fn().mockResolvedValue(cards),
+    });
+    const poolRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 2, enabled: true }),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 10, uid: "u1" }),
+    });
+    const userCardRepository = createRepository({
+      find: jest.fn().mockResolvedValue(options.userCards || []),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? fragment : null,
+      ),
+    });
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        user_id: 10,
+        item_id: 5,
+        num: options.fragmentCount ?? 200,
+      }),
+    });
+    const manager = {
+      getRepository: jest.fn((entity) =>
+        entity === DropItem ? dropRepository : createRepository(),
+      ),
+    };
+    const service = new CardService(
+      cardRepository as any,
+      poolRepository as any,
+      userRepository as any,
+      userCardRepository as any,
+      {} as any,
+      dropRepository as any,
+      inventoryRepository as any,
+      {} as any,
+      {} as any,
+      { manager } as any,
+    );
+
+    return {
+      service,
+      cardRepository,
+    };
+  }
+
+  it("按卡片和稀有度返回当前卡池图鉴状态", async () => {
+    const { service } = createCatalogService({
+      userCards: [
+        { uid: "u1", card_id: "1", card_level: "R", delete_flag: false },
+        { uid: "u1", card_id: "1", card_level: "R", delete_flag: false },
+        { uid: "u1", card_id: "2", card_level: "UR", delete_flag: false },
+      ],
+    });
+
+    const result = await service.getUserCatalog("u1", 2);
+
+    expect(result.poolId).toBe(2);
+    expect(result.total).toBe(4);
+    expect(result.list.find((item) => item.key === "1:N")).toEqual(
+      expect.objectContaining({
+        collected: false,
+        ownedCount: 0,
+        requiredFragments: 80,
+        fragmentCount: 200,
+        canSynthesize: true,
+      }),
+    );
+    expect(result.list.find((item) => item.key === "1:R")).toEqual(
+      expect.objectContaining({
+        collected: true,
+        ownedCount: 2,
+        canSynthesize: false,
+      }),
+    );
+    expect(result.list.find((item) => item.key === "2:UR")).toEqual(
+      expect.objectContaining({
+        collected: true,
+        requiredFragments: 0,
+        canSynthesize: false,
+      }),
+    );
+  });
+
+  it("图鉴接口只读取指定卡池", async () => {
+    const { service, cardRepository } = createCatalogService();
+
+    await service.getUserCatalog("u1", 2);
+
+    expect(cardRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { pool: 2 },
+      }),
+    );
+  });
+});
+
 describe("CardService 碎片合成", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {

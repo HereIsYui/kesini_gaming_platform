@@ -62,6 +62,8 @@ import type {
   TradeListing,
   TradePageResponse,
   TradeRecord,
+  UserCatalogItem,
+  UserCatalogResponse,
   UserCardsResponse,
   UserGachaStats,
   UserProfile,
@@ -79,7 +81,7 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
-  { key: "synthesize", label: "合成", icon: WandSparkles },
+  { key: "synthesize", label: "图鉴", icon: Package },
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "achievements", label: "成就", icon: ShieldCheck },
@@ -112,10 +114,7 @@ const leaderboardTabs: Array<{
 type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
 type DrawPhase = "idle" | "charging" | "burst";
-type SynthesisCard = {
-  card: CardItem;
-  rarity: CardRarity;
-  key: string;
+type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
 };
@@ -145,6 +144,8 @@ const siteConfig = ref<SiteConfig>({
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
+const catalogItems = ref<UserCatalogResponse | null>(null);
+const catalogError = ref("");
 const poolDetailOpen = ref(false);
 const poolDetailLoading = ref(false);
 const poolDetailError = ref("");
@@ -224,6 +225,7 @@ const busy = reactive({
   cardsMore: false,
   leaderboard: false,
   points: false,
+  catalog: false,
   shop: false,
   redeem: false,
   achievements: false,
@@ -316,27 +318,49 @@ const rechargeLocalAmount = computed(() => {
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
 );
-const synthesisCards = computed<SynthesisCard[]>(() =>
+const localCatalogCards = computed<CatalogCard[]>(() =>
   poolCards.value.flatMap((card) =>
     parseCardRarities(card.card_level).map((rarity) => ({
+      key: `${card.id}-${rarity}`,
       card,
       rarity,
-      key: `${card.id}-${rarity}`,
+      collected: false,
+      ownedCount: 0,
+      requiredFragments: rarity === "UR" ? 0 : requiredFragmentsForRarity(rarity),
+      fragmentCount: 0,
+      canSynthesize: false,
       costLabel: synthesisCostLabel(rarity),
       disabled: rarity === "UR",
     })),
   ),
 );
-const filteredSynthesisCards = computed<SynthesisCard[]>(() => {
-  if (!synthesisRarityFilter.value) {
-    return synthesisCards.value;
+const catalogCards = computed<CatalogCard[]>(() => {
+  if (
+    isAuthed.value &&
+    catalogItems.value &&
+    catalogItems.value.poolId === activePoolId.value
+  ) {
+    return catalogItems.value.list.map((item) => ({
+      ...item,
+      costLabel: synthesisCostLabel(item.rarity),
+      disabled: item.collected || !item.canSynthesize,
+    }));
   }
-  return synthesisCards.value.filter(
+  return localCatalogCards.value;
+});
+const filteredSynthesisCards = computed<CatalogCard[]>(() => {
+  if (!synthesisRarityFilter.value) {
+    return catalogCards.value;
+  }
+  return catalogCards.value.filter(
     (item) => item.rarity === synthesisRarityFilter.value,
   );
 });
 const synthesisAvailableCount = computed(
-  () => filteredSynthesisCards.value.filter((item) => !item.disabled).length,
+  () => filteredSynthesisCards.value.filter((item) => item.canSynthesize).length,
+);
+const catalogCollectedCount = computed(
+  () => catalogCards.value.filter((item) => item.collected).length,
 );
 const activeLeaderboardTab = computed(
   () =>
@@ -542,6 +566,13 @@ watch(activePoolId, async (poolId) => {
     }
   }
   await loadPoolCards();
+  await loadUserCatalog();
+});
+
+watch(activeSection, async (section) => {
+  if (section === "synthesize") {
+    await loadUserCatalog();
+  }
 });
 
 function notify(type: FeedbackType, text: string) {
@@ -657,6 +688,8 @@ function logout() {
   currentUser.value = null;
   stats.value = null;
   userCards.value = null;
+  catalogItems.value = null;
+  catalogError.value = "";
   launchActivity.value = null;
   launchActivityModalOpen.value = false;
   launchActivityDismissedKey.value = "";
@@ -730,6 +763,25 @@ async function loadPoolCards() {
   }
 }
 
+async function loadUserCatalog() {
+  catalogError.value = "";
+  if (!activePoolId.value || !isAuthed.value) {
+    catalogItems.value = null;
+    return;
+  }
+  busy.catalog = true;
+  try {
+    catalogItems.value = await request<UserCatalogResponse>(
+      `/card/user/catalog${toQuery({ poolId: activePoolId.value })}`,
+    );
+  } catch (error) {
+    catalogItems.value = null;
+    catalogError.value = getErrorMessage(error);
+  } finally {
+    busy.catalog = false;
+  }
+}
+
 async function openPoolDetail() {
   const poolId = activePoolId.value;
   if (!poolId) {
@@ -766,6 +818,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadUserCards(),
+    loadUserCatalog(),
     loadLaunchActivity(),
     loadLeaderboard(),
     loadAchievements(),
@@ -1329,10 +1382,15 @@ function isCardVideo(value?: string | null) {
   return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
 }
 
+function hasCardMedia(value?: string | null) {
+  return Boolean(cardMediaUrl(value));
+}
+
 function hideBrokenCardMedia(event: Event) {
   const media = event.target as HTMLImageElement | HTMLVideoElement | null;
   if (media) {
     media.hidden = true;
+    media.closest(".card-media-frame")?.classList.remove("has-media");
   }
 }
 
@@ -1402,34 +1460,38 @@ async function copyShareText() {
   }
 }
 
-async function synthesizeCard(item: SynthesisCard) {
+async function synthesizeCard(item: CatalogCard) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再合成卡片");
+    notify("error", "请先登录");
     return;
   }
-  if (item.disabled) {
-    notify("error", "UR 卡片不能通过碎片合成");
+  if (item.collected) {
+    notify("info", "已收集");
     return;
   }
-  if (
-    !window.confirm(
-      `确认消耗${item.costLabel}合成「${item.card.card_name}」${item.rarity} 吗？`,
-    )
-  ) {
+  if (item.rarity === "UR") {
+    notify("error", "UR 不可合成");
     return;
   }
-  busy.assets = true;
+  if (!item.canSynthesize) {
+    notify("error", "碎片不足");
+    return;
+  }
+  if (!window.confirm(`合成 ${item.rarity} ${item.card.card_name}？`)) {
+    return;
+  }
+  busy.catalog = true;
   try {
     await request("/card/synthesize", {
       method: "POST",
       body: JSON.stringify({ card_id: item.card.id, rarity: item.rarity }),
     });
-    notify("success", `${item.rarity} 合成成功`);
+    notify("success", "合成成功");
     await loadPrivateData();
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
-    busy.assets = false;
+    busy.catalog = false;
   }
 }
 
@@ -1754,13 +1816,20 @@ function parseCardRarities(levels?: string): CardRarity[] {
 
 function synthesisCostLabel(rarity?: string) {
   const normalized = normalizeRarity(rarity);
+  const cost = requiredFragmentsForRarity(normalized);
+  return normalized === "UR" ? "UR 不可合成" : `${cost} 碎片`;
+}
+
+function requiredFragmentsForRarity(rarity?: string) {
+  const normalized = normalizeRarity(rarity);
   const costs: Record<string, number> = {
     N: 80,
     R: 160,
     SR: 320,
     SSR: 1000,
+    UR: 0,
   };
-  return normalized === "UR" ? "UR 不可合成" : `${costs[normalized]} 碎片`;
+  return costs[normalized] || 0;
 }
 
 function poolTypeLabel(type?: number) {
@@ -2366,7 +2435,10 @@ function leaderboardRankLabel(rank?: number) {
               @keydown.space.prevent="openBagCardActions(card)"
             >
               <div class="card-face">
-                <div class="card-media-frame">
+                <div
+                  class="card-media-frame"
+                  :class="{ 'has-media': hasCardMedia(card.cardImage) }"
+                >
                   <video
                     v-if="isCardVideo(card.cardImage)"
                     class="card-art-media"
@@ -2503,8 +2575,8 @@ function leaderboardRankLabel(rank?: number) {
       >
         <div class="section-head">
           <div>
-            <p class="eyebrow">碎片合成</p>
-            <h2>选择目标卡片</h2>
+            <p class="eyebrow">卡池图鉴</p>
+            <h2>收集进度</h2>
           </div>
           <div class="filter-row">
             <select v-model="activePoolId">
@@ -2513,7 +2585,7 @@ function leaderboardRankLabel(rank?: number) {
               </option>
             </select>
             <select v-model="synthesisRarityFilter">
-              <option value="">全部稀有度</option>
+              <option value="">全部</option>
               <option
                 v-for="rarity in rarityOrder"
                 :key="rarity"
@@ -2538,40 +2610,49 @@ function leaderboardRankLabel(rank?: number) {
             <strong>{{ selectedPool?.pool_name || "未选择" }}</strong>
           </article>
           <article>
-            <small>筛选后可合成</small>
-            <strong>{{ synthesisAvailableCount }}</strong>
+            <small>已收集</small>
+            <strong>{{ catalogCollectedCount }}/{{ catalogCards.length }}</strong>
           </article>
           <article>
-            <small>当前稀有度</small>
-            <strong>{{ synthesisRarityFilter || "全部" }}</strong>
+            <small>可合成</small>
+            <strong>{{ synthesisAvailableCount }}</strong>
           </article>
         </div>
 
-        <div v-if="poolCards.length === 0" class="empty-state">
+        <div v-if="busy.catalog" class="skeleton-grid">
+          <span v-for="item in 6" :key="item"></span>
+        </div>
+        <div v-else-if="catalogError" class="empty-state">
           <Package :size="30" />
-          <strong>当前卡池暂无卡片</strong>
-          <span>切换卡池后可查看可合成卡片。</span>
+          <strong>同步失败</strong>
+          <span>{{ catalogError }}</span>
+        </div>
+        <div v-else-if="poolCards.length === 0" class="empty-state">
+          <Package :size="30" />
+          <strong>暂无图鉴</strong>
+          <span>切换卡池查看</span>
         </div>
         <div
           v-else-if="filteredSynthesisCards.length === 0"
           class="empty-state"
         >
           <Package :size="30" />
-          <strong>暂无该稀有度版本</strong>
-          <span
-            >当前卡池没有 {{ synthesisRarityFilter }} 稀有度的可展示卡片。</span
-          >
+          <strong>暂无匹配</strong>
+          <span>调整筛选</span>
         </div>
         <div v-else class="catalog-grid synthesis-grid">
           <article
             v-for="(item, index) in filteredSynthesisCards"
             :key="item.key"
             class="result-card synthesis-card"
-            :class="rarityClass(item.rarity)"
+            :class="[rarityClass(item.rarity), { 'is-uncollected': !item.collected }]"
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
             <div class="card-face">
-              <div class="card-media-frame">
+              <div
+                class="card-media-frame"
+                :class="{ 'has-media': hasCardMedia(item.card.card_image) }"
+              >
                 <video
                   v-if="isCardVideo(item.card.card_image)"
                   class="card-art-media"
@@ -2601,7 +2682,11 @@ function leaderboardRankLabel(rank?: number) {
                 <h3>{{ item.card.card_name }}</h3>
                 <p>{{ cardIntroText(item.card.card_desc) }}</p>
                 <div class="tag-row">
-                  <span>{{ item.costLabel }}</span>
+                  <span>{{ item.collected ? "已收集" : "未收集" }}</span>
+                  <span v-if="item.ownedCount">x{{ item.ownedCount }}</span>
+                  <span v-if="!item.collected && item.rarity !== 'UR'">
+                    {{ item.fragmentCount }}/{{ item.requiredFragments }}
+                  </span>
                   <span>#{{ item.card.id }}</span>
                   <button
                     v-if="hasCardIntroDetail(item.card.card_desc)"
@@ -2622,13 +2707,15 @@ function leaderboardRankLabel(rank?: number) {
               </div>
             </div>
             <button
+              v-if="!item.collected"
               class="secondary-action"
               type="button"
-              :disabled="busy.assets || item.disabled"
+              :disabled="busy.catalog || !item.canSynthesize"
               @click="synthesizeCard(item)"
             >
-              {{ item.disabled ? "不可合成" : "碎片合成" }}
+              {{ item.canSynthesize ? "合成" : item.rarity === "UR" ? "不可合成" : "碎片不足" }}
             </button>
+            <span v-else class="catalog-owned-label">已收集</span>
           </article>
         </div>
       </section>
@@ -2924,7 +3011,10 @@ function leaderboardRankLabel(rank?: number) {
                 :class="rarityClass(listing.cardLevel)"
               >
                 <div class="trade-card-art">
-                  <div class="card-media-frame trade-media-frame">
+                  <div
+                    class="card-media-frame trade-media-frame"
+                    :class="{ 'has-media': hasCardMedia(listing.cardImage) }"
+                  >
                     <video
                       v-if="isCardVideo(listing.cardImage)"
                       class="card-art-media"
@@ -3702,7 +3792,10 @@ function leaderboardRankLabel(rank?: number) {
                     :key="item.card.id"
                     class="pool-detail-card"
                   >
-                    <div class="card-media-frame pool-detail-media-frame">
+                    <div
+                      class="card-media-frame pool-detail-media-frame"
+                      :class="{ 'has-media': hasCardMedia(item.card.card_image) }"
+                    >
                       <video
                         v-if="isCardVideo(item.card.card_image)"
                         class="card-art-media"
@@ -4151,7 +4244,10 @@ function leaderboardRankLabel(rank?: number) {
               :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
             >
               <div class="card-face">
-                <div class="card-media-frame">
+                <div
+                  class="card-media-frame"
+                  :class="{ 'has-media': hasCardMedia(card.cardImage) }"
+                >
                   <video
                     v-if="isCardVideo(card.cardImage)"
                     class="card-art-media"

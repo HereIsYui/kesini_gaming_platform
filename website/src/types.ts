@@ -130,6 +130,23 @@ export interface UserCardsResponse {
   totalPages: number;
 }
 
+export interface UserCatalogItem {
+  key: string;
+  card: CardItem;
+  rarity: CardRarity;
+  collected: boolean;
+  ownedCount: number;
+  requiredFragments: number;
+  fragmentCount: number;
+  canSynthesize: boolean;
+}
+
+export interface UserCatalogResponse {
+  poolId: number;
+  list: UserCatalogItem[];
+  total: number;
+}
+
 export interface RedeemRewardItem {
   itemId: number;
   num: number;

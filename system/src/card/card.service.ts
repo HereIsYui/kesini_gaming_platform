@@ -57,6 +57,16 @@ type UserCardGroup = {
   canLottery: boolean;
   latestObtainedAt: Date | null;
 };
+type UserCatalogEntry = {
+  key: string;
+  card: CardItem;
+  rarity: CardRarity;
+  collected: boolean;
+  ownedCount: number;
+  requiredFragments: number;
+  fragmentCount: number;
+  canSynthesize: boolean;
+};
 type LeaderboardMetricKey =
   | "totalCards"
   | "ssrCards"
@@ -420,6 +430,94 @@ export class CardService {
     return this.cardRepository.find({
       where: { pool: effectivePoolId },
     });
+  }
+
+  async getUserCatalog(
+    uid: string,
+    poolId: number,
+  ): Promise<{ poolId: number; list: UserCatalogEntry[]; total: number }> {
+    const effectivePoolId = this.resolvePoolId(poolId);
+    const pool = await this.poolRepository.findOne({
+      where: { id: effectivePoolId, enabled: true },
+    });
+    if (!pool) {
+      throw new Error("卡池不存在或已下线");
+    }
+
+    const user = await this.userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+
+    const cards = await this.cardRepository.find({
+      where: { pool: effectivePoolId },
+      order: { id: "ASC" },
+    });
+    if (cards.length === 0) {
+      return { poolId: effectivePoolId, list: [], total: 0 };
+    }
+
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const userCards = await this.userCardRepository.find({
+      where: {
+        uid,
+        delete_flag: false,
+        card_id: In(cards.map((card) => String(card.id))),
+      },
+    });
+    const ownedMap = new Map<string, number>();
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        return;
+      }
+      const key = this.createPoolVersionKey(card.id, rarity);
+      ownedMap.set(key, (ownedMap.get(key) || 0) + 1);
+    });
+
+    const fragmentCountMap = new Map<number, number>();
+    for (const card of cards) {
+      const fragmentItem = await this.findFragmentItem(
+        this.dataSource.manager,
+        card,
+      );
+      const inventory = await this.inventoryRepository.findOne({
+        where: { user_id: user.id, item_id: fragmentItem.id },
+      });
+      fragmentCountMap.set(card.id, inventory?.num || 0);
+    }
+
+    const list = cards.flatMap((card) => {
+      const fragmentCount = fragmentCountMap.get(card.id) || 0;
+      return this.parseCardLevels(card.card_level).map((rarity) => {
+        const key = this.createPoolVersionKey(card.id, rarity);
+        const ownedCount = ownedMap.get(key) || 0;
+        const collected = ownedCount > 0;
+        const requiredFragments =
+          rarity === "UR" ? 0 : this.getRequiredFragments(rarity);
+        return {
+          key,
+          card,
+          rarity,
+          collected,
+          ownedCount,
+          requiredFragments,
+          fragmentCount,
+          canSynthesize:
+            !collected && rarity !== "UR" && fragmentCount >= requiredFragments,
+        };
+      });
+    });
+
+    return {
+      poolId: effectivePoolId,
+      list,
+      total: list.length,
+    };
   }
 
   /**

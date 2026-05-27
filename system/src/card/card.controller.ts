@@ -308,6 +308,34 @@ export class CardController {
   }
 
   /**
+   * 获取当前用户卡池图鉴状态
+   * GET /card/user/catalog?poolId=1
+   */
+  @Get("user/catalog")
+  @UseGuards(JwtAuthGuard)
+  async getUserCatalog(
+    @GetUser() user: UserInfo,
+    @Query("poolId") poolId?: string,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      const parsedPoolId = this.parseOptionalInt(poolId, "poolId", 1);
+      if (!parsedPoolId) {
+        return ResponseDto.error("请选择卡池");
+      }
+      const result = await this.cardService.getUserCatalog(
+        user.uid,
+        parsedPoolId,
+      );
+      return ResponseDto.success(result, "获取图鉴成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取图鉴失败");
+    }
+  }
+
+  /**
    * 获取用户卡片列表（支持分页）
    * GET /card/user/cards?rarity=SSR&poolId=1&page=1&pageSize=10
    * @param rarity 卡片等级筛选 (可选，支持: N, R, SR, SSR, UR)

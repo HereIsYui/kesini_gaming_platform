@@ -1232,6 +1232,10 @@ h3 {
   opacity: 0.78;
 }
 
+.card-media-frame.has-media::before {
+  opacity: 0;
+}
+
 .card-media-frame {
   position: relative;
   display: block;
@@ -1248,6 +1252,10 @@ h3 {
     inset 0 0 34px currentColor;
 }
 
+.card-media-frame.has-media {
+  background: rgba(5, 9, 18, 0.92);
+}
+
 .card-art-media {
   position: absolute;
   inset: 0;
@@ -1256,6 +1264,10 @@ h3 {
   height: 100%;
   object-fit: contain;
   background: rgba(5, 9, 18, 0.7);
+}
+
+.card-media-frame.has-media .card-sigil {
+  display: none;
 }
 
 .card-sigil {
@@ -1385,6 +1397,54 @@ h3 {
   color: #ff92c6;
 }
 
+.rarity-n .card-media-frame.has-media {
+  border-color: rgba(197, 209, 223, 0.5);
+}
+
+.rarity-r .card-media-frame.has-media {
+  border-color: rgba(116, 223, 183, 0.62);
+  box-shadow: 0 0 18px rgba(116, 223, 183, 0.22);
+}
+
+.rarity-sr .card-media-frame.has-media {
+  border-color: rgba(115, 215, 255, 0.68);
+  box-shadow: 0 0 20px rgba(115, 215, 255, 0.26);
+}
+
+.rarity-ssr .card-media-frame.has-media {
+  border-color: rgba(255, 211, 106, 0.82);
+  box-shadow:
+    0 0 24px rgba(255, 211, 106, 0.34),
+    inset 0 0 18px rgba(255, 211, 106, 0.2);
+}
+
+.rarity-ur .card-media-frame.has-media {
+  border-color: rgba(255, 146, 198, 0.9);
+  box-shadow:
+    0 0 28px rgba(255, 146, 198, 0.42),
+    inset 0 0 22px rgba(255, 146, 198, 0.22);
+}
+
+.rarity-r .card-face h3,
+.rarity-r .card-content {
+  text-shadow: 0 0 12px rgba(116, 223, 183, 0.22);
+}
+
+.rarity-sr .card-face h3,
+.rarity-sr .card-content {
+  text-shadow: 0 0 14px rgba(115, 215, 255, 0.28);
+}
+
+.rarity-ssr .card-face h3,
+.rarity-ssr .card-content {
+  text-shadow: 0 0 16px rgba(255, 211, 106, 0.36);
+}
+
+.rarity-ur .card-face h3,
+.rarity-ur .card-content {
+  text-shadow: 0 0 18px rgba(255, 146, 198, 0.42);
+}
+
 .summary-pill.rarity-n,
 .rarity-badge.rarity-n,
 .rarity-n .rarity-badge {
@@ -1492,6 +1552,16 @@ h3 {
   z-index: 1;
 }
 
+.synthesis-card.is-uncollected .card-media-frame,
+.synthesis-card.is-uncollected .card-content {
+  filter: grayscale(1);
+  opacity: 0.62;
+}
+
+.synthesis-card.is-uncollected .card-face {
+  border-style: dashed;
+}
+
 .owned-card.is-stacked::before,
 .owned-card.is-stacked::after {
   content: "";
@@ -1580,6 +1650,19 @@ h3 {
   min-height: 44px;
   border-radius: calc(var(--radius) - 2px);
   padding: 0 10px;
+}
+
+.catalog-owned-label {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .card-action-overlay {
