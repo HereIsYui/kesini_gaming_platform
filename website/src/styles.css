@@ -1725,48 +1725,99 @@ h3 {
 .summary-pill.rarity-n,
 .rarity-badge.rarity-n,
 .rarity-n .rarity-badge {
-  border-color: rgba(197, 209, 223, 0.42);
-  background: rgba(197, 209, 223, 0.1);
+  border-color: rgba(197, 209, 223, 0.72);
+  color: #edf5ff;
+  background: rgba(197, 209, 223, 0.24);
+  box-shadow: 0 0 12px rgba(197, 209, 223, 0.16);
 }
 
 .summary-pill.rarity-r,
 .rarity-badge.rarity-r,
 .rarity-r .rarity-badge {
-  border-color: rgba(116, 223, 183, 0.45);
-  background: rgba(116, 223, 183, 0.12);
+  border-color: rgba(116, 223, 183, 0.76);
+  color: #c8ffe9;
+  background: rgba(116, 223, 183, 0.26);
+  box-shadow: 0 0 14px rgba(116, 223, 183, 0.2);
 }
 
 .summary-pill.rarity-sr,
 .rarity-badge.rarity-sr,
 .rarity-sr .rarity-badge {
-  border-color: rgba(115, 215, 255, 0.5);
-  background: rgba(115, 215, 255, 0.14);
+  border-color: rgba(115, 215, 255, 0.82);
+  color: #d6f6ff;
+  background: rgba(115, 215, 255, 0.28);
+  box-shadow: 0 0 16px rgba(115, 215, 255, 0.22);
 }
 
 .summary-pill.rarity-ssr,
 .rarity-badge.rarity-ssr,
 .rarity-ssr .rarity-badge {
-  border-color: rgba(255, 211, 106, 0.55);
-  background: rgba(255, 211, 106, 0.14);
+  border-color: rgba(255, 211, 106, 0.86);
+  color: #fff2bf;
+  background: rgba(255, 211, 106, 0.3);
+  box-shadow: 0 0 18px rgba(255, 211, 106, 0.28);
 }
 
 .summary-pill.rarity-ur,
 .rarity-badge.rarity-ur,
 .rarity-ur .rarity-badge {
-  border-color: rgba(255, 146, 198, 0.6);
-  background: rgba(255, 146, 198, 0.14);
+  border-color: rgba(255, 146, 198, 0.9);
+  color: #ffe0ef;
+  background: rgba(255, 146, 198, 0.32);
+  box-shadow:
+    0 0 18px rgba(255, 146, 198, 0.3),
+    0 0 30px rgba(255, 211, 106, 0.12);
+}
+
+:root[data-theme="light"] .summary-pill.rarity-n,
+:root[data-theme="light"] .rarity-badge.rarity-n,
+:root[data-theme="light"] .rarity-n .rarity-badge {
+  border-color: rgba(83, 97, 116, 0.36);
+  color: #3d4b60;
+  background: rgba(237, 243, 250, 0.96);
+  box-shadow: 0 6px 14px rgba(83, 97, 116, 0.1);
+}
+
+:root[data-theme="light"] .summary-pill.rarity-r,
+:root[data-theme="light"] .rarity-badge.rarity-r,
+:root[data-theme="light"] .rarity-r .rarity-badge {
+  border-color: rgba(8, 122, 76, 0.38);
+  color: #04643d;
+  background: rgba(219, 250, 234, 0.96);
+  box-shadow: 0 6px 14px rgba(8, 122, 76, 0.12);
+}
+
+:root[data-theme="light"] .summary-pill.rarity-sr,
+:root[data-theme="light"] .rarity-badge.rarity-sr,
+:root[data-theme="light"] .rarity-sr .rarity-badge {
+  border-color: rgba(8, 118, 169, 0.4);
+  color: #00668f;
+  background: rgba(221, 245, 255, 0.96);
+  box-shadow: 0 6px 14px rgba(8, 118, 169, 0.13);
+}
+
+:root[data-theme="light"] .summary-pill.rarity-ssr,
+:root[data-theme="light"] .rarity-badge.rarity-ssr,
+:root[data-theme="light"] .rarity-ssr .rarity-badge {
+  border-color: rgba(165, 101, 0, 0.42);
+  color: #875000;
+  background: rgba(255, 238, 191, 0.97);
+  box-shadow: 0 6px 16px rgba(165, 101, 0, 0.15);
 }
 
 :root[data-theme="light"] .summary-pill.rarity-ur,
 :root[data-theme="light"] .rarity-badge.rarity-ur,
 :root[data-theme="light"] .rarity-ur .rarity-badge {
-  border-color: rgba(154, 47, 134, 0.28);
+  border-color: rgba(154, 47, 134, 0.44);
   color: #8d1d75;
   background: linear-gradient(
     135deg,
-    rgba(255, 230, 244, 0.9),
-    rgba(234, 224, 255, 0.86)
+    rgba(255, 224, 241, 0.98),
+    rgba(230, 222, 255, 0.96)
   );
+  box-shadow:
+    0 6px 16px rgba(154, 47, 134, 0.16),
+    0 0 18px rgba(255, 178, 218, 0.2);
 }
 
 .rarity-ssr .card-face,
