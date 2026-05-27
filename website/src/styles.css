@@ -918,6 +918,17 @@ h3 {
   cursor: pointer;
 }
 
+:root[data-theme="light"] .recharge-trigger {
+  border-color: rgba(166, 107, 0, 0.28);
+  color: #7b4d00;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 232, 162, 0.88),
+    rgba(255, 197, 93, 0.68)
+  );
+  box-shadow: 0 8px 18px rgba(166, 107, 0, 0.14);
+}
+
 .recharge-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -1542,7 +1553,7 @@ h3 {
 }
 
 :root[data-theme="light"] .rarity-ur {
-  color: #c72b75;
+  color: #9a2f86;
 }
 
 :root[data-theme="light"] .rarity-n .card-name,
@@ -1582,11 +1593,13 @@ h3 {
 
 :root[data-theme="light"] .rarity-ur .card-name,
 :root[data-theme="light"] .card-name.rarity-ur {
-  color: #b81868;
+  color: #8d1d75;
+  background: none;
   text-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95),
-    0 0 10px rgba(184, 24, 104, 0.3),
-    0 2px 16px rgba(184, 24, 104, 0.2);
+    0 0 8px rgba(141, 29, 117, 0.22),
+    0 2px 12px rgba(111, 72, 216, 0.14);
+  -webkit-text-fill-color: currentColor;
 }
 
 .summary-pill.rarity-n,
@@ -1624,6 +1637,18 @@ h3 {
   background: rgba(255, 146, 198, 0.14);
 }
 
+:root[data-theme="light"] .summary-pill.rarity-ur,
+:root[data-theme="light"] .rarity-badge.rarity-ur,
+:root[data-theme="light"] .rarity-ur .rarity-badge {
+  border-color: rgba(154, 47, 134, 0.28);
+  color: #8d1d75;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 230, 244, 0.9),
+    rgba(234, 224, 255, 0.86)
+  );
+}
+
 .rarity-ssr .card-face,
 .rarity-ur .card-face {
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
@@ -1634,6 +1659,24 @@ h3 {
   box-shadow:
     inset 0 0 28px currentColor,
     0 18px 44px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="light"] .rarity-ur .card-face {
+  box-shadow: 0 14px 34px rgba(154, 47, 134, 0.12);
+}
+
+:root[data-theme="light"] .rarity-ur .card-media-frame {
+  box-shadow:
+    inset 0 0 18px rgba(154, 47, 134, 0.12),
+    0 12px 28px rgba(111, 72, 216, 0.12);
+}
+
+:root[data-theme="light"] .rarity-ur .card-media-frame.has-media {
+  border-color: rgba(154, 47, 134, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 12px 28px rgba(154, 47, 134, 0.14),
+    inset 0 0 18px rgba(111, 72, 216, 0.08);
 }
 
 .result-card.featured .card-face {
@@ -1833,6 +1876,12 @@ h3 {
   backdrop-filter: blur(12px);
 }
 
+:root[data-theme="light"] .card-action-overlay {
+  border-color: rgba(48, 70, 104, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(28, 42, 67, 0.14);
+}
+
 .owned-card:hover .card-action-overlay,
 .owned-card:focus-within .card-action-overlay,
 .owned-card.actions-open .card-action-overlay {
@@ -1852,6 +1901,10 @@ h3 {
   white-space: nowrap;
 }
 
+:root[data-theme="light"] .card-action-stock {
+  color: #526175;
+}
+
 .card-icon-action {
   display: inline-grid;
   width: 30px;
@@ -1865,10 +1918,22 @@ h3 {
   padding: 0;
 }
 
+:root[data-theme="light"] .card-icon-action {
+  border-color: rgba(48, 70, 104, 0.16);
+  color: #26344a;
+  background: rgba(246, 248, 252, 0.9);
+}
+
 .card-icon-action:hover:not(:disabled) {
   border-color: rgba(150, 242, 255, 0.44);
   color: var(--primary-strong);
   background: rgba(150, 242, 255, 0.14);
+}
+
+:root[data-theme="light"] .card-icon-action:hover:not(:disabled) {
+  border-color: rgba(0, 121, 184, 0.28);
+  color: #006fa8;
+  background: rgba(11, 149, 208, 0.1);
 }
 
 .card-icon-action:disabled {
