@@ -23,6 +23,7 @@ import { TradeRecord } from "./entity/tradeRecord.entity";
 import { LaunchActivityConfig } from "./entity/launchActivityConfig.entity";
 import { LaunchActivityClaim } from "./entity/launchActivityClaim.entity";
 import { PointLedgerRecord } from "./entity/pointLedgerRecord.entity";
+import { DailySignInRecord } from "./entity/dailySignInRecord.entity";
 import { AchievementConfig } from "./entity/achievementConfig.entity";
 import { AchievementEvent } from "./entity/achievementEvent.entity";
 import { UserAchievement } from "./entity/userAchievement.entity";
@@ -39,6 +40,7 @@ import { TradeModule } from "./trade/trade.module";
 import { RechargeModule } from "./recharge/recharge.module";
 import { LaunchActivityModule } from "./launch-activity/launch-activity.module";
 import { PointLedgerModule } from "./point-ledger/point-ledger.module";
+import { DailySignInModule } from "./daily-sign-in/daily-sign-in.module";
 
 @Module({
   imports: [
@@ -68,6 +70,7 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
       LaunchActivityConfig,
       LaunchActivityClaim,
       PointLedgerRecord,
+      DailySignInRecord,
       AchievementConfig,
       AchievementEvent,
       UserAchievement,
@@ -83,6 +86,7 @@ import { PointLedgerModule } from "./point-ledger/point-ledger.module";
     RechargeModule,
     LaunchActivityModule,
     PointLedgerModule,
+    DailySignInModule,
     AchievementModule,
   ],
   controllers: [AppController],

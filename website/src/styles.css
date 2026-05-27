@@ -902,6 +902,126 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.sign-in-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(150, 242, 255, 0.2);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(
+      circle at 12% 12%,
+      rgba(150, 242, 255, 0.14),
+      transparent 30%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 211, 106, 0.08));
+  padding: 14px;
+}
+
+:root[data-theme="light"] .sign-in-card {
+  border-color: rgba(32, 116, 176, 0.14);
+  background:
+    radial-gradient(
+      circle at 12% 12%,
+      rgba(52, 147, 222, 0.12),
+      transparent 30%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 220, 0.9));
+  box-shadow: 0 12px 30px rgba(53, 82, 123, 0.08);
+}
+
+.sign-in-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sign-in-main div {
+  display: grid;
+  gap: 4px;
+}
+
+.sign-in-main span {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sign-in-main strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.sign-in-main b {
+  color: #ffe6a3;
+  font-size: 24px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(255, 211, 106, 0.38);
+}
+
+:root[data-theme="light"] .sign-in-main b {
+  color: #9a5b00;
+  text-shadow: 0 2px 12px rgba(255, 187, 64, 0.28);
+}
+
+.sign-in-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sign-in-day {
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.sign-in-day.signed {
+  border-color: rgba(97, 229, 162, 0.36);
+  color: #d6ffe8;
+  background: rgba(97, 229, 162, 0.16);
+}
+
+.sign-in-day.current {
+  border-color: rgba(255, 211, 106, 0.52);
+  box-shadow: 0 0 0 3px rgba(255, 211, 106, 0.1);
+}
+
+.sign-in-day.bonus {
+  color: #ffe6a3;
+  background: rgba(255, 211, 106, 0.14);
+}
+
+:root[data-theme="light"] .sign-in-day {
+  border-color: rgba(53, 82, 123, 0.12);
+  color: #5f6f86;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .sign-in-day.signed {
+  border-color: rgba(31, 142, 94, 0.28);
+  color: #137044;
+  background: rgba(219, 250, 232, 0.9);
+}
+
+:root[data-theme="light"] .sign-in-day.bonus {
+  color: #8a5300;
+  background: rgba(255, 235, 181, 0.92);
+}
+
+.sign-in-action {
+  width: 100%;
+  min-height: 38px;
+}
+
 .recharge-trigger {
   display: inline-flex;
   min-height: 34px;

@@ -12,6 +12,7 @@ export type PointLedgerSourceType =
   | "recharge"
   | "redeem_code"
   | "launch_activity"
+  | "daily_sign_in"
   | "exchange_shop"
   | "achievement"
   | "trade_buy"

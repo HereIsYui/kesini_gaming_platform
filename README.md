@@ -283,6 +283,10 @@ export FILE_ROOT=/data/kesini/public
 - 未启用单独配置的卡池会继承全局默认。
 - 数据库仍使用 `gacha_pool_config` 表：`pool_id=0` 表示全局默认，`pool_id>0` 表示单个卡池覆盖。
 
+## 每日签到
+
+玩家每日可签到一次。每轮 7 天循环：第 1-6 天每次奖励 10 星穹币，第 7 天奖励 100 星穹币；连续中断后重新从第 1 天开始。
+
 如果生产环境 `DB_SYNCHRONIZE=false`，升级前需要手动补字段：
 
 ```sql
@@ -290,6 +294,19 @@ ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
 ALTER TABLE pool_info ADD COLUMN sort_order int NOT NULL DEFAULT 0;
 ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
 ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
+
+CREATE TABLE daily_sign_in_record (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  sign_date varchar(10) NOT NULL,
+  streak_count int NOT NULL DEFAULT 1,
+  cycle_day int NOT NULL DEFAULT 1,
+  reward_points int NOT NULL DEFAULT 10,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_daily_sign_in_uid_date (uid, sign_date),
+  KEY IDX_daily_sign_in_uid_created (uid, createdAt)
+);
 
 CREATE TABLE achievement_config (
   id int NOT NULL AUTO_INCREMENT,

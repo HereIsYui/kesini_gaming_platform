@@ -26,6 +26,7 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   recharge: "星穹币充值",
   redeem_code: "兑换码奖励",
   launch_activity: "开服福利",
+  daily_sign_in: "每日签到",
   exchange_shop: "兑换商店",
   achievement: "成就奖励",
   trade_buy: "交易购买",

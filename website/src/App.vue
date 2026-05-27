@@ -37,6 +37,8 @@ import {
 import type {
   CardItem,
   CardRarity,
+  DailySignInClaimResponse,
+  DailySignInStatus,
   AchievementListResponse,
   AchievementNotification,
   AchievementRecord,
@@ -160,6 +162,7 @@ const stats = ref<UserGachaStats | null>(null);
 const userCards = ref<UserCardsResponse | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
+const dailySignIn = ref<DailySignInStatus | null>(null);
 const launchActivityModalOpen = ref(false);
 const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
@@ -239,6 +242,7 @@ const busy = reactive({
   bulkDecompose: false,
   bulkDecomposePreview: false,
   launchActivity: false,
+  signIn: false,
 });
 
 let feedbackTimer: number | undefined;
@@ -274,6 +278,20 @@ const hasLaunchActivityReward = computed(
     Boolean(isAuthed.value) &&
     launchActivity.value?.available === true &&
     Boolean(launchActivityInfo.value),
+);
+const dailySignInWeek = computed(
+  () =>
+    dailySignIn.value?.week ||
+    Array.from({ length: 7 }, (_, index) => ({
+      day: index + 1,
+      rewardPoints: index === 6 ? 100 : 10,
+      signed: false,
+      current: index === 0,
+    })),
+);
+const dailySignInCycleDay = computed(() => dailySignIn.value?.cycleDay || 1);
+const dailySignInRewardPoints = computed(
+  () => dailySignIn.value?.rewardPoints || 10,
 );
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
@@ -475,6 +493,7 @@ const pointSourceOptions = [
   { value: "recharge", label: "星穹币充值" },
   { value: "redeem_code", label: "兑换码奖励" },
   { value: "launch_activity", label: "开服福利" },
+  { value: "daily_sign_in", label: "每日签到" },
   { value: "exchange_shop", label: "兑换商店" },
   { value: "achievement", label: "成就奖励" },
   { value: "trade_buy", label: "交易购买" },
@@ -714,6 +733,7 @@ function logout() {
   catalogItems.value = null;
   catalogError.value = "";
   launchActivity.value = null;
+  dailySignIn.value = null;
   launchActivityModalOpen.value = false;
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
@@ -854,6 +874,7 @@ async function loadPrivateData() {
     loadUserCards(),
     loadUserCatalog(),
     loadLaunchActivity(),
+    loadDailySignIn(),
     loadLeaderboard(),
     loadAchievements(),
     loadAchievementNotifications(),
@@ -980,6 +1001,15 @@ async function loadLaunchActivity() {
   } catch {
     launchActivity.value = null;
   }
+}
+
+async function loadDailySignIn() {
+  if (!isAuthed.value) {
+    return;
+  }
+  dailySignIn.value = await request<DailySignInStatus>(
+    "/daily-sign-in/status",
+  );
 }
 
 async function loadLeaderboard() {
@@ -1286,6 +1316,40 @@ async function claimLaunchActivity() {
     notify("error", getErrorMessage(error));
   } finally {
     busy.launchActivity = false;
+  }
+}
+
+async function claimDailySignIn() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (dailySignIn.value?.signedToday) {
+    notify("info", "今日已签");
+    return;
+  }
+  busy.signIn = true;
+  try {
+    const data = await request<DailySignInClaimResponse>(
+      "/daily-sign-in/claim",
+      { method: "POST" },
+    );
+    dailySignIn.value = data;
+    if (stats.value) {
+      stats.value.point = data.pointAfter;
+    }
+    if (currentUser.value) {
+      currentUser.value.point = data.pointAfter;
+      setStoredUser(currentUser.value);
+    }
+    if (pointRecords.value) {
+      await loadPointRecords();
+    }
+    notify("success", `签到 +${data.rewardPoints}`);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.signIn = false;
   }
 }
 
@@ -1783,6 +1847,8 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `兑换码 ${String(meta("code") || "-")}`;
     case "launch_activity":
       return `活动 ${String(meta("activityName") || meta("activityKey") || "-")}`;
+    case "daily_sign_in":
+      return `第 ${String(meta("cycleDay") || "-")} 天`;
     case "exchange_shop":
       return `兑换项 ${String(meta("exchangeItemName") || meta("exchangeItemId") || "-")} · ${String(
         meta("count") || 1,
@@ -2244,6 +2310,39 @@ function leaderboardRankLabel(rank?: number) {
               当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值
               {{ rechargeRangeLabel }}
             </small>
+          </div>
+
+          <div v-if="isAuthed" class="sign-in-card">
+            <div class="sign-in-main">
+              <div>
+                <span>每日签到</span>
+                <strong>第 {{ dailySignInCycleDay }} 天</strong>
+              </div>
+              <b>+{{ dailySignInRewardPoints }}</b>
+            </div>
+            <div class="sign-in-week" aria-label="七日签到">
+              <span
+                v-for="day in dailySignInWeek"
+                :key="day.day"
+                class="sign-in-day"
+                :class="{
+                  signed: day.signed,
+                  current: day.current,
+                  bonus: day.rewardPoints >= 100,
+                }"
+              >
+                {{ day.rewardPoints >= 100 ? "100" : day.day }}
+              </span>
+            </div>
+            <button
+              class="primary-action compact sign-in-action"
+              type="button"
+              :disabled="busy.signIn || dailySignIn?.signedToday"
+              @click="claimDailySignIn"
+            >
+              <LoaderCircle v-if="busy.signIn" :size="15" class="spin" />
+              {{ dailySignIn?.signedToday ? "已签" : "签到" }}
+            </button>
           </div>
 
           <div v-if="hasLaunchActivityReward" class="launch-activity-callout">

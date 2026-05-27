@@ -195,6 +195,28 @@ export interface LaunchActivityClaimResponse {
   rewards: RedeemRewards;
 }
 
+export interface DailySignInDay {
+  day: number;
+  rewardPoints: number;
+  signed: boolean;
+  current: boolean;
+}
+
+export interface DailySignInStatus {
+  signedToday: boolean;
+  signDate: string;
+  currentStreak: number;
+  cycleDay: number;
+  rewardPoints: number;
+  nextRewardPoints: number;
+  week: DailySignInDay[];
+}
+
+export interface DailySignInClaimResponse extends DailySignInStatus {
+  pointBefore: number;
+  pointAfter: number;
+}
+
 export interface ExchangeCostItem {
   itemId: number;
   num: number;
@@ -315,6 +337,7 @@ export type PointLedgerSourceType =
   | "recharge"
   | "redeem_code"
   | "launch_activity"
+  | "daily_sign_in"
   | "exchange_shop"
   | "achievement"
   | "trade_buy"
