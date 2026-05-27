@@ -4538,7 +4538,7 @@ function leaderboardRankLabel(rank?: number) {
         @click.self="closeResultModal"
       >
         <section
-          class="result-modal"
+          class="result-modal draw-result-modal"
           role="dialog"
           aria-modal="true"
           aria-label="抽卡结果"
@@ -4571,13 +4571,13 @@ function leaderboardRankLabel(rank?: number) {
 
           <div
             v-if="lastResults.length"
-            class="result-grid modal-result-grid"
+            class="result-grid modal-result-grid draw-result-grid"
             :class="{ single: lastResults.length === 1 }"
           >
             <article
               v-for="(card, index) in lastResults"
               :key="`${card.userCardUuid}-${index}`"
-              class="result-card"
+              class="result-card draw-result-card"
               :class="[
                 rarityClass(card.rarity),
                 { featured: lastResults.length === 1 },
@@ -4616,26 +4616,9 @@ function leaderboardRankLabel(rank?: number) {
                 </div>
                 <div class="card-content">
                   <h3 class="card-name">{{ card.cardName }}</h3>
-                  <p>{{ cardIntroText(card.cardDesc) }}</p>
-                  <div class="tag-row">
+                  <div v-if="card.isUp || card.isPity" class="tag-row draw-result-tags">
                     <span v-if="card.isUp">UP</span>
                     <span v-if="card.isPity">保底</span>
-                    <span>#{{ card.cardId }}</span>
-                    <button
-                      v-if="hasCardIntroDetail(card.cardDesc)"
-                      class="tag-action"
-                      type="button"
-                      @click="
-                        openCardIntro({
-                          name: card.cardName,
-                          desc: card.cardDesc,
-                          rarity: card.rarity,
-                          type: cardTypeLabel(card.cardType),
-                        })
-                      "
-                    >
-                      详情
-                    </button>
                   </div>
                 </div>
               </div>

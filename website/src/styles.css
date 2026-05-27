@@ -3727,6 +3727,12 @@ h3 {
   animation: modal-enter 220ms ease-out both;
 }
 
+.draw-result-modal {
+  width: min(860px, 100%);
+  max-height: min(760px, calc(100dvh - 44px));
+  border-radius: calc(var(--radius) - 2px);
+}
+
 .result-modal-head,
 .result-modal-actions {
   display: flex;
@@ -3796,6 +3802,101 @@ h3 {
   flex-wrap: wrap;
   border-top: 1px solid var(--border);
   background: rgba(8, 12, 23, 0.94);
+}
+
+.draw-result-modal .result-modal-head,
+.draw-result-modal .result-modal-actions {
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.draw-result-modal .result-modal-head h2 {
+  margin-bottom: 2px;
+  font-size: 22px;
+}
+
+.draw-result-modal .modal-close {
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.draw-result-modal .result-modal-summary {
+  gap: 6px;
+  padding: 10px 16px 0;
+}
+
+.draw-result-modal .summary-pill {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.draw-result-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+
+.draw-result-grid.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.draw-result-card .card-face {
+  gap: 8px;
+  padding: 8px;
+  border-radius: calc(var(--radius) - 3px);
+}
+
+.draw-result-card .card-media-frame {
+  border-radius: calc(var(--radius) - 5px);
+}
+
+.draw-result-card .result-card-top {
+  inset: 7px 7px auto;
+  gap: 5px;
+}
+
+.draw-result-card .rarity-badge,
+.draw-result-card .card-type-pill,
+.draw-result-card .tag-row span {
+  min-height: 21px;
+  padding: 0 7px;
+  font-size: 10px;
+}
+
+.draw-result-card .card-content {
+  display: grid;
+  gap: 6px;
+  align-self: start;
+}
+
+.draw-result-card .card-face h3 {
+  min-height: 34px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.draw-result-tags {
+  min-height: 21px;
+}
+
+.draw-result-card.featured {
+  width: min(240px, 100%);
+  margin: 0 auto;
+}
+
+.draw-result-card.featured .card-face {
+  padding: 10px;
+}
+
+.draw-result-card.featured .card-face h3 {
+  min-height: 38px;
+  font-size: 17px;
+}
+
+.modal-result-grid.single .draw-result-card.featured {
+  width: min(240px, 78vw);
 }
 
 .spin {
@@ -4055,6 +4156,20 @@ h3 {
     padding: 14px;
   }
 
+  .draw-result-modal {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .draw-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px 14px 14px;
+  }
+
+  .draw-result-modal .result-modal-summary {
+    padding: 10px 14px 0;
+  }
+
   .result-card.featured {
     width: min(320px, 100%);
   }
@@ -4062,6 +4177,10 @@ h3 {
   .modal-result-grid.single .result-card.featured {
     width: min(260px, 100%);
     min-height: 0;
+  }
+
+  .modal-result-grid.single .draw-result-card.featured {
+    width: min(220px, 100%);
   }
 
   .modal-result-grid.single .result-card.featured .card-face {
@@ -4227,6 +4346,14 @@ h3 {
   .result-grid,
   .modal-result-grid {
     grid-template-columns: 1fr;
+  }
+
+  .draw-result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-result-grid.single .draw-result-card.featured {
+    width: min(210px, 100%);
   }
 
   .pool-chip {
