@@ -851,6 +851,10 @@ body {
   width: min(280px, 100%);
 }
 
+.card-media-link-form {
+  width: 100%;
+}
+
 .image-upload-actions {
   display: flex;
   flex-wrap: wrap;

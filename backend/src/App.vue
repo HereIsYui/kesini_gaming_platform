@@ -461,6 +461,15 @@
         />
         <span v-else>未配置</span>
       </div>
+      <el-form label-position="top" class="card-media-link-form">
+        <el-form-item label="图片链接">
+          <el-input
+            v-model="cardMediaValue"
+            clearable
+            placeholder="https://..."
+          />
+        </el-form-item>
+      </el-form>
       <div class="image-upload-actions">
         <label class="image-upload-button">
           上传
@@ -1089,6 +1098,23 @@ function clearCardMedia() {
   cardMediaValue.value = "";
 }
 
+function normalizeCardMediaValue(value: unknown) {
+  return String(value || "").trim();
+}
+
+function validateCardMediaValue(value: string) {
+  if (!value) {
+    return "";
+  }
+  if (value.length > 500) {
+    throw new Error("链接过长");
+  }
+  if (!/^(https?:\/\/|\/file\/)/i.test(value)) {
+    throw new Error("链接格式不对");
+  }
+  return value;
+}
+
 async function handleCardMediaUpload(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -1135,9 +1161,13 @@ async function saveCardMedia() {
   }
   cardMediaSaving.value = true;
   try {
+    const cardImage = validateCardMediaValue(
+      normalizeCardMediaValue(cardMediaValue.value),
+    );
+    cardMediaValue.value = cardImage;
     await request(`/admin/cards/${row.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ card_image: cardMediaValue.value }),
+      body: JSON.stringify({ card_image: cardImage }),
     });
     ElMessage.success("已保存");
     cardMediaVisible.value = false;
