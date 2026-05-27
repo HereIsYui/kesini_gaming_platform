@@ -2836,29 +2836,11 @@ function leaderboardRankLabel(rank?: number) {
               </div>
               <div class="card-content">
                 <h3 class="card-name">{{ item.card.card_name }}</h3>
-                <p>{{ cardIntroText(item.card.card_desc) }}</p>
                 <div class="tag-row">
                   <span>{{ item.collected ? "已收集" : "未收集" }}</span>
-                  <span v-if="item.ownedCount">x{{ item.ownedCount }}</span>
                   <span v-if="!item.collected && item.rarity !== 'UR'">
                     {{ item.fragmentCount }}/{{ item.requiredFragments }}
                   </span>
-                  <span>#{{ item.card.id }}</span>
-                  <button
-                    v-if="hasCardIntroDetail(item.card.card_desc)"
-                    class="tag-action"
-                    type="button"
-                    @click="
-                      openCardIntro({
-                        name: item.card.card_name,
-                        desc: item.card.card_desc,
-                        rarity: item.rarity,
-                        type: cardTypeLabel(item.card.card_type),
-                      })
-                    "
-                  >
-                    详情
-                  </button>
                 </div>
               </div>
             </div>
@@ -3904,9 +3886,6 @@ function leaderboardRankLabel(rank?: number) {
                     <p class="eyebrow">抽卡概率</p>
                     <h3>稀有度分布</h3>
                   </div>
-                  <span class="type-pill"
-                    >{{ poolDetailCatalogCards.length }} 张卡片</span
-                  >
                 </div>
                 <div class="pool-probability-list">
                   <div
@@ -3930,9 +3909,6 @@ function leaderboardRankLabel(rank?: number) {
                     <p class="eyebrow">卡池图鉴</p>
                     <h3>全部卡片</h3>
                   </div>
-                  <span class="type-pill"
-                    >{{ poolDetailCatalogCards.length }} 张</span
-                  >
                 </div>
                 <div
                   v-if="poolDetailCards.length === 0"
@@ -3987,24 +3963,8 @@ function leaderboardRankLabel(rank?: number) {
                     >
                       {{ item.card.card_name }}
                     </strong>
-                    <p>{{ cardIntroText(item.card.card_desc) }}</p>
                     <div class="tag-row">
                       <span>{{ cardTypeLabel(item.card.card_type) }}</span>
-                      <span>#{{ item.card.id }}</span>
-                      <button
-                        v-if="hasCardIntroDetail(item.card.card_desc)"
-                        class="tag-action"
-                        type="button"
-                        @click="
-                          openCardIntro({
-                            name: item.card.card_name,
-                            desc: item.card.card_desc,
-                            type: cardTypeLabel(item.card.card_type),
-                          })
-                        "
-                      >
-                        详情
-                      </button>
                     </div>
                   </div>
                 </div>
