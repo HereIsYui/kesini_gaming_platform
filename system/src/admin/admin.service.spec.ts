@@ -150,6 +150,7 @@ describe("AdminService", () => {
         card_desc: "标准卡池",
         card_type: 0,
         enabled: true,
+        sort_order: 0,
       }),
     );
   });
@@ -204,15 +205,21 @@ describe("AdminService", () => {
       }),
     );
     expect(gachaService.getPoolConfigsByPoolIds).toHaveBeenCalledWith([1, 2]);
+    expect(poolRepository.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order: { sort_order: "ASC", id: "ASC" },
+      }),
+    );
   });
 
-  it("更新卡池会保留上下线状态和卡池类型", async () => {
+  it("更新卡池会保留上下线状态、卡池类型和排序", async () => {
     const pool = {
       id: 2,
       pool_name: "限定卡池",
       card_desc: "旧描述",
       card_type: 2,
       enabled: true,
+      sort_order: 9,
     };
     const poolRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(pool),
@@ -223,12 +230,14 @@ describe("AdminService", () => {
       service.updatePool(2, {
         card_type: 1,
         enabled: false,
+        sort_order: 3,
       } as any),
     ).resolves.toEqual(
       expect.objectContaining({
         id: 2,
         card_type: 1,
         enabled: false,
+        sort_order: 3,
       }),
     );
     expect(poolRepository.save).toHaveBeenCalledWith(
@@ -236,6 +245,7 @@ describe("AdminService", () => {
         id: 2,
         card_type: 1,
         enabled: false,
+        sort_order: 3,
       }),
     );
   });
@@ -406,7 +416,7 @@ describe("AdminService", () => {
     );
   });
 
-  it("更新卡片允许清空描述和分解产出", async () => {
+  it("更新卡片允许清空描述和分解产出且不会用 null 清空卡面素材", async () => {
     const card = {
       id: 10,
       card_name: "测试卡",
@@ -431,8 +441,33 @@ describe("AdminService", () => {
     expect(cardRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         card_desc: "",
-        card_image: "",
+        card_image: "old.png",
         drop_item: "",
+      }),
+    );
+  });
+
+  it("更新卡片显式提交空字符串时会清空卡面素材", async () => {
+    const card = {
+      id: 10,
+      card_name: "测试卡",
+      card_level: "N",
+      card_desc: "旧描述",
+      card_image: "old.png",
+      drop_item: "1",
+      card_type: 0,
+      pool: 1,
+    };
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const service = createService({ card: cardRepository });
+
+    await service.updateCard(10, { card_image: "" } as any);
+
+    expect(cardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        card_image: "",
       }),
     );
   });
@@ -572,7 +607,7 @@ describe("AdminService", () => {
       defaultFragmentItem: null,
     });
     expect(poolRepository.find).toHaveBeenCalledWith({
-      order: { id: "DESC" },
+      order: { sort_order: "ASC", id: "ASC" },
     });
     expect(cardRepository.find).toHaveBeenCalledWith({
       order: { id: "DESC" },

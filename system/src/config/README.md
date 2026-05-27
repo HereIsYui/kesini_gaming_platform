@@ -37,6 +37,7 @@ PORT=3000                   # 应用端口
 JWT_SECRET=your-secret-key   # JWT密钥（生产环境必须配置）
 JWT_EXPIRES_IN=7d           # JWT过期时间
 ADMIN_UIDS=123456,789012    # 保留配置，不作为后台管理权限放行依据
+FILE_ROOT=/data/kesini/public # 上传素材持久化目录
 ```
 
 后台管理权限以用户表 `is_admin=true` 为准。

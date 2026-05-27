@@ -242,7 +242,7 @@
                   @change="handleImageUpload(field, $event)"
                 />
               </label>
-              <el-button size="small" plain @click="formValues[field.key] = ''">
+              <el-button size="small" plain @click="clearImageField(field.key)">
                 清空
               </el-button>
             </div>
@@ -359,6 +359,7 @@ const imageUploading = ref(false);
 const editing = ref<Record<string, any> | null>(null);
 const formVisible = ref(false);
 const formValues = ref<Record<string, any>>({});
+const imageTouched = ref<Record<string, boolean>>({});
 const detail = ref<Record<string, any> | null>(null);
 const detailVisible = ref(false);
 
@@ -449,18 +450,31 @@ function createDefaultForm(row?: Record<string, any>) {
 
 function openCreate() {
   editing.value = null;
+  imageTouched.value = {};
   formValues.value = createDefaultForm();
   formVisible.value = true;
 }
 
 function openEdit(row: Record<string, any>) {
   editing.value = row;
+  imageTouched.value = {};
   formValues.value = createDefaultForm(row);
   formVisible.value = true;
 }
 
 function serializeForm() {
   return editableFields.value.reduce<Record<string, any>>((result, field) => {
+    if (
+      editing.value &&
+      field.type === "imageUpload" &&
+      !imageTouched.value[field.key]
+    ) {
+      const originalValue = getValue(editing.value, field.key);
+      if (originalValue !== undefined) {
+        result[field.key] = serializeFieldValue(field, originalValue);
+      }
+      return result;
+    }
     result[field.key] = serializeFieldValue(field, formValues.value[field.key]);
     return result;
   }, {});
@@ -493,6 +507,11 @@ function assetUrl(value: unknown) {
 
 function isMediaVideo(value: unknown) {
   return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
+}
+
+function clearImageField(key: string) {
+  formValues.value[key] = "";
+  imageTouched.value[key] = true;
 }
 
 async function handleImageUpload(field: FieldConfig, event: Event) {
@@ -529,6 +548,7 @@ async function handleImageUpload(field: FieldConfig, event: Event) {
       },
     );
     formValues.value[field.key] = result.url;
+    imageTouched.value[field.key] = true;
     ElMessage.success("已上传");
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : "上传失败");

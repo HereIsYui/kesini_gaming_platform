@@ -35,6 +35,8 @@ export interface PoolInfo {
   pool_name: string;
   card_desc: string;
   card_type: number;
+  sort_order?: number;
+  sortOrder?: number;
   rarityProbabilities?: Partial<Record<CardRarity | string, number>>;
   drawCosts?: {
     once: number;

@@ -400,6 +400,7 @@ export class CardService {
   async getAllPools(): Promise<PoolInfo[]> {
     const pools = await this.poolRepository.find({
       where: { enabled: true },
+      order: { sort_order: "ASC", id: "ASC" },
     });
     return Promise.all(
       pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
@@ -527,6 +528,7 @@ export class CardService {
   async getPoolsByType(cardType: number): Promise<PoolInfo[]> {
     const pools = await this.poolRepository.find({
       where: { card_type: cardType, enabled: true },
+      order: { sort_order: "ASC", id: "ASC" },
     });
     return Promise.all(
       pools.map((pool) => this.decoratePoolWithDrawCosts(pool)),
@@ -1268,6 +1270,7 @@ export class CardService {
     const config = await this.gachaConfigService.getConfigByPoolId(pool.id);
     return {
       ...pool,
+      sortOrder: Number(pool.sort_order || 0),
       rarityProbabilities: config.rarityProbabilities || {},
       drawCosts: config.drawCosts || { once: 10, ten: 100 },
     };

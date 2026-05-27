@@ -248,7 +248,15 @@ EOF
 
 注意：以前在打包产物里 `grep http://localhost:3000` 可能会命中本地开发兜底值或输入框占位符，不能单独作为生产 API 地址是否生效的判断依据。现在生产地址优先看 `dist/config.js`，也可以在浏览器开发者工具的 Network 面板确认请求实际发往的域名。
 
-卡面素材支持图片和视频：图片最大 2MB，视频最大 10MB，会上传到 `system/public/card-images` 或 `system/public/card-videos`，接口通过 `/file/...` 访问。生产部署时需要把 `system/public` 作为持久化目录保留，避免重新发布或重启时丢失已上传素材；也可以用 `FILE_ROOT=/data/kesini/public` 指定单独的持久化目录。
+卡面素材支持图片和视频：图片最大 2MB，视频最大 10MB，接口通过 `/file/...` 访问。生产环境建议把上传目录放到发布目录之外，避免后台/服务端更新时覆盖已上传素材：
+
+```bash
+mkdir -p /data/kesini/public/card-images /data/kesini/public/card-videos
+chown -R www:www /data/kesini/public
+export FILE_ROOT=/data/kesini/public
+```
+
+部署脚本只替换代码和 `dist/`，不要删除 `/data/kesini/public`。如果没有配置 `FILE_ROOT`，素材会保存到 `system/public/card-images` 和 `system/public/card-videos`，此时需要把 `system/public` 作为持久化目录保留。
 
 ## 验证清单
 
@@ -279,6 +287,7 @@ EOF
 
 ```sql
 ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
+ALTER TABLE pool_info ADD COLUMN sort_order int NOT NULL DEFAULT 0;
 ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
 ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
 

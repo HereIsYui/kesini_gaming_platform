@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   Between,
+  FindOptionsOrder,
   FindOptionsWhere,
   In,
   Like,
@@ -199,7 +200,9 @@ export class AdminService {
 
   async getOptions() {
     const [pools, cards, dropItems] = await Promise.all([
-      this.poolRepository.find({ order: { id: "DESC" } as any }),
+      this.poolRepository.find({
+        order: { sort_order: "ASC", id: "ASC" } as any,
+      }),
       this.cardRepository.find({ order: { id: "DESC" } as any }),
       this.dropRepository.find({ order: { id: "DESC" } as any }),
     ]);
@@ -324,6 +327,7 @@ export class AdminService {
       where,
       page,
       pageSize,
+      { sort_order: "ASC", id: "ASC" } as any,
     );
     const poolIds = result.list
       .map((pool) => Number(pool.id))
@@ -353,6 +357,11 @@ export class AdminService {
       card_desc: body.card_desc,
       card_type: Number(body.card_type || 0),
       enabled: body.enabled ?? true,
+      sort_order: this.normalizeOptionalIntegerInput(
+        body.sort_order,
+        "排序无效",
+        0,
+      ),
     });
     return this.poolRepository.save(pool);
   }
@@ -378,6 +387,13 @@ export class AdminService {
     }
     if (body.enabled !== undefined && body.enabled !== null) {
       updates.enabled = body.enabled === true;
+    }
+    if (body.sort_order !== undefined) {
+      updates.sort_order = this.normalizeOptionalIntegerInput(
+        body.sort_order,
+        "排序无效",
+        0,
+      );
     }
     Object.assign(pool, updates);
     return this.poolRepository.save(pool);
@@ -456,7 +472,7 @@ export class AdminService {
     if (body.card_desc !== undefined) {
       updates.card_desc = this.normalizeOptionalString(body.card_desc);
     }
-    if (body.card_image !== undefined) {
+    if (body.card_image !== undefined && body.card_image !== null) {
       updates.card_image = this.normalizeOptionalString(body.card_image);
     }
     if (body.card_type !== undefined) {
@@ -1838,10 +1854,11 @@ export class AdminService {
     where: any,
     page: number,
     pageSize: number,
+    order: FindOptionsOrder<T> = { id: "DESC" } as any,
   ) {
     const [list, total] = await repository.findAndCount({
       where,
-      order: { id: "DESC" } as any,
+      order,
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
@@ -1876,6 +1893,13 @@ export class AdminService {
 
   private normalizeOptionalString(value: unknown) {
     return String(value ?? "").trim();
+  }
+
+  private normalizeOptionalIntegerInput(value: unknown, message: string, min = 0) {
+    if (value === undefined || value === null || value === "") {
+      return min;
+    }
+    return this.normalizeIntegerInput(value, message, min);
   }
 
   private normalizeIntegerInput(value: unknown, message: string, min = 0) {

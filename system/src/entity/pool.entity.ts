@@ -26,6 +26,10 @@ export class PoolInfo {
   @Column({ default: true })
   enabled: boolean;
 
+  // 排序值，越小越靠前
+  @Column({ default: 0 })
+  sort_order: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

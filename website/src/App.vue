@@ -712,6 +712,17 @@ function logout() {
   notify("info", "已退出登录");
 }
 
+function poolSortOrder(pool: PoolInfo) {
+  const value = Number(pool.sortOrder ?? pool.sort_order ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function sortPools(list: PoolInfo[]) {
+  return [...list].sort(
+    (a, b) => poolSortOrder(a) - poolSortOrder(b) || a.id - b.id,
+  );
+}
+
 async function loadPublicData() {
   busy.public = true;
   try {
@@ -719,7 +730,7 @@ async function loadPublicData() {
       request<PoolInfo[]>("/card/pools"),
       request<RechargeConfig>("/recharge/config").catch(() => null),
     ]);
-    pools.value = list || [];
+    pools.value = sortPools(list || []);
     rechargeConfig.value = recharge;
     if (!activePoolId.value && pools.value.length > 0) {
       activePoolId.value = pools.value[0].id;
@@ -1814,6 +1825,13 @@ function parseCardRarities(levels?: string): CardRarity[] {
     );
 }
 
+function strongestRarityClass(rarities: CardRarity[] = []) {
+  const strongest = [...rarities].sort(
+    (a, b) => (rarityRank[b] || 0) - (rarityRank[a] || 0),
+  )[0];
+  return rarityClass(strongest);
+}
+
 function synthesisCostLabel(rarity?: string) {
   const normalized = normalizeRarity(rarity);
   const cost = requiredFragmentsForRarity(normalized);
@@ -2085,7 +2103,12 @@ function leaderboardRankLabel(rank?: number) {
               <div class="orbit orbit-two"></div>
               <div class="summon-flare"></div>
               <WandSparkles :size="44" />
-              <strong>{{ bestResult?.cardName || "星轨待命" }}</strong>
+              <strong
+                class="card-name summon-card-name"
+                :class="bestResult ? rarityClass(bestResult.rarity) : ''"
+              >
+                {{ bestResult?.cardName || "星轨待命" }}
+              </strong>
               <span>{{ drawPhaseText }}</span>
             </div>
 
@@ -2473,7 +2496,7 @@ function leaderboardRankLabel(rank?: number) {
                   </div>
                 </div>
                 <div class="card-content">
-                  <h3>{{ card.cardName }}</h3>
+                  <h3 class="card-name">{{ card.cardName }}</h3>
                   <p>{{ cardIntroText(card.cardDesc) }}</p>
                   <div class="tag-row">
                     <span>{{
@@ -2679,7 +2702,7 @@ function leaderboardRankLabel(rank?: number) {
                 </div>
               </div>
               <div class="card-content">
-                <h3>{{ item.card.card_name }}</h3>
+                <h3 class="card-name">{{ item.card.card_name }}</h3>
                 <p>{{ cardIntroText(item.card.card_desc) }}</p>
                 <div class="tag-row">
                   <span>{{ item.collected ? "已收集" : "未收集" }}</span>
@@ -3035,7 +3058,7 @@ function leaderboardRankLabel(rank?: number) {
                     <div class="card-sigil"></div>
                     <span class="rarity-badge">{{ listing.cardLevel }}</span>
                   </div>
-                  <strong>{{ listing.cardName }}</strong>
+                  <strong class="card-name">{{ listing.cardName }}</strong>
                   <small>{{ listing.poolName || "未知卡池" }}</small>
                 </div>
                 <div class="trade-card-body">
@@ -3825,7 +3848,12 @@ function leaderboardRankLabel(rank?: number) {
                         {{ rarity }}
                       </span>
                     </div>
-                    <strong>{{ item.card.card_name }}</strong>
+                    <strong
+                      class="card-name"
+                      :class="strongestRarityClass(item.rarities)"
+                    >
+                      {{ item.card.card_name }}
+                    </strong>
                     <p>{{ cardIntroText(item.card.card_desc) }}</p>
                     <div class="tag-row">
                       <span>{{ cardTypeLabel(item.card.card_type) }}</span>
@@ -4274,7 +4302,7 @@ function leaderboardRankLabel(rank?: number) {
                   </div>
                 </div>
                 <div class="card-content">
-                  <h3>{{ card.cardName }}</h3>
+                  <h3 class="card-name">{{ card.cardName }}</h3>
                   <p>{{ cardIntroText(card.cardDesc) }}</p>
                   <div class="tag-row">
                     <span v-if="card.isUp">UP</span>

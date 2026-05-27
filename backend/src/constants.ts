@@ -161,6 +161,7 @@ export const poolFields: FieldConfig[] = [
     options: enabledOptions,
     defaultValue: true,
   },
+  { key: "sort_order", label: "排序", type: "number", defaultValue: 0 },
   { key: "gacha_config_mode", label: "抽卡配置", readonly: true },
 ];
 

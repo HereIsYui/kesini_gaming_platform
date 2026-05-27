@@ -1355,6 +1355,18 @@ h3 {
   color: var(--text);
 }
 
+.card-name {
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.trade-card-art .card-name,
+.pool-detail-card .card-name,
+.summon-card-name {
+  display: block;
+}
+
 .card-face p,
 .catalog-card p,
 .shop-card p {
@@ -1425,24 +1437,43 @@ h3 {
     inset 0 0 22px rgba(255, 146, 198, 0.22);
 }
 
-.rarity-r .card-face h3,
-.rarity-r .card-content {
-  text-shadow: 0 0 12px rgba(116, 223, 183, 0.22);
+.rarity-n .card-name,
+.card-name.rarity-n {
+  color: #dce6f2;
+  text-shadow: 0 0 10px rgba(197, 209, 223, 0.18);
 }
 
-.rarity-sr .card-face h3,
-.rarity-sr .card-content {
-  text-shadow: 0 0 14px rgba(115, 215, 255, 0.28);
+.rarity-r .card-name,
+.card-name.rarity-r {
+  color: #9ff3d1;
+  text-shadow:
+    0 0 8px rgba(116, 223, 183, 0.36),
+    0 0 18px rgba(116, 223, 183, 0.18);
 }
 
-.rarity-ssr .card-face h3,
-.rarity-ssr .card-content {
-  text-shadow: 0 0 16px rgba(255, 211, 106, 0.36);
+.rarity-sr .card-name,
+.card-name.rarity-sr {
+  color: #a9e9ff;
+  text-shadow:
+    0 0 8px rgba(115, 215, 255, 0.4),
+    0 0 20px rgba(115, 215, 255, 0.22);
 }
 
-.rarity-ur .card-face h3,
-.rarity-ur .card-content {
-  text-shadow: 0 0 18px rgba(255, 146, 198, 0.42);
+.rarity-ssr .card-name,
+.card-name.rarity-ssr {
+  color: #ffe6a3;
+  text-shadow:
+    0 0 8px rgba(255, 211, 106, 0.5),
+    0 0 22px rgba(255, 211, 106, 0.3);
+}
+
+.rarity-ur .card-name,
+.card-name.rarity-ur {
+  color: #ffd2e8;
+  text-shadow:
+    0 0 8px rgba(255, 146, 198, 0.58),
+    0 0 24px rgba(255, 146, 198, 0.36),
+    0 0 38px rgba(255, 211, 106, 0.18);
 }
 
 .summary-pill.rarity-n,
