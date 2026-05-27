@@ -334,6 +334,12 @@ class ShopRecycleConfigPatchDto {
   priceUR?: number;
 }
 
+class DecomposeConfigPatchDto {
+  @IsOptional()
+  @IsObject()
+  rules?: Record<string, { itemId?: number; min?: number; max?: number }>;
+}
+
 class AchievementQueryDto extends PageDto {
   @IsOptional()
   @IsString()
@@ -1271,6 +1277,24 @@ export class AdminController {
     return ResponseDto.success(
       await this.shopRecycleService.updateConfig(body),
       "更新回收配置成功",
+    );
+  }
+
+  @Get("config/decompose")
+  async getDecomposeConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getDecomposeConfig(),
+      "获取分解配置成功",
+    );
+  }
+
+  @Patch("config/decompose")
+  async updateDecomposeConfig(
+    @Body() body: DecomposeConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateDecomposeConfig(body),
+      "更新分解配置成功",
     );
   }
 

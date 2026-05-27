@@ -42,11 +42,18 @@ import {
   RechargeRecord,
   RechargeRecordStatus,
 } from "src/entity/rechargeRecord.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import {
+  DECOMPOSE_CONFIG_KEY,
+  DECOMPOSE_CONFIG_RARITIES,
+  DecomposeConfig,
+  normalizeDecomposeConfig,
+} from "src/card/decompose-config";
 
 export interface PageQuery {
   page?: number;
@@ -114,6 +121,9 @@ export class AdminService {
     @Optional()
     @InjectRepository(TradeConfig)
     private readonly tradeConfigRepository?: Repository<TradeConfig>,
+    @Optional()
+    @InjectRepository(SystemConfig)
+    private readonly systemConfigRepository?: Repository<SystemConfig>,
     @Optional()
     @InjectRepository(RechargeConfig)
     private readonly rechargeConfigRepository?: Repository<RechargeConfig>,
@@ -1217,6 +1227,29 @@ export class AdminService {
     return repository.save(config);
   }
 
+  async getDecomposeConfig() {
+    return this.decorateDecomposeConfig(await this.readDecomposeConfig());
+  }
+
+  async updateDecomposeConfig(body: unknown) {
+    const repository = this.mustSystemConfigRepository();
+    const config = normalizeDecomposeConfig(body);
+    await this.assertDecomposeConfig(config);
+    let row = await repository.findOne({
+      where: { key: DECOMPOSE_CONFIG_KEY },
+    });
+    if (!row) {
+      row = repository.create({
+        key: DECOMPOSE_CONFIG_KEY,
+        description: "卡片分解默认产出配置",
+      });
+    }
+    row.value = JSON.stringify(config);
+    row.description = "卡片分解默认产出配置";
+    await repository.save(row);
+    return this.decorateDecomposeConfig(config);
+  }
+
   async getRechargeConfig() {
     const config = await this.ensureRechargeConfig();
     return this.toRechargeConfigView(config);
@@ -1552,6 +1585,82 @@ export class AdminService {
     return config;
   }
 
+  private async readDecomposeConfig(): Promise<DecomposeConfig> {
+    const row = await this.mustSystemConfigRepository().findOne({
+      where: { key: DECOMPOSE_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return normalizeDecomposeConfig(null);
+    }
+    try {
+      return normalizeDecomposeConfig(JSON.parse(row.value));
+    } catch {
+      return normalizeDecomposeConfig(null);
+    }
+  }
+
+  private async decorateDecomposeConfig(config: DecomposeConfig) {
+    const itemIds = DECOMPOSE_CONFIG_RARITIES.map(
+      (rarity) => config.rules[rarity].itemId,
+    ).filter((itemId) => itemId > 0);
+    const items =
+      itemIds.length > 0
+        ? await this.dropRepository.find({ where: { id: In(itemIds) } })
+        : [];
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+
+    return {
+      rules: DECOMPOSE_CONFIG_RARITIES.reduce(
+        (result, rarity) => {
+          const rule = config.rules[rarity];
+          const item = itemMap.get(rule.itemId);
+          result[rarity] = {
+            ...rule,
+            itemName: item?.drop_name || "",
+          };
+          return result;
+        },
+        {} as Record<string, unknown>,
+      ),
+    };
+  }
+
+  private async assertDecomposeConfig(config: DecomposeConfig) {
+    const itemIds = [
+      ...new Set(
+        DECOMPOSE_CONFIG_RARITIES.map((rarity) => config.rules[rarity].itemId)
+          .filter((itemId) => itemId > 0),
+      ),
+    ];
+    const items =
+      itemIds.length > 0
+        ? await this.dropRepository.find({ where: { id: In(itemIds) } })
+        : [];
+    const itemMap = new Map(items.map((item) => [item.id, item]));
+
+    DECOMPOSE_CONFIG_RARITIES.forEach((rarity) => {
+      const rule = config.rules[rarity];
+      if (!Number.isInteger(rule.min) || rule.min < 1) {
+        throw new Error(`${rarity} 分解最小数量必须为正整数`);
+      }
+      if (!Number.isInteger(rule.max) || rule.max < rule.min) {
+        throw new Error(`${rarity} 分解最大数量必须大于等于最小数量`);
+      }
+      if (rule.itemId > 0) {
+        const item = itemMap.get(rule.itemId);
+        if (!item) {
+          throw new Error(`${rarity} 分解碎片不存在`);
+        }
+        if (item.drop_type !== 0) {
+          throw new Error(`${rarity} 分解产出只能选择卡片碎片`);
+        }
+        if (item.disabled === true) {
+          throw new Error(`${rarity} 分解碎片已禁用`);
+        }
+      }
+    });
+  }
+
   private async ensureRechargeConfig() {
     const repository = this.mustRechargeConfigRepository();
     let config = await repository.findOne({ where: { id: 1 } });
@@ -1745,6 +1854,13 @@ export class AdminService {
       throw new Error("交易配置仓库未初始化");
     }
     return this.tradeConfigRepository;
+  }
+
+  private mustSystemConfigRepository() {
+    if (!this.systemConfigRepository) {
+      throw new Error("系统配置仓库未初始化");
+    }
+    return this.systemConfigRepository;
   }
 
   private mustRechargeConfigRepository() {

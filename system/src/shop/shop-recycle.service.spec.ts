@@ -198,7 +198,7 @@ describe("ShopRecycleService", () => {
     expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
   });
 
-  it("挂售中的卡不参与可回收数量", async () => {
+  it("挂售中的卡不会被回收但会作为保留卡", async () => {
     const userCards = [createUserCard(1, "SSR"), createUserCard(2, "SSR")];
     const { service, repositories, pointLedgerService } = createService({
       userCards,
@@ -212,12 +212,14 @@ describe("ShopRecycleService", () => {
         poolId: 1,
         count: 1,
       }),
-    ).rejects.toThrow("可回收数量不足");
-    expect(repositories.userCardRepository.save).not.toHaveBeenCalled();
-    expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
+    ).resolves.toEqual(expect.objectContaining({ count: 1 }));
+    expect(repositories.userCardRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({ card_uuid: "card-2", delete_flag: true }),
+    ]);
+    expect(pointLedgerService.applyChange).toHaveBeenCalled();
   });
 
-  it("锁定卡不参与可回收数量", async () => {
+  it("锁定卡不会被回收但会作为保留卡", async () => {
     const lockedCard = createUserCard(1, "SSR");
     lockedCard.locked = true;
     const userCards = [lockedCard, createUserCard(2, "SSR")];
@@ -232,9 +234,11 @@ describe("ShopRecycleService", () => {
         poolId: 1,
         count: 1,
       }),
-    ).rejects.toThrow("可回收数量不足");
-    expect(repositories.userCardRepository.save).not.toHaveBeenCalled();
-    expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
+    ).resolves.toEqual(expect.objectContaining({ count: 1 }));
+    expect(repositories.userCardRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({ card_uuid: "card-2", delete_flag: true }),
+    ]);
+    expect(pointLedgerService.applyChange).toHaveBeenCalled();
   });
 
   it("回收预览会排除锁定卡", async () => {
@@ -246,7 +250,7 @@ describe("ShopRecycleService", () => {
 
     await expect(service.getRecyclePreview("u1", 1, "R")).resolves.toEqual(
       expect.objectContaining({
-        availableCount: 1,
+        availableCount: 2,
       }),
     );
   });

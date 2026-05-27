@@ -371,6 +371,15 @@
           :fields="shopRecycleConfigFields"
         />
 
+        <ConfigPanel
+          v-else-if="active === 'decompose-config'"
+          title="分解配置"
+          description="配置各稀有度卡片分解后的默认碎片与数量范围。"
+          endpoint="/admin/config/decompose"
+          :fields="decomposeConfigFields"
+          :item-options="itemOptions"
+        />
+
         <AdminTable
           v-else-if="active === 'trade-listings'"
           title="交易挂单"
@@ -520,6 +529,7 @@ import {
 import {
   achievementFields,
   createCardFields,
+  decomposeConfigFields,
   defaultPageKey,
   dropFields,
   exchangeItemFields,
@@ -764,6 +774,13 @@ const pageDefinitions = computed(() => [
     description: "配置卡片回收开关和稀有度价格。",
     group: "交易与支付",
     icon: Shop,
+  },
+  {
+    key: "decompose-config",
+    label: "分解配置",
+    description: "配置各稀有度卡片分解后的默认碎片产出。",
+    group: "系统配置",
+    icon: Setting,
   },
   {
     key: "trade-listings",

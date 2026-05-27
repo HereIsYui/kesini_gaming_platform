@@ -63,6 +63,22 @@ describe("TradeService", () => {
               can_sell: true,
               delete_flag: false,
             }),
+            find: jest.fn().mockResolvedValue([
+              {
+                uid: "seller",
+                card_uuid: "card-uuid",
+                card_id: "7",
+                card_level: "SSR",
+                delete_flag: false,
+              },
+              {
+                uid: "seller",
+                card_uuid: "reserve-card",
+                card_id: "7",
+                card_level: "SSR",
+                delete_flag: false,
+              },
+            ]),
           }),
         ],
         [
@@ -243,6 +259,15 @@ describe("TradeService", () => {
                 can_sell: true,
                 delete_flag: false,
               },
+              {
+                uid: "seller",
+                card_uuid: "locked-card",
+                card_id: "7",
+                card_level: "SSR",
+                can_sell: true,
+                delete_flag: false,
+                locked: true,
+              },
             ]),
           }),
         ],
@@ -293,6 +318,78 @@ describe("TradeService", () => {
     );
   });
 
+  it("UR卡片不能上架交易市场", async () => {
+    const { service } = createCreateListingService({
+      userCard: { card_level: "UR" },
+      ownedCards: [
+        {
+          uid: "seller",
+          card_uuid: "card-uuid",
+          card_id: "7",
+          card_level: "UR",
+          delete_flag: false,
+        },
+        {
+          uid: "seller",
+          card_uuid: "reserve-card",
+          card_id: "7",
+          card_level: "UR",
+          delete_flag: false,
+        },
+      ],
+    });
+
+    await expect(service.createListing("seller", "card-uuid", 100)).rejects.toThrow(
+      "UR卡片禁止上架交易市场",
+    );
+  });
+
+  it("堆叠挂售拒绝选择UR卡片", async () => {
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(
+      service.createRandomListing("seller", {
+        cardId: 7,
+        rarity: "UR",
+        poolId: 2,
+        price: 100,
+      }),
+    ).rejects.toThrow("UR卡片禁止上架交易市场");
+  });
+
+  it("最后一张同稀有度卡片不能挂售", async () => {
+    const { service } = createCreateListingService({
+      ownedCards: [
+        {
+          uid: "seller",
+          card_uuid: "card-uuid",
+          card_id: "7",
+          card_level: "SSR",
+          delete_flag: false,
+        },
+      ],
+    });
+
+    await expect(service.createListing("seller", "card-uuid", 100)).rejects.toThrow(
+      "至少保留一张SSR卡片，不能挂售",
+    );
+  });
+
   it("购买成功会扣买家星穹币、给卖家实收并保持UUID不变", async () => {
     const listing = {
       id: 1,
@@ -309,6 +406,7 @@ describe("TradeService", () => {
       uid: "seller",
       card_uuid: "card-uuid",
       card_id: "7",
+      card_level: "SSR",
       delete_flag: false,
     };
     const buyer = { uid: "buyer", point: 120 };
@@ -320,6 +418,16 @@ describe("TradeService", () => {
     });
     const userCardRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(userCard),
+      find: jest.fn().mockResolvedValue([
+        userCard,
+        {
+          uid: "seller",
+          card_uuid: "reserve-card",
+          card_id: "7",
+          card_level: "SSR",
+          delete_flag: false,
+        },
+      ]),
     });
     const listingRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(listing),
@@ -353,6 +461,7 @@ describe("TradeService", () => {
               card_name: "测试卡",
               card_desc: "描述",
               card_type: 0,
+              card_level: "SSR",
               pool: 2,
             }),
           }),
@@ -448,6 +557,150 @@ describe("TradeService", () => {
     expect(listingRepository.save).not.toHaveBeenCalled();
   });
 
+  it("UR历史挂单不能继续交易", async () => {
+    const listingRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        seller_uid: "seller",
+        card_uuid: "card-uuid",
+        card_id: 7,
+        card_level: "UR",
+        price: 100,
+        fee_rate: 0,
+        status: "active",
+      }),
+      save: jest.fn(),
+    });
+    const userCardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "seller",
+        card_uuid: "card-uuid",
+        card_id: "7",
+        card_level: "UR",
+        delete_flag: false,
+      }),
+      save: jest.fn(),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn(async ({ where }) =>
+        where.uid === "buyer"
+          ? { uid: "buyer", point: 120 }
+          : { uid: "seller", point: 0 },
+      ),
+      save: jest.fn(),
+    });
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+        [TradeListing, listingRepository],
+        [UserCard, userCardRepository],
+        [User, userRepository],
+        [
+          CardItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 7,
+              card_name: "UR卡",
+              card_level: "UR",
+              pool: 2,
+            }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.buyListing("buyer", 1)).rejects.toThrow(
+      "UR卡片禁止交易",
+    );
+    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+    expect(listingRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("成交时仍会保护卖家的最后一张同稀有度卡片", async () => {
+    const listingRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        seller_uid: "seller",
+        card_uuid: "card-uuid",
+        card_id: 7,
+        card_level: "SSR",
+        price: 100,
+        fee_rate: 0,
+        status: "active",
+      }),
+      save: jest.fn(),
+    });
+    const userCard = {
+      uid: "seller",
+      card_uuid: "card-uuid",
+      card_id: "7",
+      card_level: "SSR",
+      delete_flag: false,
+    };
+    const userCardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(userCard),
+      find: jest.fn().mockResolvedValue([userCard]),
+      save: jest.fn(),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn(async ({ where }) =>
+        where.uid === "buyer"
+          ? { uid: "buyer", point: 120 }
+          : { uid: "seller", point: 0 },
+      ),
+      save: jest.fn(),
+    });
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+        [TradeListing, listingRepository],
+        [UserCard, userCardRepository],
+        [User, userRepository],
+        [
+          CardItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 7,
+              card_name: "测试卡",
+              card_level: "SSR",
+              pool: 2,
+            }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.buyListing("buyer", 1)).rejects.toThrow(
+      "至少保留一张SSR卡片，不能出售",
+    );
+    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+    expect(listingRepository.save).not.toHaveBeenCalled();
+  });
+
   it("取消挂售只允许取消交易中的挂单", async () => {
     const listing = {
       id: 1,
@@ -474,10 +727,22 @@ describe("TradeService", () => {
 function createCreateListingService({
   activeListing = null,
   userCard = {},
+  ownedCards,
 }: {
   activeListing?: Record<string, any> | null;
   userCard?: Record<string, any>;
+  ownedCards?: Record<string, any>[];
 }) {
+  const baseUserCard = {
+    uid: "seller",
+    card_uuid: "card-uuid",
+    card_id: "7",
+    card_level: "SSR",
+    can_sell: true,
+    delete_flag: false,
+    locked: false,
+    ...userCard,
+  };
   const service = createService(
     new Map<any, any>([
       [
@@ -501,16 +766,19 @@ function createCreateListingService({
       [
         UserCard,
         createRepository({
-          findOne: jest.fn().mockResolvedValue({
-            uid: "seller",
-            card_uuid: "card-uuid",
-            card_id: "7",
-            card_level: "SSR",
-            can_sell: true,
-            delete_flag: false,
-            locked: false,
-            ...userCard,
-          }),
+          findOne: jest.fn().mockResolvedValue(baseUserCard),
+          find: jest.fn().mockResolvedValue(
+            ownedCards || [
+              baseUserCard,
+              {
+                uid: "seller",
+                card_uuid: "reserve-card",
+                card_id: "7",
+                card_level: baseUserCard.card_level,
+                delete_flag: false,
+              },
+            ],
+          ),
         }),
       ],
       [

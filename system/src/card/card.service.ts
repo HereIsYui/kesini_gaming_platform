@@ -12,6 +12,7 @@ import { DropItem } from "src/entity/drop.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import {
   CardRarity,
   DrawCosts,
@@ -25,6 +26,11 @@ import {
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
 import { GachaConfigService } from "./gacha-config.service";
+import {
+  DECOMPOSE_CONFIG_KEY,
+  isDecomposeConfigRarity,
+  normalizeDecomposeConfig,
+} from "./decompose-config";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
@@ -41,6 +47,10 @@ type DecomposeCandidate = {
   userCard: UserCard;
   card: CardItem;
   rarity: CardRarity;
+};
+type DecomposeCandidateGroup = {
+  candidates: DecomposeCandidate[];
+  totalOwned: number;
 };
 type UserCardGroup = {
   cardId: number;
@@ -859,15 +869,28 @@ export class CardService {
       );
     });
 
-    return Array.from(groupMap.values()).sort((left, right) => {
-      const rightTime = right.latestObtainedAt?.getTime() || 0;
-      const leftTime = left.latestObtainedAt?.getTime() || 0;
-      return (
-        rightTime - leftTime ||
-        right.cardId - left.cardId ||
-        this.getRarityRank(right.cardLevel) - this.getRarityRank(left.cardLevel)
-      );
-    });
+    return Array.from(groupMap.values())
+      .map((group) => {
+        const sellableCount =
+          group.cardLevel === "UR"
+            ? 0
+            : Math.min(group.sellableCount, Math.max(0, group.count - 1));
+        return {
+          ...group,
+          sellableCount,
+          canSell: sellableCount > 0,
+        };
+      })
+      .sort((left, right) => {
+        const rightTime = right.latestObtainedAt?.getTime() || 0;
+        const leftTime = left.latestObtainedAt?.getTime() || 0;
+        return (
+          rightTime - leftTime ||
+          right.cardId - left.cardId ||
+          this.getRarityRank(right.cardLevel) -
+            this.getRarityRank(left.cardLevel)
+        );
+      });
   }
 
   private pickLatestDate(current: Date | null, next?: Date | string | null) {
@@ -979,6 +1002,18 @@ export class CardService {
       if (!card) {
         throw new Error("卡片不存在");
       }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        throw new Error("未知的卡片等级");
+      }
+      await this.assertCanRemoveOwnedCard(
+        manager,
+        uid,
+        userCard,
+        card,
+        rarity,
+        "分解",
+      );
 
       const user = await this.getExistingUser(manager, uid);
       const fragmentDrop = await this.createDecomposeFragmentDrop(
@@ -1188,17 +1223,17 @@ export class CardService {
       countsByRarity,
       skippedListed,
       skippedLocked,
-      reservedCount: candidateGroups.size,
+      reservedCount: this.countBulkReservedCandidates(candidateGroups),
     };
   }
 
   private collectDecomposeCandidates(
-    candidateGroups: Map<string, DecomposeCandidate[]>,
+    candidateGroups: Map<string, DecomposeCandidateGroup>,
   ): DecomposeCandidate[] {
-    return Array.from(candidateGroups.values()).flatMap((candidates) =>
-      [...candidates]
+    return Array.from(candidateGroups.values()).flatMap((group) =>
+      [...group.candidates]
         .sort((left, right) => this.compareUserCardsForKeep(left, right))
-        .slice(1),
+        .slice(this.getBulkKeepCount(group)),
     );
   }
 
@@ -1207,21 +1242,17 @@ export class CardService {
     cards: CardItem[],
     activeListings: TradeListing[],
     selectedRarities: CardRarity[],
-  ): Map<string, DecomposeCandidate[]> {
+  ): Map<string, DecomposeCandidateGroup> {
     const selectedSet = new Set(selectedRarities);
     const activeListingSet = new Set(
       activeListings.map((listing) => listing.card_uuid),
     );
     const cardMap = new Map(cards.map((card) => [card.id, card]));
-    const groups = new Map<string, DecomposeCandidate[]>();
+    const groups = new Map<string, DecomposeCandidateGroup>();
 
     userCards.forEach((userCard) => {
       const card = cardMap.get(Number(userCard.card_id));
-      if (
-        !card ||
-        activeListingSet.has(userCard.card_uuid) ||
-        userCard.locked === true
-      ) {
+      if (!card) {
         return;
       }
       const rarity = this.getEffectiveUserCardRarity(userCard, card);
@@ -1229,12 +1260,35 @@ export class CardService {
         return;
       }
       const key = this.createPoolVersionKey(card.id, rarity);
-      const group = groups.get(key) || [];
-      group.push({ userCard, card, rarity });
+      const group = groups.get(key) || { candidates: [], totalOwned: 0 };
+      group.totalOwned += 1;
+      if (
+        !activeListingSet.has(userCard.card_uuid) &&
+        userCard.locked !== true
+      ) {
+        group.candidates.push({ userCard, card, rarity });
+      }
       groups.set(key, group);
     });
 
     return groups;
+  }
+
+  private getBulkKeepCount(group: DecomposeCandidateGroup) {
+    const protectedCount = Math.max(
+      0,
+      group.totalOwned - group.candidates.length,
+    );
+    return protectedCount > 0 ? 0 : Math.min(1, group.candidates.length);
+  }
+
+  private countBulkReservedCandidates(
+    candidateGroups: Map<string, DecomposeCandidateGroup>,
+  ) {
+    return Array.from(candidateGroups.values()).reduce(
+      (sum, group) => sum + this.getBulkKeepCount(group),
+      0,
+    );
   }
 
   private compareUserCardsForKeep(
@@ -1282,14 +1336,45 @@ export class CardService {
     if (rarity === "UR") {
       throw new Error("UR卡片不可以分解");
     }
-    const fragmentRange = this.getDecomposeFragmentRange(rarity);
+    const decomposeRule = await this.getDecomposeRule(manager, rarity);
+    const fragmentRange = {
+      min: decomposeRule.min,
+      max: decomposeRule.max,
+    };
     const fragmentCount = randomInt(fragmentRange.min, fragmentRange.max + 1);
-    const fragmentItem = await this.findFragmentItem(manager, card);
+    const fragmentItem =
+      decomposeRule.itemId > 0
+        ? await this.findDecomposeConfigFragmentItem(manager, decomposeRule.itemId)
+        : await this.findFragmentItem(manager, card);
     return {
       rarity,
       fragmentCount,
       fragmentItem,
     };
+  }
+
+  private async assertCanRemoveOwnedCard(
+    manager: EntityManager,
+    uid: string,
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    actionLabel: string,
+  ) {
+    const userCards = await manager.getRepository(UserCard).find({
+      where: {
+        uid,
+        card_id: userCard.card_id,
+        delete_flag: false,
+      },
+      lock: { mode: "pessimistic_write" },
+    });
+    const sameRarityCount = userCards.filter(
+      (item) => this.getEffectiveUserCardRarity(item, card) === rarity,
+    ).length;
+    if (sameRarityCount <= 1) {
+      throw new Error(`至少保留一张${rarity}卡片，不能${actionLabel}`);
+    }
   }
 
   private async applyFragmentGain(
@@ -2106,6 +2191,42 @@ export class CardService {
       pageSize,
       totalPages: 0,
     };
+  }
+
+  private async getDecomposeRule(
+    manager: EntityManager,
+    rarity: CardRarity,
+  ) {
+    const fallback = this.getDecomposeFragmentRange(rarity);
+    if (!isDecomposeConfigRarity(rarity)) {
+      return { itemId: 0, ...fallback };
+    }
+
+    try {
+      const row = await manager.getRepository(SystemConfig).findOne({
+        where: { key: DECOMPOSE_CONFIG_KEY },
+      });
+      if (!row?.value) {
+        return { itemId: 0, ...fallback };
+      }
+      const config = normalizeDecomposeConfig(JSON.parse(row.value));
+      return config.rules[rarity] || { itemId: 0, ...fallback };
+    } catch {
+      return { itemId: 0, ...fallback };
+    }
+  }
+
+  private async findDecomposeConfigFragmentItem(
+    manager: EntityManager,
+    itemId: number,
+  ): Promise<DropItem> {
+    const fragmentItem = await manager.getRepository(DropItem).findOne({
+      where: { id: itemId, drop_type: 0, disabled: false },
+    });
+    if (!fragmentItem) {
+      throw new Error("分解配置的碎片物品不存在或已禁用");
+    }
+    return fragmentItem;
   }
 
   private async findFragmentItem(

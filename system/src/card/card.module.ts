@@ -12,6 +12,7 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
@@ -30,6 +31,7 @@ import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
       UserGachaPity,
       GachaPoolConfig,
       TradeListing,
+      SystemConfig,
     ]),
     AuthModule,
     PointLedgerModule,

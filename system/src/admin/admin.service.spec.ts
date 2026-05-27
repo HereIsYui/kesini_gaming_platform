@@ -104,6 +104,7 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.tradeListing,
     repositories.tradeRecord,
     repositories.tradeConfig,
+    repositories.systemConfig,
     repositories.rechargeConfig,
     repositories.rechargeRecord,
     repositories.launchActivityConfig,
@@ -1156,6 +1157,104 @@ describe("AdminService", () => {
     await expect(
       service.updateRechargeConfig({ min_amount: null } as any),
     ).rejects.toThrow("最低充值金额必须为正整数");
+  });
+
+  it("获取分解配置会返回默认规则", async () => {
+    const systemConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const service = createService({
+      systemConfig: systemConfigRepository,
+      drop: createRepository(),
+    });
+
+    await expect(service.getDecomposeConfig()).resolves.toEqual(
+      expect.objectContaining({
+        rules: expect.objectContaining({
+          N: expect.objectContaining({ itemId: 0, min: 1, max: 10 }),
+          SSR: expect.objectContaining({ itemId: 0, min: 40, max: 80 }),
+        }),
+      }),
+    );
+  });
+
+  it("更新分解配置会保存碎片产出规则", async () => {
+    const systemConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, drop_name: "测试碎片", drop_type: 0, disabled: false },
+      ]),
+    });
+    const service = createService({
+      systemConfig: systemConfigRepository,
+      drop: dropRepository,
+    });
+
+    const result = await service.updateDecomposeConfig({
+      rules: {
+        N: { itemId: 9, min: 2, max: 4 },
+      },
+    });
+
+    expect(systemConfigRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "decomposeConfig",
+        description: "卡片分解默认产出配置",
+      }),
+    );
+    const saved = systemConfigRepository.save.mock.calls[0][0];
+    expect(JSON.parse(saved.value).rules.N).toEqual({
+      itemId: 9,
+      min: 2,
+      max: 4,
+    });
+    expect(result.rules.N).toEqual(
+      expect.objectContaining({
+        itemId: 9,
+        itemName: "测试碎片",
+        min: 2,
+        max: 4,
+      }),
+    );
+  });
+
+  it("分解配置只能选择启用的卡片碎片", async () => {
+    const systemConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const disabledDropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 9, drop_name: "旧碎片", drop_type: 0, disabled: true },
+      ]),
+    });
+    const disabledService = createService({
+      systemConfig: systemConfigRepository,
+      drop: disabledDropRepository,
+    });
+
+    await expect(
+      disabledService.updateDecomposeConfig({
+        rules: { N: { itemId: 9, min: 1, max: 1 } },
+      }),
+    ).rejects.toThrow("N 分解碎片已禁用");
+
+    const itemDropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        { id: 10, drop_name: "普通道具", drop_type: 2, disabled: false },
+      ]),
+    });
+    const itemService = createService({
+      systemConfig: systemConfigRepository,
+      drop: itemDropRepository,
+    });
+
+    await expect(
+      itemService.updateDecomposeConfig({
+        rules: { R: { itemId: 10, min: 1, max: 1 } },
+      }),
+    ).rejects.toThrow("R 分解产出只能选择卡片碎片");
   });
 
   it("后台开服活动配置会保存奖励和活动批次", async () => {

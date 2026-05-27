@@ -154,8 +154,18 @@ export class TradeService {
         throw new Error("卡片不存在");
       }
       const pool = await poolRepository.findOne({ where: { id: card.pool } });
-      const rarity =
-        userCard.card_level || this.getHighestRarity(card.card_level || "");
+      const rarity = userCard.card_level
+        ? this.normalizeRarity(userCard.card_level)
+        : this.getHighestRarity(card.card_level || "");
+      this.assertTradableRarity(rarity, "上架交易市场");
+      await this.assertCanRemoveOwnedCard(
+        manager,
+        uid,
+        userCard,
+        card,
+        rarity,
+        "挂售",
+      );
       const listing = listingRepository.create({
         seller_uid: uid,
         buyer_uid: null,
@@ -207,6 +217,7 @@ export class TradeService {
         throw new Error("卡池无效");
       }
       const rarity = this.normalizeRarity(input.rarity);
+      this.assertTradableRarity(rarity, "上架交易市场");
       const userCardRepository = manager.getRepository(UserCard);
       const listingRepository = manager.getRepository(TradeListing);
       const cardRepository = manager.getRepository(CardItem);
@@ -227,7 +238,6 @@ export class TradeService {
         where: {
           uid,
           card_id: String(cardId),
-          can_sell: true,
           delete_flag: false,
         } as any,
         lock: { mode: "pessimistic_write" },
@@ -237,6 +247,9 @@ export class TradeService {
       );
       if (matchedUserCards.length === 0) {
         throw new Error("暂无可挂售卡片");
+      }
+      if (matchedUserCards.length <= 1) {
+        throw new Error(`至少保留一张${rarity}卡片，不能挂售`);
       }
 
       const activeListings = await listingRepository.find({
@@ -251,6 +264,7 @@ export class TradeService {
       );
       const candidates = matchedUserCards.filter(
         (userCard) =>
+          userCard.can_sell === true &&
           userCard.locked !== true &&
           !activeListingSet.has(userCard.card_uuid),
       );
@@ -356,6 +370,18 @@ export class TradeService {
       if (!card) {
         throw new Error("卡片不存在");
       }
+      const rarity = this.normalizeRarity(
+        listing.card_level || this.getUserCardRarity(userCard, card),
+      );
+      this.assertTradableRarity(rarity, "交易");
+      await this.assertCanRemoveOwnedCard(
+        manager,
+        listing.seller_uid,
+        userCard,
+        card,
+        rarity,
+        "出售",
+      );
       const pool = await poolRepository.findOne({ where: { id: card.pool } });
       const feeAmount = this.calculateFee(listing.price, listing.fee_rate);
       const sellerIncome = listing.price - feeAmount;
@@ -722,6 +748,36 @@ export class TradeService {
       throw new Error("稀有度参数无效");
     }
     return normalized as CardRarity;
+  }
+
+  private assertTradableRarity(rarity: CardRarity, actionLabel: string) {
+    if (rarity === "UR") {
+      throw new Error(`UR卡片禁止${actionLabel}`);
+    }
+  }
+
+  private async assertCanRemoveOwnedCard(
+    manager: EntityManager,
+    uid: string,
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    actionLabel: string,
+  ) {
+    const userCards = await manager.getRepository(UserCard).find({
+      where: {
+        uid,
+        card_id: userCard.card_id,
+        delete_flag: false,
+      } as any,
+      lock: { mode: "pessimistic_write" },
+    });
+    const sameRarityCount = userCards.filter(
+      (item) => this.getUserCardRarity(item, card) === rarity,
+    ).length;
+    if (sameRarityCount <= 1) {
+      throw new Error(`至少保留一张${rarity}卡片，不能${actionLabel}`);
+    }
   }
 
   private parseCardLevels(cardLevel: string): CardRarity[] {

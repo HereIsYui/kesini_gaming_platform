@@ -134,7 +134,8 @@ export interface FieldConfig {
     | "json"
     | "imageUpload"
     | "rewards"
-    | "costs";
+    | "costs"
+    | "decomposeConfig";
   options?: SelectOption[];
   helper?: string;
   uploadEndpoint?: string;

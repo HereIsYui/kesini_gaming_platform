@@ -27,6 +27,7 @@ export type PageKey =
   | "recharge-config"
   | "recharge-records"
   | "shop-recycle-config"
+  | "decompose-config"
   | "site-config"
   | "gacha-config";
 
@@ -63,6 +64,7 @@ export const pageKeys: PageKey[] = [
   "recharge-config",
   "recharge-records",
   "shop-recycle-config",
+  "decompose-config",
   "site-config",
   "gacha-config",
 ];
@@ -539,6 +541,21 @@ export const shopRecycleConfigFields: FieldConfig[] = [
   { key: "priceSR", label: "SR 回收价", type: "number", defaultValue: 5 },
   { key: "priceSSR", label: "SSR 回收价", type: "number", defaultValue: 15 },
   { key: "priceUR", label: "UR 回收价", type: "number", defaultValue: 50 },
+];
+
+export const decomposeConfigFields: FieldConfig[] = [
+  {
+    key: "rules",
+    label: "默认分解产出",
+    type: "decomposeConfig",
+    fullWidth: true,
+    defaultValue: {
+      N: { itemId: 0, min: 1, max: 10 },
+      R: { itemId: 0, min: 10, max: 20 },
+      SR: { itemId: 0, min: 20, max: 40 },
+      SSR: { itemId: 0, min: 40, max: 80 },
+    },
+  },
 ];
 
 export const rechargeRecordFields: FieldConfig[] = [

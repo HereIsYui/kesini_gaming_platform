@@ -137,7 +137,10 @@ export class ShopRecycleService {
         (userCard) =>
           userCard.locked !== true && !listedUuidSet.has(userCard.card_uuid),
       );
-      const maxCount = Math.max(0, recyclableCards.length - 1);
+      const maxCount = Math.min(
+        recyclableCards.length,
+        Math.max(0, sameRarityCards.length - 1),
+      );
       if (count > maxCount) {
         throw new Error("可回收数量不足");
       }
@@ -251,7 +254,10 @@ export class ShopRecycleService {
     return {
       cardId: card.id,
       rarity: normalizedRarity,
-      availableCount: Math.max(0, unlistedCount - 1),
+      availableCount: Math.min(
+        unlistedCount,
+        Math.max(0, sameRarityCards.length - 1),
+      ),
     };
   }
 

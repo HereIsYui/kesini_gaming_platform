@@ -61,6 +61,11 @@
             v-model="values[field.key]"
             :item-options="itemOptions"
           />
+          <DecomposeConfigEditor
+            v-else-if="field.type === 'decomposeConfig'"
+            v-model="values[field.key]"
+            :item-options="itemOptions"
+          />
           <small v-if="field.helper" class="form-help">{{ field.helper }}</small>
         </el-form-item>
       </template>
@@ -80,6 +85,7 @@ import { request } from "../api";
 import type { FieldConfig, SelectOption } from "../types";
 import { cloneJson, parseFormJson } from "../utils";
 import RewardEditor from "./RewardEditor.vue";
+import DecomposeConfigEditor from "./DecomposeConfigEditor.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -114,6 +120,9 @@ function buildDefault(data: Record<string, any> | null) {
       }
       if (field.type === "rewards") {
         return [field.key, cloneJson(raw || { points: 0, items: [] })];
+      }
+      if (field.type === "decomposeConfig") {
+        return [field.key, cloneJson(raw || {})];
       }
       if (field.type === "boolean") {
         return [field.key, raw === undefined ? Boolean(field.defaultValue) : raw !== false];

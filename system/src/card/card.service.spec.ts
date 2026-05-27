@@ -19,6 +19,7 @@ import { UserCard } from "src/entity/userCard.entity";
 import { UserHistory } from "src/entity/history.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -589,7 +590,7 @@ describe("CardService 背包筛选", () => {
           cardLevel: "N",
           count: 2,
           listedCount: 0,
-          sellableCount: 2,
+          sellableCount: 1,
           canSell: true,
         }),
         expect.objectContaining({
@@ -1292,6 +1293,7 @@ describe("CardService 卡片锁定", () => {
 
   function createLockService(options: {
     userCard?: Partial<UserCard> | null;
+    userCards?: Partial<UserCard>[];
     activeListing?: Partial<TradeListing> | null;
   } = {}) {
     const userCard = options.userCard === null
@@ -1309,6 +1311,7 @@ describe("CardService 卡片锁定", () => {
         } as UserCard);
     const userCardRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(userCard),
+      find: jest.fn().mockResolvedValue(options.userCards || [userCard].filter(Boolean)),
     });
     const listingRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(options.activeListing || null),
@@ -1395,6 +1398,15 @@ describe("CardService 卡片锁定", () => {
     expect(cardRepository.findOne).not.toHaveBeenCalled();
     expect(userCardRepository.save).not.toHaveBeenCalled();
   });
+
+  it("最后一张同稀有度卡片不能分解", async () => {
+    const { service, userCardRepository } = createLockService();
+
+    await expect(service.decomposeCard("u1", "card-uuid")).rejects.toThrow(
+      "至少保留一张SSR卡片，不能分解",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
 });
 
 describe("CardService 一键分解", () => {
@@ -1412,6 +1424,8 @@ describe("CardService 一键分解", () => {
     overrides: {
       userCards?: Partial<UserCard>[];
       activeListings?: Partial<TradeListing>[];
+      systemConfigRow?: Partial<SystemConfig> | null;
+      extraDropItems?: Partial<DropItem>[];
     } = {},
   ) {
     const cards = [
@@ -1484,6 +1498,7 @@ describe("CardService 一键分解", () => {
       disabled: false,
       default_fragment: true,
     } as DropItem;
+    const dropItems = [fragment, ...((overrides.extraDropItems || []) as DropItem[])];
     const inventory = {
       id: 1,
       user_id: 1,
@@ -1505,10 +1520,39 @@ describe("CardService 一键分解", () => {
       find: jest.fn(async () => activeListings),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn(async ({ where }) =>
-        where.default_fragment === true ? fragment : null,
+      find: jest.fn(async ({ where }) =>
+        dropItems.filter((item) => {
+          if (where?.id !== undefined && item.id !== where.id) {
+            return false;
+          }
+          if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
+            return false;
+          }
+          if (where?.disabled !== undefined && item.disabled !== where.disabled) {
+            return false;
+          }
+          return true;
+        }),
       ),
+      findOne: jest.fn(async ({ where }) => {
+        if (where?.default_fragment === true) {
+          return fragment;
+        }
+        return (
+          dropItems.find((item) => {
+            if (where?.id !== undefined && item.id !== where.id) {
+              return false;
+            }
+            if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
+              return false;
+            }
+            if (where?.disabled !== undefined && item.disabled !== where.disabled) {
+              return false;
+            }
+            return true;
+          }) || null
+        );
+      }),
     });
     const inventoryRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(inventory),
@@ -1520,6 +1564,12 @@ describe("CardService 一键分解", () => {
       [TradeListing, tradeListingRepository],
       [DropItem, dropRepository],
       [UserInventory, inventoryRepository],
+      [
+        SystemConfig,
+        createRepository({
+          findOne: jest.fn().mockResolvedValue(overrides.systemConfigRow || null),
+        }),
+      ],
     ]);
     const manager = {
       getRepository: jest.fn((entity) => repositories.get(entity)),
@@ -1601,9 +1651,9 @@ describe("CardService 一键分解", () => {
 
     const result = await service.previewBulkDecompose("u1", ["N"]);
 
-    expect(result.total).toBe(1);
+    expect(result.total).toBe(2);
     expect(result.skippedLocked).toBe(1);
-    expect(result.countsByRarity).toEqual(expect.objectContaining({ N: 1 }));
+    expect(result.countsByRarity).toEqual(expect.objectContaining({ N: 2 }));
   });
 
   it("一键分解会批量删除卡片并聚合碎片入账", async () => {
@@ -1632,6 +1682,38 @@ describe("CardService 一键分解", () => {
     );
     expect(inventoryRepository.save).toHaveBeenCalledTimes(1);
     expect(inventory.num).toBe(10 + result.fragments[0].count);
+  });
+
+  it("一键分解会使用后台分解配置的碎片和数量范围", async () => {
+    const { service } = createBulkDecomposeService({
+      systemConfigRow: {
+        key: "decomposeConfig",
+        value: JSON.stringify({
+          rules: {
+            N: { itemId: 9, min: 3, max: 3 },
+          },
+        }),
+      },
+      extraDropItems: [
+        {
+          id: 9,
+          drop_name: "N级配置碎片",
+          drop_type: 0,
+          disabled: false,
+        },
+      ],
+    });
+
+    const result = await service.bulkDecomposeCards("u1", ["N"]);
+
+    expect(result.decomposed).toBe(1);
+    expect(result.fragments).toEqual([
+      expect.objectContaining({
+        itemId: 9,
+        itemName: "N级配置碎片",
+        count: 3,
+      }),
+    ]);
   });
 
   it("一键分解拒绝选择 UR", async () => {
