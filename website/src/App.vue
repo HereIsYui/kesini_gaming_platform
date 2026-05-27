@@ -6,6 +6,7 @@ import {
   Coins,
   Gift,
   History,
+  Lock,
   LoaderCircle,
   LogIn,
   LogOut,
@@ -20,6 +21,7 @@ import {
   Sun,
   Ticket,
   Trophy,
+  Unlock,
   UserRound,
   WandSparkles,
 } from "@lucide/vue";
@@ -44,6 +46,8 @@ import type {
   AchievementNotification,
   AchievementRecord,
   BulkDecomposeResponse,
+  DrawHistoryRecord,
+  DrawHistoryResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
   GachaResult,
@@ -162,6 +166,9 @@ const poolDetailError = ref("");
 const poolDetailPool = ref<PoolInfo | null>(null);
 const poolDetailCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
+const drawHistory = ref<DrawHistoryResponse | null>(null);
+const drawHistoryOpen = ref(false);
+const drawHistoryPage = ref(1);
 const userCards = ref<UserCardsResponse | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
@@ -255,6 +262,7 @@ const busy = reactive({
   recharge: false,
   bulkDecompose: false,
   bulkDecomposePreview: false,
+  drawHistory: false,
   launchActivity: false,
   signIn: false,
 });
@@ -312,6 +320,31 @@ const selectedPool = computed(() =>
 );
 const selectedDrawCosts = computed(
   () => selectedPool.value?.drawCosts || { once: 10, ten: 100 },
+);
+const selectedPoolPity = computed(() => getPityForPool(activePoolId.value));
+const selectedHardPity = computed(
+  () => selectedPoolPity.value?.hard || selectedPoolPity.value?.soft || null,
+);
+const selectedPityPercent = computed(() => {
+  const rule = selectedHardPity.value;
+  if (!rule?.count) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    Math.min(100, Math.round((Number(rule.current || 0) / rule.count) * 100)),
+  );
+});
+const selectedPityText = computed(() => {
+  const rule = selectedHardPity.value;
+  if (!rule) {
+    return "当前卡池暂无保底进度";
+  }
+  const label = selectedPoolPity.value?.hard ? "硬保底" : "保底";
+  return `距离${label} ${rule.guaranteedRarity} 还 ${rule.remaining} 抽`;
+});
+const poolDetailPity = computed(() =>
+  getPityForPool(poolDetailPool.value?.id || activePoolId.value),
 );
 const poolDetailProbabilityRows = computed(() => {
   const probabilities =
@@ -535,6 +568,12 @@ const bulkDecomposePreviewTotal = computed(
 const bulkDecomposeReservedCount = computed(
   () => bulkDecomposePreview.value?.reservedCount || 0,
 );
+const drawHistoryRows = computed<DrawHistoryRecord[]>(
+  () => drawHistory.value?.list || [],
+);
+const drawHistoryTotalPages = computed(
+  () => drawHistory.value?.totalPages || 1,
+);
 const tradeTotalPages = ref(1);
 const myTradeTotalPages = ref(1);
 const tradeRecordTotalPages = ref(1);
@@ -756,6 +795,9 @@ function logout() {
   token.value = "";
   currentUser.value = null;
   stats.value = null;
+  drawHistory.value = null;
+  drawHistoryOpen.value = false;
+  drawHistoryPage.value = 1;
   userCards.value = null;
   catalogItems.value = null;
   catalogError.value = "";
@@ -919,6 +961,49 @@ async function loadPrivateData() {
 
 async function loadStats() {
   stats.value = await request<UserGachaStats>("/card/stats");
+}
+
+async function loadDrawHistory(page = drawHistoryPage.value) {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.drawHistory = true;
+  try {
+    const data = await request<DrawHistoryResponse>(
+      `/card/history${toQuery({ page, pageSize: 10 })}`,
+    );
+    drawHistory.value = data;
+    drawHistoryPage.value = data.page || page;
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.drawHistory = false;
+  }
+}
+
+async function openDrawHistory() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再查看抽卡历史");
+    return;
+  }
+  drawHistoryOpen.value = true;
+  drawHistoryPage.value = 1;
+  await loadDrawHistory(1);
+}
+
+function closeDrawHistory() {
+  drawHistoryOpen.value = false;
+}
+
+function changeDrawHistoryPage(delta: number) {
+  const next = Math.min(
+    Math.max(1, drawHistoryPage.value + delta),
+    drawHistoryTotalPages.value,
+  );
+  if (next === drawHistoryPage.value) {
+    return;
+  }
+  void loadDrawHistory(next);
 }
 
 function ensureBagPoolFilter() {
@@ -1533,6 +1618,26 @@ function getPoolName(poolId?: number | null) {
   return pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || "";
 }
 
+function getPityForPool(poolId?: number | null) {
+  const normalizedPoolId = Number(poolId || 0);
+  if (!normalizedPoolId) {
+    return null;
+  }
+  return (
+    stats.value?.pity?.find((item) => Number(item.poolId) === normalizedPoolId) ||
+    null
+  );
+}
+
+function pityRuleLabel(
+  rule?: { count: number; guaranteedRarity: string; remaining: number } | null,
+) {
+  if (!rule) {
+    return "暂无保底规则";
+  }
+  return `${rule.count} 抽内必得 ${rule.guaranteedRarity}，当前还差 ${rule.remaining} 抽`;
+}
+
 function buildCardShareText(card: {
   cardName: string;
   cardDesc?: string | null;
@@ -1580,6 +1685,44 @@ function bagActionKey(card: UserCardsResponse["list"][number]) {
 
 function openBagCardActions(card: UserCardsResponse["list"][number]) {
   activeBagActionKey.value = bagActionKey(card);
+}
+
+function cardLockAction(card: UserCardsResponse["list"][number]) {
+  const hasLocked = Number(card.lockedCount || 0) > 0 || card.locked === true;
+  const uuid = hasLocked
+    ? card.unlockableUuid || card.uuid || null
+    : card.lockableUuid || card.uuid || null;
+  return {
+    uuid,
+    locked: !hasLocked,
+    label: hasLocked ? "解锁" : "锁定",
+  };
+}
+
+async function toggleCardLock(card: UserCardsResponse["list"][number]) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再操作卡片");
+    return;
+  }
+  const action = cardLockAction(card);
+  if (!action.uuid) {
+    notify("info", "当前没有可切换锁定状态的卡片");
+    return;
+  }
+  busy.assets = true;
+  try {
+    await request(`/card/user/cards/${action.uuid}/lock`, {
+      method: "PATCH",
+      body: JSON.stringify({ locked: action.locked }),
+    });
+    notify("success", action.locked ? "卡片已锁定" : "卡片已解锁");
+    await loadUserCards();
+    await loadBulkDecomposePreview();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.assets = false;
+  }
 }
 
 async function copyShareText() {
@@ -1685,13 +1828,17 @@ async function bulkDecomposeCards() {
     preview.skippedListed > 0
       ? `；${preview.skippedListed} 张挂售中卡片会跳过`
       : "";
+  const lockedText =
+    Number(preview.skippedLocked || 0) > 0
+      ? `；${preview.skippedLocked} 张锁定卡片会跳过`
+      : "";
   const reservedText =
     Number(preview.reservedCount || 0) > 0
       ? `；保留 ${preview.reservedCount} 张`
       : "";
   if (
     !window.confirm(
-      `确认分解 ${preview.total} 张卡片（${detail}）${skippedText}${reservedText}？`,
+      `确认分解 ${preview.total} 张卡片（${detail}）${skippedText}${lockedText}${reservedText}？`,
     )
   ) {
     return;
@@ -2358,6 +2505,17 @@ function leaderboardRankLabel(rank?: number) {
                   <strong>{{ selectedDrawCosts.ten }} 星穹币</strong>
                 </div>
               </div>
+              <div
+                v-if="isAuthed"
+                class="pity-progress-card"
+                :style="{ '--pity-progress': `${selectedPityPercent}%` }"
+              >
+                <div>
+                  <span>保底进度</span>
+                  <strong>{{ selectedPityText }}</strong>
+                </div>
+                <i aria-hidden="true"></i>
+              </div>
               <button
                 class="primary-action"
                 type="button"
@@ -2659,6 +2817,13 @@ function leaderboardRankLabel(rank?: number) {
                     <strong>{{ bulkDecomposePreview.skippedListed }} 张</strong>
                   </div>
                   <div
+                    v-if="bulkDecomposePreview?.skippedLocked"
+                    class="bulk-preview-line muted"
+                  >
+                    <span>锁定跳过</span>
+                    <strong>{{ bulkDecomposePreview.skippedLocked }} 张</strong>
+                  </div>
+                  <div
                     v-if="bulkDecomposeReservedCount"
                     class="bulk-preview-line muted"
                   >
@@ -2770,11 +2935,15 @@ function leaderboardRankLabel(rank?: number) {
                     <span v-if="card.listedCount"
                       >挂售 {{ card.listedCount }}</span
                     >
+                    <span v-if="card.lockedCount || card.locked">
+                      已锁定 {{ card.lockedCount || 1 }}
+                    </span>
                   </div>
                 </div>
                 <div class="card-action-overlay" aria-label="卡片操作">
                   <span class="card-action-stock">
                     可售 {{ card.sellableCount || 0 }}
+                    <b v-if="card.lockedCount">锁定 {{ card.lockedCount }}</b>
                   </span>
                   <button
                     v-if="hasCardIntroDetail(card.cardDesc)"
@@ -2792,6 +2961,20 @@ function leaderboardRankLabel(rank?: number) {
                     "
                   >
                     <Package :size="16" />
+                  </button>
+                  <button
+                    class="card-icon-action"
+                    type="button"
+                    :title="cardLockAction(card).label"
+                    :aria-label="cardLockAction(card).label"
+                    :disabled="!cardLockAction(card).uuid || busy.assets"
+                    @click.stop="toggleCardLock(card)"
+                  >
+                    <Unlock
+                      v-if="Number(card.lockedCount || 0) > 0 || card.locked"
+                      :size="16"
+                    />
+                    <Lock v-else :size="16" />
                   </button>
                   <button
                     class="card-icon-action"
@@ -3913,7 +4096,15 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">最近记录</p>
             <h2>抽卡脉冲</h2>
           </div>
-          <History :size="22" />
+          <button
+            class="secondary-action compact"
+            type="button"
+            :disabled="!isAuthed || busy.drawHistory"
+            @click="openDrawHistory"
+          >
+            <History :size="16" />
+            查看全部
+          </button>
         </div>
         <div v-if="!stats?.recentDraws?.length" class="empty-mini">
           暂无最近抽卡记录
@@ -4050,6 +4241,34 @@ function leaderboardRankLabel(rank?: number) {
                     </div>
                     <strong>{{ formatPercent(item.value) }}</strong>
                   </div>
+                </div>
+              </section>
+
+              <section class="pool-detail-section">
+                <div class="section-title-row">
+                  <div>
+                    <p class="eyebrow">保底规则</p>
+                    <h3>当前进度</h3>
+                  </div>
+                </div>
+                <div v-if="poolDetailPity" class="pool-pity-summary">
+                  <article v-if="poolDetailPity.soft">
+                    <span>阶段保底</span>
+                    <strong>{{ pityRuleLabel(poolDetailPity.soft) }}</strong>
+                  </article>
+                  <article v-if="poolDetailPity.hard">
+                    <span>硬保底</span>
+                    <strong>{{ pityRuleLabel(poolDetailPity.hard) }}</strong>
+                  </article>
+                  <article v-if="!poolDetailPity.soft && !poolDetailPity.hard">
+                    <span>保底规则</span>
+                    <strong>当前卡池暂无保底规则</strong>
+                  </article>
+                </div>
+                <div v-else class="empty-state compact">
+                  <ShieldCheck :size="26" />
+                  <strong>登录后查看个人保底进度</strong>
+                  <span>抽取后这里会记录当前卡池的保底进度。</span>
                 </div>
               </section>
 
@@ -4524,6 +4743,98 @@ function leaderboardRankLabel(rank?: number) {
             </button>
             <button class="primary-action" type="button" @click="copyShareText">
               复制
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="drawHistoryOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeDrawHistory"
+      >
+        <section
+          class="trade-listing-modal draw-history-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="抽卡历史"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">抽卡历史</p>
+              <h2>全部记录</h2>
+              <span>
+                第 {{ drawHistoryPage }} / {{ drawHistoryTotalPages }} 页 · 共
+                {{ drawHistory?.total || 0 }} 条
+              </span>
+            </div>
+            <button class="modal-close" type="button" @click="closeDrawHistory">
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body draw-history-body">
+            <div v-if="busy.drawHistory" class="empty-state compact">
+              <LoaderCircle :size="26" class="spin" />
+              <strong>正在整理记录</strong>
+              <span>抽卡明细加载中。</span>
+            </div>
+            <div v-else-if="drawHistoryRows.length === 0" class="empty-state compact">
+              <History :size="26" />
+              <strong>暂无抽卡历史</strong>
+              <span>完成抽取后会出现在这里。</span>
+            </div>
+            <div v-else class="draw-history-list">
+              <article
+                v-for="record in drawHistoryRows"
+                :key="record.id"
+                class="draw-history-record"
+              >
+                <header>
+                  <strong>{{ record.count }} 抽</strong>
+                  <time>{{ formatDate(record.createdAt) }}</time>
+                </header>
+                <div class="draw-history-cards">
+                  <div
+                    v-for="detail in record.details"
+                    :key="detail.cardUuid || `${record.id}-${detail.cardId}-${detail.rarity}`"
+                    class="draw-history-card"
+                    :class="rarityClass(detail.rarity)"
+                  >
+                    <span class="rarity-badge">{{ detail.rarity }}</span>
+                    <strong>{{ detail.cardName }}</strong>
+                    <small>{{ detail.cardUuid || "旧记录" }}</small>
+                    <div v-if="detail.isUp || detail.isPity" class="tag-row">
+                      <span v-if="detail.isUp">UP</span>
+                      <span v-if="detail.isPity">保底</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.drawHistory || drawHistoryPage <= 1"
+              @click="changeDrawHistoryPage(-1)"
+            >
+              <ChevronLeft :size="16" />
+              上一页
+            </button>
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="
+                busy.drawHistory || drawHistoryPage >= drawHistoryTotalPages
+              "
+              @click="changeDrawHistoryPage(1)"
+            >
+              下一页
+              <ChevronRight :size="16" />
             </button>
           </footer>
         </section>

@@ -729,6 +729,52 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.pity-progress-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(150, 242, 255, 0.24);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(84, 216, 255, 0.13), transparent),
+    rgba(255, 255, 255, 0.055);
+  padding: 10px 12px;
+}
+
+.pity-progress-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pity-progress-card span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.pity-progress-card strong {
+  color: var(--text);
+  font-size: 13px;
+  text-align: right;
+}
+
+.pity-progress-card i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pity-progress-card i::before {
+  content: "";
+  display: block;
+  width: var(--pity-progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #ffe6a3);
+}
+
 .auth-panel {
   display: flex;
   flex-direction: column;
@@ -2120,6 +2166,12 @@ h3 {
   white-space: nowrap;
 }
 
+.card-action-stock b {
+  margin-left: 8px;
+  color: #ffe6a3;
+  font: inherit;
+}
+
 :root[data-theme="light"] .card-action-stock {
   border-color: rgba(48, 70, 104, 0.12);
   color: #40506a;
@@ -2966,6 +3018,34 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.pool-pity-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.pool-pity-summary article {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(196, 220, 255, 0.12);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--chip-bg);
+  padding: 10px 12px;
+}
+
+.pool-pity-summary span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.pool-pity-summary strong {
+  color: var(--text);
+  font-size: 13px;
+  text-align: right;
+}
+
 .pool-card-groups {
   display: grid;
   gap: 14px;
@@ -3022,6 +3102,74 @@ h3 {
   line-height: 1.55;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.draw-history-modal {
+  width: min(920px, calc(100vw - 28px));
+  max-height: min(820px, calc(100dvh - 36px));
+}
+
+.draw-history-body {
+  max-height: min(620px, calc(100dvh - 210px));
+  overflow: auto;
+}
+
+.draw-history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.draw-history-record {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.draw-history-record header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draw-history-record time {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.draw-history-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.draw-history-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(196, 220, 255, 0.12);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--chip-bg);
+  padding: 10px;
+}
+
+.draw-history-card strong,
+.draw-history-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draw-history-card small {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.draw-history-card .tag-row {
+  margin-top: 2px;
 }
 
 .leaderboard-content {

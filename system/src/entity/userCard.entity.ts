@@ -40,6 +40,10 @@ export class UserCard {
   @Column({ default: false })
   delete_flag: boolean;
 
+  // 收藏锁定：锁定后不可分解、回收或挂售
+  @Column({ default: false })
+  locked: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

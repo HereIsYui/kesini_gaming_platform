@@ -217,6 +217,40 @@ describe("ShopRecycleService", () => {
     expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
   });
 
+  it("锁定卡不参与可回收数量", async () => {
+    const lockedCard = createUserCard(1, "SSR");
+    lockedCard.locked = true;
+    const userCards = [lockedCard, createUserCard(2, "SSR")];
+    const { service, repositories, pointLedgerService } = createService({
+      userCards,
+    });
+
+    await expect(
+      service.recycleCards("u1", {
+        cardId: 1,
+        rarity: "SSR",
+        poolId: 1,
+        count: 1,
+      }),
+    ).rejects.toThrow("可回收数量不足");
+    expect(repositories.userCardRepository.save).not.toHaveBeenCalled();
+    expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
+  });
+
+  it("回收预览会排除锁定卡", async () => {
+    const lockedCard = createUserCard(1, "R");
+    lockedCard.locked = true;
+    const { service } = createService({
+      userCards: [lockedCard, createUserCard(2, "R"), createUserCard(3, "R")],
+    });
+
+    await expect(service.getRecyclePreview("u1", 1, "R")).resolves.toEqual(
+      expect.objectContaining({
+        availableCount: 1,
+      }),
+    );
+  });
+
   it("回收价为 0 时仍写入回收流水", async () => {
     const userCards = [createUserCard(1, "N"), createUserCard(2, "N")];
     const { service, repositories, pointLedgerService } = createService({

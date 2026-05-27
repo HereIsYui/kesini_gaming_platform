@@ -134,7 +134,8 @@ export class ShopRecycleService {
         activeListings.map((listing) => listing.card_uuid),
       );
       const recyclableCards = sameRarityCards.filter(
-        (userCard) => !listedUuidSet.has(userCard.card_uuid),
+        (userCard) =>
+          userCard.locked !== true && !listedUuidSet.has(userCard.card_uuid),
       );
       const maxCount = Math.max(0, recyclableCards.length - 1);
       if (count > maxCount) {
@@ -244,7 +245,8 @@ export class ShopRecycleService {
       activeListings.map((listing) => listing.card_uuid),
     );
     const unlistedCount = sameRarityCards.filter(
-      (userCard) => !listedUuidSet.has(userCard.card_uuid),
+      (userCard) =>
+        userCard.locked !== true && !listedUuidSet.has(userCard.card_uuid),
     ).length;
     return {
       cardId: card.id,

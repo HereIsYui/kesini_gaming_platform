@@ -135,6 +135,9 @@ export class TradeService {
       if (userCard.can_sell !== true) {
         throw new Error("这张卡片不可交易");
       }
+      if (userCard.locked === true) {
+        throw new Error("已锁定的卡片不能挂售");
+      }
 
       const activeListing = await listingRepository.findOne({
         where: { card_uuid: cardUuid, status: "active" },
@@ -247,7 +250,9 @@ export class TradeService {
         activeListings.map((listing) => listing.card_uuid),
       );
       const candidates = matchedUserCards.filter(
-        (userCard) => !activeListingSet.has(userCard.card_uuid),
+        (userCard) =>
+          userCard.locked !== true &&
+          !activeListingSet.has(userCard.card_uuid),
       );
       if (candidates.length === 0) {
         throw new Error("暂无可挂售卡片");
@@ -402,6 +407,7 @@ export class TradeService {
         await userRepository.save([buyer, seller]);
       }
       userCard.uid = uid;
+      userCard.locked = false;
       listing.status = "sold";
       listing.buyer_uid = uid;
       listing.sold_at = new Date();

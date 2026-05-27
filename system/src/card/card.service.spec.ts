@@ -604,6 +604,46 @@ describe("CardService 背包筛选", () => {
     );
   });
 
+  it("堆叠背包会展示锁定数量并从可售数量中排除", async () => {
+    const { service } = createListService([
+      {
+        id: 4,
+        uid: "u1",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "n-card-locked",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        locked: true,
+        createdAt: new Date("2026-01-04"),
+      },
+    ]);
+
+    const result = await service.getUserCards(
+      "u1",
+      undefined,
+      1,
+      1,
+      20,
+      true,
+    );
+
+    expect(result.list).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cardId: 1,
+          cardLevel: "N",
+          count: 2,
+          lockedCount: 1,
+          sellableCount: 1,
+          lockableUuid: "n-card",
+          unlockableUuid: "n-card-locked",
+        }),
+      ]),
+    );
+  });
+
   it("堆叠背包必须指定卡池", async () => {
     const { service } = createListService();
 
@@ -763,6 +803,160 @@ describe("CardService 排行榜", () => {
     expect(result.rankings.totalCards.list).toHaveLength(100);
     expect(result.rankings.totalCards.me).toEqual(
       expect.objectContaining({ uid: "u119", value: 1 }),
+    );
+  });
+});
+
+describe("CardService 抽卡统计与历史详情", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      findAndCount: jest.fn().mockResolvedValue([[], 0]),
+      createQueryBuilder: jest.fn(),
+      ...overrides,
+    };
+  }
+
+  it("统计接口按可用卡池返回保底进度和剩余抽数", async () => {
+    const historyRepository = createRepository({
+      createQueryBuilder: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ total: "48" }),
+      })),
+      find: jest.fn().mockResolvedValue([]),
+    });
+    const pityRepository = createRepository({
+      find: jest.fn().mockResolvedValue([
+        {
+          uid: "u1",
+          pool_id: 2,
+          draws_since_sr: 8,
+          draws_since_ssr: 48,
+          draws_since_ur: 48,
+        },
+      ]),
+    });
+    const service = new CardService(
+      createRepository() as any,
+      createRepository({
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 2,
+            pool_name: "测试卡池",
+            enabled: true,
+            sort_order: 0,
+          },
+        ]),
+      }) as any,
+      createRepository({
+        findOne: jest.fn().mockResolvedValue({
+          uid: "u1",
+          point: 120,
+          card_count_n: 1,
+          card_count_r: 2,
+          card_count_sr: 3,
+          card_count_ssr: 4,
+          card_count_ur: 0,
+        }),
+      }) as any,
+      createRepository() as any,
+      historyRepository as any,
+      createRepository() as any,
+      createRepository() as any,
+      pityRepository as any,
+      {
+        getConfigByPoolId: jest.fn().mockResolvedValue({
+          pitySystem: {
+            enabled: true,
+            softPity: { count: 10, guaranteedRarity: "SR" },
+            hardPity: { count: 90, guaranteedRarity: "SSR" },
+          },
+        }),
+      } as any,
+      {} as any,
+    );
+
+    const result = await service.getUserGachaStats("u1");
+
+    expect(result.pity).toEqual([
+      expect.objectContaining({
+        poolId: 2,
+        poolName: "测试卡池",
+        hard: expect.objectContaining({
+          count: 90,
+          guaranteedRarity: "SSR",
+          current: 48,
+          remaining: 42,
+        }),
+      }),
+    ]);
+  });
+
+  it("抽卡历史详情会兼容旧字段并补全卡片信息", async () => {
+    const service = new CardService(
+      createRepository({
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 7,
+            card_name: "历史卡",
+            card_desc: "描述",
+            card_image: "/card.webp",
+            card_type: 0,
+            card_level: "SSR",
+            pool: 1,
+          },
+        ]),
+      }) as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository({
+        findAndCount: jest.fn().mockResolvedValue([
+          [
+            {
+              id: 3,
+              uid: "u1",
+              count: 1,
+              card_ids: "7",
+              card_levels: "SSR",
+              card_uuids: "uuid-7",
+              card_details: null,
+              createdAt: new Date("2026-01-01"),
+            },
+          ],
+          1,
+        ]),
+      }) as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      {} as any,
+      {} as any,
+    );
+
+    const result = await service.getUserDrawHistory("u1", 1, 10);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        total: 1,
+        totalPages: 1,
+        list: [
+          expect.objectContaining({
+            id: 3,
+            details: [
+              expect.objectContaining({
+                cardId: 7,
+                cardName: "历史卡",
+                rarity: "SSR",
+                cardUuid: "uuid-7",
+              }),
+            ],
+          }),
+        ],
+      }),
     );
   });
 });
@@ -1085,6 +1279,124 @@ describe("CardService 碎片合成", () => {
   });
 });
 
+describe("CardService 卡片锁定", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createLockService(options: {
+    userCard?: Partial<UserCard> | null;
+    activeListing?: Partial<TradeListing> | null;
+  } = {}) {
+    const userCard = options.userCard === null
+      ? null
+      : ({
+          uid: "u1",
+          card_uuid: "card-uuid",
+          card_id: "1",
+          card_level: "SSR",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          locked: false,
+          ...options.userCard,
+        } as UserCard);
+    const userCardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(userCard),
+    });
+    const listingRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(options.activeListing || null),
+    });
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        card_name: "测试卡",
+        card_level: "SSR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 1,
+      } as CardItem),
+    });
+    const repositories = new Map<any, any>([
+      [UserCard, userCardRepository],
+      [TradeListing, listingRepository],
+      [CardItem, cardRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const service = new CardService(
+      cardRepository as any,
+      createRepository() as any,
+      createRepository() as any,
+      userCardRepository as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      createRepository() as any,
+      {} as any,
+      dataSource as any,
+    );
+
+    return {
+      service,
+      userCard,
+      userCardRepository,
+      cardRepository,
+    };
+  }
+
+  it("可切换本人卡片锁定状态", async () => {
+    const { service, userCard, userCardRepository } = createLockService();
+
+    const result = await service.updateUserCardLock("u1", "card-uuid", true);
+
+    expect(userCard?.locked).toBe(true);
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ locked: true }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        uuid: "card-uuid",
+        locked: true,
+        cardName: "测试卡",
+      }),
+    );
+  });
+
+  it("挂售中的卡片不允许切换锁定状态", async () => {
+    const { service, userCardRepository } = createLockService({
+      activeListing: { id: 9, card_uuid: "card-uuid", status: "active" },
+    });
+
+    await expect(
+      service.updateUserCardLock("u1", "card-uuid", true),
+    ).rejects.toThrow("挂售中的卡片不能切换锁定状态");
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("锁定卡片不能分解", async () => {
+    const { service, userCardRepository, cardRepository } = createLockService({
+      userCard: { locked: true },
+    });
+
+    await expect(service.decomposeCard("u1", "card-uuid")).rejects.toThrow(
+      "已锁定的卡片不能分解",
+    );
+    expect(cardRepository.findOne).not.toHaveBeenCalled();
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+});
+
 describe("CardService 一键分解", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {
@@ -1248,6 +1560,50 @@ describe("CardService 一键分解", () => {
     expect(result.countsByRarity).toEqual(
       expect.objectContaining({ N: 1, R: 1, SR: 0 }),
     );
+  });
+
+  it("一键分解预览会跳过锁定卡片", async () => {
+    const { service } = createBulkDecomposeService({
+      userCards: [
+        {
+          id: 1,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-card-old",
+          delete_flag: false,
+          locked: false,
+          createdAt: new Date("2026-01-01"),
+        },
+        {
+          id: 2,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-card-locked",
+          delete_flag: false,
+          locked: true,
+          createdAt: new Date("2026-01-02"),
+        },
+        {
+          id: 3,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-card-keep",
+          delete_flag: false,
+          locked: false,
+          createdAt: new Date("2026-01-03"),
+        },
+      ],
+      activeListings: [],
+    });
+
+    const result = await service.previewBulkDecompose("u1", ["N"]);
+
+    expect(result.total).toBe(1);
+    expect(result.skippedLocked).toBe(1);
+    expect(result.countsByRarity).toEqual(expect.objectContaining({ N: 1 }));
   });
 
   it("一键分解会批量删除卡片并聚合碎片入账", async () => {

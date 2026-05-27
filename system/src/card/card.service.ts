@@ -52,9 +52,12 @@ type UserCardGroup = {
   poolId: number;
   count: number;
   listedCount: number;
+  lockedCount: number;
   sellableCount: number;
   canSell: boolean;
   canLottery: boolean;
+  lockableUuid: string | null;
+  unlockableUuid: string | null;
   latestObtainedAt: Date | null;
 };
 type UserCatalogEntry = {
@@ -269,6 +272,28 @@ export class CardService {
       take: 5,
     });
     const pityStates = await this.pityRepository.find({ where: { uid } });
+    const availablePools = await this.poolRepository.find({
+      where: { enabled: true },
+      order: { sort_order: "ASC", id: "ASC" },
+    });
+    const pityStateMap = new Map(
+      pityStates.map((pity) => [pity.pool_id, pity]),
+    );
+    const pity = await Promise.all(
+      availablePools.map(async (pool) => {
+        const config = await this.gachaConfigService.getConfigByPoolId(pool.id);
+        const state =
+          pityStateMap.get(pool.id) ||
+          this.pityRepository.create({
+            uid,
+            pool_id: pool.id,
+            draws_since_sr: 0,
+            draws_since_ssr: 0,
+            draws_since_ur: 0,
+          });
+        return this.createPityView(pool, state, config.pitySystem);
+      }),
+    );
 
     return {
       uid,
@@ -281,12 +306,7 @@ export class CardService {
         SSR: user?.card_count_ssr || 0,
         UR: user?.card_count_ur || 0,
       },
-      pity: pityStates.map((pity) => ({
-        poolId: pity.pool_id,
-        drawsSinceSR: pity.draws_since_sr,
-        drawsSinceSSR: pity.draws_since_ssr,
-        drawsSinceUR: pity.draws_since_ur,
-      })),
+      pity,
       recentDraws: recentHistory.map((h) => ({
         count: h.count,
         cardIds: h.card_ids ? h.card_ids.split(",") : [],
@@ -639,6 +659,7 @@ export class CardService {
           poolId: card.pool,
           canSell: userCard.can_sell,
           canLottery: userCard.can_lottery,
+          locked: userCard.locked === true,
           isListed: Boolean(activeListing),
           tradeListingId: activeListing?.id || null,
           tradePrice: activeListing?.price || null,
@@ -650,6 +671,83 @@ export class CardService {
     return {
       list,
       dropItems,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  async updateUserCardLock(uid: string, cardUuid: string, locked: boolean) {
+    if (!cardUuid || typeof locked !== "boolean") {
+      throw new Error("锁定参数无效");
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const userCardRepository = manager.getRepository(UserCard);
+      const userCard = await userCardRepository.findOne({
+        where: { uid, card_uuid: cardUuid, delete_flag: false },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!userCard) {
+        throw new Error("用户没有这张卡片");
+      }
+
+      const activeListing = await manager.getRepository(TradeListing).findOne({
+        where: { card_uuid: cardUuid, status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (activeListing) {
+        throw new Error("挂售中的卡片不能切换锁定状态");
+      }
+
+      userCard.locked = locked;
+      await userCardRepository.save(userCard);
+
+      const card = await manager.getRepository(CardItem).findOne({
+        where: { id: Number(userCard.card_id) },
+      });
+
+      return {
+        uuid: userCard.card_uuid,
+        locked: userCard.locked,
+        cardId: Number(userCard.card_id),
+        cardName: card?.card_name || "",
+        cardLevel:
+          userCard.card_level ||
+          (card ? this.getHighestRarity(card.card_level) : undefined),
+      };
+    });
+  }
+
+  async getUserDrawHistory(uid: string, page = 1, pageSize = 10) {
+    page = Math.max(1, page);
+    pageSize = Math.min(50, Math.max(1, pageSize));
+
+    const [histories, total] =
+      await this.userCardHistoryRepository.findAndCount({
+        where: { uid },
+        order: { createdAt: "DESC" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+    const cardIds = [
+      ...new Set(
+        histories
+          .flatMap((history) => this.extractHistoryCardIds(history))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ];
+    const cards =
+      cardIds.length > 0
+        ? await this.cardRepository.find({ where: { id: In(cardIds) } })
+        : [];
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+
+    return {
+      list: histories.map((history) =>
+        this.toDrawHistoryRecord(history, cardMap),
+      ),
       total,
       page,
       pageSize,
@@ -729,20 +827,32 @@ export class CardService {
           poolId: card.pool,
           count: 0,
           listedCount: 0,
+          lockedCount: 0,
           sellableCount: 0,
           canSell: false,
           canLottery: false,
+          lockableUuid: null,
+          unlockableUuid: null,
           latestObtainedAt: null,
         };
         groupMap.set(key, group);
       }
 
       const isListed = activeListingSet.has(userCard.card_uuid);
+      const isLocked = userCard.locked === true;
       group.count += 1;
       group.listedCount += isListed ? 1 : 0;
-      group.sellableCount += userCard.can_sell === true && !isListed ? 1 : 0;
+      group.lockedCount += isLocked ? 1 : 0;
+      group.sellableCount +=
+        userCard.can_sell === true && !isListed && !isLocked ? 1 : 0;
       group.canSell = group.sellableCount > 0;
       group.canLottery = group.canLottery || userCard.can_lottery === true;
+      if (!isListed && !isLocked && !group.lockableUuid) {
+        group.lockableUuid = userCard.card_uuid;
+      }
+      if (!isListed && isLocked && !group.unlockableUuid) {
+        group.unlockableUuid = userCard.card_uuid;
+      }
       group.latestObtainedAt = this.pickLatestDate(
         group.latestObtainedAt,
         userCard.createdAt,
@@ -851,6 +961,9 @@ export class CardService {
 
       if (!userCard) {
         throw new Error("用户没有这张卡片");
+      }
+      if (userCard.locked === true) {
+        throw new Error("已锁定的卡片不能分解");
       }
       const activeListing = await manager.getRepository(TradeListing).findOne({
         where: { card_uuid: cardUuid, status: "active" },
@@ -1047,6 +1160,7 @@ export class CardService {
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const countsByRarity = this.createEmptyRarityCounts();
     let skippedListed = 0;
+    let skippedLocked = 0;
 
     userCards.forEach((userCard) => {
       const card = cardMap.get(Number(userCard.card_id));
@@ -1060,6 +1174,9 @@ export class CardService {
       if (activeListingSet.has(userCard.card_uuid)) {
         skippedListed += 1;
       }
+      if (userCard.locked === true) {
+        skippedLocked += 1;
+      }
     });
     candidates.forEach((candidate) => {
       countsByRarity[candidate.rarity] += 1;
@@ -1070,6 +1187,7 @@ export class CardService {
       total: candidates.length,
       countsByRarity,
       skippedListed,
+      skippedLocked,
       reservedCount: candidateGroups.size,
     };
   }
@@ -1099,7 +1217,11 @@ export class CardService {
 
     userCards.forEach((userCard) => {
       const card = cardMap.get(Number(userCard.card_id));
-      if (!card || activeListingSet.has(userCard.card_uuid)) {
+      if (
+        !card ||
+        activeListingSet.has(userCard.card_uuid) ||
+        userCard.locked === true
+      ) {
         return;
       }
       const rarity = this.getEffectiveUserCardRarity(userCard, card);
@@ -1438,6 +1560,55 @@ export class CardService {
     return pity.draws_since_sr || 0;
   }
 
+  private createPityView(
+    pool: PoolInfo,
+    pity: UserGachaPity,
+    config?: PitySystemConfig,
+  ) {
+    const soft =
+      config?.enabled && config.softPity
+        ? this.createPityRuleView(pity, config.softPity)
+        : null;
+    const hard =
+      config?.enabled && config.hardPity
+        ? this.createPityRuleView(pity, config.hardPity)
+        : null;
+    const next = [soft, hard]
+      .filter(Boolean)
+      .sort((left, right) => left!.remaining - right!.remaining)[0];
+
+    return {
+      poolId: pool.id,
+      poolName: pool.pool_name,
+      enabled: pool.enabled !== false,
+      drawsSinceSR: pity.draws_since_sr || 0,
+      drawsSinceSSR: pity.draws_since_ssr || 0,
+      drawsSinceUR: pity.draws_since_ur || 0,
+      soft,
+      hard,
+      next: next
+        ? {
+            label: `${next.guaranteedRarity} 保底`,
+            guaranteedRarity: next.guaranteedRarity,
+            remaining: next.remaining,
+          }
+        : null,
+    };
+  }
+
+  private createPityRuleView(
+    pity: UserGachaPity,
+    rule: NonNullable<PitySystemConfig["softPity"]>,
+  ) {
+    const current = this.getPityCounter(pity, rule.guaranteedRarity);
+    return {
+      count: rule.count,
+      guaranteedRarity: rule.guaranteedRarity,
+      current,
+      remaining: Math.max(0, rule.count - current),
+    };
+  }
+
   private updatePityCounters(pity: UserGachaPity, rarity: CardRarity): void {
     const rank = this.getRarityRank(rarity);
     pity.draws_since_sr =
@@ -1537,6 +1708,75 @@ export class CardService {
     });
 
     await repository.save(userCardHistory);
+  }
+
+  private extractHistoryCardIds(history: UserHistory): number[] {
+    const detailIds = Array.isArray(history.card_details)
+      ? history.card_details.map((detail) => Number(detail.cardId))
+      : [];
+    const legacyIds = String(history.card_ids || "")
+      .split(",")
+      .map((id) => Number(id.trim()));
+    return [...detailIds, ...legacyIds].filter(
+      (id) => Number.isInteger(id) && id > 0,
+    );
+  }
+
+  private toDrawHistoryRecord(
+    history: UserHistory,
+    cardMap: Map<number, CardItem>,
+  ) {
+    const cardIds = String(history.card_ids || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const cardLevels = String(history.card_levels || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const cardUuids = String(history.card_uuids || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const rawDetails =
+      Array.isArray(history.card_details) && history.card_details.length > 0
+        ? history.card_details
+        : cardIds.map((cardId, index) => ({
+            cardId: Number(cardId),
+            rarity: cardLevels[index] || "",
+            cardUuid: cardUuids[index] || "",
+            isUp: false,
+            isPity: false,
+          }));
+
+    return {
+      id: history.id,
+      count: history.count,
+      createdAt: history.createdAt,
+      cardIds,
+      cardLevels,
+      cardUuids,
+      details: rawDetails.map((detail, index) => {
+        const cardId = Number(detail.cardId);
+        const card = cardMap.get(cardId);
+        const rarity =
+          detail.rarity ||
+          cardLevels[index] ||
+          (card ? this.getHighestRarity(card.card_level) : "");
+        return {
+          cardId,
+          cardName: card?.card_name || `卡片 ${cardId}`,
+          cardDesc: card?.card_desc || "",
+          cardImage: card?.card_image || "",
+          cardType: card?.card_type ?? 0,
+          poolId: card?.pool ?? null,
+          rarity,
+          cardUuid: detail.cardUuid || cardUuids[index] || "",
+          isUp: detail.isUp === true,
+          isPity: detail.isPity === true,
+        };
+      }),
+    };
   }
 
   private async buildUserCardWhereConditions(

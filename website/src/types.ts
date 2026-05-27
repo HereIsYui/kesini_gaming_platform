@@ -77,9 +77,18 @@ export interface UserGachaStats {
   cardCounts: Record<CardRarity, number>;
   pity?: Array<{
     poolId: number;
+    poolName?: string;
+    enabled?: boolean;
     drawsSinceSR: number;
     drawsSinceSSR: number;
     drawsSinceUR: number;
+    soft?: PityProgress | null;
+    hard?: PityProgress | null;
+    next?: {
+      label: string;
+      guaranteedRarity: CardRarity | string;
+      remaining: number;
+    } | null;
   }>;
   recentDraws?: Array<{
     count: number;
@@ -89,6 +98,13 @@ export interface UserGachaStats {
     details?: unknown[];
     createdAt: string;
   }>;
+}
+
+export interface PityProgress {
+  count: number;
+  guaranteedRarity: CardRarity | string;
+  current: number;
+  remaining: number;
 }
 
 export interface UserCardRecord {
@@ -103,7 +119,11 @@ export interface UserCardRecord {
   poolId: number;
   count?: number;
   listedCount?: number;
+  locked?: boolean;
+  lockedCount?: number;
   sellableCount?: number;
+  lockableUuid?: string | null;
+  unlockableUuid?: string | null;
   canSell: boolean;
   canLottery: boolean;
   isListed?: boolean;
@@ -277,9 +297,41 @@ export interface BulkDecomposeResponse {
   total: number;
   countsByRarity: Partial<Record<CardRarity | string, number>>;
   skippedListed: number;
+  skippedLocked?: number;
   reservedCount?: number;
   decomposed?: number;
   fragments?: BulkDecomposeFragment[];
+}
+
+export interface DrawHistoryDetail {
+  cardId: number;
+  cardName: string;
+  cardDesc?: string;
+  cardImage?: string;
+  cardType?: number;
+  poolId?: number | null;
+  rarity: CardRarity | string;
+  cardUuid: string;
+  isUp: boolean;
+  isPity: boolean;
+}
+
+export interface DrawHistoryRecord {
+  id: number;
+  count: number;
+  createdAt: string;
+  cardIds: string[];
+  cardLevels: string[];
+  cardUuids: string[];
+  details: DrawHistoryDetail[];
+}
+
+export interface DrawHistoryResponse {
+  list: DrawHistoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ShopRecycleConfig {

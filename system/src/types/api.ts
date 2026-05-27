@@ -79,6 +79,28 @@ export interface UserGachaStats {
     SSR: number;
     UR: number;
   };
+  pity?: Array<{
+    poolId: number;
+    poolName: string;
+    enabled: boolean;
+    drawsSinceSR: number;
+    drawsSinceSSR: number;
+    drawsSinceUR: number;
+    soft?: PityProgressView | null;
+    hard?: PityProgressView | null;
+    next?: {
+      label: string;
+      guaranteedRarity: CardRarity;
+      remaining: number;
+    } | null;
+  }>;
+}
+
+export interface PityProgressView {
+  count: number;
+  guaranteedRarity: CardRarity;
+  current: number;
+  remaining: number;
 }
 
 export interface LeaderboardEntry {

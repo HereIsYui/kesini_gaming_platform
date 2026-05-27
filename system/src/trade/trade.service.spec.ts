@@ -141,6 +141,16 @@ describe("TradeService", () => {
                 card_level: "SSR",
                 can_sell: true,
                 delete_flag: false,
+                locked: false,
+              },
+              {
+                uid: "seller",
+                card_uuid: "locked-card",
+                card_id: "7",
+                card_level: "SSR",
+                can_sell: true,
+                delete_flag: false,
+                locked: true,
               },
               {
                 uid: "seller",
@@ -149,6 +159,7 @@ describe("TradeService", () => {
                 card_level: "SSR",
                 can_sell: true,
                 delete_flag: false,
+                locked: false,
               },
             ]),
           }),
@@ -269,6 +280,16 @@ describe("TradeService", () => {
 
     await expect(service.createListing("seller", "card-uuid", 100)).rejects.toThrow(
       "这张卡片已在交易中",
+    );
+  });
+
+  it("锁定卡片不能挂售", async () => {
+    const { service } = createCreateListingService({
+      userCard: { locked: true },
+    });
+
+    await expect(service.createListing("seller", "card-uuid", 100)).rejects.toThrow(
+      "已锁定的卡片不能挂售",
     );
   });
 
@@ -452,8 +473,10 @@ describe("TradeService", () => {
 
 function createCreateListingService({
   activeListing = null,
+  userCard = {},
 }: {
   activeListing?: Record<string, any> | null;
+  userCard?: Record<string, any>;
 }) {
   const service = createService(
     new Map<any, any>([
@@ -485,6 +508,8 @@ function createCreateListingService({
             card_level: "SSR",
             can_sell: true,
             delete_flag: false,
+            locked: false,
+            ...userCard,
           }),
         }),
       ],

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
   Query,
@@ -20,6 +21,7 @@ import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { GetUser } from "src/auth/get-user.decorator";
 import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsIn,
   IsNotEmpty,
@@ -65,6 +67,11 @@ export class BulkDecomposeDto {
   @IsArray()
   @IsIn(["N", "R", "SR", "SSR"], { each: true })
   rarities: string[];
+}
+
+export class LockUserCardDto {
+  @IsBoolean()
+  locked: boolean;
 }
 
 // 用户信息接口
@@ -192,6 +199,33 @@ export class CardController {
       return ResponseDto.success(stats, "获取统计成功");
     } catch (error) {
       return ResponseDto.error(error.message || "获取统计失败");
+    }
+  }
+
+  /**
+   * 获取用户抽卡历史详情
+   * GET /card/history?page=1&pageSize=10
+   */
+  @Get("history")
+  @UseGuards(JwtAuthGuard)
+  async getUserDrawHistory(
+    @GetUser() user: UserInfo,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.getUserDrawHistory(
+        user.uid,
+        this.parseOptionalInt(page, "page", 1) || 1,
+        this.parseOptionalInt(pageSize, "pageSize", 1, 50) || 10,
+      );
+      return ResponseDto.success(result, "获取抽卡历史成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取抽卡历史失败");
     }
   }
 
@@ -369,6 +403,36 @@ export class CardController {
       return ResponseDto.success(result, "获取用户卡片列表成功");
     } catch (error) {
       return ResponseDto.error(error.message || "获取用户卡片列表失败");
+    }
+  }
+
+  /**
+   * 切换用户卡片锁定状态
+   * PATCH /card/user/cards/:uuid/lock
+   */
+  @Patch("user/cards/:uuid/lock")
+  @UseGuards(JwtAuthGuard)
+  async updateUserCardLock(
+    @Param("uuid") uuid: string,
+    @Body() body: LockUserCardDto,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.updateUserCardLock(
+        user.uid,
+        uuid,
+        body.locked,
+      );
+      return ResponseDto.success(
+        result,
+        body.locked ? "卡片已锁定" : "卡片已解锁",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "切换锁定状态失败");
     }
   }
 

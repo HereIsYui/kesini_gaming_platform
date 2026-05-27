@@ -283,6 +283,14 @@ export FILE_ROOT=/data/kesini/public
 - 未启用单独配置的卡池会继承全局默认。
 - 数据库仍使用 `gacha_pool_config` 表：`pool_id=0` 表示全局默认，`pool_id>0` 表示单个卡池覆盖。
 
+## 玩法规划 TODO
+
+- [ ] P0 第一阶段：卡片收藏锁定、保底进度展示、抽卡历史详情
+- [ ] P1 每日/每周任务、活跃度奖励
+- [ ] P2 卡片养成、阵容编队、轻量 PVE 玩法
+- [ ] P3 赛季系统、赛季商店、活动排行
+- [ ] P4 玩家主页、卡片展示墙、好友/公会等社交扩展
+
 ## 每日签到
 
 玩家每日可签到一次。每轮 7 天循环：第 1-6 天每次奖励 10 星穹币，第 7 天奖励 100 星穹币；连续中断后重新从第 1 天开始。
@@ -294,6 +302,7 @@ ALTER TABLE pool_info ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
 ALTER TABLE pool_info ADD COLUMN sort_order int NOT NULL DEFAULT 0;
 ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
 ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
+ALTER TABLE user_card ADD COLUMN locked tinyint NOT NULL DEFAULT 0;
 
 CREATE TABLE daily_sign_in_record (
   id int NOT NULL AUTO_INCREMENT,
@@ -374,4 +383,3 @@ CREATE TABLE achievement_event (
 - 抽卡接口：`system/src/card/README_GACHA.md`
 - JWT 使用：`system/src/auth/README_JWT.md`
 - 配置说明：`system/src/config/README.md`
-
