@@ -26,6 +26,7 @@ export type PageKey =
   | "trade-records"
   | "recharge-config"
   | "recharge-records"
+  | "shop-recycle-config"
   | "site-config"
   | "gacha-config";
 
@@ -61,6 +62,7 @@ export const pageKeys: PageKey[] = [
   "trade-records",
   "recharge-config",
   "recharge-records",
+  "shop-recycle-config",
   "site-config",
   "gacha-config",
 ];
@@ -175,6 +177,7 @@ export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
       type: "imageUpload",
       uploadEndpoint: "/admin/uploads/card-image",
       minWidth: 120,
+      formHidden: true,
     },
     {
       key: "card_level",
@@ -527,6 +530,15 @@ export const tradeConfigFields: FieldConfig[] = [
   { key: "fee_rate", label: "手续费率", type: "number", defaultValue: 0 },
   { key: "min_price", label: "最低价格", type: "number", defaultValue: 1 },
   { key: "max_price", label: "最高价格", type: "number", defaultValue: 999999 },
+];
+
+export const shopRecycleConfigFields: FieldConfig[] = [
+  { key: "enabled", label: "回收状态", type: "boolean", defaultValue: true },
+  { key: "priceN", label: "N 回收价", type: "number", defaultValue: 1 },
+  { key: "priceR", label: "R 回收价", type: "number", defaultValue: 2 },
+  { key: "priceSR", label: "SR 回收价", type: "number", defaultValue: 5 },
+  { key: "priceSSR", label: "SSR 回收价", type: "number", defaultValue: 15 },
+  { key: "priceUR", label: "UR 回收价", type: "number", defaultValue: 50 },
 ];
 
 export const rechargeRecordFields: FieldConfig[] = [

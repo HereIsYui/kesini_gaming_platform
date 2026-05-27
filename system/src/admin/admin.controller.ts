@@ -38,6 +38,7 @@ import {
   AchievementService,
 } from "src/achievement/achievement.service";
 import type { AchievementTargetType } from "src/entity/achievementConfig.entity";
+import { ShopRecycleService } from "src/shop/shop-recycle.service";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
 
@@ -295,6 +296,42 @@ class SiteConfigPatchDto {
   @IsString()
   @MaxLength(80)
   adminTitle?: string;
+}
+
+class ShopRecycleConfigPatchDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  priceN?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  priceR?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  priceSR?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  priceSSR?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  priceUR?: number;
 }
 
 class AchievementQueryDto extends PageDto {
@@ -666,6 +703,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly achievementService: AchievementService,
+    private readonly shopRecycleService: ShopRecycleService,
   ) {}
 
   @Get("me")
@@ -1215,6 +1253,24 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateSiteConfig(body),
       "更新站点配置成功",
+    );
+  }
+
+  @Get("config/shop-recycle")
+  async getShopRecycleConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopRecycleService.getConfig(),
+      "获取回收配置成功",
+    );
+  }
+
+  @Patch("config/shop-recycle")
+  async updateShopRecycleConfig(
+    @Body() body: ShopRecycleConfigPatchDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopRecycleService.updateConfig(body),
+      "更新回收配置成功",
     );
   }
 

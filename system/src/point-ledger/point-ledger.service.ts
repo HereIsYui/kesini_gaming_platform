@@ -31,6 +31,7 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   achievement: "成就奖励",
   trade_buy: "交易购买",
   trade_sell: "交易出售",
+  shop_recycle: "商店回收",
 };
 
 const ALLOWED_SOURCE_TYPES = Object.keys(SOURCE_LABELS);

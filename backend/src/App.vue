@@ -182,7 +182,18 @@
           detail-fetchable
           enable-rarity-filter
           search-placeholder="搜索卡片名称"
-        />
+        >
+          <template #actions="{ row, reload }">
+            <el-button
+              size="small"
+              type="success"
+              plain
+              @click="openCardMedia(row, reload)"
+            >
+              卡面
+            </el-button>
+          </template>
+        </AdminTable>
 
         <AdminTable
           v-else-if="active === 'drop-items'"
@@ -352,6 +363,14 @@
           :fields="tradeConfigFields"
         />
 
+        <ConfigPanel
+          v-else-if="active === 'shop-recycle-config'"
+          title="商店回收"
+          description="配置回收开关和各稀有度价格。"
+          endpoint="/admin/config/shop-recycle"
+          :fields="shopRecycleConfigFields"
+        />
+
         <AdminTable
           v-else-if="active === 'trade-listings'"
           title="交易挂单"
@@ -418,6 +437,50 @@
     :options="adminOptions"
     @save="savePoolGacha"
   />
+
+  <el-dialog
+    v-model="cardMediaVisible"
+    title="卡面"
+    width="520px"
+    class="admin-dialog"
+  >
+    <div class="card-media-dialog">
+      <div class="image-upload-preview card-media-preview">
+        <video
+          v-if="isMediaVideo(cardMediaValue)"
+          :src="assetUrl(cardMediaValue)"
+          muted
+          loop
+          autoplay
+          playsinline
+        />
+        <img
+          v-else-if="assetUrl(cardMediaValue)"
+          :src="assetUrl(cardMediaValue)"
+          alt="卡面"
+        />
+        <span v-else>未配置</span>
+      </div>
+      <div class="image-upload-actions">
+        <label class="image-upload-button">
+          上传
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+            :disabled="cardMediaUploading"
+            @change="handleCardMediaUpload"
+          />
+        </label>
+        <el-button plain @click="clearCardMedia">清空</el-button>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="cardMediaVisible = false">取消</el-button>
+      <el-button type="primary" :loading="cardMediaSaving" @click="saveCardMedia">
+        保存
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -465,6 +528,7 @@ import {
   redeemCodeFields,
   redeemUsageFields,
   routeAliases,
+  shopRecycleConfigFields,
   siteConfigFields,
   tradeConfigFields,
   tradeListingFields,
@@ -537,6 +601,12 @@ const editingPoolGacha = ref<{
   config: GachaPoolConfig;
   defaultConfig: GachaPoolConfig;
 } | null>(null);
+const cardMediaVisible = ref(false);
+const cardMediaSaving = ref(false);
+const cardMediaUploading = ref(false);
+const cardMediaRow = ref<Record<string, any> | null>(null);
+const cardMediaValue = ref("");
+const cardMediaReload = ref<(() => void) | null>(null);
 
 const itemOptions = computed<SelectOption[]>(() => adminOptions.value?.dropItems || []);
 const cardFields = computed(() => {
@@ -678,6 +748,13 @@ const pageDefinitions = computed(() => [
     description: "配置交易开关、手续费率和价格区间。",
     group: "交易与支付",
     icon: Setting,
+  },
+  {
+    key: "shop-recycle-config",
+    label: "商店回收",
+    description: "配置卡片回收开关和稀有度价格。",
+    group: "交易与支付",
+    icon: Shop,
   },
   {
     key: "trade-listings",
@@ -983,6 +1060,92 @@ async function savePoolGacha(poolId: number, values: GachaPoolConfig) {
     editingPoolGacha.value = null;
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : "保存抽卡配置失败");
+  }
+}
+
+function assetUrl(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (/^(https?:|data:|blob:)/i.test(raw)) {
+    return raw;
+  }
+  return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
+function isMediaVideo(value: unknown) {
+  return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
+}
+
+function openCardMedia(row: Record<string, any>, reload: () => void) {
+  cardMediaRow.value = row;
+  cardMediaValue.value = String(row.card_image || "");
+  cardMediaReload.value = reload;
+  cardMediaVisible.value = true;
+}
+
+function clearCardMedia() {
+  cardMediaValue.value = "";
+}
+
+async function handleCardMediaUpload(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) {
+    return;
+  }
+  const isImage = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+  const isVideo = ["video/mp4", "video/webm"].includes(file.type);
+  if (!isImage && !isVideo) {
+    ElMessage.error("仅支持 JPG、PNG、WEBP、MP4、WEBM");
+    return;
+  }
+  if (isImage && file.size > 2 * 1024 * 1024) {
+    ElMessage.error("图片不能超过2MB");
+    return;
+  }
+  if (isVideo && file.size > 10 * 1024 * 1024) {
+    ElMessage.error("视频不能超过10MB");
+    return;
+  }
+
+  cardMediaUploading.value = true;
+  try {
+    const body = new FormData();
+    body.append("file", file);
+    const result = await request<{ url: string }>("/admin/uploads/card-image", {
+      method: "POST",
+      body,
+    });
+    cardMediaValue.value = result.url;
+    ElMessage.success("已上传");
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "上传失败");
+  } finally {
+    cardMediaUploading.value = false;
+  }
+}
+
+async function saveCardMedia() {
+  const row = cardMediaRow.value;
+  if (!row?.id) {
+    return;
+  }
+  cardMediaSaving.value = true;
+  try {
+    await request(`/admin/cards/${row.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ card_image: cardMediaValue.value }),
+    });
+    ElMessage.success("已保存");
+    cardMediaVisible.value = false;
+    cardMediaReload.value?.();
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "保存失败");
+  } finally {
+    cardMediaSaving.value = false;
   }
 }
 

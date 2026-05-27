@@ -841,6 +841,16 @@ body {
   justify-items: start;
 }
 
+.card-media-dialog {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.card-media-preview {
+  width: min(280px, 100%);
+}
+
 .image-upload-actions {
   display: flex;
   flex-wrap: wrap;

@@ -11,6 +11,7 @@ import {
   LogOut,
   Moon,
   Package,
+  Recycle,
   RefreshCw,
   Share2,
   ShieldCheck,
@@ -56,6 +57,8 @@ import type {
   PointLedgerRecordsResponse,
   PointLedgerSourceType,
   SiteConfig,
+  ShopRecycleCardsResponse,
+  ShopRecycleConfig,
   LoginResponse,
   LoginUrlResponse,
   PoolInfo,
@@ -187,6 +190,14 @@ const tradeConfig = ref<TradeConfig>({
   minPrice: 1,
   maxPrice: 999999,
 });
+const shopRecycleConfig = ref<ShopRecycleConfig>({
+  enabled: true,
+  priceN: 1,
+  priceR: 2,
+  priceSR: 5,
+  priceSSR: 15,
+  priceUR: 50,
+});
 const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
@@ -210,10 +221,12 @@ const tradeSort = ref("newest");
 const tradeMinPrice = ref("");
 const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const recycleTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
 const activeBagActionKey = ref("");
 const listingPrice = ref("");
+const recycleCount = ref(1);
 const redeemCode = ref("");
 const rechargeModalOpen = ref(false);
 const rechargeAmount = ref(10);
@@ -238,6 +251,7 @@ const busy = reactive({
   redeem: false,
   achievements: false,
   trade: false,
+  recycle: false,
   recharge: false,
   bulkDecompose: false,
   bulkDecomposePreview: false,
@@ -498,6 +512,7 @@ const pointSourceOptions = [
   { value: "achievement", label: "成就奖励" },
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
+  { value: "shop_recycle", label: "商店回收" },
 ] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bagHasMore = computed(
@@ -531,6 +546,18 @@ const listingFeePreview = computed(() => {
     sellerIncome: Math.max(0, price - feeAmount),
   };
 });
+const recycleAvailableCount = computed(() => {
+  if (!recycleTarget.value) {
+    return 0;
+  }
+  return Math.max(0, Number(recycleTarget.value.sellableCount || 0) - 1);
+});
+const recycleUnitPrice = computed(() =>
+  getRecyclePrice(recycleTarget.value?.cardLevel || ""),
+);
+const recycleTotalPoints = computed(
+  () => Math.max(0, Number(recycleCount.value || 0)) * recycleUnitPrice.value,
+);
 const bestResult = computed(() => {
   return [...lastResults.value].sort(
     (a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0),
@@ -880,6 +907,7 @@ async function loadPrivateData() {
     loadAchievementNotifications(),
     loadPointRecords(),
     loadExchangeItems(),
+    loadShopRecycleConfig(),
     loadTradeData(),
   ]);
   const failed = results.filter((item) => item.status === "rejected");
@@ -1153,6 +1181,15 @@ async function loadExchangeItems() {
   } finally {
     busy.shop = false;
   }
+}
+
+async function loadShopRecycleConfig() {
+  if (!isAuthed.value) {
+    return;
+  }
+  shopRecycleConfig.value = await request<ShopRecycleConfig>(
+    "/shop/recycle/config",
+  );
 }
 
 async function loadTradeData() {
@@ -1705,6 +1742,96 @@ function closeTradeListingModal() {
   listingPrice.value = "";
 }
 
+function getRecyclePrice(rarity: string) {
+  const key = String(rarity || "").toUpperCase();
+  if (key === "N") {
+    return shopRecycleConfig.value.priceN;
+  }
+  if (key === "R") {
+    return shopRecycleConfig.value.priceR;
+  }
+  if (key === "SR") {
+    return shopRecycleConfig.value.priceSR;
+  }
+  if (key === "SSR") {
+    return shopRecycleConfig.value.priceSSR;
+  }
+  if (key === "UR") {
+    return shopRecycleConfig.value.priceUR;
+  }
+  return 0;
+}
+
+function openRecycleModal(card: UserCardsResponse["list"][number]) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (!shopRecycleConfig.value.enabled) {
+    notify("info", "商店未开启");
+    return;
+  }
+  const available = Math.max(0, Number(card.sellableCount || 0) - 1);
+  if (available <= 0) {
+    notify("info", "无可回收");
+    return;
+  }
+  recycleTarget.value = card;
+  recycleCount.value = 1;
+}
+
+function closeRecycleModal() {
+  recycleTarget.value = null;
+  recycleCount.value = 1;
+}
+
+async function recycleCards() {
+  const target = recycleTarget.value;
+  if (!target?.cardId) {
+    notify("error", "卡片无效");
+    return;
+  }
+  const count = Number(recycleCount.value);
+  if (!Number.isInteger(count) || count <= 0) {
+    notify("error", "数量无效");
+    return;
+  }
+  if (count > recycleAvailableCount.value) {
+    notify("error", "数量不足");
+    return;
+  }
+
+  busy.recycle = true;
+  try {
+    const data = await request<ShopRecycleCardsResponse>(
+      "/shop/recycle/cards",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          cardId: target.cardId,
+          rarity: target.cardLevel,
+          poolId: target.poolId,
+          count,
+        }),
+      },
+    );
+    notify("success", `回收 +${data.rewardPoints}`);
+    if (stats.value) {
+      stats.value.point = data.pointAfter;
+    }
+    if (currentUser.value) {
+      currentUser.value.point = data.pointAfter;
+      setStoredUser(currentUser.value);
+    }
+    closeRecycleModal();
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.recycle = false;
+  }
+}
+
 async function createTradeListing() {
   if (!listingTarget.value) {
     return;
@@ -1857,6 +1984,8 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
     case "trade_sell":
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
+    case "shop_recycle":
+      return `${String(meta("cardName") || "卡片")} · ${String(meta("count") || 1)} 张`;
     default:
       return record.title;
   }
@@ -2681,6 +2810,27 @@ function leaderboardRankLabel(rank?: number) {
                     @click.stop="openTradeListingModal(card)"
                   >
                     <Store :size="16" />
+                  </button>
+                  <button
+                    class="card-icon-action"
+                    type="button"
+                    :title="
+                      shopRecycleConfig.enabled && Number(card.sellableCount || 0) > 1
+                        ? '回收'
+                        : '无可收'
+                    "
+                    :aria-label="
+                      shopRecycleConfig.enabled && Number(card.sellableCount || 0) > 1
+                        ? '回收'
+                        : '无可收'
+                    "
+                    :disabled="
+                      !shopRecycleConfig.enabled ||
+                      Number(card.sellableCount || 0) <= 1
+                    "
+                    @click.stop="openRecycleModal(card)"
+                  >
+                    <Recycle :size="16" />
                   </button>
                   <button
                     class="card-icon-action"
@@ -4227,6 +4377,76 @@ function leaderboardRankLabel(rank?: number) {
               @click="createTradeListing"
             >
               确认挂售
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="recycleTarget"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeRecycleModal"
+      >
+        <section
+          class="trade-listing-modal recycle-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="回收"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">商店</p>
+              <h2>{{ recycleTarget.cardName }}</h2>
+              <span>{{ recycleTarget.cardLevel }}</span>
+            </div>
+            <button class="modal-close" type="button" @click="closeRecycleModal">
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body">
+            <label class="redeem-input">
+              <span>数量</span>
+              <input
+                v-model.number="recycleCount"
+                type="number"
+                min="1"
+                :max="recycleAvailableCount"
+                step="1"
+              />
+            </label>
+            <dl>
+              <div>
+                <dt>可回收</dt>
+                <dd>{{ recycleAvailableCount }} 张</dd>
+              </div>
+              <div>
+                <dt>单价</dt>
+                <dd>{{ recycleUnitPrice }} 星穹币</dd>
+              </div>
+              <div>
+                <dt>总计</dt>
+                <dd>{{ recycleTotalPoints }} 星穹币</dd>
+              </div>
+            </dl>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="closeRecycleModal"
+            >
+              取消
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.recycle || recycleAvailableCount <= 0"
+              @click="recycleCards"
+            >
+              确认回收
             </button>
           </footer>
         </section>

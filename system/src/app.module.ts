@@ -41,6 +41,7 @@ import { RechargeModule } from "./recharge/recharge.module";
 import { LaunchActivityModule } from "./launch-activity/launch-activity.module";
 import { PointLedgerModule } from "./point-ledger/point-ledger.module";
 import { DailySignInModule } from "./daily-sign-in/daily-sign-in.module";
+import { ShopModule } from "./shop/shop.module";
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { DailySignInModule } from "./daily-sign-in/daily-sign-in.module";
     PointLedgerModule,
     DailySignInModule,
     AchievementModule,
+    ShopModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

@@ -4,6 +4,7 @@ import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "src/card/gacha-config.service";
 import { SiteConfigModule } from "src/config/site-config.module";
+import { ShopModule } from "src/shop/shop.module";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
@@ -53,6 +54,7 @@ import { AdminService } from "./admin.service";
     AuthModule,
     AchievementModule,
     SiteConfigModule,
+    ShopModule,
   ],
   controllers: [AdminController],
   providers: [AdminGuard, AdminService, GachaConfigService],

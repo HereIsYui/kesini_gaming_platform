@@ -282,6 +282,27 @@ export interface BulkDecomposeResponse {
   fragments?: BulkDecomposeFragment[];
 }
 
+export interface ShopRecycleConfig {
+  enabled: boolean;
+  priceN: number;
+  priceR: number;
+  priceSR: number;
+  priceSSR: number;
+  priceUR: number;
+}
+
+export interface ShopRecycleCardsResponse {
+  cardId: number;
+  cardName: string;
+  rarity: CardRarity | string;
+  poolId: number;
+  count: number;
+  unitPrice: number;
+  rewardPoints: number;
+  pointBefore: number;
+  pointAfter: number;
+}
+
 export type AchievementTargetType =
   | "total_draws"
   | "rarity_draws"
@@ -341,7 +362,8 @@ export type PointLedgerSourceType =
   | "exchange_shop"
   | "achievement"
   | "trade_buy"
-  | "trade_sell";
+  | "trade_sell"
+  | "shop_recycle";
 
 export interface PointLedgerRecord {
   id: number;
