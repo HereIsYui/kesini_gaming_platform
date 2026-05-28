@@ -29,6 +29,7 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   daily_sign_in: "每日签到",
   exchange_shop: "兑换商店",
   achievement: "成就奖励",
+  task: "任务奖励",
   trade_buy: "交易购买",
   trade_sell: "交易出售",
   shop_recycle: "商店回收",

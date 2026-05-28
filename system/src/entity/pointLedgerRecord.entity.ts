@@ -15,6 +15,7 @@ export type PointLedgerSourceType =
   | "daily_sign_in"
   | "exchange_shop"
   | "achievement"
+  | "task"
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle";

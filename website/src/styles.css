@@ -432,6 +432,7 @@ option {
 .catalog-panel,
 .points-panel,
 .leaderboard-panel,
+.task-panel,
 .achievement-panel,
 .trade-panel,
 .redeem-panel,
@@ -3425,6 +3426,33 @@ h3 {
   gap: 18px;
 }
 
+.task-content {
+  display: grid;
+  gap: 18px;
+}
+
+.task-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-toolbar > span {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.task-scope-switch {
+  width: min(320px, 100%);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-scope-switch button {
+  gap: 6px;
+}
+
 .achievement-filter-bar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.45fr) minmax(160px, 0.6fr) auto;
@@ -3481,6 +3509,82 @@ h3 {
 
 .achievement-summary article {
   padding: 14px;
+}
+
+.task-activity {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 15px;
+}
+
+.task-activity header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-activity header div {
+  display: grid;
+  gap: 5px;
+}
+
+.task-activity header strong {
+  color: var(--text);
+}
+
+.task-activity header span,
+.task-milestones small {
+  color: var(--text-soft);
+}
+
+.task-activity header b {
+  color: var(--primary-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-milestones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.task-milestones button {
+  display: grid;
+  grid-template-columns: 22px minmax(0, auto) minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.task-milestones button.available {
+  border-color: rgba(150, 242, 255, 0.46);
+  background: rgba(84, 216, 255, 0.12);
+}
+
+.task-milestones button.claimed {
+  border-color: rgba(97, 229, 162, 0.34);
+  color: var(--success);
+  background: rgba(97, 229, 162, 0.1);
+}
+
+.task-milestones span {
+  font-weight: 800;
+}
+
+.task-milestones small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .achievement-summary small {
@@ -3597,6 +3701,11 @@ h3 {
 .achievement-card.achieved header b {
   border-color: rgba(97, 229, 162, 0.36);
   color: var(--success);
+}
+
+.task-card.completed:not(.achieved) header b {
+  border-color: rgba(150, 242, 255, 0.38);
+  color: var(--primary-strong);
 }
 
 .achievement-card p {
@@ -4369,6 +4478,8 @@ h3 {
 
   .leaderboard-tabs,
   .points-overview,
+  .task-summary,
+  .task-grid,
   .achievement-filter-bar,
   .achievement-summary,
   .achievement-grid,

@@ -237,6 +237,55 @@ export interface DailySignInClaimResponse extends DailySignInStatus {
   pointAfter: number;
 }
 
+export type TaskScope = "daily" | "weekly";
+
+export interface TaskItem {
+  id: string;
+  name: string;
+  description: string;
+  targetValue: number;
+  progress: number;
+  rawProgress?: number;
+  completed: boolean;
+  claimed: boolean;
+  activityPoints: number;
+  rewards: RedeemRewards;
+}
+
+export interface TaskActivityMilestone {
+  threshold: number;
+  rewards: RedeemRewards;
+  claimed: boolean;
+  available: boolean;
+}
+
+export interface TaskScopeOverview {
+  scope: TaskScope;
+  label: string;
+  periodKey: string;
+  startsAt: string;
+  endsAt: string;
+  activity: number;
+  maxActivity: number;
+  tasks: TaskItem[];
+  milestones: TaskActivityMilestone[];
+}
+
+export interface TaskOverview {
+  generatedAt: string;
+  daily: TaskScopeOverview;
+  weekly: TaskScopeOverview;
+}
+
+export interface TaskClaimResponse {
+  scope: TaskScope;
+  periodKey: string;
+  task?: TaskItem;
+  milestone?: TaskActivityMilestone;
+  activity?: number;
+  rewards: RedeemRewards;
+}
+
 export interface ExchangeCostItem {
   itemId: number;
   num: number;
@@ -413,6 +462,7 @@ export type PointLedgerSourceType =
   | "daily_sign_in"
   | "exchange_shop"
   | "achievement"
+  | "task"
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle";

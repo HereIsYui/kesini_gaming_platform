@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import {
   Boxes,
+  CalendarCheck,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Coins,
   Gift,
   History,
+  ListChecks,
   Lock,
   LoaderCircle,
   LogIn,
@@ -42,6 +45,12 @@ import type {
   CardRarity,
   DailySignInClaimResponse,
   DailySignInStatus,
+  TaskActivityMilestone,
+  TaskClaimResponse,
+  TaskItem,
+  TaskOverview,
+  TaskScope,
+  TaskScopeOverview,
   AchievementListResponse,
   AchievementNotification,
   AchievementRecord,
@@ -95,6 +104,7 @@ const sectionItems = [
   { key: "synthesize", label: "图鉴", icon: Package },
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
+  { key: "tasks", label: "任务", icon: ListChecks },
   { key: "achievements", label: "成就", icon: ShieldCheck },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
@@ -173,6 +183,8 @@ const userCards = ref<UserCardsResponse | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
+const tasksOverview = ref<TaskOverview | null>(null);
+const taskScope = ref<TaskScope>("daily");
 const launchActivityModalOpen = ref(false);
 const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
@@ -256,6 +268,8 @@ const busy = reactive({
   catalog: false,
   shop: false,
   redeem: false,
+  tasks: false,
+  claimTask: false,
   achievements: false,
   trade: false,
   recycle: false,
@@ -315,6 +329,31 @@ const dailySignInCycleDay = computed(() => dailySignIn.value?.cycleDay || 1);
 const dailySignInRewardPoints = computed(
   () => dailySignIn.value?.rewardPoints || 10,
 );
+const activeTaskOverview = computed<TaskScopeOverview | null>(() =>
+  tasksOverview.value ? tasksOverview.value[taskScope.value] : null,
+);
+const activeTaskList = computed<TaskItem[]>(
+  () => activeTaskOverview.value?.tasks || [],
+);
+const activeTaskMilestones = computed<TaskActivityMilestone[]>(
+  () => activeTaskOverview.value?.milestones || [],
+);
+const taskCompletedCount = computed(
+  () => activeTaskList.value.filter((task) => task.completed).length,
+);
+const taskClaimedCount = computed(
+  () => activeTaskList.value.filter((task) => task.claimed).length,
+);
+const taskActivityPercent = computed(() => {
+  const overview = activeTaskOverview.value;
+  if (!overview?.maxActivity) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    Math.min(100, Math.round((overview.activity / overview.maxActivity) * 100)),
+  );
+});
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
 );
@@ -543,6 +582,7 @@ const pointSourceOptions = [
   { value: "daily_sign_in", label: "每日签到" },
   { value: "exchange_shop", label: "兑换商店" },
   { value: "achievement", label: "成就奖励" },
+  { value: "task", label: "任务奖励" },
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
   { value: "shop_recycle", label: "商店回收" },
@@ -681,6 +721,9 @@ watch(activeSection, async (section) => {
   if (section === "synthesize") {
     await loadUserCatalog();
   }
+  if (section === "tasks" && isAuthed.value) {
+    await loadTasks();
+  }
 });
 
 function notify(type: FeedbackType, text: string) {
@@ -803,6 +846,8 @@ function logout() {
   catalogError.value = "";
   launchActivity.value = null;
   dailySignIn.value = null;
+  tasksOverview.value = null;
+  taskScope.value = "daily";
   launchActivityModalOpen.value = false;
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
@@ -944,6 +989,7 @@ async function loadPrivateData() {
     loadUserCatalog(),
     loadLaunchActivity(),
     loadDailySignIn(),
+    loadTasks(),
     loadLeaderboard(),
     loadAchievements(),
     loadAchievementNotifications(),
@@ -1123,6 +1169,22 @@ async function loadDailySignIn() {
   dailySignIn.value = await request<DailySignInStatus>(
     "/daily-sign-in/status",
   );
+}
+
+async function loadTasks() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.tasks = true;
+  try {
+    tasksOverview.value = await request<TaskOverview>("/tasks/overview");
+  } catch (error) {
+    if (activeSection.value === "tasks") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.tasks = false;
+  }
 }
 
 async function loadLeaderboard() {
@@ -1467,11 +1529,77 @@ async function claimDailySignIn() {
     if (pointRecords.value) {
       await loadPointRecords();
     }
+    await loadTasks();
     notify("success", `签到 +${data.rewardPoints}`);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
     busy.signIn = false;
+  }
+}
+
+async function claimTaskReward(task: TaskItem) {
+  const overview = activeTaskOverview.value;
+  if (!isAuthed.value || !overview) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (!task.completed) {
+    notify("info", "任务还在进行中");
+    return;
+  }
+  if (task.claimed) {
+    notify("info", "任务奖励已领取");
+    return;
+  }
+  busy.claimTask = true;
+  try {
+    const data = await request<TaskClaimResponse>("/tasks/claim", {
+      method: "POST",
+      body: JSON.stringify({
+        taskId: task.id,
+        periodKey: overview.periodKey,
+      }),
+    });
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.claimTask = false;
+  }
+}
+
+async function claimActivityReward(milestone: TaskActivityMilestone) {
+  const overview = activeTaskOverview.value;
+  if (!isAuthed.value || !overview) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (milestone.claimed) {
+    notify("info", "活跃度奖励已领取");
+    return;
+  }
+  if (!milestone.available) {
+    notify("info", "活跃度还不够");
+    return;
+  }
+  busy.claimTask = true;
+  try {
+    const data = await request<TaskClaimResponse>("/tasks/activity/claim", {
+      method: "POST",
+      body: JSON.stringify({
+        scope: overview.scope,
+        periodKey: overview.periodKey,
+        milestone: milestone.threshold,
+      }),
+    });
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
+    await loadPrivateData();
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.claimTask = false;
   }
 }
 
@@ -2127,6 +2255,10 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `兑换项 ${String(meta("exchangeItemName") || meta("exchangeItemId") || "-")} · ${String(
         meta("count") || 1,
       )} 次`;
+    case "task":
+      return `${String(meta("taskName") || meta("milestone") || "任务")} · ${String(
+        meta("periodKey") || "-",
+      )}`;
     case "trade_buy":
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
     case "trade_sell":
@@ -2294,6 +2426,30 @@ function achievementProgressText(achievement: AchievementRecord) {
   const target = Math.max(0, Number(achievement.targetValue || 0));
   const progress = Math.min(Math.max(0, Number(achievement.progress || 0)), target);
   return `${progress} / ${target}`;
+}
+
+function taskProgressPercent(task: TaskItem) {
+  if (task.claimed || task.completed) {
+    return 100;
+  }
+  const target = Math.max(1, Number(task.targetValue || 0));
+  return Math.max(
+    0,
+    Math.min(100, Math.round((Number(task.progress || 0) / target) * 100)),
+  );
+}
+
+function taskProgressText(task: TaskItem) {
+  const target = Math.max(0, Number(task.targetValue || 0));
+  const progress = Math.min(Math.max(0, Number(task.progress || 0)), target);
+  return `${progress} / ${target}`;
+}
+
+function taskPeriodText(overview?: TaskScopeOverview | null) {
+  if (!overview) {
+    return "";
+  }
+  return `${formatDate(overview.startsAt)} - ${formatDate(overview.endsAt)}`;
 }
 
 function resetAchievementFilters() {
@@ -3798,6 +3954,168 @@ function leaderboardRankLabel(rank?: number) {
           <p class="leaderboard-time">
             更新时间：{{ formatDate(leaderboard?.generatedAt) }}
           </p>
+        </div>
+      </section>
+
+      <section
+        v-if="activeSection === 'tasks'"
+        class="panel task-panel"
+        data-section="tasks"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">任务中心</p>
+            <h2>日常与周常</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.tasks"
+            @click="loadTasks"
+          >
+            <RefreshCw :size="16" :class="{ spin: busy.tasks }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <ListChecks :size="30" />
+          <strong>登录后查看任务</strong>
+          <span>每日目标和周常奖励会出现在这里。</span>
+        </div>
+        <div
+          v-else-if="busy.tasks && !tasksOverview"
+          class="skeleton-grid achievement-skeleton"
+        >
+          <span v-for="item in 6" :key="item"></span>
+        </div>
+        <div v-else-if="!activeTaskOverview" class="empty-state">
+          <ListChecks :size="30" />
+          <strong>任务正在整理</strong>
+          <span>稍后刷新即可查看。</span>
+        </div>
+        <div v-else class="task-content">
+          <div class="task-toolbar">
+            <div class="segmented-control task-scope-switch">
+              <button
+                type="button"
+                :class="{ active: taskScope === 'daily' }"
+                @click="taskScope = 'daily'"
+              >
+                <CalendarCheck :size="15" />
+                日常
+              </button>
+              <button
+                type="button"
+                :class="{ active: taskScope === 'weekly' }"
+                @click="taskScope = 'weekly'"
+              >
+                <CalendarDays :size="15" />
+                周常
+              </button>
+            </div>
+            <span>{{ taskPeriodText(activeTaskOverview) }}</span>
+          </div>
+
+          <div class="achievement-summary task-summary">
+            <article>
+              <small>已完成</small>
+              <strong>{{ taskCompletedCount }}/{{ activeTaskList.length }}</strong>
+            </article>
+            <article>
+              <small>已领取</small>
+              <strong>{{ taskClaimedCount }}</strong>
+            </article>
+            <article>
+              <small>活跃度</small>
+              <strong>{{ activeTaskOverview.activity }}</strong>
+            </article>
+          </div>
+
+          <section
+            class="task-activity"
+            :style="{ '--progress': `${taskActivityPercent}%` }"
+          >
+            <header>
+              <div>
+                <strong>{{ activeTaskOverview.label }}活跃度</strong>
+                <span>
+                  {{ activeTaskOverview.activity }} /
+                  {{ activeTaskOverview.maxActivity }}
+                </span>
+              </div>
+              <b>{{ taskActivityPercent }}%</b>
+            </header>
+            <div class="achievement-progress task-activity-progress">
+              <i></i>
+            </div>
+            <div class="task-milestones">
+              <button
+                v-for="milestone in activeTaskMilestones"
+                :key="`${activeTaskOverview.scope}-${milestone.threshold}`"
+                type="button"
+                :class="{
+                  claimed: milestone.claimed,
+                  available: milestone.available,
+                }"
+                :disabled="busy.claimTask || milestone.claimed || !milestone.available"
+                @click="claimActivityReward(milestone)"
+              >
+                <Gift :size="15" />
+                <span>{{ milestone.threshold }}</span>
+                <small>{{ formatRewards(milestone.rewards) }}</small>
+              </button>
+            </div>
+          </section>
+
+          <div class="achievement-grid task-grid">
+            <article
+              v-for="task in activeTaskList"
+              :key="task.id"
+              class="achievement-card task-card"
+              :class="{ achieved: task.claimed, completed: task.completed }"
+              :style="{ '--progress': `${taskProgressPercent(task)}%` }"
+            >
+              <header>
+                <span class="achievement-icon">
+                  <ListChecks :size="17" />
+                </span>
+                <div>
+                  <strong>{{ task.name }}</strong>
+                  <small>活跃度 +{{ task.activityPoints }}</small>
+                </div>
+                <b>{{
+                  task.claimed ? "已领取" : task.completed ? "可领取" : "进行中"
+                }}</b>
+              </header>
+              <p>{{ task.description }}</p>
+              <div class="achievement-meta">
+                <span>{{ taskProgressText(task) }}</span>
+                <span>奖励 {{ formatRewards(task.rewards) }}</span>
+              </div>
+              <div class="achievement-progress" aria-hidden="true">
+                <i></i>
+              </div>
+              <footer>
+                <button
+                  class="primary-action wide"
+                  type="button"
+                  :disabled="busy.claimTask || task.claimed || !task.completed"
+                  @click="claimTaskReward(task)"
+                >
+                  <LoaderCircle
+                    v-if="busy.claimTask && task.completed && !task.claimed"
+                    :size="17"
+                    class="spin"
+                  />
+                  <Gift v-else :size="17" />
+                  {{
+                    task.claimed ? "已领取" : task.completed ? "领取奖励" : "未完成"
+                  }}
+                </button>
+              </footer>
+            </article>
+          </div>
         </div>
       </section>
 

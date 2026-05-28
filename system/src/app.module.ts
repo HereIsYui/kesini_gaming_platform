@@ -27,6 +27,7 @@ import { DailySignInRecord } from "./entity/dailySignInRecord.entity";
 import { AchievementConfig } from "./entity/achievementConfig.entity";
 import { AchievementEvent } from "./entity/achievementEvent.entity";
 import { UserAchievement } from "./entity/userAchievement.entity";
+import { UserTaskClaim } from "./entity/userTaskClaim.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -42,6 +43,7 @@ import { LaunchActivityModule } from "./launch-activity/launch-activity.module";
 import { PointLedgerModule } from "./point-ledger/point-ledger.module";
 import { DailySignInModule } from "./daily-sign-in/daily-sign-in.module";
 import { ShopModule } from "./shop/shop.module";
+import { TasksModule } from "./tasks/tasks.module";
 
 @Module({
   imports: [
@@ -75,6 +77,7 @@ import { ShopModule } from "./shop/shop.module";
       AchievementConfig,
       AchievementEvent,
       UserAchievement,
+      UserTaskClaim,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -90,6 +93,7 @@ import { ShopModule } from "./shop/shop.module";
     DailySignInModule,
     AchievementModule,
     ShopModule,
+    TasksModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

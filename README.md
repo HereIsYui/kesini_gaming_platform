@@ -286,10 +286,16 @@ export FILE_ROOT=/data/kesini/public
 ## 玩法规划 TODO
 
 - [x] P0 第一阶段：卡片收藏锁定、保底进度展示、抽卡历史详情
-- [ ] P1 每日/每周任务、活跃度奖励
+- [x] P1 每日/每周任务、活跃度奖励
 - [ ] P2 卡片养成、阵容编队、轻量 PVE 玩法
 - [ ] P3 赛季系统、赛季商店、活动排行
 - [ ] P4 玩家主页、卡片展示墙、好友/公会等社交扩展
+
+## 任务与活跃度
+
+玩家端新增任务中心，包含日常与周常两类目标。任务进度会根据签到、抽卡、兑换商店、交易、合成和分解等成功记录动态统计；任务奖励领取后才会累计活跃度，达到对应档位后可领取活跃度奖励。
+
+任务奖励和活跃度奖励会直接发放到玩家背包与星穹币账户，并写入星穹币流水，来源显示为“任务奖励”。
 
 ## 每日签到
 
@@ -367,6 +373,21 @@ CREATE TABLE achievement_event (
   PRIMARY KEY (id),
   KEY IDX_achievement_event_uid_type (uid, event_type),
   KEY IDX_achievement_event_created (createdAt)
+);
+
+CREATE TABLE user_task_claim (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  scope varchar(20) NOT NULL,
+  period_key varchar(20) NOT NULL,
+  claim_type varchar(20) NOT NULL,
+  target_key varchar(80) NOT NULL,
+  activity_points int NOT NULL DEFAULT 0,
+  reward_snapshot json NOT NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_user_task_claim_unique (uid, scope, period_key, claim_type, target_key),
+  KEY IDX_user_task_claim_period (uid, scope, period_key)
 );
 ```
 
