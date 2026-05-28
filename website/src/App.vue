@@ -13,7 +13,6 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
-  MoreHorizontal,
   Moon,
   Package,
   Recycle,
@@ -132,7 +131,7 @@ const desktopPrimaryItems = sectionItems.filter((item) =>
     item.key as (typeof desktopPrimarySectionKeys)[number],
   ),
 );
-const desktopMoreItems = sectionItems.filter(
+const userMenuItems = sectionItems.filter(
   (item) =>
     !desktopPrimarySectionKeys.includes(
       item.key as (typeof desktopPrimarySectionKeys)[number],
@@ -186,7 +185,7 @@ const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
-const moreNavOpen = ref(false);
+const userMenuOpen = ref(false);
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -328,8 +327,8 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
-const activeMoreSection = computed(() =>
-  desktopMoreItems.some((item) => item.key === activeSection.value),
+const activeUserMenuSection = computed(() =>
+  userMenuItems.some((item) => item.key === activeSection.value),
 );
 const playerDisplayName = computed(
   () =>
@@ -794,7 +793,7 @@ watch(activePoolId, async (poolId) => {
 });
 
 watch(activeSection, async (section) => {
-  moreNavOpen.value = false;
+  userMenuOpen.value = false;
   if (section === "synthesize") {
     await loadUserCatalog();
   }
@@ -911,9 +910,11 @@ async function applyManualToken() {
   currentUser.value = null;
   notify("info", "Token 已写入，正在加载玩家资产");
   await loadPrivateData();
+  userMenuOpen.value = false;
 }
 
 function logout() {
+  userMenuOpen.value = false;
   clearToken();
   token.value = "";
   currentUser.value = null;
@@ -2792,37 +2793,6 @@ function leaderboardRankLabel(rank?: number) {
           <component :is="item.icon" :size="16" />
           {{ item.label }}
         </RouterLink>
-        <div
-          class="desktop-nav-more"
-          :class="{ open: moreNavOpen }"
-          @keydown.escape="moreNavOpen = false"
-        >
-          <button
-            class="desktop-more-trigger"
-            type="button"
-            :class="{ active: activeMoreSection }"
-            :aria-expanded="moreNavOpen"
-            aria-haspopup="true"
-            aria-label="更多导航"
-            @click="moreNavOpen = !moreNavOpen"
-          >
-            <MoreHorizontal :size="16" />
-            更多
-          </button>
-          <div class="desktop-more-menu" role="menu">
-            <RouterLink
-              v-for="item in desktopMoreItems"
-              :key="item.key"
-              :to="{ name: item.key }"
-              :class="{ active: activeSection === item.key }"
-              role="menuitem"
-              @click="moreNavOpen = false"
-            >
-              <component :is="item.icon" :size="16" />
-              {{ item.label }}
-            </RouterLink>
-          </div>
-        </div>
       </nav>
 
       <div class="top-actions">
@@ -2849,15 +2819,123 @@ function leaderboardRankLabel(rank?: number) {
           />
           <span>刷新</span>
         </button>
-        <button
-          v-if="isAuthed"
-          class="icon-button ghost"
-          type="button"
-          @click="logout"
+        <div
+          class="user-menu-wrap"
+          :class="{ open: userMenuOpen }"
+          @keydown.escape="userMenuOpen = false"
         >
-          <LogOut :size="17" />
-          <span>退出</span>
-        </button>
+          <button
+            class="user-menu-trigger"
+            type="button"
+            :class="{ active: activeUserMenuSection }"
+            :aria-expanded="userMenuOpen"
+            aria-haspopup="true"
+            :aria-label="isAuthed ? '玩家菜单' : '登录菜单'"
+            @click="userMenuOpen = !userMenuOpen"
+          >
+            <span class="user-menu-avatar">
+              <img
+                v-if="isAuthed && currentUser?.avatar"
+                :src="currentUser.avatar"
+                :alt="playerDisplayName"
+              />
+              <span v-else-if="isAuthed">{{ playerInitial }}</span>
+              <LogIn v-else :size="17" />
+            </span>
+            <span class="user-menu-trigger-text">
+              <strong>{{ isAuthed ? playerDisplayName : "登录" }}</strong>
+              <small v-if="isAuthed">{{ stats?.point ?? 0 }} 星穹币</small>
+            </span>
+          </button>
+
+          <div class="user-menu-panel" role="menu">
+            <template v-if="isAuthed">
+              <div class="user-menu-head">
+                <span class="user-menu-avatar large">
+                  <img
+                    v-if="currentUser?.avatar"
+                    :src="currentUser.avatar"
+                    :alt="playerDisplayName"
+                  />
+                  <span v-else>{{ playerInitial }}</span>
+                </span>
+                <div>
+                  <strong>{{ playerDisplayName }}</strong>
+                  <small>{{ playerUidLabel }}</small>
+                </div>
+              </div>
+              <div class="user-menu-balance">
+                <span>星穹币余额</span>
+                <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
+              </div>
+              <nav class="user-menu-links" aria-label="用户菜单导航">
+                <RouterLink
+                  v-for="item in userMenuItems"
+                  :key="item.key"
+                  class="user-menu-link"
+                  :to="{ name: item.key }"
+                  :class="{ active: activeSection === item.key }"
+                  role="menuitem"
+                  @click="userMenuOpen = false"
+                >
+                  <component :is="item.icon" :size="16" />
+                  {{ item.label }}
+                </RouterLink>
+              </nav>
+              <button
+                class="user-menu-link danger"
+                type="button"
+                role="menuitem"
+                @click="logout"
+              >
+                <LogOut :size="16" />
+                退出登录
+              </button>
+            </template>
+            <template v-else>
+              <div class="user-menu-head guest">
+                <span class="user-menu-avatar large">
+                  <UserRound :size="22" />
+                </span>
+                <div>
+                  <strong>登录后同步资产</strong>
+                  <small>抽卡、背包与交易会在登录后加载。</small>
+                </div>
+              </div>
+              <div class="guest-login-actions">
+                <button
+                  class="primary-action wide"
+                  type="button"
+                  :disabled="busy.auth || callbackBusy"
+                  @click="loginWithOpenId"
+                >
+                  <LoaderCircle
+                    v-if="busy.auth || callbackBusy"
+                    :size="18"
+                    class="spin"
+                  />
+                  <LogIn v-else :size="18" />
+                  使用 OpenID 登录
+                </button>
+                <label class="token-box debug-token-box compact">
+                  <span>本地调试 Token</span>
+                  <textarea
+                    v-model="manualToken"
+                    placeholder="粘贴玩家 JWT，仅保存在当前浏览器"
+                  ></textarea>
+                </label>
+                <button
+                  class="secondary-action wide"
+                  type="button"
+                  @click="applyManualToken"
+                >
+                  <ShieldCheck :size="18" />
+                  使用 Token 进入
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
     </header>
 
