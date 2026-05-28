@@ -29,7 +29,7 @@ function createRepository(overrides: Record<string, any> = {}) {
   };
 }
 
-function createService(repositories: Map<any, any>) {
+function createService(repositories: Map<any, any>, seasonService?: any) {
   const manager = {
     getRepository: jest.fn((entity) => repositories.get(entity)),
   };
@@ -41,17 +41,27 @@ function createService(repositories: Map<any, any>) {
     grantRewards: jest.fn().mockResolvedValue(undefined),
   };
   return {
-    service: new TasksService(dataSource as any, rewardService as any),
+    service: new TasksService(
+      dataSource as any,
+      rewardService as any,
+      seasonService,
+    ),
     dataSource,
     manager,
     rewardService,
+    seasonService,
   };
 }
 
 function baseRepositories(overrides: Array<[any, any]> = []) {
   return new Map<any, any>([
     [UserTaskClaim, createRepository()],
-    [User, createRepository({ findOne: jest.fn().mockResolvedValue({ uid: "u1", point: 0 }) })],
+    [
+      User,
+      createRepository({
+        findOne: jest.fn().mockResolvedValue({ uid: "u1", point: 0 }),
+      }),
+    ],
     [UserHistory, createRepository()],
     [DailySignInRecord, createRepository()],
     [ExchangeShopUsage, createRepository()],
@@ -130,6 +140,54 @@ describe("TasksService", () => {
     ).rejects.toThrow("任务奖励已领取");
   });
 
+  it("领取任务奖励后同步获得赛季积分", async () => {
+    const claimRepository = createRepository();
+    const user = { uid: "u1", point: 0 } as User;
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const historyRepository = createRepository({
+      createQueryBuilder: jest.fn(() => createQueryBuilder({ total: 1 })),
+    });
+    const seasonService = {
+      grantTaskActivity: jest.fn().mockResolvedValue({
+        title: "赛季积分：星轨初响",
+      }),
+    };
+    const { service, manager } = createService(
+      baseRepositories([
+        [UserTaskClaim, claimRepository],
+        [User, userRepository],
+        [UserHistory, historyRepository],
+      ]),
+      seasonService,
+    );
+
+    await expect(
+      service.claimTask("u1", {
+        taskId: "daily_draw_1",
+        periodKey: "2026-05-07",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        seasonPoints: {
+          gained: 20,
+          title: "赛季积分：星轨初响",
+        },
+      }),
+    );
+    expect(seasonService.grantTaskActivity).toHaveBeenCalledWith(
+      manager,
+      "u1",
+      {
+        periodKey: "2026-05-07",
+        taskId: "daily_draw_1",
+        taskName: "星轨初响",
+        activityPoints: 20,
+      },
+    );
+  });
+
   it("未达到目标时不会发放任务奖励", async () => {
     const historyRepository = createRepository({
       createQueryBuilder: jest.fn(() => createQueryBuilder({ total: 0 })),
@@ -204,7 +262,9 @@ describe("TasksService", () => {
   });
 
   it("概览中未领取任务不会计入活跃度", async () => {
-    const claimRepository = createRepository({ find: jest.fn().mockResolvedValue([]) });
+    const claimRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+    });
     const historyRepository = createRepository({
       createQueryBuilder: jest.fn(() => createQueryBuilder({ total: 10 })),
     });
@@ -217,8 +277,9 @@ describe("TasksService", () => {
 
     const overview = await service.getOverview("u1");
     expect(overview.daily.activity).toBe(0);
-    expect(overview.daily.tasks.find((task) => task.id === "daily_draw_10"))
-      .toEqual(expect.objectContaining({ completed: true, claimed: false }));
+    expect(
+      overview.daily.tasks.find((task) => task.id === "daily_draw_10"),
+    ).toEqual(expect.objectContaining({ completed: true, claimed: false }));
     expect(overview.daily.milestones[0]).toEqual(
       expect.objectContaining({ threshold: 30, available: false }),
     );
@@ -226,12 +287,14 @@ describe("TasksService", () => {
 
   it("周常签到按自然周统计不同签到日", async () => {
     const signRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { sign_date: "2026-05-04" },
-        { sign_date: "2026-05-05" },
-        { sign_date: "2026-05-05" },
-        { sign_date: "2026-05-06" },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { sign_date: "2026-05-04" },
+          { sign_date: "2026-05-05" },
+          { sign_date: "2026-05-05" },
+          { sign_date: "2026-05-06" },
+        ]),
     });
     const { service } = createService(
       baseRepositories([[DailySignInRecord, signRepository]]),

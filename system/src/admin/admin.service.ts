@@ -44,6 +44,10 @@ import {
   RechargeRecord,
   RechargeRecordStatus,
 } from "src/entity/rechargeRecord.entity";
+import { SeasonConfig } from "src/entity/seasonConfig.entity";
+import { SeasonPointRecord } from "src/entity/seasonPointRecord.entity";
+import { SeasonShopItem } from "src/entity/seasonShopItem.entity";
+import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
@@ -145,6 +149,18 @@ export class AdminService {
     @InjectRepository(PveChallengeRecord)
     private readonly pveRecordRepository?: Repository<PveChallengeRecord>,
     @Optional()
+    @InjectRepository(SeasonConfig)
+    private readonly seasonRepository?: Repository<SeasonConfig>,
+    @Optional()
+    @InjectRepository(SeasonShopItem)
+    private readonly seasonShopItemRepository?: Repository<SeasonShopItem>,
+    @Optional()
+    @InjectRepository(SeasonPointRecord)
+    private readonly seasonPointRecordRepository?: Repository<SeasonPointRecord>,
+    @Optional()
+    @InjectRepository(SeasonShopUsage)
+    private readonly seasonShopUsageRepository?: Repository<SeasonShopUsage>,
+    @Optional()
     private readonly siteConfigService?: SiteConfigService,
   ) {}
 
@@ -217,12 +233,18 @@ export class AdminService {
   }
 
   async getOptions() {
-    const [pools, cards, dropItems] = await Promise.all([
+    const [pools, cards, dropItems, seasons] = await Promise.all([
       this.poolRepository.find({
         order: { sort_order: "ASC", id: "ASC" } as any,
       }),
       this.cardRepository.find({ order: { id: "DESC" } as any }),
       this.dropRepository.find({ order: { id: "DESC" } as any }),
+      this.seasonRepository
+        ? this.seasonRepository.find({
+            where: { delete_flag: false },
+            order: { id: "DESC" } as any,
+          })
+        : Promise.resolve([] as SeasonConfig[]),
     ]);
     const defaultFragmentItem = dropItems.find(
       (item) =>
@@ -258,6 +280,11 @@ export class AdminService {
             value: defaultFragmentItem.id,
           }
         : null,
+      seasons: seasons.map((season) => ({
+        label: `${season.name} · ${season.season_key}`,
+        value: season.season_key,
+        enabled: season.enabled === true,
+      })),
     };
   }
 
@@ -305,9 +332,7 @@ export class AdminService {
       throw new Error("仅支持 JPG、PNG、WEBP、MP4、WEBM 文件");
     }
     if (file.size > media.maxSize) {
-      throw new Error(
-        `${media.label}不能超过${media.maxSize / 1024 / 1024}MB`,
-      );
+      throw new Error(`${media.label}不能超过${media.maxSize / 1024 / 1024}MB`);
     }
 
     const publicRoot = process.env.FILE_ROOT
@@ -731,9 +756,7 @@ export class AdminService {
           .filter((poolId) => Number.isInteger(poolId) && poolId > 0),
       ),
     ];
-    const uids = [
-      ...new Set(pityRows.map((pity) => pity.uid).filter(Boolean)),
-    ];
+    const uids = [...new Set(pityRows.map((pity) => pity.uid).filter(Boolean))];
     const [pools, users, configs] = await Promise.all([
       poolIds.length
         ? this.poolRepository.find({ where: { id: In(poolIds) } })
@@ -952,10 +975,7 @@ export class AdminService {
 
     const next = code;
     if (body.name !== undefined) {
-      next.name = this.normalizeRequiredString(
-        body.name,
-        "兑换码名称不能为空",
-      );
+      next.name = this.normalizeRequiredString(body.name, "兑换码名称不能为空");
     }
     if (body.description !== undefined) {
       next.description = this.normalizeOptionalString(body.description);
@@ -1497,9 +1517,7 @@ export class AdminService {
     return { deleted: true };
   }
 
-  async listPveRecords(
-    query: PageQuery & { uid?: string; stageId?: number },
-  ) {
+  async listPveRecords(query: PageQuery & { uid?: string; stageId?: number }) {
     const { page, pageSize } = this.normalizePage(query);
     const where: FindOptionsWhere<PveChallengeRecord> = {};
     if (query.uid) {
@@ -1518,17 +1536,238 @@ export class AdminService {
     );
   }
 
+  async listSeasons(query: PageQuery) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where = query.keyword
+      ? [
+          { season_key: Like(`%${query.keyword}%`), delete_flag: false },
+          { name: Like(`%${query.keyword}%`), delete_flag: false },
+        ]
+      : { delete_flag: false };
+    return this.findAndPage(
+      this.mustSeasonRepository(),
+      where,
+      page,
+      pageSize,
+      { id: "DESC" } as any,
+    );
+  }
+
+  async getSeason(id: number) {
+    const season = await this.mustFind(
+      this.mustSeasonRepository(),
+      id,
+      "赛季不存在",
+    );
+    if (season.delete_flag) {
+      throw new Error("赛季不存在");
+    }
+    return season;
+  }
+
+  async createSeason(body: Partial<SeasonConfig>) {
+    const normalized = this.normalizeSeasonInput(body, true);
+    const existing = await this.mustSeasonRepository().findOne({
+      where: { season_key: normalized.season_key },
+    });
+    if (existing && existing.delete_flag !== true) {
+      throw new Error("赛季编码已存在");
+    }
+    if (existing && existing.delete_flag === true) {
+      Object.assign(existing, normalized, { delete_flag: false });
+      this.assertSeasonTimeRange(existing.starts_at, existing.ends_at);
+      return this.mustSeasonRepository().save(existing);
+    }
+    const season = this.mustSeasonRepository().create({
+      ...normalized,
+      delete_flag: false,
+    });
+    this.assertSeasonTimeRange(season.starts_at, season.ends_at);
+    return this.mustSeasonRepository().save(season);
+  }
+
+  async updateSeason(id: number, body: Partial<SeasonConfig>) {
+    const season = await this.getSeason(id);
+    const normalized = this.normalizeSeasonInput(
+      {
+        ...season,
+        ...body,
+        enabled:
+          body.enabled === undefined || body.enabled === null
+            ? season.enabled
+            : body.enabled,
+        shop_enabled:
+          body.shop_enabled === undefined || body.shop_enabled === null
+            ? season.shop_enabled
+            : body.shop_enabled,
+        leaderboard_enabled:
+          body.leaderboard_enabled === undefined ||
+          body.leaderboard_enabled === null
+            ? season.leaderboard_enabled
+            : body.leaderboard_enabled,
+      },
+      false,
+    );
+    if (normalized.season_key !== season.season_key) {
+      const existing = await this.mustSeasonRepository().findOne({
+        where: { season_key: normalized.season_key },
+      });
+      if (existing && existing.id !== id && existing.delete_flag !== true) {
+        throw new Error("赛季编码已存在");
+      }
+    }
+    Object.assign(season, normalized);
+    this.assertSeasonTimeRange(season.starts_at, season.ends_at);
+    return this.mustSeasonRepository().save(season);
+  }
+
+  async deleteSeason(id: number) {
+    const season = await this.getSeason(id);
+    season.enabled = false;
+    season.shop_enabled = false;
+    season.leaderboard_enabled = false;
+    season.delete_flag = true;
+    await this.mustSeasonRepository().save(season);
+    return { deleted: true };
+  }
+
+  async listSeasonShopItems(query: PageQuery & { seasonKey?: string }) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<SeasonShopItem> = { delete_flag: false };
+    if (query.seasonKey) {
+      where.season_key = query.seasonKey;
+    }
+    if (query.keyword) {
+      const keyword = `%${query.keyword}%`;
+      const base = { delete_flag: false };
+      const filters = [
+        { ...base, name: Like(keyword) },
+        { ...base, season_key: Like(keyword) },
+      ] as FindOptionsWhere<SeasonShopItem>[];
+      return this.findAndPage(
+        this.mustSeasonShopItemRepository(),
+        filters,
+        page,
+        pageSize,
+        { sort_order: "ASC", id: "DESC" } as any,
+      );
+    }
+    return this.findAndPage(
+      this.mustSeasonShopItemRepository(),
+      where,
+      page,
+      pageSize,
+      { sort_order: "ASC", id: "DESC" } as any,
+    );
+  }
+
+  async getSeasonShopItem(id: number) {
+    const item = await this.mustFind(
+      this.mustSeasonShopItemRepository(),
+      id,
+      "赛季商店兑换项不存在",
+    );
+    if (item.delete_flag) {
+      throw new Error("赛季商店兑换项不存在");
+    }
+    return item;
+  }
+
+  async createSeasonShopItem(body: Partial<SeasonShopItem>) {
+    const normalized = await this.normalizeSeasonShopItemInput(body, true);
+    const entity = this.mustSeasonShopItemRepository().create({
+      ...normalized,
+      used_count: 0,
+      delete_flag: false,
+    });
+    this.assertSeasonShopTimeRange(entity.starts_at, entity.ends_at);
+    return this.mustSeasonShopItemRepository().save(entity);
+  }
+
+  async updateSeasonShopItem(id: number, body: Partial<SeasonShopItem>) {
+    const item = await this.getSeasonShopItem(id);
+    const normalized = await this.normalizeSeasonShopItemInput(
+      {
+        ...item,
+        ...body,
+        enabled:
+          body.enabled === undefined || body.enabled === null
+            ? item.enabled
+            : body.enabled,
+      },
+      false,
+    );
+    if (
+      normalized.total_limit !== null &&
+      normalized.total_limit !== undefined &&
+      item.used_count > normalized.total_limit
+    ) {
+      throw new Error("总库存不能小于已兑换数量");
+    }
+    Object.assign(item, normalized);
+    this.assertSeasonShopTimeRange(item.starts_at, item.ends_at);
+    return this.mustSeasonShopItemRepository().save(item);
+  }
+
+  async deleteSeasonShopItem(id: number) {
+    const item = await this.getSeasonShopItem(id);
+    item.enabled = false;
+    item.delete_flag = true;
+    await this.mustSeasonShopItemRepository().save(item);
+    return { deleted: true };
+  }
+
+  async listSeasonPointRecords(
+    query: PageQuery & { uid?: string; seasonKey?: string },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<SeasonPointRecord> = {};
+    if (query.uid) {
+      where.uid = Like(`%${query.uid}%`);
+    }
+    if (query.seasonKey) {
+      where.season_key = query.seasonKey;
+    }
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(
+        this.mustSeasonPointRecordRepository(),
+        where,
+        page,
+        pageSize,
+      ),
+    );
+  }
+
+  async listSeasonShopUsages(
+    query: PageQuery & { uid?: string; itemId?: number },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<SeasonShopUsage> = {};
+    if (query.uid) {
+      where.uid = Like(`%${query.uid}%`);
+    }
+    if (query.itemId !== undefined) {
+      where.shop_item_id = query.itemId;
+    }
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(
+        this.mustSeasonShopUsageRepository(),
+        where,
+        page,
+        pageSize,
+      ),
+    );
+  }
+
   private getUserDisplayName(user?: User | null) {
     return String(user?.nickname || user?.name || user?.uid || "");
   }
 
-  private async getUserDisplayMapByUids(values: Array<string | null | undefined>) {
+  private async getUserDisplayMapByUids(
+    values: Array<string | null | undefined>,
+  ) {
     const uids = [
-      ...new Set(
-        values
-          .map((uid) => String(uid || "").trim())
-          .filter(Boolean),
-      ),
+      ...new Set(values.map((uid) => String(uid || "").trim()).filter(Boolean)),
     ];
     if (uids.length === 0) {
       return new Map<string, string>();
@@ -1541,12 +1780,7 @@ export class AdminService {
 
   private async attachUserDisplayToUidRows<
     T extends { uid?: string | null },
-  >(result: {
-    list: T[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }) {
+  >(result: { list: T[]; total: number; page: number; pageSize: number }) {
     const displayMap = await this.getUserDisplayMapByUids(
       result.list.map((item) => item.uid),
     );
@@ -1735,8 +1969,7 @@ export class AdminService {
       ...new Set(
         DECOMPOSE_CONFIG_RARITIES.flatMap((rarity) =>
           config.rules[rarity].drops.map((drop) => drop.itemId),
-        )
-          .filter((itemId) => itemId > 0),
+        ).filter((itemId) => itemId > 0),
       ),
     ];
     const items =
@@ -2018,6 +2251,34 @@ export class AdminService {
     return this.pveRecordRepository;
   }
 
+  private mustSeasonRepository() {
+    if (!this.seasonRepository) {
+      throw new Error("赛季配置仓库未初始化");
+    }
+    return this.seasonRepository;
+  }
+
+  private mustSeasonShopItemRepository() {
+    if (!this.seasonShopItemRepository) {
+      throw new Error("赛季商店仓库未初始化");
+    }
+    return this.seasonShopItemRepository;
+  }
+
+  private mustSeasonPointRecordRepository() {
+    if (!this.seasonPointRecordRepository) {
+      throw new Error("赛季积分记录仓库未初始化");
+    }
+    return this.seasonPointRecordRepository;
+  }
+
+  private mustSeasonShopUsageRepository() {
+    if (!this.seasonShopUsageRepository) {
+      throw new Error("赛季商店兑换记录仓库未初始化");
+    }
+    return this.seasonShopUsageRepository;
+  }
+
   private normalizePage(query: PageQuery) {
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
@@ -2138,7 +2399,11 @@ export class AdminService {
     return String(value ?? "").trim();
   }
 
-  private normalizeOptionalIntegerInput(value: unknown, message: string, min = 0) {
+  private normalizeOptionalIntegerInput(
+    value: unknown,
+    message: string,
+    min = 0,
+  ) {
     if (value === undefined || value === null || value === "") {
       return min;
     }
@@ -2216,7 +2481,9 @@ export class AdminService {
     const normalizedCards = cards
       .map((card) => ({
         cardId: Number(card.cardId),
-        rarity: String(card.rarity || "").trim().toUpperCase(),
+        rarity: String(card.rarity || "")
+          .trim()
+          .toUpperCase(),
         num: Number(card.num),
       }))
       .filter((card) => card.cardId > 0 || card.num > 0 || card.rarity);
@@ -2295,6 +2562,78 @@ export class AdminService {
       sort_order: sortOrder,
       starts_at: this.parseOptionalDate(body.starts_at),
       ends_at: this.parseOptionalDate(body.ends_at),
+    };
+  }
+
+  private normalizeSeasonInput(body: Partial<SeasonConfig>, creating: boolean) {
+    const seasonKey = this.normalizeSeasonKey(body.season_key);
+    const name = this.normalizeRequiredString(body.name, "赛季名称不能为空");
+    return {
+      season_key: seasonKey,
+      name,
+      description: this.normalizeOptionalString(body.description),
+      enabled:
+        body.enabled === undefined || body.enabled === null
+          ? creating
+          : body.enabled === true,
+      shop_enabled:
+        body.shop_enabled === undefined || body.shop_enabled === null
+          ? true
+          : body.shop_enabled === true,
+      leaderboard_enabled:
+        body.leaderboard_enabled === undefined ||
+        body.leaderboard_enabled === null
+          ? true
+          : body.leaderboard_enabled === true,
+      starts_at: this.parseOptionalDate(body.starts_at),
+      ends_at: this.parseOptionalDate(body.ends_at),
+    };
+  }
+
+  private async normalizeSeasonShopItemInput(
+    body: Partial<SeasonShopItem>,
+    creating: boolean,
+  ) {
+    const seasonKey = this.normalizeSeasonKey(body.season_key);
+    const season = await this.mustSeasonRepository().findOne({
+      where: { season_key: seasonKey, delete_flag: false },
+    });
+    if (!season) {
+      throw new Error("所属赛季不存在");
+    }
+    const name = this.normalizeRequiredString(body.name, "兑换项名称不能为空");
+    const costPoints = this.normalizeIntegerInput(
+      body.cost_points ?? 1,
+      "赛季积分价格必须为正整数",
+      1,
+    );
+    const sortOrder = this.normalizeIntegerInput(
+      body.sort_order ?? 0,
+      "排序值必须为非负整数",
+      0,
+    );
+    const rewards = await this.normalizeRewards(
+      body.rewards,
+      "赛季商店奖励不能为空",
+    );
+    return {
+      season_key: seasonKey,
+      name,
+      description: this.normalizeOptionalString(body.description),
+      enabled:
+        body.enabled === undefined || body.enabled === null
+          ? creating
+          : body.enabled === true,
+      cost_points: costPoints,
+      rewards,
+      total_limit: this.normalizeTotalLimit(body.total_limit),
+      user_limit: this.normalizeNullablePositiveInt(
+        body.user_limit,
+        "单用户限兑必须为正整数",
+      ),
+      starts_at: this.parseOptionalDate(body.starts_at),
+      ends_at: this.parseOptionalDate(body.ends_at),
+      sort_order: sortOrder,
     };
   }
 
@@ -2553,6 +2892,19 @@ export class AdminService {
     return key;
   }
 
+  private normalizeSeasonKey(value: unknown) {
+    const key = String(value || "").trim();
+    if (!key) {
+      throw new Error("赛季编码不能为空");
+    }
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(key)) {
+      throw new Error(
+        "赛季编码只能包含字母、数字、下划线和中划线，且不超过64位",
+      );
+    }
+    return key;
+  }
+
   private async assertExchangeItemsAvailable(itemIds: number[], label: string) {
     const uniqueItemIds = [...new Set(itemIds)];
     if (uniqueItemIds.length === 0) {
@@ -2584,24 +2936,28 @@ export class AdminService {
       exchangeItems,
       launchConfigs,
       pveStages,
+      seasonShopItems,
     ] = await Promise.all([
-        this.inventoryRepository.count({ where: { item_id: itemId } }),
-        this.cardRepository.find({
-          where: { drop_item: Like(`%${itemId}%`) },
-        }),
-        this.redeemCodeRepository.find({
-          where: { delete_flag: false },
-        }),
-        this.exchangeItemRepository.find({
-          where: { delete_flag: false },
-        }),
-        this.launchActivityConfigRepository
-          ? this.launchActivityConfigRepository.find()
-          : Promise.resolve([] as LaunchActivityConfig[]),
-        this.pveStageRepository
-          ? this.pveStageRepository.find({ where: { delete_flag: false } })
-          : Promise.resolve([] as PveStage[]),
-      ]);
+      this.inventoryRepository.count({ where: { item_id: itemId } }),
+      this.cardRepository.find({
+        where: { drop_item: Like(`%${itemId}%`) },
+      }),
+      this.redeemCodeRepository.find({
+        where: { delete_flag: false },
+      }),
+      this.exchangeItemRepository.find({
+        where: { delete_flag: false },
+      }),
+      this.launchActivityConfigRepository
+        ? this.launchActivityConfigRepository.find()
+        : Promise.resolve([] as LaunchActivityConfig[]),
+      this.pveStageRepository
+        ? this.pveStageRepository.find({ where: { delete_flag: false } })
+        : Promise.resolve([] as PveStage[]),
+      this.seasonShopItemRepository
+        ? this.seasonShopItemRepository.find({ where: { delete_flag: false } })
+        : Promise.resolve([] as SeasonShopItem[]),
+    ]);
 
     if (inventoryCount > 0) {
       return true;
@@ -2632,6 +2988,11 @@ export class AdminService {
       pveStages.some((stage) =>
         (stage.rewards?.items || []).some(
           (item) => Number(item.itemId) === itemId,
+        ),
+      ) ||
+      seasonShopItems.some((item) =>
+        (item.rewards?.items || []).some(
+          (entry) => Number(entry.itemId) === itemId,
         ),
       )
     );
@@ -2698,6 +3059,18 @@ export class AdminService {
   private assertPveStageTimeRange(start?: Date | null, end?: Date | null) {
     if (start && end && start.getTime() >= end.getTime()) {
       throw new Error("关卡结束时间必须晚于开始时间");
+    }
+  }
+
+  private assertSeasonTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() >= end.getTime()) {
+      throw new Error("赛季结束时间必须晚于开始时间");
+    }
+  }
+
+  private assertSeasonShopTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() >= end.getTime()) {
+      throw new Error("赛季商店兑换项结束时间必须晚于开始时间");
     }
   }
 }

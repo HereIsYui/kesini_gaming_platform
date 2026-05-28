@@ -31,6 +31,11 @@ import { UserTaskClaim } from "./entity/userTaskClaim.entity";
 import { UserFormationSlot } from "./entity/userFormationSlot.entity";
 import { PveStage } from "./entity/pveStage.entity";
 import { PveChallengeRecord } from "./entity/pveChallengeRecord.entity";
+import { SeasonConfig } from "./entity/seasonConfig.entity";
+import { SeasonPointRecord } from "./entity/seasonPointRecord.entity";
+import { SeasonShopItem } from "./entity/seasonShopItem.entity";
+import { SeasonShopUsage } from "./entity/seasonShopUsage.entity";
+import { UserSeasonProgress } from "./entity/userSeasonProgress.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -49,6 +54,7 @@ import { ShopModule } from "./shop/shop.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { FormationModule } from "./formation/formation.module";
 import { PveModule } from "./pve/pve.module";
+import { SeasonModule } from "./season/season.module";
 
 @Module({
   imports: [
@@ -86,6 +92,11 @@ import { PveModule } from "./pve/pve.module";
       UserFormationSlot,
       PveStage,
       PveChallengeRecord,
+      SeasonConfig,
+      SeasonPointRecord,
+      SeasonShopItem,
+      SeasonShopUsage,
+      UserSeasonProgress,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -104,6 +115,7 @@ import { PveModule } from "./pve/pve.module";
     TasksModule,
     FormationModule,
     PveModule,
+    SeasonModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

@@ -87,6 +87,10 @@ import type {
   RechargeConfig,
   RechargePointsResponse,
   RedeemClaimResponse,
+  SeasonOverview,
+  SeasonPointRecord,
+  SeasonShopBuyResponse,
+  SeasonShopItem,
   TradeConfig,
   TradeListing,
   TradePageResponse,
@@ -116,6 +120,7 @@ const sectionItems = [
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "tasks", label: "任务", icon: ListChecks },
+  { key: "season", label: "赛季", icon: CalendarDays },
   { key: "achievements", label: "成就", icon: ShieldCheck },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
@@ -227,6 +232,7 @@ const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
 const taskScope = ref<TaskScope>("daily");
+const seasonOverview = ref<SeasonOverview | null>(null);
 const launchActivityModalOpen = ref(false);
 const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
@@ -242,6 +248,7 @@ const pointRecordTypeFilter = ref<"all" | "income" | "expense">("all");
 const pointRecordSourceFilter = ref<PointLedgerSourceType | "">("");
 const pointRecordTotalPages = ref(1);
 const exchangeItems = ref<ExchangeShopItem[]>([]);
+const seasonShopCounts = reactive<Record<number, number>>({});
 const tradeListings = ref<TradeListing[]>([]);
 const myTradeListings = ref<TradeListing[]>([]);
 const tradeRecords = ref<TradeRecord[]>([]);
@@ -314,6 +321,8 @@ const busy = reactive({
   redeem: false,
   tasks: false,
   claimTask: false,
+  season: false,
+  seasonShop: false,
   achievements: false,
   trade: false,
   recycle: false,
@@ -407,6 +416,27 @@ const taskActivityPercent = computed(() => {
     Math.min(100, Math.round((overview.activity / overview.maxActivity) * 100)),
   );
 });
+const activeSeason = computed(() => seasonOverview.value?.season || null);
+const seasonPoints = computed(
+  () => seasonOverview.value?.points || { earned: 0, balance: 0 },
+);
+const seasonShopItems = computed<SeasonShopItem[]>(
+  () => seasonOverview.value?.shopItems || [],
+);
+const seasonPointRecords = computed<SeasonPointRecord[]>(
+  () => seasonOverview.value?.records || [],
+);
+const seasonLeaderboard = computed(
+  () => seasonOverview.value?.leaderboard || { list: [], me: null },
+);
+const seasonLeaderboardRows = computed<LeaderboardEntry[]>(
+  () => seasonLeaderboard.value.list || [],
+);
+const seasonRankText = computed(() =>
+  seasonLeaderboard.value.me?.rank
+    ? `第 ${seasonLeaderboard.value.me.rank} 名`
+    : "暂未上榜",
+);
 const selectedPool = computed(() =>
   pools.value.find((pool) => pool.id === activePoolId.value),
 );
@@ -488,7 +518,8 @@ const localCatalogCards = computed<CatalogCard[]>(() =>
       rarity,
       collected: false,
       ownedCount: 0,
-      requiredFragments: rarity === "UR" ? 0 : requiredFragmentsForRarity(rarity),
+      requiredFragments:
+        rarity === "UR" ? 0 : requiredFragmentsForRarity(rarity),
       fragmentCount: 0,
       canSynthesize: false,
       costLabel: synthesisCostLabel(rarity),
@@ -519,7 +550,8 @@ const filteredSynthesisCards = computed<CatalogCard[]>(() => {
   );
 });
 const synthesisAvailableCount = computed(
-  () => filteredSynthesisCards.value.filter((item) => item.canSynthesize).length,
+  () =>
+    filteredSynthesisCards.value.filter((item) => item.canSynthesize).length,
 );
 const catalogCollectedCount = computed(
   () => catalogCards.value.filter((item) => item.collected).length,
@@ -544,16 +576,15 @@ const pointLedgerRows = computed<PointLedgerRecord[]>(
 );
 const achievementCategories = computed(() =>
   Array.from(
-    new Set(achievements.value.map((achievement) => achievement.category || "常规")),
+    new Set(
+      achievements.value.map((achievement) => achievement.category || "常规"),
+    ),
   ),
 );
 const filteredAchievements = computed(() => {
   const keyword = achievementKeyword.value.trim().toLowerCase();
   return achievements.value.filter((achievement) => {
-    if (
-      achievementStatusFilter.value === "achieved" &&
-      !achievement.achieved
-    ) {
+    if (achievementStatusFilter.value === "achieved" && !achievement.achieved) {
       return false;
     }
     if (
@@ -597,7 +628,9 @@ const achievementGroups = computed(() => {
     ),
   }));
 });
-const achievementVisibleCount = computed(() => filteredAchievements.value.length);
+const achievementVisibleCount = computed(
+  () => filteredAchievements.value.length,
+);
 const achievementUnlockedCount = computed(
   () => achievements.value.filter((achievement) => achievement.achieved).length,
 );
@@ -640,6 +673,7 @@ const pointSourceOptions = [
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
   { value: "shop_recycle", label: "商店回收" },
+  { value: "season_shop", label: "赛季商店" },
 ] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bagHasMore = computed(
@@ -829,6 +863,9 @@ watch(activeSection, async (section) => {
   if (section === "tasks" && isAuthed.value) {
     await loadTasks();
   }
+  if (section === "season" && isAuthed.value) {
+    await loadSeasonOverview();
+  }
   if (section === "formation" && isAuthed.value) {
     await loadFormation();
   }
@@ -969,6 +1006,7 @@ function logout() {
   dailySignIn.value = null;
   tasksOverview.value = null;
   taskScope.value = "daily";
+  seasonOverview.value = null;
   launchActivityModalOpen.value = false;
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
@@ -981,6 +1019,9 @@ function logout() {
   achievementToastTimers.clear();
   pointRecordPage.value = 1;
   exchangeItems.value = [];
+  Object.keys(seasonShopCounts).forEach((key) => {
+    delete seasonShopCounts[Number(key)];
+  });
   tradeListings.value = [];
   myTradeListings.value = [];
   tradeRecords.value = [];
@@ -1116,6 +1157,7 @@ async function loadPrivateData() {
     loadLaunchActivity(),
     loadDailySignIn(),
     loadTasks(),
+    loadSeasonOverview(),
     loadLeaderboard(),
     loadAchievements(),
     loadAchievementNotifications(),
@@ -1489,9 +1531,7 @@ async function loadDailySignIn() {
   if (!isAuthed.value) {
     return;
   }
-  dailySignIn.value = await request<DailySignInStatus>(
-    "/daily-sign-in/status",
-  );
+  dailySignIn.value = await request<DailySignInStatus>("/daily-sign-in/status");
 }
 
 async function loadTasks() {
@@ -1507,6 +1547,28 @@ async function loadTasks() {
     }
   } finally {
     busy.tasks = false;
+  }
+}
+
+async function loadSeasonOverview() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.season = true;
+  try {
+    const data = await request<SeasonOverview>("/season/overview");
+    seasonOverview.value = data;
+    (data.shopItems || []).forEach((item) => {
+      if (!seasonShopCounts[item.id]) {
+        seasonShopCounts[item.id] = 1;
+      }
+    });
+  } catch (error) {
+    if (activeSection.value === "season") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.season = false;
   }
 }
 
@@ -1884,7 +1946,10 @@ async function claimTaskReward(task: TaskItem) {
         periodKey: overview.periodKey,
       }),
     });
-    notify("success", `领取成功：${formatRewards(data.rewards)}`);
+    const seasonText = data.seasonPoints?.gained
+      ? `，赛季积分 +${data.seasonPoints.gained}`
+      : "";
+    notify("success", `领取成功：${formatRewards(data.rewards)}${seasonText}`);
     await loadPrivateData();
   } catch (error) {
     notify("error", getErrorMessage(error));
@@ -2066,7 +2131,9 @@ function hideBrokenCardMedia(event: Event) {
 }
 
 function getPoolName(poolId?: number | null) {
-  return pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || "";
+  return (
+    pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || ""
+  );
 }
 
 function getPityForPool(poolId?: number | null) {
@@ -2075,8 +2142,9 @@ function getPityForPool(poolId?: number | null) {
     return null;
   }
   return (
-    stats.value?.pity?.find((item) => Number(item.poolId) === normalizedPoolId) ||
-    null
+    stats.value?.pity?.find(
+      (item) => Number(item.poolId) === normalizedPoolId,
+    ) || null
   );
 }
 
@@ -2622,12 +2690,65 @@ async function claimExchange(item: ExchangeShopItem) {
   }
 }
 
+async function buySeasonShopItem(item: SeasonShopItem) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再兑换赛季奖励");
+    return;
+  }
+  const count = Math.max(
+    1,
+    Math.min(99, Number(seasonShopCounts[item.id] || 1)),
+  );
+  seasonShopCounts[item.id] = count;
+  busy.seasonShop = true;
+  try {
+    const data = await request<SeasonShopBuyResponse>(
+      `/season/shop/items/${item.id}/buy`,
+      {
+        method: "POST",
+        body: JSON.stringify({ count }),
+      },
+    );
+    notify("success", `兑换成功：${formatRewards(data.rewards)}`);
+    seasonOverview.value = {
+      ...(seasonOverview.value || {
+        season: data.season,
+        leaderboard: { list: [], me: null },
+        shopItems: [],
+        records: [],
+      }),
+      season: data.season,
+      points: data.points,
+    };
+    await Promise.all([
+      loadSeasonOverview(),
+      loadStats(),
+      loadUserCards(),
+      loadUserCatalog(),
+      pointRecords.value ? loadPointRecords() : Promise.resolve(),
+    ]);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.seasonShop = false;
+  }
+}
+
 function pointChangeClass(amount: number) {
   return amount >= 0 ? "income" : "expense";
 }
 
 function formatPointChange(amount: number) {
   return `${amount > 0 ? "+" : ""}${amount}`;
+}
+
+function seasonPointSourceLabel(sourceType: string) {
+  const labels: Record<string, string> = {
+    task_activity: "任务活跃",
+    shop_spend: "赛季商店",
+    admin_adjust: "后台调整",
+  };
+  return labels[sourceType] || sourceType;
 }
 
 function pointMetadataSummary(record: PointLedgerRecord) {
@@ -2667,6 +2788,10 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
     case "shop_recycle":
       return `${String(meta("cardName") || "卡片")} · ${String(meta("count") || 1)} 张`;
+    case "season_shop":
+      return `赛季商店 ${String(meta("shopItemName") || meta("shopItemId") || "-")} · ${String(
+        meta("count") || 1,
+      )} 次`;
     default:
       return record.title;
   }
@@ -2795,7 +2920,12 @@ function formatDate(value?: string | null) {
 function formatRewards(rewards?: {
   points?: number;
   items?: Array<{ itemName?: string; itemId: number; num: number }>;
-  cards?: Array<{ cardName?: string; cardId: number; rarity: string; num: number }>;
+  cards?: Array<{
+    cardName?: string;
+    cardId: number;
+    rarity: string;
+    num: number;
+  }>;
 }) {
   if (!rewards) {
     return "无奖励";
@@ -2808,7 +2938,9 @@ function formatRewards(rewards?: {
     parts.push(`${item.itemName || `物品 ${item.itemId}`} x${item.num}`);
   });
   rewards.cards?.forEach((card) => {
-    parts.push(`${card.cardName || `卡片 ${card.cardId}`} ${card.rarity} x${card.num}`);
+    parts.push(
+      `${card.cardName || `卡片 ${card.cardId}`} ${card.rarity} x${card.num}`,
+    );
   });
   return parts.length > 0 ? parts.join("，") : "无奖励";
 }
@@ -2817,7 +2949,10 @@ function pvePowerPercent(stage: PveStage) {
   const enemyPower = Math.max(1, Number(stage.enemyPower || 0));
   return Math.max(
     0,
-    Math.min(100, Math.round((pveFormation.value.totalPower / enemyPower) * 100)),
+    Math.min(
+      100,
+      Math.round((pveFormation.value.totalPower / enemyPower) * 100),
+    ),
   );
 }
 
@@ -2839,13 +2974,19 @@ function achievementProgressPercent(achievement: AchievementRecord) {
   const target = Math.max(1, Number(achievement.targetValue || 0));
   return Math.max(
     0,
-    Math.min(100, Math.round((Number(achievement.progress || 0) / target) * 100)),
+    Math.min(
+      100,
+      Math.round((Number(achievement.progress || 0) / target) * 100),
+    ),
   );
 }
 
 function achievementProgressText(achievement: AchievementRecord) {
   const target = Math.max(0, Number(achievement.targetValue || 0));
-  const progress = Math.min(Math.max(0, Number(achievement.progress || 0)), target);
+  const progress = Math.min(
+    Math.max(0, Number(achievement.progress || 0)),
+    target,
+  );
   return `${progress} / ${target}`;
 }
 
@@ -3410,10 +3551,7 @@ function leaderboardRankLabel(rank?: number) {
               <h2>卡片与物品</h2>
             </div>
             <div class="filter-row">
-              <select
-                v-model="rarityFilter"
-                @change="resetUserCards"
-              >
+              <select v-model="rarityFilter" @change="resetUserCards">
                 <option value="">全部稀有度</option>
                 <option
                   v-for="rarity in rarityOrder"
@@ -3423,10 +3561,7 @@ function leaderboardRankLabel(rank?: number) {
                   {{ rarity }}
                 </option>
               </select>
-              <select
-                v-model="poolFilter"
-                @change="resetUserCards"
-              >
+              <select v-model="poolFilter" @change="resetUserCards">
                 <option v-for="pool in pools" :key="pool.id" :value="pool.id">
                   {{ pool.pool_name }}
                 </option>
@@ -3678,7 +3813,9 @@ function leaderboardRankLabel(rank?: number) {
                         ? '挂售'
                         : '无可售'
                     "
-                    :disabled="!card.canSell || Number(card.sellableCount || 0) <= 0"
+                    :disabled="
+                      !card.canSell || Number(card.sellableCount || 0) <= 0
+                    "
                     @click.stop="openTradeListingModal(card)"
                   >
                     <Store :size="16" />
@@ -3687,12 +3824,14 @@ function leaderboardRankLabel(rank?: number) {
                     class="card-icon-action"
                     type="button"
                     :title="
-                      shopRecycleConfig.enabled && Number(card.sellableCount || 0) > 1
+                      shopRecycleConfig.enabled &&
+                      Number(card.sellableCount || 0) > 1
                         ? '回收'
                         : '无可收'
                     "
                     :aria-label="
-                      shopRecycleConfig.enabled && Number(card.sellableCount || 0) > 1
+                      shopRecycleConfig.enabled &&
+                      Number(card.sellableCount || 0) > 1
                         ? '回收'
                         : '无可收'
                     "
@@ -3708,7 +3847,9 @@ function leaderboardRankLabel(rank?: number) {
                     class="card-icon-action"
                     type="button"
                     :title="cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'"
-                    :aria-label="cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'"
+                    :aria-label="
+                      cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'
+                    "
                     :disabled="!cardUpgradeUuid(card) || busy.upgrade"
                     @click.stop="openUpgradeModal(card)"
                   >
@@ -3743,17 +3884,12 @@ function leaderboardRankLabel(rank?: number) {
               :disabled="busy.cardsMore"
               @click="loadMoreUserCards"
             >
-              <LoaderCircle
-                v-if="busy.cardsMore"
-                :size="16"
-                class="spin"
-              />
+              <LoaderCircle v-if="busy.cardsMore" :size="16" class="spin" />
               {{ busy.cardsMore ? "加载中" : "更多" }}
             </button>
             <span v-else class="load-more-done">已全部</span>
           </div>
         </div>
-
       </section>
 
       <section
@@ -3793,7 +3929,10 @@ function leaderboardRankLabel(rank?: number) {
             </article>
             <article>
               <small>上阵</small>
-              <strong>{{ formationFilledCount }} / {{ formation?.slotCount || 3 }}</strong>
+              <strong
+                >{{ formationFilledCount }} /
+                {{ formation?.slotCount || 3 }}</strong
+              >
             </article>
             <article>
               <small>当前目标</small>
@@ -3921,7 +4060,10 @@ function leaderboardRankLabel(rank?: number) {
             </article>
             <article>
               <small>上阵卡片</small>
-              <strong>{{ pveFormation.filledCount }} / {{ pveFormation.slotCount }}</strong>
+              <strong
+                >{{ pveFormation.filledCount }} /
+                {{ pveFormation.slotCount }}</strong
+              >
             </article>
             <article>
               <small>开放关卡</small>
@@ -3985,7 +4127,11 @@ function leaderboardRankLabel(rank?: number) {
                   class="spin"
                 />
                 <Swords v-else :size="17" />
-                {{ stage.canChallenge ? "挑战" : stage.unavailableReason || "不可挑战" }}
+                {{
+                  stage.canChallenge
+                    ? "挑战"
+                    : stage.unavailableReason || "不可挑战"
+                }}
               </button>
             </article>
           </div>
@@ -4020,10 +4166,20 @@ function leaderboardRankLabel(rank?: number) {
               >
                 <div>
                   <strong>{{ record.stageName }}</strong>
-                  <span>{{ record.success ? "胜利" : "失败" }} · {{ formatDate(record.createdAt) }}</span>
+                  <span
+                    >{{ record.success ? "胜利" : "失败" }} ·
+                    {{ formatDate(record.createdAt) }}</span
+                  >
                 </div>
-                <small>战力 {{ record.formationPower }} / {{ record.enemyPower }}</small>
-                <b>{{ record.success ? formatRewards(record.rewards || undefined) : "未获得奖励" }}</b>
+                <small
+                  >战力 {{ record.formationPower }} /
+                  {{ record.enemyPower }}</small
+                >
+                <b>{{
+                  record.success
+                    ? formatRewards(record.rewards || undefined)
+                    : "未获得奖励"
+                }}</b>
               </article>
             </div>
             <div v-if="pveRecords" class="pager">
@@ -4040,7 +4196,9 @@ function leaderboardRankLabel(rank?: number) {
               <button
                 class="secondary-action compact"
                 type="button"
-                :disabled="pveRecordPage >= pveRecordTotalPages || busy.pveRecords"
+                :disabled="
+                  pveRecordPage >= pveRecordTotalPages || busy.pveRecords
+                "
                 @click="changePveRecordPage(1)"
               >
                 下一页
@@ -4094,7 +4252,9 @@ function leaderboardRankLabel(rank?: number) {
           </article>
           <article>
             <small>已收集</small>
-            <strong>{{ catalogCollectedCount }}/{{ catalogCards.length }}</strong>
+            <strong
+              >{{ catalogCollectedCount }}/{{ catalogCards.length }}</strong
+            >
           </article>
           <article>
             <small>可合成</small>
@@ -4128,7 +4288,10 @@ function leaderboardRankLabel(rank?: number) {
             v-for="(item, index) in filteredSynthesisCards"
             :key="item.key"
             class="result-card synthesis-card"
-            :class="[rarityClass(item.rarity), { 'is-uncollected': !item.collected }]"
+            :class="[
+              rarityClass(item.rarity),
+              { 'is-uncollected': !item.collected },
+            ]"
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
             <div class="card-face">
@@ -4178,7 +4341,13 @@ function leaderboardRankLabel(rank?: number) {
               :disabled="busy.catalog || !item.canSynthesize"
               @click="synthesizeCard(item)"
             >
-              {{ item.canSynthesize ? "合成" : item.rarity === "UR" ? "不可合成" : "碎片不足" }}
+              {{
+                item.canSynthesize
+                  ? "合成"
+                  : item.rarity === "UR"
+                    ? "不可合成"
+                    : "碎片不足"
+              }}
             </button>
             <span v-else class="catalog-owned-label">已收集</span>
           </article>
@@ -4858,7 +5027,9 @@ function leaderboardRankLabel(rank?: number) {
           <div class="achievement-summary task-summary">
             <article>
               <small>已完成</small>
-              <strong>{{ taskCompletedCount }}/{{ activeTaskList.length }}</strong>
+              <strong
+                >{{ taskCompletedCount }}/{{ activeTaskList.length }}</strong
+              >
             </article>
             <article>
               <small>已领取</small>
@@ -4896,7 +5067,9 @@ function leaderboardRankLabel(rank?: number) {
                   claimed: milestone.claimed,
                   available: milestone.available,
                 }"
-                :disabled="busy.claimTask || milestone.claimed || !milestone.available"
+                :disabled="
+                  busy.claimTask || milestone.claimed || !milestone.available
+                "
                 @click="claimActivityReward(milestone)"
               >
                 <Gift :size="15" />
@@ -4948,12 +5121,238 @@ function leaderboardRankLabel(rank?: number) {
                   />
                   <Gift v-else :size="17" />
                   {{
-                    task.claimed ? "已领取" : task.completed ? "领取奖励" : "未完成"
+                    task.claimed
+                      ? "已领取"
+                      : task.completed
+                        ? "领取奖励"
+                        : "未完成"
                   }}
                 </button>
               </footer>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section
+        v-if="activeSection === 'season'"
+        class="panel season-panel"
+        data-section="season"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">赛季远征</p>
+            <h2>{{ activeSeason?.name || "当前赛季" }}</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.season"
+            @click="loadSeasonOverview"
+          >
+            <RefreshCw :size="16" :class="{ spin: busy.season }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <CalendarDays :size="30" />
+          <strong>登录后查看赛季</strong>
+          <span>完成任务会积累赛季积分，可用于兑换赛季奖励。</span>
+        </div>
+        <div
+          v-else-if="busy.season && !seasonOverview"
+          class="skeleton-grid season-skeleton"
+        >
+          <span v-for="item in 6" :key="item"></span>
+        </div>
+        <div v-else-if="!activeSeason" class="empty-state">
+          <CalendarDays :size="30" />
+          <strong>暂无开放赛季</strong>
+          <span>新的赛季开放后会出现在这里。</span>
+        </div>
+        <div v-else class="season-content">
+          <div class="season-hero">
+            <div>
+              <span class="type-pill">赛季进行中</span>
+              <h3>{{ activeSeason.name }}</h3>
+              <p>
+                {{
+                  activeSeason.description ||
+                  "完成每日与周常任务，积累赛季积分。"
+                }}
+              </p>
+              <small>
+                {{ formatDate(activeSeason.startsAt) }} 至
+                {{ formatDate(activeSeason.endsAt) }}
+              </small>
+            </div>
+            <div class="season-score">
+              <span>我的排名</span>
+              <strong>{{ seasonRankText }}</strong>
+              <small>累计 {{ seasonPoints.earned }} 赛季积分</small>
+            </div>
+          </div>
+
+          <div class="season-summary">
+            <article>
+              <small>累计获得</small>
+              <strong>{{ seasonPoints.earned }}</strong>
+            </article>
+            <article>
+              <small>可用余额</small>
+              <strong>{{ seasonPoints.balance }}</strong>
+            </article>
+            <article>
+              <small>商店兑换项</small>
+              <strong>{{ seasonShopItems.length }}</strong>
+            </article>
+            <article>
+              <small>排行人数</small>
+              <strong>{{ seasonLeaderboardRows.length }}</strong>
+            </article>
+          </div>
+
+          <section class="season-block">
+            <div class="section-subhead">
+              <div>
+                <p class="eyebrow">活动排行</p>
+                <h3>赛季积分榜</h3>
+              </div>
+              <Trophy :size="22" />
+            </div>
+            <div v-if="seasonLeaderboardRows.length === 0" class="empty-mini">
+              暂无排行记录
+            </div>
+            <div v-else class="season-rank-list">
+              <article
+                v-for="entry in seasonLeaderboardRows.slice(0, 10)"
+                :key="entry.uid"
+                :class="{ mine: entry.uid === currentUser?.uid }"
+              >
+                <b>{{ leaderboardRankLabel(entry.rank) }}</b>
+                <img
+                  v-if="entry.avatar"
+                  :src="entry.avatar"
+                  :alt="entry.nickname"
+                />
+                <span v-else class="avatar-fallback small">
+                  {{ leaderboardInitial(entry) }}
+                </span>
+                <div>
+                  <strong>{{ entry.nickname || entry.uid }}</strong>
+                  <span>UID {{ entry.uid }}</span>
+                </div>
+                <em>{{ entry.value }} 积分</em>
+              </article>
+            </div>
+          </section>
+
+          <section class="season-block">
+            <div class="section-subhead">
+              <div>
+                <p class="eyebrow">赛季商店</p>
+                <h3>积分兑换</h3>
+              </div>
+              <Store :size="22" />
+            </div>
+            <div v-if="seasonShopItems.length === 0" class="empty-mini">
+              暂无可兑换奖励
+            </div>
+            <div v-else class="season-shop-grid">
+              <article v-for="item in seasonShopItems" :key="item.id">
+                <header>
+                  <div>
+                    <strong>{{ item.name }}</strong>
+                    <span>{{ item.description || "赛季限定兑换奖励" }}</span>
+                  </div>
+                  <b>{{ item.costPoints }} 积分</b>
+                </header>
+                <dl>
+                  <div>
+                    <dt>奖励</dt>
+                    <dd>{{ formatRewards(item.rewards) }}</dd>
+                  </div>
+                  <div>
+                    <dt>库存</dt>
+                    <dd>
+                      {{
+                        item.remaining === null || item.remaining === undefined
+                          ? "不限库存"
+                          : `剩余 ${item.remaining}`
+                      }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>限兑</dt>
+                    <dd>
+                      {{
+                        item.userLimit
+                          ? `${item.usedByUser || 0}/${item.userLimit}`
+                          : "不限"
+                      }}
+                    </dd>
+                  </div>
+                </dl>
+                <div class="season-shop-actions">
+                  <input
+                    v-model.number="seasonShopCounts[item.id]"
+                    type="number"
+                    min="1"
+                    max="99"
+                    placeholder="1"
+                  />
+                  <button
+                    class="primary-action"
+                    type="button"
+                    :disabled="busy.seasonShop || !item.canBuy"
+                    @click="buySeasonShopItem(item)"
+                  >
+                    <LoaderCircle
+                      v-if="busy.seasonShop"
+                      :size="17"
+                      class="spin"
+                    />
+                    <Gift v-else :size="17" />
+                    {{
+                      item.canBuy
+                        ? "兑换"
+                        : item.unavailableReason || "不可兑换"
+                    }}
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="season-block">
+            <div class="section-subhead">
+              <div>
+                <p class="eyebrow">积分记录</p>
+                <h3>最近变动</h3>
+              </div>
+              <History :size="22" />
+            </div>
+            <div v-if="seasonPointRecords.length === 0" class="empty-mini">
+              暂无赛季积分记录
+            </div>
+            <div v-else class="season-record-list">
+              <article
+                v-for="record in seasonPointRecords"
+                :key="record.id"
+                :class="pointChangeClass(record.changeAmount)"
+              >
+                <div>
+                  <strong>{{ record.title }}</strong>
+                  <span>
+                    {{ seasonPointSourceLabel(record.sourceType) }} ·
+                    {{ formatDate(record.createdAt) }}
+                  </span>
+                </div>
+                <b>{{ formatPointChange(record.changeAmount) }}</b>
+              </article>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -5034,7 +5433,11 @@ function leaderboardRankLabel(rank?: number) {
               type="search"
               placeholder="搜索成就"
             />
-            <button class="secondary-action" type="button" @click="resetAchievementFilters">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="resetAchievementFilters"
+            >
               重置
             </button>
           </div>
@@ -5090,7 +5493,9 @@ function leaderboardRankLabel(rank?: number) {
                     </div>
                     <b>{{ achievement.achieved ? "已达成" : "进行中" }}</b>
                   </header>
-                  <p>{{ achievement.description || "完成目标后自动发放奖励。" }}</p>
+                  <p>
+                    {{ achievement.description || "完成目标后自动发放奖励。" }}
+                  </p>
                   <div class="achievement-meta">
                     <span>{{ achievementScopeLabel(achievement) }}</span>
                     <span>{{ achievementProgressText(achievement) }}</span>
@@ -5451,7 +5856,9 @@ function leaderboardRankLabel(rank?: number) {
                   >
                     <div
                       class="card-media-frame pool-detail-media-frame"
-                      :class="{ 'has-media': hasCardMedia(item.card.card_image) }"
+                      :class="{
+                        'has-media': hasCardMedia(item.card.card_image),
+                      }"
                     >
                       <video
                         v-if="isCardVideo(item.card.card_image)"
@@ -5704,10 +6111,7 @@ function leaderboardRankLabel(rank?: number) {
             </button>
           </header>
           <div class="trade-listing-body formation-picker-body">
-            <div
-              v-if="busy.formationCandidates"
-              class="empty-state compact"
-            >
+            <div v-if="busy.formationCandidates" class="empty-state compact">
               <LoaderCircle :size="26" class="spin" />
               <strong>正在读取背包</strong>
               <span>可上阵卡片同步中。</span>
@@ -5922,7 +6326,9 @@ function leaderboardRankLabel(rank?: number) {
               <h2>{{ upgradeTarget.cardName }}</h2>
               <span>
                 {{ upgradeTarget.cardLevel }} · Lv.{{
-                  upgradePreview?.current.level || upgradeTarget.cultivationLevel || 1
+                  upgradePreview?.current.level ||
+                  upgradeTarget.cultivationLevel ||
+                  1
                 }}
               </span>
             </div>
@@ -5936,7 +6342,10 @@ function leaderboardRankLabel(rank?: number) {
             </button>
           </header>
           <div class="trade-listing-body upgrade-modal-body">
-            <div v-if="busy.upgrade && !upgradePreview" class="empty-state compact">
+            <div
+              v-if="busy.upgrade && !upgradePreview"
+              class="empty-state compact"
+            >
               <LoaderCircle :size="26" class="spin" />
               <strong>正在读取养成信息</strong>
               <span>碎片库存与等级状态加载中。</span>
@@ -5952,11 +6361,15 @@ function leaderboardRankLabel(rank?: number) {
                 <article :class="{ muted: !upgradePreview.next }">
                   <span>下一级</span>
                   <strong>
-                    Lv.{{ upgradePreview.next?.level || upgradePreview.current.level }}
+                    Lv.{{
+                      upgradePreview.next?.level || upgradePreview.current.level
+                    }}
                   </strong>
                   <b>
                     战力
-                    {{ upgradePreview.next?.power || upgradePreview.current.power }}
+                    {{
+                      upgradePreview.next?.power || upgradePreview.current.power
+                    }}
                   </b>
                 </article>
               </div>
@@ -5972,7 +6385,9 @@ function leaderboardRankLabel(rank?: number) {
                 <div>
                   <dt>消耗碎片</dt>
                   <dd>
-                    {{ upgradePreview.cost.itemName }} x{{ upgradePreview.cost.num }}
+                    {{ upgradePreview.cost.itemName }} x{{
+                      upgradePreview.cost.num
+                    }}
                   </dd>
                 </div>
                 <div>
@@ -6033,7 +6448,11 @@ function leaderboardRankLabel(rank?: number) {
               <h2>{{ recycleTarget.cardName }}</h2>
               <span>{{ recycleTarget.cardLevel }}</span>
             </div>
-            <button class="modal-close" type="button" @click="closeRecycleModal">
+            <button
+              class="modal-close"
+              type="button"
+              @click="closeRecycleModal"
+            >
               关闭
             </button>
           </header>
@@ -6103,7 +6522,11 @@ function leaderboardRankLabel(rank?: number) {
               <h2>{{ cardIntroTarget.name }}</h2>
               <span>
                 {{
-                  [cardIntroTarget.rarity, cardIntroTarget.type, cardIntroTarget.extra]
+                  [
+                    cardIntroTarget.rarity,
+                    cardIntroTarget.type,
+                    cardIntroTarget.extra,
+                  ]
                     .filter(Boolean)
                     .join(" · ")
                 }}
@@ -6150,7 +6573,11 @@ function leaderboardRankLabel(rank?: number) {
             ></textarea>
           </div>
           <footer class="result-modal-actions">
-            <button class="secondary-action" type="button" @click="closeShareText">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="closeShareText"
+            >
               关闭
             </button>
             <button class="primary-action" type="button" @click="copyShareText">
@@ -6193,7 +6620,10 @@ function leaderboardRankLabel(rank?: number) {
               <strong>正在整理记录</strong>
               <span>抽卡明细加载中。</span>
             </div>
-            <div v-else-if="drawHistoryRows.length === 0" class="empty-state compact">
+            <div
+              v-else-if="drawHistoryRows.length === 0"
+              class="empty-state compact"
+            >
               <History :size="26" />
               <strong>暂无抽卡历史</strong>
               <span>完成抽取后会出现在这里。</span>
@@ -6211,7 +6641,10 @@ function leaderboardRankLabel(rank?: number) {
                 <div class="draw-history-cards">
                   <div
                     v-for="detail in record.details"
-                    :key="detail.cardUuid || `${record.id}-${detail.cardId}-${detail.rarity}`"
+                    :key="
+                      detail.cardUuid ||
+                      `${record.id}-${detail.cardId}-${detail.rarity}`
+                    "
                     class="draw-history-card"
                     :class="rarityClass(detail.rarity)"
                   >
@@ -6339,7 +6772,10 @@ function leaderboardRankLabel(rank?: number) {
                 </div>
                 <div class="card-content">
                   <h3 class="card-name">{{ card.cardName }}</h3>
-                  <div v-if="card.isUp || card.isPity" class="tag-row draw-result-tags">
+                  <div
+                    v-if="card.isUp || card.isPity"
+                    class="tag-row draw-result-tags"
+                  >
                     <span v-if="card.isUp">UP</span>
                     <span v-if="card.isPity">保底</span>
                   </div>

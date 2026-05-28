@@ -22,21 +22,49 @@ function createRepository(overrides: Record<string, any> = {}) {
 }
 
 function createService(repositories: Record<string, any> = {}) {
-  const gachaService =
-    repositories.gachaService || {
-      getAllPoolConfigs: jest.fn(async () => ({ 0: { poolId: 0 } })),
-      getPoolConfigsByPoolIds: jest.fn(async () => ({ 0: { poolId: 0 } })),
-      getEnvConfigByPoolId: jest.fn((poolId: number) => ({
+  const gachaService = repositories.gachaService || {
+    getAllPoolConfigs: jest.fn(async () => ({ 0: { poolId: 0 } })),
+    getPoolConfigsByPoolIds: jest.fn(async () => ({ 0: { poolId: 0 } })),
+    getEnvConfigByPoolId: jest.fn((poolId: number) => ({
+      poolId,
+      rarityProbabilities: { N: 1 },
+      drawCosts: { once: 10, ten: 100 },
+    })),
+    getConfigByPoolId: jest.fn(async (poolId: number) => ({
+      poolId,
+      rarityProbabilities: { N: 1 },
+      drawCosts: { once: 10, ten: 100 },
+    })),
+    getGlobalDefaultConfigView: jest.fn(async () => ({
+      poolId: 0,
+      rarityProbabilities: { N: 1 },
+      drawCosts: { once: 10, ten: 100 },
+      enabled: false,
+      source: "env",
+      scope: "fallback",
+      updatedAt: null,
+    })),
+    getFallbackConfigView: jest.fn(() => ({
+      poolId: 0,
+      rarityProbabilities: { N: 1 },
+      drawCosts: { once: 10, ten: 100 },
+      enabled: false,
+      source: "env",
+      scope: "fallback",
+      updatedAt: null,
+    })),
+    getPoolConfigDetail: jest.fn(async (poolId: number) => ({
+      effective: {
         poolId,
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 10, ten: 100 },
-      })),
-      getConfigByPoolId: jest.fn(async (poolId: number) => ({
-        poolId,
-        rarityProbabilities: { N: 1 },
-        drawCosts: { once: 10, ten: 100 },
-      })),
-      getGlobalDefaultConfigView: jest.fn(async () => ({
+        enabled: false,
+        source: "env",
+        scope: "fallback",
+        updatedAt: null,
+      },
+      individualConfig: null,
+      defaultConfig: {
         poolId: 0,
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 10, ten: 100 },
@@ -44,8 +72,8 @@ function createService(repositories: Record<string, any> = {}) {
         source: "env",
         scope: "fallback",
         updatedAt: null,
-      })),
-      getFallbackConfigView: jest.fn(() => ({
+      },
+      fallbackConfig: {
         poolId: 0,
         rarityProbabilities: { N: 1 },
         drawCosts: { once: 10, ten: 100 },
@@ -53,40 +81,11 @@ function createService(repositories: Record<string, any> = {}) {
         source: "env",
         scope: "fallback",
         updatedAt: null,
-      })),
-      getPoolConfigDetail: jest.fn(async (poolId: number) => ({
-        effective: {
-          poolId,
-          rarityProbabilities: { N: 1 },
-          drawCosts: { once: 10, ten: 100 },
-          enabled: false,
-          source: "env",
-          scope: "fallback",
-          updatedAt: null,
-        },
-        individualConfig: null,
-        defaultConfig: {
-          poolId: 0,
-          rarityProbabilities: { N: 1 },
-          drawCosts: { once: 10, ten: 100 },
-          enabled: false,
-          source: "env",
-          scope: "fallback",
-          updatedAt: null,
-        },
-        fallbackConfig: {
-          poolId: 0,
-          rarityProbabilities: { N: 1 },
-          drawCosts: { once: 10, ten: 100 },
-          enabled: false,
-          source: "env",
-          scope: "fallback",
-          updatedAt: null,
-        },
-        hasIndividualConfig: false,
-      })),
-      savePoolConfig: jest.fn(async (_poolId, config) => config),
-    };
+      },
+      hasIndividualConfig: false,
+    })),
+    savePoolConfig: jest.fn(async (_poolId, config) => config),
+  };
   return new AdminService(
     repositories.user || createRepository(),
     repositories.card || createRepository(),
@@ -109,6 +108,13 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.rechargeRecord,
     repositories.launchActivityConfig,
     repositories.launchActivityClaim,
+    repositories.pveStage,
+    repositories.pveRecord,
+    repositories.season,
+    repositories.seasonShopItem,
+    repositories.seasonPointRecord,
+    repositories.seasonShopUsage,
+    repositories.siteConfig,
   );
 }
 
@@ -397,7 +403,10 @@ describe("AdminService", () => {
       service.createCard({ card_name: "空稀有度", card_level: "" } as any),
     ).rejects.toThrow("卡片稀有度不能为空");
     await expect(
-      service.createCard({ card_name: "非法稀有度", card_level: "SSR,X" } as any),
+      service.createCard({
+        card_name: "非法稀有度",
+        card_level: "SSR,X",
+      } as any),
     ).rejects.toThrow("卡片稀有度不支持: X");
   });
 
@@ -540,15 +549,19 @@ describe("AdminService", () => {
 
   it("抽卡历史列表会补充用户昵称", async () => {
     const historyRepository = createRepository({
-      findAndCount: jest.fn().mockResolvedValue([
-        [{ id: 1, uid: "1001", card_levels: "SSR", count: 1 }],
-        1,
-      ]),
+      findAndCount: jest
+        .fn()
+        .mockResolvedValue([
+          [{ id: 1, uid: "1001", card_levels: "SSR", count: 1 }],
+          1,
+        ]),
     });
     const userRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { uid: "1001", name: "fishpi-user", nickname: "鱼排玩家" },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { uid: "1001", name: "fishpi-user", nickname: "鱼排玩家" },
+        ]),
     });
     const service = createService({
       history: historyRepository,
@@ -571,19 +584,23 @@ describe("AdminService", () => {
 
   it("后台选项会按轻量结构返回卡池、卡片和物品", async () => {
     const poolRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 1, pool_name: "常驻池", card_type: 0 },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, pool_name: "常驻池", card_type: 0 }]),
     });
     const cardRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 10, card_name: "测试卡", card_level: "SSR", pool: 1 },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 10, card_name: "测试卡", card_level: "SSR", pool: 1 },
+        ]),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 20, drop_name: "测试碎片", drop_type: 0, disabled: false },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 20, drop_name: "测试碎片", drop_type: 0, disabled: false },
+        ]),
     });
     const service = createService({
       pool: poolRepository,
@@ -606,6 +623,7 @@ describe("AdminService", () => {
         },
       ],
       defaultFragmentItem: null,
+      seasons: [],
     });
     expect(poolRepository.find).toHaveBeenCalledWith({
       order: { sort_order: "ASC", id: "ASC" },
@@ -821,7 +839,12 @@ describe("AdminService", () => {
   });
 
   it("被引用的物品删除时改为禁用", async () => {
-    const item = { id: 7, drop_name: "通用碎片", drop_type: 0, disabled: false };
+    const item = {
+      id: 7,
+      drop_name: "通用碎片",
+      drop_type: 0,
+      disabled: false,
+    };
     const dropRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(item),
     });
@@ -899,6 +922,91 @@ describe("AdminService", () => {
     });
   });
 
+  it("创建赛季会校验赛季编码和时间范围", async () => {
+    const seasonRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
+    });
+    const service = createService({ season: seasonRepository });
+
+    await expect(
+      service.createSeason({
+        season_key: "season-2026-s1",
+        name: "第一赛季",
+        starts_at: "2026-05-01T00:00:00Z" as any,
+        ends_at: "2026-06-01T00:00:00Z" as any,
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        season_key: "season-2026-s1",
+        name: "第一赛季",
+        enabled: true,
+        shop_enabled: true,
+        leaderboard_enabled: true,
+      }),
+    );
+
+    await expect(
+      service.createSeason({
+        season_key: "bad key",
+        name: "异常赛季",
+      } as any),
+    ).rejects.toThrow("赛季编码只能包含");
+    await expect(
+      service.createSeason({
+        season_key: "season-2026-s2",
+        name: "异常赛季",
+        starts_at: "2026-06-01T00:00:00Z" as any,
+        ends_at: "2026-05-01T00:00:00Z" as any,
+      } as any),
+    ).rejects.toThrow("赛季结束时间必须晚于开始时间");
+  });
+
+  it("创建赛季商店兑换项会校验赛季和奖励", async () => {
+    const seasonRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        id: 1,
+        season_key: "season-2026-s1",
+        delete_flag: false,
+      }),
+    });
+    const shopRepository = createRepository({
+      save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
+    });
+    const service = createService({
+      season: seasonRepository,
+      seasonShopItem: shopRepository,
+      drop: createRepository(),
+      card: createRepository(),
+    });
+
+    await expect(
+      service.createSeasonShopItem({
+        season_key: "season-2026-s1",
+        name: "星尘补给",
+        cost_points: 100,
+        rewards: { points: 20, items: [] },
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        season_key: "season-2026-s1",
+        name: "星尘补给",
+        cost_points: 100,
+      }),
+    );
+    expect(seasonRepository.findOne).toHaveBeenCalledWith({
+      where: { season_key: "season-2026-s1", delete_flag: false },
+    });
+
+    await expect(
+      service.createSeasonShopItem({
+        season_key: "season-2026-s1",
+        name: "空奖励",
+        rewards: { points: 0, items: [] },
+      } as any),
+    ).rejects.toThrow("赛季商店奖励不能为空");
+  });
+
   it("获取抽卡配置只返回全局默认配置和代码兜底", async () => {
     const gachaService = {
       getGlobalDefaultConfigView: jest.fn().mockResolvedValue({
@@ -942,13 +1050,11 @@ describe("AdminService", () => {
 
   it("复制抽卡配置会保存到选中的目标卡池", async () => {
     const poolRepository = createRepository({
-      find: jest
-        .fn()
-        .mockResolvedValue([
-          { id: 1, pool_name: "源卡池" },
-          { id: 2, pool_name: "目标A" },
-          { id: 3, pool_name: "目标B" },
-        ]),
+      find: jest.fn().mockResolvedValue([
+        { id: 1, pool_name: "源卡池" },
+        { id: 2, pool_name: "目标A" },
+        { id: 3, pool_name: "目标B" },
+      ]),
     });
     const gachaService = {
       getConfigByPoolId: jest.fn().mockResolvedValue({
@@ -990,9 +1096,9 @@ describe("AdminService", () => {
   it("创建兑换码会标准化码值和奖励", async () => {
     const redeemCodeRepository = createRepository();
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 1, drop_name: "测试道具", disabled: false },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, drop_name: "测试道具", disabled: false }]),
     });
     const service = createService({
       redeemCode: redeemCodeRepository,
@@ -1024,9 +1130,11 @@ describe("AdminService", () => {
   it("创建兑换码支持卡片奖励", async () => {
     const redeemCodeRepository = createRepository();
     const cardRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+        ]),
     });
     const service = createService({
       redeemCode: redeemCodeRepository,
@@ -1057,9 +1165,11 @@ describe("AdminService", () => {
 
   it("创建兑换码会校验卡片奖励稀有度", async () => {
     const cardRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 9, card_name: "测试卡片", card_level: "SR,SSR" },
+        ]),
     });
     const service = createService({ card: cardRepository });
 
@@ -1078,9 +1188,9 @@ describe("AdminService", () => {
 
   it("兑换码奖励不能选择已禁用物品", async () => {
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 1, drop_name: "旧道具", disabled: true },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, drop_name: "旧道具", disabled: true }]),
     });
     const service = createService({ drop: dropRepository });
 
@@ -1244,9 +1354,11 @@ describe("AdminService", () => {
       findOne: jest.fn().mockResolvedValue(null),
     });
     const disabledDropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 9, drop_name: "旧碎片", drop_type: 0, disabled: true },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 9, drop_name: "旧碎片", drop_type: 0, disabled: true },
+        ]),
     });
     const disabledService = createService({
       systemConfig: systemConfigRepository,
@@ -1260,9 +1372,11 @@ describe("AdminService", () => {
     ).rejects.toThrow("N 分解第1项碎片已禁用");
 
     const itemDropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 10, drop_name: "普通道具", drop_type: 2, disabled: false },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 10, drop_name: "普通道具", drop_type: 2, disabled: false },
+        ]),
     });
     const itemService = createService({
       systemConfig: systemConfigRepository,
@@ -1325,9 +1439,9 @@ describe("AdminService", () => {
       }),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 2, drop_name: "禁用道具", disabled: true },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 2, drop_name: "禁用道具", disabled: true }]),
     });
     const service = createService({
       launchActivityConfig: configRepository,
@@ -1380,9 +1494,11 @@ describe("AdminService", () => {
 
   it("兑换商店消耗不能选择虚拟星穹币物品", async () => {
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        { id: 1, drop_name: "星穹币物品", drop_type: 1, disabled: false },
-      ]),
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 1, drop_name: "星穹币物品", drop_type: 1, disabled: false },
+        ]),
     });
     const service = createService({ drop: dropRepository });
 

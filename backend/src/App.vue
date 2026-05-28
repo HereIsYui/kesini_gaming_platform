@@ -150,11 +150,17 @@
             </el-tag>
             <el-tag
               v-else-if="field.key === 'gacha_config_mode'"
-              :type="String(row.gacha_config_mode) === '卡池配置' ? 'success' : 'info'"
+              :type="
+                String(row.gacha_config_mode) === '卡池配置'
+                  ? 'success'
+                  : 'info'
+              "
             >
               {{ row.gacha_config_mode || "默认配置" }}
             </el-tag>
-            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
           </template>
           <template #actions="{ row }">
             <el-button
@@ -253,12 +259,18 @@
               <span>UID {{ row.uid || "-" }}</span>
             </div>
             <div v-else-if="field.key === 'poolName'" class="identity-cell">
-              <strong>{{ row.poolName || `卡池 #${row.pool_id || "-"}` }}</strong>
+              <strong>{{
+                row.poolName || `卡池 #${row.pool_id || "-"}`
+              }}</strong>
               <span>ID {{ row.pool_id || "-" }}</span>
             </div>
             <el-tag
               v-else-if="field.key === 'gacha_config_mode'"
-              :type="String(row.gacha_config_mode) === '卡池配置' ? 'success' : 'info'"
+              :type="
+                String(row.gacha_config_mode) === '卡池配置'
+                  ? 'success'
+                  : 'info'
+              "
             >
               {{ row.gacha_config_mode || "默认配置" }}
             </el-tag>
@@ -266,7 +278,9 @@
               v-else-if="field.key === 'pity_overview'"
               :row="row"
             />
-            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
           </template>
         </AdminTable>
 
@@ -356,6 +370,86 @@
         />
 
         <AdminTable
+          v-else-if="active === 'seasons'"
+          title="赛季配置"
+          endpoint="/admin/seasons"
+          :fields="seasonFields"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索赛季名称或编码"
+        >
+          <template #cell="{ field, row }">
+            <el-tag
+              v-if="field.key === 'enabled'"
+              :type="row.enabled !== false ? 'success' : 'info'"
+            >
+              {{ row.enabled !== false ? "上线" : "下线" }}
+            </el-tag>
+            <el-tag
+              v-else-if="field.key === 'shop_enabled'"
+              :type="row.shop_enabled !== false ? 'success' : 'info'"
+            >
+              {{ row.shop_enabled !== false ? "商店开启" : "商店关闭" }}
+            </el-tag>
+            <el-tag
+              v-else-if="field.key === 'leaderboard_enabled'"
+              :type="row.leaderboard_enabled !== false ? 'success' : 'info'"
+            >
+              {{ row.leaderboard_enabled !== false ? "排行开启" : "排行关闭" }}
+            </el-tag>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
+          </template>
+        </AdminTable>
+
+        <AdminTable
+          v-else-if="active === 'season-shop-items'"
+          title="赛季商店"
+          endpoint="/admin/season-shop-items"
+          :fields="seasonShopItemFields"
+          :item-options="itemOptions"
+          :card-options="adminOptions?.cards || []"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索兑换项或赛季编码"
+        >
+          <template #cell="{ field, row }">
+            <el-tag
+              v-if="field.key === 'enabled'"
+              :type="row.enabled !== false ? 'success' : 'info'"
+            >
+              {{ row.enabled !== false ? "上架" : "下架" }}
+            </el-tag>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
+          </template>
+        </AdminTable>
+
+        <AdminTable
+          v-else-if="active === 'season-point-records'"
+          title="赛季积分记录"
+          endpoint="/admin/season-point-records"
+          :fields="seasonPointRecordFields"
+          keyword-param="uid"
+          search-placeholder="按 UID 查询"
+        />
+
+        <AdminTable
+          v-else-if="active === 'season-shop-usages'"
+          title="赛季兑换记录"
+          endpoint="/admin/season-shop-usages"
+          :fields="seasonShopUsageFields"
+          keyword-param="uid"
+          search-placeholder="按 UID 查询"
+        />
+
+        <AdminTable
           v-else-if="active === 'pve-stages'"
           title="PVE 关卡"
           endpoint="/admin/pve-stages"
@@ -369,10 +463,15 @@
           search-placeholder="搜索关卡名称或说明"
         >
           <template #cell="{ field, row }">
-            <el-tag v-if="field.key === 'enabled'" :type="row.enabled !== false ? 'success' : 'info'">
+            <el-tag
+              v-if="field.key === 'enabled'"
+              :type="row.enabled !== false ? 'success' : 'info'"
+            >
               {{ row.enabled !== false ? "上线" : "下线" }}
             </el-tag>
-            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
           </template>
         </AdminTable>
 
@@ -391,7 +490,9 @@
             >
               {{ row.success === true ? "胜利" : "失败" }}
             </el-tag>
-            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
           </template>
         </AdminTable>
 
@@ -534,7 +635,11 @@
     </div>
     <template #footer>
       <el-button @click="cardMediaVisible = false">取消</el-button>
-      <el-button type="primary" :loading="cardMediaSaving" @click="saveCardMedia">
+      <el-button
+        type="primary"
+        :loading="cardMediaSaving"
+        @click="saveCardMedia"
+      >
         保存
       </el-button>
     </template>
@@ -569,6 +674,7 @@ import {
 import {
   achievementFields,
   createCardFields,
+  createSeasonShopItemFields,
   decomposeConfigFields,
   defaultPageKey,
   dropFields,
@@ -589,6 +695,9 @@ import {
   redeemCodeFields,
   redeemUsageFields,
   routeAliases,
+  seasonFields,
+  seasonPointRecordFields,
+  seasonShopUsageFields,
   shopRecycleConfigFields,
   siteConfigFields,
   tradeConfigFields,
@@ -648,7 +757,9 @@ const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
   adminTitle: "Kesini 后台管理",
 });
-const theme = ref<Theme>((localStorage.getItem("kesini_theme") as Theme) || "light");
+const theme = ref<Theme>(
+  (localStorage.getItem("kesini_theme") as Theme) || "light",
+);
 const active = ref(readHashRoute().key);
 const dashboardData = ref<DashboardData | null>(null);
 const dashboardLoading = ref(false);
@@ -669,7 +780,9 @@ const cardMediaRow = ref<Record<string, any> | null>(null);
 const cardMediaValue = ref("");
 const cardMediaReload = ref<(() => void) | null>(null);
 
-const itemOptions = computed<SelectOption[]>(() => adminOptions.value?.dropItems || []);
+const itemOptions = computed<SelectOption[]>(
+  () => adminOptions.value?.dropItems || [],
+);
 const cardFields = computed(() => {
   const fields = createCardFields(adminOptions.value?.pools || []);
   const dropItemField = fields.find((field) => field.key === "drop_item");
@@ -689,204 +802,238 @@ const cardFields = computed(() => {
   }
   return fields;
 });
+const seasonShopItemFields = computed(() =>
+  createSeasonShopItemFields(adminOptions.value?.seasons || []),
+);
 
-const pageDefinitions = computed(() => [
-  {
-    key: "dashboard",
-    label: "总览",
-    description: "查看关键运营指标、稀有度分布和最近抽卡动态。",
-    group: "工作台",
-    icon: DataAnalysis,
-  },
-  {
-    key: "pools",
-    label: "卡池管理",
-    description: "维护卡池基础信息、上线状态和单独抽卡配置。",
-    group: "内容配置",
-    icon: Collection,
-  },
-  {
-    key: "cards",
-    label: "卡片管理",
-    description: "维护卡片信息、稀有度和分解产出碎片。",
-    group: "内容配置",
-    icon: MagicStick,
-  },
-  {
-    key: "drop-items",
-    label: "物品管理",
-    description: "维护碎片、普通道具和活动道具。",
-    group: "内容配置",
-    icon: Goods,
-  },
-  {
-    key: "users",
-    label: "用户管理",
-    description: "查看用户资料、星穹币和管理员状态。",
-    group: "玩家资产",
-    icon: User,
-  },
-  {
-    key: "histories",
-    label: "抽卡历史",
-    description: "按 UID 和稀有度追踪玩家抽卡记录。",
-    group: "玩家资产",
-    icon: Files,
-  },
-  {
-    key: "inventories",
-    label: "背包管理",
-    description: "查看和调整玩家背包物品库存。",
-    group: "玩家资产",
-    icon: Wallet,
-  },
-  {
-    key: "pity",
-    label: "保底状态",
-    description: "维护玩家在各卡池中的保底计数。",
-    group: "玩家资产",
-    icon: Histogram,
-  },
-  {
-    key: "redeem-codes",
-    label: "兑换码",
-    description: "创建礼包码，维护库存、有效期和奖励规则。",
-    group: "运营工具",
-    icon: Present,
-  },
-  {
-    key: "redeem-usages",
-    label: "兑换记录",
-    description: "查看玩家兑换码领取记录和奖励快照。",
-    group: "运营工具",
-    icon: Files,
-  },
-  {
-    key: "exchange-shop",
-    label: "兑换商店",
-    description: "配置物品消耗、奖励内容、库存和限兑规则。",
-    group: "运营工具",
-    icon: Shop,
-  },
-  {
-    key: "exchange-usages",
-    label: "兑换商店记录",
-    description: "查看兑换商店领取记录、消耗和奖励快照。",
-    group: "运营工具",
-    icon: Files,
-  },
-  {
-    key: "launch-activity-config",
-    label: "开服活动",
-    description: "配置登录可领取的开服福利。",
-    group: "运营工具",
-    icon: Present,
-  },
-  {
-    key: "launch-activity-claims",
-    label: "活动领取记录",
-    description: "查看玩家开服福利领取批次、时间和奖励快照。",
-    group: "运营工具",
-    icon: Files,
-  },
-  {
-    key: "achievements",
-    label: "成就配置",
-    description: "配置成就目标、奖励和上线状态。",
-    group: "运营工具",
-    icon: Medal,
-  },
-  {
-    key: "user-achievements",
-    label: "成就记录",
-    description: "查看玩家成就进度、达成时间和通知状态。",
-    group: "运营工具",
-    icon: Files,
-  },
-  {
-    key: "pve-stages",
-    label: "PVE 关卡",
-    description: "配置轻量关卡、战力门槛、每日次数和胜利奖励。",
-    group: "运营工具",
-    icon: MagicStick,
-  },
-  {
-    key: "pve-records",
-    label: "PVE 记录",
-    description: "查看玩家关卡挑战结果、阵容战力和奖励快照。",
-    group: "运营工具",
-    icon: Files,
-  },
-  {
-    key: "trade-config",
-    label: "交易配置",
-    description: "配置交易开关、手续费率和价格区间。",
-    group: "交易与支付",
-    icon: Setting,
-  },
-  {
-    key: "shop-recycle-config",
-    label: "商店回收",
-    description: "配置卡片回收开关和稀有度价格。",
-    group: "交易与支付",
-    icon: Shop,
-  },
-  {
-    key: "decompose-config",
-    label: "分解配置",
-    description: "配置各稀有度卡片分解后的默认碎片产出。",
-    group: "系统配置",
-    icon: Setting,
-  },
-  {
-    key: "trade-listings",
-    label: "交易挂单",
-    description: "审计匿名交易挂单状态和卡片流转。",
-    group: "交易与支付",
-    icon: Ticket,
-  },
-  {
-    key: "trade-records",
-    label: "交易记录",
-    description: "查看交易成交记录、手续费和买卖双方审计信息。",
-    group: "交易与支付",
-    icon: Files,
-  },
-  {
-    key: "recharge-config",
-    label: "充值配置",
-    description: "配置鱼排扣分充值开关、范围和密钥。",
-    group: "交易与支付",
-    icon: Setting,
-  },
-  {
-    key: "recharge-records",
-    label: "充值记录",
-    description: "追踪鱼排扣分充值请求和星穹币入账状态。",
-    group: "交易与支付",
-    icon: Coin,
-  },
-  {
-    key: "gacha-config",
-    label: "默认抽卡配置",
-    description: "维护未设置单独配置卡池继承的默认概率、UP、保底和价格。",
-    group: "系统配置",
-    icon: Setting,
-  },
-  {
-    key: "site-config",
-    label: "站点配置",
-    description: "配置玩家站和后台管理台的页面标题与品牌标题。",
-    group: "系统配置",
-    icon: Setting,
-  },
-] satisfies Array<{
-  key: PageKey;
-  label: string;
-  description: string;
-  group: NavGroup;
-  icon: any;
-}>);
+const pageDefinitions = computed(
+  () =>
+    [
+      {
+        key: "dashboard",
+        label: "总览",
+        description: "查看关键运营指标、稀有度分布和最近抽卡动态。",
+        group: "工作台",
+        icon: DataAnalysis,
+      },
+      {
+        key: "pools",
+        label: "卡池管理",
+        description: "维护卡池基础信息、上线状态和单独抽卡配置。",
+        group: "内容配置",
+        icon: Collection,
+      },
+      {
+        key: "cards",
+        label: "卡片管理",
+        description: "维护卡片信息、稀有度和分解产出碎片。",
+        group: "内容配置",
+        icon: MagicStick,
+      },
+      {
+        key: "drop-items",
+        label: "物品管理",
+        description: "维护碎片、普通道具和活动道具。",
+        group: "内容配置",
+        icon: Goods,
+      },
+      {
+        key: "users",
+        label: "用户管理",
+        description: "查看用户资料、星穹币和管理员状态。",
+        group: "玩家资产",
+        icon: User,
+      },
+      {
+        key: "histories",
+        label: "抽卡历史",
+        description: "按 UID 和稀有度追踪玩家抽卡记录。",
+        group: "玩家资产",
+        icon: Files,
+      },
+      {
+        key: "inventories",
+        label: "背包管理",
+        description: "查看和调整玩家背包物品库存。",
+        group: "玩家资产",
+        icon: Wallet,
+      },
+      {
+        key: "pity",
+        label: "保底状态",
+        description: "维护玩家在各卡池中的保底计数。",
+        group: "玩家资产",
+        icon: Histogram,
+      },
+      {
+        key: "redeem-codes",
+        label: "兑换码",
+        description: "创建礼包码，维护库存、有效期和奖励规则。",
+        group: "运营工具",
+        icon: Present,
+      },
+      {
+        key: "redeem-usages",
+        label: "兑换记录",
+        description: "查看玩家兑换码领取记录和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "exchange-shop",
+        label: "兑换商店",
+        description: "配置物品消耗、奖励内容、库存和限兑规则。",
+        group: "运营工具",
+        icon: Shop,
+      },
+      {
+        key: "exchange-usages",
+        label: "兑换商店记录",
+        description: "查看兑换商店领取记录、消耗和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "launch-activity-config",
+        label: "开服活动",
+        description: "配置登录可领取的开服福利。",
+        group: "运营工具",
+        icon: Present,
+      },
+      {
+        key: "launch-activity-claims",
+        label: "活动领取记录",
+        description: "查看玩家开服福利领取批次、时间和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "achievements",
+        label: "成就配置",
+        description: "配置成就目标、奖励和上线状态。",
+        group: "运营工具",
+        icon: Medal,
+      },
+      {
+        key: "user-achievements",
+        label: "成就记录",
+        description: "查看玩家成就进度、达成时间和通知状态。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "seasons",
+        label: "赛季配置",
+        description: "配置赛季周期、商店和活动排行开关。",
+        group: "运营工具",
+        icon: Medal,
+      },
+      {
+        key: "season-shop-items",
+        label: "赛季商店",
+        description: "配置赛季积分兑换项、库存、限兑和奖励。",
+        group: "运营工具",
+        icon: Shop,
+      },
+      {
+        key: "season-point-records",
+        label: "赛季积分记录",
+        description: "查看玩家赛季积分获取与消耗流水。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "season-shop-usages",
+        label: "赛季兑换记录",
+        description: "查看赛季商店兑换数量和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "pve-stages",
+        label: "PVE 关卡",
+        description: "配置轻量关卡、战力门槛、每日次数和胜利奖励。",
+        group: "运营工具",
+        icon: MagicStick,
+      },
+      {
+        key: "pve-records",
+        label: "PVE 记录",
+        description: "查看玩家关卡挑战结果、阵容战力和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "trade-config",
+        label: "交易配置",
+        description: "配置交易开关、手续费率和价格区间。",
+        group: "交易与支付",
+        icon: Setting,
+      },
+      {
+        key: "shop-recycle-config",
+        label: "商店回收",
+        description: "配置卡片回收开关和稀有度价格。",
+        group: "交易与支付",
+        icon: Shop,
+      },
+      {
+        key: "decompose-config",
+        label: "分解配置",
+        description: "配置各稀有度卡片分解后的默认碎片产出。",
+        group: "系统配置",
+        icon: Setting,
+      },
+      {
+        key: "trade-listings",
+        label: "交易挂单",
+        description: "审计匿名交易挂单状态和卡片流转。",
+        group: "交易与支付",
+        icon: Ticket,
+      },
+      {
+        key: "trade-records",
+        label: "交易记录",
+        description: "查看交易成交记录、手续费和买卖双方审计信息。",
+        group: "交易与支付",
+        icon: Files,
+      },
+      {
+        key: "recharge-config",
+        label: "充值配置",
+        description: "配置鱼排扣分充值开关、范围和密钥。",
+        group: "交易与支付",
+        icon: Setting,
+      },
+      {
+        key: "recharge-records",
+        label: "充值记录",
+        description: "追踪鱼排扣分充值请求和星穹币入账状态。",
+        group: "交易与支付",
+        icon: Coin,
+      },
+      {
+        key: "gacha-config",
+        label: "默认抽卡配置",
+        description: "维护未设置单独配置卡池继承的默认概率、UP、保底和价格。",
+        group: "系统配置",
+        icon: Setting,
+      },
+      {
+        key: "site-config",
+        label: "站点配置",
+        description: "配置玩家站和后台管理台的页面标题与品牌标题。",
+        group: "系统配置",
+        icon: Setting,
+      },
+    ] satisfies Array<{
+      key: PageKey;
+      label: string;
+      description: string;
+      group: NavGroup;
+      icon: any;
+    }>,
+);
 
 const activePage = computed(
   () =>
@@ -957,7 +1104,8 @@ async function loadAdmin() {
     token.value = "";
     admin.value = null;
     adminOptions.value = null;
-    authError.value = err instanceof Error ? err.message : "当前账号没有后台管理权限";
+    authError.value =
+      err instanceof Error ? err.message : "当前账号没有后台管理权限";
   }
 }
 
@@ -1012,7 +1160,11 @@ async function handleOpenidCallback() {
     }
     setToken(data.token);
     token.value = data.token;
-    window.history.replaceState({}, "", `${window.location.pathname}#dashboard`);
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}#dashboard`,
+    );
   } catch (err) {
     authError.value = err instanceof Error ? err.message : "登录失败";
   } finally {
@@ -1137,7 +1289,9 @@ async function savePoolGacha(poolId: number, values: GachaPoolConfig) {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
-    ElMessage.success(values.enabled === false ? "已改为继承默认配置" : "已保存卡池配置");
+    ElMessage.success(
+      values.enabled === false ? "已改为继承默认配置" : "已保存卡池配置",
+    );
     poolGachaVisible.value = false;
     editingPoolGacha.value = null;
   } catch (err) {
@@ -1258,7 +1412,10 @@ watch(
   (nextTheme) => {
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
-    document.body.setAttribute("theme-mode", nextTheme === "dark" ? "dark" : "light");
+    document.body.setAttribute(
+      "theme-mode",
+      nextTheme === "dark" ? "dark" : "light",
+    );
     localStorage.setItem("kesini_theme", nextTheme);
   },
   { immediate: true },
@@ -1311,52 +1468,77 @@ const DashboardPage = defineComponent({
   setup(props, { emit }) {
     return () =>
       h("div", { class: "dashboard-page" }, [
-        h("div", { class: "stat-grid" },
-          Object.entries((props.data as DashboardData | null)?.counters || {}).map(
-            ([key, value]) =>
-              h("div", { class: "stat-card", key }, [
-                h("span", counterLabel(key)),
-                h("strong", String(value)),
-              ]),
+        h(
+          "div",
+          { class: "stat-grid" },
+          Object.entries(
+            (props.data as DashboardData | null)?.counters || {},
+          ).map(([key, value]) =>
+            h("div", { class: "stat-card", key }, [
+              h("span", counterLabel(key)),
+              h("strong", String(value)),
+            ]),
           ),
         ),
         h("div", { class: "dashboard-grid" }, [
-          h(
-            "div",
-            { class: "dashboard-main" },
-            [
-              props.error
-                ? h("div", { class: "state-box error" }, props.error)
-                : props.loading
-                  ? h("div", { class: "state-box" }, "正在加载总览...")
-                  : h("div", { class: "panel-card plain-card" }, [
-                      h("div", { class: "panel-header" }, [
-                        h("div", [h("p", { class: "eyebrow" }, "最近动态"), h("h2", "抽卡记录")]),
-                        h("button", { class: "link-button", onClick: () => emit("reload") }, "刷新"),
+          h("div", { class: "dashboard-main" }, [
+            props.error
+              ? h("div", { class: "state-box error" }, props.error)
+              : props.loading
+                ? h("div", { class: "state-box" }, "正在加载总览...")
+                : h("div", { class: "panel-card plain-card" }, [
+                    h("div", { class: "panel-header" }, [
+                      h("div", [
+                        h("p", { class: "eyebrow" }, "最近动态"),
+                        h("h2", "抽卡记录"),
                       ]),
                       h(
-                        "div",
-                        { class: "activity-list" },
-                        ((props.data as DashboardData | null)?.recentHistories || []).length
-                          ? ((props.data as DashboardData | null)?.recentHistories || []).map(
-                              (item, index) =>
-                                h("div", { class: "activity-item", key: index }, [
-                                  h("div", { class: "activity-user" }, [
-                                    h("strong", String(item.userName || "未知用户")),
-                                    h("span", `UID ${String(item.uid || "-")}`),
-                                  ]),
-                                  h("div", { class: "activity-detail" }, [
-                                    h("strong", `${String(item.count || 0)} 抽`),
-                                    h("span", String(item.card_levels || "-")),
-                                    h("time", item.createdAt ? formatDate(item.createdAt) : "-"),
-                                  ]),
-                                ]),
-                            )
-                          : [h("div", { class: "state-box compact" }, "暂无抽卡记录")],
+                        "button",
+                        { class: "link-button", onClick: () => emit("reload") },
+                        "刷新",
                       ),
                     ]),
-            ],
-          ),
+                    h(
+                      "div",
+                      { class: "activity-list" },
+                      (
+                        (props.data as DashboardData | null)?.recentHistories ||
+                        []
+                      ).length
+                        ? (
+                            (props.data as DashboardData | null)
+                              ?.recentHistories || []
+                          ).map((item, index) =>
+                            h("div", { class: "activity-item", key: index }, [
+                              h("div", { class: "activity-user" }, [
+                                h(
+                                  "strong",
+                                  String(item.userName || "未知用户"),
+                                ),
+                                h("span", `UID ${String(item.uid || "-")}`),
+                              ]),
+                              h("div", { class: "activity-detail" }, [
+                                h("strong", `${String(item.count || 0)} 抽`),
+                                h("span", String(item.card_levels || "-")),
+                                h(
+                                  "time",
+                                  item.createdAt
+                                    ? formatDate(item.createdAt)
+                                    : "-",
+                                ),
+                              ]),
+                            ]),
+                          )
+                        : [
+                            h(
+                              "div",
+                              { class: "state-box compact" },
+                              "暂无抽卡记录",
+                            ),
+                          ],
+                    ),
+                  ]),
+          ]),
           h("div", { class: "side-stack" }, [
             h("div", { class: "panel-card plain-card" }, [
               h("p", { class: "eyebrow" }, "运营状态"),
@@ -1372,7 +1554,9 @@ const DashboardPage = defineComponent({
             ]),
             h("div", { class: "panel-card plain-card" }, [
               h("p", { class: "eyebrow" }, "稀有度库存"),
-              ...Object.entries((props.data as DashboardData | null)?.rarityTotals || {}).map(([key, value]) =>
+              ...Object.entries(
+                (props.data as DashboardData | null)?.rarityTotals || {},
+              ).map(([key, value]) =>
                 h("div", { class: "rarity-row", key }, [
                   h("span", key),
                   h("strong", String(value)),
@@ -1444,21 +1628,52 @@ const GachaConfigPage = defineComponent({
       h("div", [
         h("div", { class: "panel-card plain-card" }, [
           h("div", { class: "panel-header" }, [
-            h("div", [h("p", { class: "eyebrow" }, "系统配置"), h("h2", "默认抽卡配置")]),
-            h("button", { class: "link-button", onClick: load }, loading.value ? "加载中" : "刷新"),
+            h("div", [
+              h("p", { class: "eyebrow" }, "系统配置"),
+              h("h2", "默认抽卡配置"),
+            ]),
+            h(
+              "button",
+              { class: "link-button", onClick: load },
+              loading.value ? "加载中" : "刷新",
+            ),
           ]),
           error.value
             ? h("div", { class: "state-box error" }, error.value)
             : editableDefaultConfig.value
               ? h("div", { class: "config-summary-grid" }, [
-                  summaryItem("配置来源", getGachaSourceText(editableDefaultConfig.value)),
-                  summaryItem("星穹币消耗", `单抽 ${editableDefaultConfig.value.drawCosts?.once ?? 10} / 十连 ${editableDefaultConfig.value.drawCosts?.ten ?? 100}`),
-                  summaryItem("概率合计", `${(getProbabilityTotal(editableDefaultConfig.value.rarityProbabilities) * 100).toFixed(2)}%`),
-                  summaryItem("UP", summarizeUpConfig(editableDefaultConfig.value.upCards)),
-                  summaryItem("保底", summarizePityConfig(editableDefaultConfig.value.pitySystem)),
-                  summaryItem("更新时间", editableDefaultConfig.value.updatedAt ? formatDate(editableDefaultConfig.value.updatedAt) : "-"),
+                  summaryItem(
+                    "配置来源",
+                    getGachaSourceText(editableDefaultConfig.value),
+                  ),
+                  summaryItem(
+                    "星穹币消耗",
+                    `单抽 ${editableDefaultConfig.value.drawCosts?.once ?? 10} / 十连 ${editableDefaultConfig.value.drawCosts?.ten ?? 100}`,
+                  ),
+                  summaryItem(
+                    "概率合计",
+                    `${(getProbabilityTotal(editableDefaultConfig.value.rarityProbabilities) * 100).toFixed(2)}%`,
+                  ),
+                  summaryItem(
+                    "UP",
+                    summarizeUpConfig(editableDefaultConfig.value.upCards),
+                  ),
+                  summaryItem(
+                    "保底",
+                    summarizePityConfig(editableDefaultConfig.value.pitySystem),
+                  ),
+                  summaryItem(
+                    "更新时间",
+                    editableDefaultConfig.value.updatedAt
+                      ? formatDate(editableDefaultConfig.value.updatedAt)
+                      : "-",
+                  ),
                 ])
-              : h("div", { class: "state-box" }, "暂无默认配置，保存后会写入 pool_id=0。"),
+              : h(
+                  "div",
+                  { class: "state-box" },
+                  "暂无默认配置，保存后会写入 pool_id=0。",
+                ),
           h("div", { class: "config-actions" }, [
             h(
               ElButton,
@@ -1475,7 +1690,8 @@ const GachaConfigPage = defineComponent({
         editableDefaultConfig.value
           ? h(GachaConfigDialog, {
               modelValue: dialogVisible.value,
-              "onUpdate:modelValue": (value: boolean) => (dialogVisible.value = value),
+              "onUpdate:modelValue": (value: boolean) =>
+                (dialogVisible.value = value),
               mode: "default",
               poolKey: "0",
               config: editableDefaultConfig.value,

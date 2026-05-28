@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import {
   Between,
   DataSource,
@@ -13,11 +13,9 @@ import { UserHistory } from "src/entity/history.entity";
 import type { RedeemRewards } from "src/entity/redeemCode.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
-import {
-  TaskScope,
-  UserTaskClaim,
-} from "src/entity/userTaskClaim.entity";
+import { TaskScope, UserTaskClaim } from "src/entity/userTaskClaim.entity";
 import { RewardService } from "src/reward/reward.service";
+import { SeasonService } from "src/season/season.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TASK_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -205,6 +203,8 @@ export class TasksService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly rewardService: RewardService,
+    @Optional()
+    private readonly seasonService?: SeasonService,
   ) {}
 
   async getOverview(uid: string) {
@@ -239,7 +239,12 @@ export class TasksService {
           throw new Error("任务奖励已领取");
         }
 
-        const progress = await this.calculateTaskProgress(manager, uid, task, period);
+        const progress = await this.calculateTaskProgress(
+          manager,
+          uid,
+          task,
+          period,
+        );
         if (progress < task.targetValue) {
           throw new Error("任务尚未完成");
         }
@@ -269,12 +274,28 @@ export class TasksService {
             activityPoints: task.activityPoints,
           },
         });
+        const seasonPointRecord = await this.seasonService?.grantTaskActivity(
+          manager,
+          uid,
+          {
+            periodKey: period.periodKey,
+            taskId: task.key,
+            taskName: task.name,
+            activityPoints: task.activityPoints,
+          },
+        );
 
         return {
           scope: period.scope,
           periodKey: period.periodKey,
           task: this.toTaskView(task, progress, true),
           rewards,
+          seasonPoints: seasonPointRecord
+            ? {
+                gained: task.activityPoints,
+                title: seasonPointRecord.title,
+              }
+            : null,
         };
       });
     } catch (error) {
@@ -311,7 +332,11 @@ export class TasksService {
           throw new Error("活跃度奖励已领取");
         }
 
-        const activity = await this.calculateClaimedActivity(manager, uid, period);
+        const activity = await this.calculateClaimedActivity(
+          manager,
+          uid,
+          period,
+        );
         if (activity < milestone.threshold) {
           throw new Error("活跃度不足");
         }
@@ -374,7 +399,12 @@ export class TasksService {
     );
     const tasks: TaskView[] = [];
     for (const task of TASK_DEFINITIONS[period.scope]) {
-      const progress = await this.calculateTaskProgress(manager, uid, task, period);
+      const progress = await this.calculateTaskProgress(
+        manager,
+        uid,
+        task,
+        period,
+      );
       tasks.push(
         this.toTaskView(task, progress, claimMap.has(`task:${task.key}`)),
       );
@@ -466,9 +496,19 @@ export class TasksService {
       case "trade":
         return this.countTrade(manager, uid, period);
       case "synthesize":
-        return this.sumAchievementEvents(manager, uid, "synthesize_count", period);
+        return this.sumAchievementEvents(
+          manager,
+          uid,
+          "synthesize_count",
+          period,
+        );
       case "decompose":
-        return this.sumAchievementEvents(manager, uid, "decompose_count", period);
+        return this.sumAchievementEvents(
+          manager,
+          uid,
+          "decompose_count",
+          period,
+        );
       default:
         return 0;
     }
