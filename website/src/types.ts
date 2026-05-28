@@ -124,11 +124,17 @@ export interface UserCardRecord {
   sellableCount?: number;
   lockableUuid?: string | null;
   unlockableUuid?: string | null;
+  upgradeableUuid?: string | null;
   canSell: boolean;
   canLottery: boolean;
+  canUpgrade?: boolean;
   isListed?: boolean;
   tradeListingId?: number | null;
   tradePrice?: number | null;
+  cultivationLevel?: number;
+  cultivationExp?: number;
+  cultivationMaxLevel?: number;
+  power?: number;
   obtainedAt?: string;
   latestObtainedAt?: string;
 }
@@ -350,6 +356,47 @@ export interface BulkDecomposeResponse {
   reservedCount?: number;
   decomposed?: number;
   fragments?: BulkDecomposeFragment[];
+}
+
+export interface CardCultivationSnapshot {
+  level: number;
+  exp: number;
+  maxLevel: number;
+  power: number;
+  cardName: string;
+  rarity: CardRarity | string;
+}
+
+export interface CardUpgradePreview {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  rarity: CardRarity | string;
+  current: CardCultivationSnapshot;
+  next: CardCultivationSnapshot | null;
+  cost: {
+    itemId: number;
+    itemName: string;
+    num: number;
+    owned: number;
+  };
+  canUpgrade: boolean;
+  unavailableReason?: string;
+}
+
+export interface CardUpgradeResponse {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  rarity: CardRarity | string;
+  before: CardCultivationSnapshot;
+  after: CardCultivationSnapshot;
+  cost: {
+    itemId: number;
+    itemName: string;
+    num: number;
+    remaining: number;
+  };
 }
 
 export interface DrawHistoryDetail {

@@ -55,6 +55,8 @@ import type {
   AchievementNotification,
   AchievementRecord,
   BulkDecomposeResponse,
+  CardUpgradePreview,
+  CardUpgradeResponse,
   DrawHistoryRecord,
   DrawHistoryResponse,
   ExchangeClaimResponse,
@@ -241,6 +243,8 @@ const tradeMinPrice = ref("");
 const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const recycleTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const upgradeTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const upgradePreview = ref<CardUpgradePreview | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
 const activeBagActionKey = ref("");
@@ -273,6 +277,7 @@ const busy = reactive({
   achievements: false,
   trade: false,
   recycle: false,
+  upgrade: false,
   recharge: false,
   bulkDecompose: false,
   bulkDecomposePreview: false,
@@ -637,6 +642,13 @@ const recycleUnitPrice = computed(() =>
 const recycleTotalPoints = computed(
   () => Math.max(0, Number(recycleCount.value || 0)) * recycleUnitPrice.value,
 );
+const upgradePowerGain = computed(() => {
+  const preview = upgradePreview.value;
+  if (!preview?.next) {
+    return 0;
+  }
+  return Math.max(0, preview.next.power - preview.current.power);
+});
 const bestResult = computed(() => {
   return [...lastResults.value].sort(
     (a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0),
@@ -863,6 +875,8 @@ function logout() {
   tradeListings.value = [];
   myTradeListings.value = [];
   tradeRecords.value = [];
+  upgradeTarget.value = null;
+  upgradePreview.value = null;
   lastResults.value = [];
   resultModalOpen.value = false;
   localStorage.removeItem(DRAW_RESULTS_KEY);
@@ -2060,6 +2074,81 @@ function closeRecycleModal() {
   recycleCount.value = 1;
 }
 
+function cardUpgradeUuid(card: UserCardsResponse["list"][number]) {
+  return card.upgradeableUuid || (card.canUpgrade ? card.uuid : "") || "";
+}
+
+async function openUpgradeModal(card: UserCardsResponse["list"][number]) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再养成卡片");
+    return;
+  }
+  const uuid = cardUpgradeUuid(card);
+  if (!uuid) {
+    notify("info", "当前没有可养成的卡片");
+    return;
+  }
+  upgradeTarget.value = card;
+  upgradePreview.value = null;
+  busy.upgrade = true;
+  try {
+    upgradePreview.value = await request<CardUpgradePreview>(
+      `/card/user/cards/${uuid}/upgrade-preview`,
+    );
+  } catch (error) {
+    upgradeTarget.value = null;
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.upgrade = false;
+  }
+}
+
+function closeUpgradeModal() {
+  if (busy.upgrade) {
+    return;
+  }
+  upgradeTarget.value = null;
+  upgradePreview.value = null;
+}
+
+async function upgradeCard() {
+  const uuid =
+    upgradePreview.value?.uuid ||
+    (upgradeTarget.value ? cardUpgradeUuid(upgradeTarget.value) : "");
+  if (!uuid) {
+    notify("error", "卡片无效");
+    return;
+  }
+  if (upgradePreview.value && !upgradePreview.value.canUpgrade) {
+    notify("info", upgradePreview.value.unavailableReason || "暂时不能养成");
+    return;
+  }
+  busy.upgrade = true;
+  try {
+    const data = await request<CardUpgradeResponse>(
+      `/card/user/cards/${uuid}/upgrade`,
+      { method: "POST" },
+    );
+    notify(
+      "success",
+      `养成成功：Lv.${data.before.level} → Lv.${data.after.level}，战力 +${data.after.power - data.before.power}`,
+    );
+    await loadPrivateData();
+    try {
+      upgradePreview.value = await request<CardUpgradePreview>(
+        `/card/user/cards/${uuid}/upgrade-preview`,
+      );
+    } catch {
+      upgradeTarget.value = null;
+      upgradePreview.value = null;
+    }
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.upgrade = false;
+  }
+}
+
 async function recycleCards() {
   const target = recycleTarget.value;
   if (!target?.cardId) {
@@ -3082,6 +3171,10 @@ function leaderboardRankLabel(rank?: number) {
                   <h3 class="card-name">{{ card.cardName }}</h3>
                   <p>{{ cardIntroText(card.cardDesc) }}</p>
                   <div class="tag-row">
+                    <span class="cultivation-pill">
+                      Lv.{{ card.cultivationLevel || 1 }}
+                    </span>
+                    <span>战力 {{ card.power || 0 }}</span>
                     <span>{{
                       poolTypeLabel(
                         pools.find((pool) => pool.id === card.poolId)
@@ -3170,6 +3263,16 @@ function leaderboardRankLabel(rank?: number) {
                     @click.stop="openRecycleModal(card)"
                   >
                     <Recycle :size="16" />
+                  </button>
+                  <button
+                    class="card-icon-action"
+                    type="button"
+                    :title="cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'"
+                    :aria-label="cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'"
+                    :disabled="!cardUpgradeUuid(card) || busy.upgrade"
+                    @click.stop="openUpgradeModal(card)"
+                  >
+                    <WandSparkles :size="16" />
                   </button>
                   <button
                     class="card-icon-action"
@@ -4914,6 +5017,117 @@ function leaderboardRankLabel(rank?: number) {
               @click="createTradeListing"
             >
               确认挂售
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="upgradeTarget"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeUpgradeModal"
+      >
+        <section
+          class="trade-listing-modal upgrade-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="卡片养成"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡片养成</p>
+              <h2>{{ upgradeTarget.cardName }}</h2>
+              <span>
+                {{ upgradeTarget.cardLevel }} · Lv.{{
+                  upgradePreview?.current.level || upgradeTarget.cultivationLevel || 1
+                }}
+              </span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.upgrade"
+              @click="closeUpgradeModal"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body upgrade-modal-body">
+            <div v-if="busy.upgrade && !upgradePreview" class="empty-state compact">
+              <LoaderCircle :size="26" class="spin" />
+              <strong>正在读取养成信息</strong>
+              <span>碎片库存与等级状态加载中。</span>
+            </div>
+            <template v-else-if="upgradePreview">
+              <div class="upgrade-compare">
+                <article>
+                  <span>当前</span>
+                  <strong>Lv.{{ upgradePreview.current.level }}</strong>
+                  <b>战力 {{ upgradePreview.current.power }}</b>
+                </article>
+                <ChevronRight :size="22" />
+                <article :class="{ muted: !upgradePreview.next }">
+                  <span>下一级</span>
+                  <strong>
+                    Lv.{{ upgradePreview.next?.level || upgradePreview.current.level }}
+                  </strong>
+                  <b>
+                    战力
+                    {{ upgradePreview.next?.power || upgradePreview.current.power }}
+                  </b>
+                </article>
+              </div>
+              <dl>
+                <div>
+                  <dt>等级上限</dt>
+                  <dd>{{ upgradePreview.current.maxLevel }}</dd>
+                </div>
+                <div>
+                  <dt>本次提升</dt>
+                  <dd>战力 +{{ upgradePowerGain }}</dd>
+                </div>
+                <div>
+                  <dt>消耗碎片</dt>
+                  <dd>
+                    {{ upgradePreview.cost.itemName }} x{{ upgradePreview.cost.num }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>当前库存</dt>
+                  <dd>{{ upgradePreview.cost.owned }}</dd>
+                </div>
+              </dl>
+              <p
+                v-if="upgradePreview.unavailableReason"
+                class="upgrade-warning"
+              >
+                {{ upgradePreview.unavailableReason }}
+              </p>
+            </template>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.upgrade"
+              @click="closeUpgradeModal"
+            >
+              取消
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="
+                busy.upgrade || !upgradePreview || !upgradePreview.canUpgrade
+              "
+              @click="upgradeCard"
+            >
+              <LoaderCircle v-if="busy.upgrade" :size="18" class="spin" />
+              <WandSparkles v-else :size="18" />
+              确认养成
             </button>
           </footer>
         </section>

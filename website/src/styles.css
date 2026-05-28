@@ -1544,6 +1544,11 @@ h3 {
   line-height: 1;
 }
 
+.cultivation-pill {
+  border-color: rgba(150, 242, 255, 0.4);
+  color: var(--primary-strong);
+}
+
 .card-type-pill {
   display: inline-flex;
   min-height: 26px;
@@ -2858,6 +2863,75 @@ h3 {
 
 .card-intro-modal {
   width: min(520px, 100%);
+}
+
+.upgrade-modal {
+  width: min(580px, 100%);
+}
+
+.upgrade-modal-body dl div:nth-child(2) dd,
+.upgrade-modal-body dl div:nth-child(4) dd {
+  color: var(--primary-strong);
+  font-weight: 800;
+}
+
+.upgrade-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.upgrade-compare article {
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 14px;
+}
+
+.upgrade-compare article:last-child {
+  border-color: rgba(150, 242, 255, 0.32);
+  background: rgba(84, 216, 255, 0.1);
+}
+
+.upgrade-compare article.muted {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0.7;
+}
+
+.upgrade-compare span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.upgrade-compare strong {
+  color: var(--text);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.upgrade-compare b {
+  color: var(--primary-strong);
+  font-size: 13px;
+}
+
+.upgrade-warning {
+  margin: 0;
+  border: 1px solid rgba(255, 211, 106, 0.32);
+  border-radius: var(--radius);
+  color: #ffe5a2;
+  background: rgba(255, 211, 106, 0.1);
+  padding: 10px 12px;
+  line-height: 1.55;
+}
+
+:root[data-theme="light"] .upgrade-warning {
+  color: #7a4a00;
+  background: rgba(255, 211, 106, 0.2);
 }
 
 .share-text-modal {
@@ -4489,6 +4563,7 @@ h3 {
   }
 
   .trade-grid,
+  .upgrade-compare,
   .trade-card,
   .trade-list article {
     grid-template-columns: 1fr;

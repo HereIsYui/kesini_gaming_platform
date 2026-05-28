@@ -44,6 +44,14 @@ export class UserCard {
   @Column({ default: false })
   locked: boolean;
 
+  // 养成等级：用于后续阵容与 PVE 战力计算
+  @Column({ type: "int", default: 1 })
+  cultivation_level: number;
+
+  // 累计投入的养成经验，首版等同于已消耗碎片数量
+  @Column({ type: "int", default: 0 })
+  cultivation_exp: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

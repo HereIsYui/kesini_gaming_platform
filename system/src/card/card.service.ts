@@ -35,6 +35,16 @@ import {
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
 const DEFAULT_DRAW_POOL_ID = 1;
+const CULTIVATION_CONFIG: Record<
+  CardRarity,
+  { maxLevel: number; costBase: number; powerBase: number; powerGrowth: number }
+> = {
+  N: { maxLevel: 20, costBase: 4, powerBase: 100, powerGrowth: 12 },
+  R: { maxLevel: 30, costBase: 8, powerBase: 180, powerGrowth: 22 },
+  SR: { maxLevel: 40, costBase: 16, powerBase: 320, powerGrowth: 38 },
+  SSR: { maxLevel: 50, costBase: 30, powerBase: 600, powerGrowth: 72 },
+  UR: { maxLevel: 60, costBase: 50, powerBase: 1000, powerGrowth: 120 },
+};
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -71,8 +81,14 @@ type UserCardGroup = {
   sellableCount: number;
   canSell: boolean;
   canLottery: boolean;
+  canUpgrade: boolean;
   lockableUuid: string | null;
   unlockableUuid: string | null;
+  upgradeableUuid: string | null;
+  cultivationLevel: number;
+  cultivationExp: number;
+  cultivationMaxLevel: number;
+  power: number;
   latestObtainedAt: Date | null;
 };
 type UserCatalogEntry = {
@@ -678,6 +694,31 @@ export class CardService {
           isListed: Boolean(activeListing),
           tradeListingId: activeListing?.id || null,
           tradePrice: activeListing?.price || null,
+          cultivationLevel: this.getCultivationLevel(userCard),
+          cultivationExp: this.getCultivationExp(userCard),
+          cultivationMaxLevel: this.getCultivationMaxLevel(
+            userCard.card_level || this.getHighestRarity(card.card_level),
+          ),
+          power: this.calculateCultivationPower(
+            userCard.card_level || this.getHighestRarity(card.card_level),
+            this.getCultivationLevel(userCard),
+          ),
+          canUpgrade:
+            !activeListing &&
+            userCard.locked !== true &&
+            this.getCultivationLevel(userCard) <
+              this.getCultivationMaxLevel(
+                userCard.card_level || this.getHighestRarity(card.card_level),
+              ),
+          upgradeableUuid:
+            !activeListing &&
+            userCard.locked !== true &&
+            this.getCultivationLevel(userCard) <
+              this.getCultivationMaxLevel(
+                userCard.card_level || this.getHighestRarity(card.card_level),
+              )
+              ? userCard.card_uuid
+              : null,
           obtainedAt: userCard.createdAt,
         };
       })
@@ -731,6 +772,119 @@ export class CardService {
         cardLevel:
           userCard.card_level ||
           (card ? this.getHighestRarity(card.card_level) : undefined),
+      };
+    });
+  }
+
+  async getUserCardUpgradePreview(uid: string, cardUuid: string) {
+    const userCard = await this.userCardRepository.findOne({
+      where: { uid, card_uuid: cardUuid, delete_flag: false },
+    });
+    if (!userCard) {
+      throw new Error("用户没有这张卡片");
+    }
+    const card = await this.cardRepository.findOne({
+      where: { id: Number(userCard.card_id) },
+    });
+    if (!card) {
+      throw new Error("卡片不存在");
+    }
+    const [activeListing] = await this.findActiveListingsByCardUuids([cardUuid]);
+    const user = await this.userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    const fragmentItem = await this.findFragmentItem(
+      this.dataSource.manager,
+      card,
+    );
+    const inventory = await this.inventoryRepository.findOne({
+      where: { user_id: user.id, item_id: fragmentItem.id },
+    });
+
+    return this.createUpgradePreview(
+      userCard,
+      card,
+      fragmentItem,
+      inventory?.num || 0,
+      Boolean(activeListing),
+    );
+  }
+
+  async upgradeUserCard(uid: string, cardUuid: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const userCardRepository = manager.getRepository(UserCard);
+      const inventoryRepository = manager.getRepository(UserInventory);
+      const userCard = await userCardRepository.findOne({
+        where: { uid, card_uuid: cardUuid, delete_flag: false },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!userCard) {
+        throw new Error("用户没有这张卡片");
+      }
+      if (userCard.locked === true) {
+        throw new Error("已锁定的卡片不能养成");
+      }
+
+      const activeListing = await manager.getRepository(TradeListing).findOne({
+        where: { card_uuid: cardUuid, status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (activeListing) {
+        throw new Error("挂售中的卡片不能养成");
+      }
+
+      const card = await manager.getRepository(CardItem).findOne({
+        where: { id: Number(userCard.card_id) },
+      });
+      if (!card) {
+        throw new Error("卡片不存在");
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        throw new Error("未知的卡片等级");
+      }
+
+      const currentLevel = this.getCultivationLevel(userCard);
+      const maxLevel = this.getCultivationMaxLevel(rarity);
+      if (currentLevel >= maxLevel) {
+        throw new Error("卡片已达到当前稀有度等级上限");
+      }
+
+      const user = await this.getExistingUser(manager, uid);
+      const fragmentItem = await this.findFragmentItem(manager, card);
+      const inventory = await inventoryRepository.findOne({
+        where: { user_id: user.id, item_id: fragmentItem.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      const cost = this.getCultivationUpgradeCost(rarity, currentLevel);
+      if (!inventory || inventory.num < cost) {
+        throw new Error(
+          `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${inventory?.num || 0}个`,
+        );
+      }
+
+      const before = this.createCultivationSnapshot(userCard, card, rarity);
+      inventory.num -= cost;
+      userCard.cultivation_level = currentLevel + 1;
+      userCard.cultivation_exp = this.getCultivationExp(userCard) + cost;
+      await inventoryRepository.save(inventory);
+      await userCardRepository.save(userCard);
+      const after = this.createCultivationSnapshot(userCard, card, rarity);
+
+      return {
+        uuid: userCard.card_uuid,
+        cardId: Number(userCard.card_id),
+        cardName: card.card_name,
+        rarity,
+        before,
+        after,
+        cost: {
+          itemId: fragmentItem.id,
+          itemName: fragmentItem.drop_name,
+          num: cost,
+          remaining: inventory.num,
+        },
       };
     });
   }
@@ -846,8 +1000,14 @@ export class CardService {
           sellableCount: 0,
           canSell: false,
           canLottery: false,
+          canUpgrade: false,
           lockableUuid: null,
           unlockableUuid: null,
+          upgradeableUuid: null,
+          cultivationLevel: 1,
+          cultivationExp: 0,
+          cultivationMaxLevel: this.getCultivationMaxLevel(rarity),
+          power: this.calculateCultivationPower(rarity, 1),
           latestObtainedAt: null,
         };
         groupMap.set(key, group);
@@ -855,6 +1015,8 @@ export class CardService {
 
       const isListed = activeListingSet.has(userCard.card_uuid);
       const isLocked = userCard.locked === true;
+      const cultivationLevel = this.getCultivationLevel(userCard);
+      const cultivationExp = this.getCultivationExp(userCard);
       group.count += 1;
       group.listedCount += isListed ? 1 : 0;
       group.lockedCount += isLocked ? 1 : 0;
@@ -867,6 +1029,23 @@ export class CardService {
       }
       if (!isListed && isLocked && !group.unlockableUuid) {
         group.unlockableUuid = userCard.card_uuid;
+      }
+      if (
+        cultivationLevel > group.cultivationLevel ||
+        (cultivationLevel === group.cultivationLevel &&
+          cultivationExp > group.cultivationExp)
+      ) {
+        group.cultivationLevel = cultivationLevel;
+        group.cultivationExp = cultivationExp;
+        group.power = this.calculateCultivationPower(rarity, cultivationLevel);
+      }
+      if (
+        !isListed &&
+        !isLocked &&
+        cultivationLevel < group.cultivationMaxLevel &&
+        !group.upgradeableUuid
+      ) {
+        group.upgradeableUuid = userCard.card_uuid;
       }
       group.latestObtainedAt = this.pickLatestDate(
         group.latestObtainedAt,
@@ -884,6 +1063,7 @@ export class CardService {
           ...group,
           sellableCount,
           canSell: sellableCount > 0,
+          canUpgrade: Boolean(group.upgradeableUuid),
         };
       })
       .sort((left, right) => {
@@ -2062,6 +2242,109 @@ export class CardService {
     } catch {
       return null;
     }
+  }
+
+  private getCultivationLevel(userCard: UserCard): number {
+    const level = Number(userCard.cultivation_level || 1);
+    return Number.isInteger(level) && level > 0 ? level : 1;
+  }
+
+  private getCultivationExp(userCard: UserCard): number {
+    const exp = Number(userCard.cultivation_exp || 0);
+    return Number.isInteger(exp) && exp > 0 ? exp : 0;
+  }
+
+  private getCultivationMaxLevel(rarity: string): number {
+    const normalized = this.normalizeRarity(rarity);
+    return CULTIVATION_CONFIG[normalized].maxLevel;
+  }
+
+  private getCultivationUpgradeCost(
+    rarity: CardRarity,
+    currentLevel: number,
+  ): number {
+    const config = CULTIVATION_CONFIG[rarity];
+    return config.costBase * Math.max(1, currentLevel);
+  }
+
+  private calculateCultivationPower(rarity: string, level: number): number {
+    const normalized = this.normalizeRarity(rarity);
+    const config = CULTIVATION_CONFIG[normalized];
+    const safeLevel = Math.max(
+      1,
+      Math.min(config.maxLevel, Math.floor(Number(level || 1))),
+    );
+    return config.powerBase + (safeLevel - 1) * config.powerGrowth;
+  }
+
+  private createCultivationSnapshot(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+  ) {
+    const level = this.getCultivationLevel(userCard);
+    return {
+      level,
+      exp: this.getCultivationExp(userCard),
+      maxLevel: this.getCultivationMaxLevel(rarity),
+      power: this.calculateCultivationPower(rarity, level),
+      cardName: card.card_name,
+      rarity,
+    };
+  }
+
+  private createUpgradePreview(
+    userCard: UserCard,
+    card: CardItem,
+    fragmentItem: DropItem,
+    ownedFragments: number,
+    isListed: boolean,
+  ) {
+    const rarity = this.getEffectiveUserCardRarity(userCard, card);
+    if (!rarity) {
+      throw new Error("未知的卡片等级");
+    }
+    const current = this.createCultivationSnapshot(userCard, card, rarity);
+    const nextLevel = Math.min(current.maxLevel, current.level + 1);
+    const cost =
+      current.level < current.maxLevel
+        ? this.getCultivationUpgradeCost(rarity, current.level)
+        : 0;
+    const next = {
+      level: nextLevel,
+      exp: current.exp + cost,
+      maxLevel: current.maxLevel,
+      power: this.calculateCultivationPower(rarity, nextLevel),
+      cardName: card.card_name,
+      rarity,
+    };
+    const unavailableReason =
+      userCard.locked === true
+        ? "已锁定的卡片不能养成"
+        : isListed
+          ? "挂售中的卡片不能养成"
+          : current.level >= current.maxLevel
+            ? "卡片已达到当前稀有度等级上限"
+            : ownedFragments < cost
+              ? `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${ownedFragments}个`
+              : "";
+
+    return {
+      uuid: userCard.card_uuid,
+      cardId: Number(userCard.card_id),
+      cardName: card.card_name,
+      rarity,
+      current,
+      next: current.level < current.maxLevel ? next : null,
+      cost: {
+        itemId: fragmentItem.id,
+        itemName: fragmentItem.drop_name,
+        num: cost,
+        owned: ownedFragments,
+      },
+      canUpgrade: !unavailableReason,
+      unavailableReason,
+    };
   }
 
   private buildRequiredPoolVersionMap(

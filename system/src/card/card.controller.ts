@@ -437,6 +437,53 @@ export class CardController {
   }
 
   /**
+   * 获取卡片养成升级预览
+   * GET /card/user/cards/:uuid/upgrade-preview
+   */
+  @Get("user/cards/:uuid/upgrade-preview")
+  @UseGuards(JwtAuthGuard)
+  async getUserCardUpgradePreview(
+    @Param("uuid") uuid: string,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.getUserCardUpgradePreview(
+        user.uid,
+        uuid,
+      );
+      return ResponseDto.success(result, "获取养成预览成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取养成预览失败");
+    }
+  }
+
+  /**
+   * 升级玩家卡片养成等级
+   * POST /card/user/cards/:uuid/upgrade
+   */
+  @Post("user/cards/:uuid/upgrade")
+  @UseGuards(JwtAuthGuard)
+  async upgradeUserCard(
+    @Param("uuid") uuid: string,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.upgradeUserCard(user.uid, uuid);
+      return ResponseDto.success(result, "养成成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "养成失败");
+    }
+  }
+
+  /**
    * 合成卡片
    * POST /card/synthesize
    */

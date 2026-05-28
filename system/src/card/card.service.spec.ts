@@ -1409,6 +1409,208 @@ describe("CardService 卡片锁定", () => {
   });
 });
 
+describe("CardService 卡片养成", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function createUpgradeService(options: {
+    userCard?: Partial<UserCard> | null;
+    inventory?: Partial<UserInventory> | null;
+    activeListing?: Partial<TradeListing> | null;
+  } = {}) {
+    const userCard = options.userCard === null
+      ? null
+      : ({
+          uid: "u1",
+          card_uuid: "card-uuid",
+          card_id: "1",
+          card_level: "R",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 2,
+          cultivation_exp: 10,
+          ...options.userCard,
+        } as UserCard);
+    const card = {
+      id: 1,
+      card_name: "养成测试卡",
+      card_level: "R",
+      card_desc: "描述",
+      card_type: 0,
+      pool: 1,
+      drop_item: "",
+    } as CardItem;
+    const fragment = {
+      id: 5,
+      drop_name: "通用碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: true,
+    } as DropItem;
+    const inventory = options.inventory === null
+      ? null
+      : ({
+          id: 1,
+          user_id: 1,
+          item_id: 5,
+          num: 100,
+          ...options.inventory,
+        } as UserInventory);
+    const userCardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(userCard),
+    });
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async ({ where }) =>
+        where.default_fragment === true ? fragment : null,
+      ),
+    });
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(inventory),
+    });
+    const listingRepository = createRepository({
+      find: jest
+        .fn()
+        .mockResolvedValue(options.activeListing ? [options.activeListing] : []),
+      findOne: jest.fn().mockResolvedValue(options.activeListing || null),
+    });
+    const repositories = new Map<any, any>([
+      [UserCard, userCardRepository],
+      [CardItem, cardRepository],
+      [User, userRepository],
+      [DropItem, dropRepository],
+      [UserInventory, inventoryRepository],
+      [TradeListing, listingRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      manager,
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const service = new CardService(
+      cardRepository as any,
+      createRepository() as any,
+      userRepository as any,
+      userCardRepository as any,
+      createRepository() as any,
+      dropRepository as any,
+      inventoryRepository as any,
+      createRepository() as any,
+      {} as any,
+      dataSource as any,
+    );
+
+    return {
+      service,
+      userCard,
+      inventory,
+      userCardRepository,
+      inventoryRepository,
+    };
+  }
+
+  it("升级会消耗对应碎片并提升等级与战力", async () => {
+    const { service, userCard, inventory, userCardRepository, inventoryRepository } =
+      createUpgradeService();
+
+    const result = await service.upgradeUserCard("u1", "card-uuid");
+
+    expect(inventory?.num).toBe(84);
+    expect(userCard?.cultivation_level).toBe(3);
+    expect(userCard?.cultivation_exp).toBe(26);
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ num: 84 }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ cultivation_level: 3, cultivation_exp: 26 }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        cardName: "养成测试卡",
+        rarity: "R",
+        before: expect.objectContaining({ level: 2, power: 202 }),
+        after: expect.objectContaining({ level: 3, power: 224 }),
+        cost: expect.objectContaining({
+          itemName: "通用碎片",
+          num: 16,
+          remaining: 84,
+        }),
+      }),
+    );
+  });
+
+  it("预览会返回碎片不足原因", async () => {
+    const { service } = createUpgradeService({
+      inventory: { num: 1 },
+    });
+
+    const result = await service.getUserCardUpgradePreview("u1", "card-uuid");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        canUpgrade: false,
+        unavailableReason: "碎片不足，需要16个通用碎片，当前拥有1个",
+        cost: expect.objectContaining({ owned: 1, num: 16 }),
+      }),
+    );
+  });
+
+  it("锁定卡片不能养成", async () => {
+    const { service, userCardRepository, inventoryRepository } =
+      createUpgradeService({
+        userCard: { locked: true },
+      });
+
+    await expect(service.upgradeUserCard("u1", "card-uuid")).rejects.toThrow(
+      "已锁定的卡片不能养成",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+    expect(inventoryRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("挂售中的卡片不能养成", async () => {
+    const { service, userCardRepository, inventoryRepository } =
+      createUpgradeService({
+        activeListing: { id: 9, card_uuid: "card-uuid", status: "active" },
+      });
+
+    await expect(service.upgradeUserCard("u1", "card-uuid")).rejects.toThrow(
+      "挂售中的卡片不能养成",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+    expect(inventoryRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("达到等级上限后不能继续养成", async () => {
+    const { service, userCardRepository } = createUpgradeService({
+      userCard: { cultivation_level: 30 },
+    });
+
+    await expect(service.upgradeUserCard("u1", "card-uuid")).rejects.toThrow(
+      "卡片已达到当前稀有度等级上限",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+});
+
 describe("CardService 一键分解", () => {
   function createRepository(overrides: Record<string, any> = {}) {
     return {

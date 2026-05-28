@@ -291,6 +291,12 @@ export FILE_ROOT=/data/kesini/public
 - [ ] P3 赛季系统、赛季商店、活动排行
 - [ ] P4 玩家主页、卡片展示墙、好友/公会等社交扩展
 
+## 卡片养成
+
+P2 已完成第一步：玩家背包卡片支持养成等级、累计投入经验与战力展示。养成消耗该卡片对应碎片，每次提升 1 级；不同稀有度有不同等级上限、碎片消耗和战力成长。锁定、挂售和已达到等级上限的卡片不能继续养成。
+
+后续 P2 仍待完成：阵容编队、轻量 PVE 关卡与战斗结算。
+
 ## 任务与活跃度
 
 玩家端新增任务中心，包含日常与周常两类目标。任务进度会根据签到、抽卡、兑换商店、交易、合成和分解等成功记录动态统计；任务奖励领取后才会累计活跃度，达到对应档位后可领取活跃度奖励。
@@ -309,6 +315,8 @@ ALTER TABLE pool_info ADD COLUMN sort_order int NOT NULL DEFAULT 0;
 ALTER TABLE recharge_config ADD COLUMN fishpi_api_key varchar(255) NOT NULL DEFAULT '';
 ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
 ALTER TABLE user_card ADD COLUMN locked tinyint NOT NULL DEFAULT 0;
+ALTER TABLE user_card ADD COLUMN cultivation_level int NOT NULL DEFAULT 1;
+ALTER TABLE user_card ADD COLUMN cultivation_exp int NOT NULL DEFAULT 0;
 
 CREATE TABLE daily_sign_in_record (
   id int NOT NULL AUTO_INCREMENT,
