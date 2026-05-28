@@ -1171,20 +1171,25 @@ describe("AdminService", () => {
     await expect(service.getDecomposeConfig()).resolves.toEqual(
       expect.objectContaining({
         rules: expect.objectContaining({
-          N: expect.objectContaining({ itemId: 0, min: 1, max: 10 }),
-          SSR: expect.objectContaining({ itemId: 0, min: 40, max: 80 }),
+          N: expect.objectContaining({
+            drops: [expect.objectContaining({ itemId: 0, min: 1, max: 10 })],
+          }),
+          SSR: expect.objectContaining({
+            drops: [expect.objectContaining({ itemId: 0, min: 40, max: 80 })],
+          }),
         }),
       }),
     );
   });
 
-  it("更新分解配置会保存碎片产出规则", async () => {
+  it("更新分解配置会保存多种碎片产出规则", async () => {
     const systemConfigRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(null),
     });
     const dropRepository = createRepository({
       find: jest.fn().mockResolvedValue([
         { id: 9, drop_name: "测试碎片", drop_type: 0, disabled: false },
+        { id: 10, drop_name: "额外碎片", drop_type: 0, disabled: false },
       ]),
     });
     const service = createService({
@@ -1194,7 +1199,12 @@ describe("AdminService", () => {
 
     const result = await service.updateDecomposeConfig({
       rules: {
-        N: { itemId: 9, min: 2, max: 4 },
+        N: {
+          drops: [
+            { itemId: 9, min: 2, max: 4 },
+            { itemId: 10, min: 1, max: 1 },
+          ],
+        },
       },
     });
 
@@ -1205,17 +1215,26 @@ describe("AdminService", () => {
       }),
     );
     const saved = systemConfigRepository.save.mock.calls[0][0];
-    expect(JSON.parse(saved.value).rules.N).toEqual({
-      itemId: 9,
-      min: 2,
-      max: 4,
-    });
+    expect(JSON.parse(saved.value).rules.N.drops).toEqual([
+      { itemId: 9, min: 2, max: 4 },
+      { itemId: 10, min: 1, max: 1 },
+    ]);
     expect(result.rules.N).toEqual(
       expect.objectContaining({
-        itemId: 9,
-        itemName: "测试碎片",
-        min: 2,
-        max: 4,
+        drops: [
+          expect.objectContaining({
+            itemId: 9,
+            itemName: "测试碎片",
+            min: 2,
+            max: 4,
+          }),
+          expect.objectContaining({
+            itemId: 10,
+            itemName: "额外碎片",
+            min: 1,
+            max: 1,
+          }),
+        ],
       }),
     );
   });
@@ -1238,7 +1257,7 @@ describe("AdminService", () => {
       disabledService.updateDecomposeConfig({
         rules: { N: { itemId: 9, min: 1, max: 1 } },
       }),
-    ).rejects.toThrow("N 分解碎片已禁用");
+    ).rejects.toThrow("N 分解第1项碎片已禁用");
 
     const itemDropRepository = createRepository({
       find: jest.fn().mockResolvedValue([
@@ -1254,7 +1273,7 @@ describe("AdminService", () => {
       itemService.updateDecomposeConfig({
         rules: { R: { itemId: 10, min: 1, max: 1 } },
       }),
-    ).rejects.toThrow("R 分解产出只能选择卡片碎片");
+    ).rejects.toThrow("R 分解第1项产出只能选择卡片碎片");
   });
 
   it("后台开服活动配置会保存奖励和活动批次", async () => {

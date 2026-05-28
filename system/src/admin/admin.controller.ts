@@ -337,7 +337,15 @@ class ShopRecycleConfigPatchDto {
 class DecomposeConfigPatchDto {
   @IsOptional()
   @IsObject()
-  rules?: Record<string, { itemId?: number; min?: number; max?: number }>;
+  rules?: Record<
+    string,
+    {
+      drops?: Array<{ itemId?: number; min?: number; max?: number }>;
+      itemId?: number;
+      min?: number;
+      max?: number;
+    }
+  >;
 }
 
 class AchievementQueryDto extends PageDto {

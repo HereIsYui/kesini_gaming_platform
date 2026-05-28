@@ -43,6 +43,11 @@ type DecomposeFragmentSummary = {
   itemName: string;
   count: number;
 };
+type DecomposeFragmentDrop = {
+  rarity: CardRarity;
+  fragmentItem: DropItem;
+  fragmentCount: number;
+};
 type DecomposeCandidate = {
   userCard: UserCard;
   card: CardItem;
@@ -1016,7 +1021,7 @@ export class CardService {
       );
 
       const user = await this.getExistingUser(manager, uid);
-      const fragmentDrop = await this.createDecomposeFragmentDrop(
+      const fragmentDrops = await this.createDecomposeFragmentDrops(
         manager,
         userCard,
         card,
@@ -1024,31 +1029,38 @@ export class CardService {
 
       userCard.delete_flag = true;
       await userCardRepository.save(userCard);
-      await this.applyFragmentGain(
-        manager,
-        user.id,
-        fragmentDrop.fragmentItem,
-        fragmentDrop.fragmentCount,
-      );
+      for (const fragmentDrop of fragmentDrops) {
+        await this.applyFragmentGain(
+          manager,
+          user.id,
+          fragmentDrop.fragmentItem,
+          fragmentDrop.fragmentCount,
+        );
+      }
       await this.achievementService?.evaluateAndUnlock(manager, uid, [
         {
           type: "decompose_count",
           amount: 1,
           metadata: {
             cardId: Number(userCard.card_id),
-            rarity: fragmentDrop.rarity,
+            rarity,
             cardUuid,
           },
         },
       ]);
+      const fragmentMap = this.createFragmentSummaryMap(fragmentDrops);
 
       return {
         data: {
           card_id: parseInt(userCard.card_id),
           card_name: card.card_name,
-          card_level: fragmentDrop.rarity,
+          card_level: rarity,
           card_uuid: cardUuid,
-          fragments_gained: fragmentDrop.fragmentCount,
+          fragments_gained: fragmentDrops.reduce(
+            (sum, item) => sum + item.fragmentCount,
+            0,
+          ),
+          fragments: this.toFragmentSummary(fragmentMap),
         },
         msg: "分解成功",
       };
@@ -1132,19 +1144,21 @@ export class CardService {
 
       const fragmentMap = new Map<number, { item: DropItem; count: number }>();
       for (const candidate of candidates) {
-        const fragmentDrop = await this.createDecomposeFragmentDrop(
+        const fragmentDrops = await this.createDecomposeFragmentDrops(
           manager,
           candidate.userCard,
           candidate.card,
         );
-        const existing = fragmentMap.get(fragmentDrop.fragmentItem.id);
-        if (existing) {
-          existing.count += fragmentDrop.fragmentCount;
-        } else {
-          fragmentMap.set(fragmentDrop.fragmentItem.id, {
-            item: fragmentDrop.fragmentItem,
-            count: fragmentDrop.fragmentCount,
-          });
+        for (const fragmentDrop of fragmentDrops) {
+          const existing = fragmentMap.get(fragmentDrop.fragmentItem.id);
+          if (existing) {
+            existing.count += fragmentDrop.fragmentCount;
+          } else {
+            fragmentMap.set(fragmentDrop.fragmentItem.id, {
+              item: fragmentDrop.fragmentItem,
+              count: fragmentDrop.fragmentCount,
+            });
+          }
         }
         candidate.userCard.delete_flag = true;
       }
@@ -1325,11 +1339,11 @@ export class CardService {
     return normalized;
   }
 
-  private async createDecomposeFragmentDrop(
+  private async createDecomposeFragmentDrops(
     manager: EntityManager,
     userCard: UserCard,
     card: CardItem,
-  ) {
+  ): Promise<DecomposeFragmentDrop[]> {
     const rarity =
       this.getEffectiveUserCardRarity(userCard, card) ||
       this.getHighestRarity(card.card_level);
@@ -1337,20 +1351,23 @@ export class CardService {
       throw new Error("UR卡片不可以分解");
     }
     const decomposeRule = await this.getDecomposeRule(manager, rarity);
-    const fragmentRange = {
-      min: decomposeRule.min,
-      max: decomposeRule.max,
-    };
-    const fragmentCount = randomInt(fragmentRange.min, fragmentRange.max + 1);
-    const fragmentItem =
-      decomposeRule.itemId > 0
-        ? await this.findDecomposeConfigFragmentItem(manager, decomposeRule.itemId)
-        : await this.findFragmentItem(manager, card);
-    return {
-      rarity,
-      fragmentCount,
-      fragmentItem,
-    };
+    return Promise.all(
+      decomposeRule.drops.map(async (dropRule) => {
+        const fragmentCount = randomInt(dropRule.min, dropRule.max + 1);
+        const fragmentItem =
+          dropRule.itemId > 0
+            ? await this.findDecomposeConfigFragmentItem(
+                manager,
+                dropRule.itemId,
+              )
+            : await this.findFragmentItem(manager, card);
+        return {
+          rarity,
+          fragmentCount,
+          fragmentItem,
+        };
+      }),
+    );
   }
 
   private async assertCanRemoveOwnedCard(
@@ -1409,6 +1426,22 @@ export class CardService {
       itemName: item.drop_name,
       count,
     }));
+  }
+
+  private createFragmentSummaryMap(fragmentDrops: DecomposeFragmentDrop[]) {
+    const fragmentMap = new Map<number, { item: DropItem; count: number }>();
+    fragmentDrops.forEach((fragmentDrop) => {
+      const existing = fragmentMap.get(fragmentDrop.fragmentItem.id);
+      if (existing) {
+        existing.count += fragmentDrop.fragmentCount;
+      } else {
+        fragmentMap.set(fragmentDrop.fragmentItem.id, {
+          item: fragmentDrop.fragmentItem,
+          count: fragmentDrop.fragmentCount,
+        });
+      }
+    });
+    return fragmentMap;
   }
 
   private async resolveServerConfig(poolId?: number): Promise<GachaConfig> {
@@ -2198,8 +2231,9 @@ export class CardService {
     rarity: CardRarity,
   ) {
     const fallback = this.getDecomposeFragmentRange(rarity);
+    const fallbackRule = { drops: [{ itemId: 0, ...fallback }] };
     if (!isDecomposeConfigRarity(rarity)) {
-      return { itemId: 0, ...fallback };
+      return fallbackRule;
     }
 
     try {
@@ -2207,12 +2241,12 @@ export class CardService {
         where: { key: DECOMPOSE_CONFIG_KEY },
       });
       if (!row?.value) {
-        return { itemId: 0, ...fallback };
+        return fallbackRule;
       }
       const config = normalizeDecomposeConfig(JSON.parse(row.value));
-      return config.rules[rarity] || { itemId: 0, ...fallback };
+      return config.rules[rarity] || fallbackRule;
     } catch {
-      return { itemId: 0, ...fallback };
+      return fallbackRule;
     }
   }
 

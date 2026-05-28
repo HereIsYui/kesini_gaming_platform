@@ -4,41 +4,73 @@
       <el-table-column prop="rarity" label="卡片等级" width="100" />
       <el-table-column label="产出碎片">
         <template #default="{ row }">
-          <el-select
-            :model-value="row.itemId"
-            filterable
-            placeholder="沿用卡片或默认碎片"
-            @update:model-value="updateRule(row.rarity, { itemId: Number($event || 0) })"
-          >
-            <el-option label="沿用卡片配置 / 默认碎片" :value="0" />
-            <el-option
-              v-for="item in fragmentOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="Number(item.value)"
-              :disabled="item.disabled"
-            />
-          </el-select>
-        </template>
-      </el-table-column>
-      <el-table-column label="最小数量" width="140">
-        <template #default="{ row }">
-          <el-input-number
-            :model-value="row.min"
-            :min="1"
-            :step="1"
-            @update:model-value="updateRule(row.rarity, { min: Number($event || 1) })"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column label="最大数量" width="140">
-        <template #default="{ row }">
-          <el-input-number
-            :model-value="row.max"
-            :min="row.min || 1"
-            :step="1"
-            @update:model-value="updateRule(row.rarity, { max: Number($event || row.min || 1) })"
-          />
+          <div class="drop-list">
+            <div
+              v-for="(drop, index) in row.drops"
+              :key="`${row.rarity}-${index}`"
+              class="drop-row"
+            >
+              <el-select
+                :model-value="drop.itemId"
+                filterable
+                placeholder="沿用卡片或默认碎片"
+                class="drop-item-select"
+                @update:model-value="
+                  updateDrop(row.rarity, index, { itemId: Number($event || 0) })
+                "
+              >
+                <el-option label="沿用卡片配置 / 默认碎片" :value="0" />
+                <el-option
+                  v-for="item in fragmentOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="Number(item.value)"
+                  :disabled="item.disabled"
+                />
+              </el-select>
+              <el-input-number
+                :model-value="drop.min"
+                :min="1"
+                :step="1"
+                controls-position="right"
+                class="drop-count-input"
+                @update:model-value="
+                  updateDrop(row.rarity, index, { min: Number($event || 1) })
+                "
+              />
+              <span class="drop-count-separator">至</span>
+              <el-input-number
+                :model-value="drop.max"
+                :min="drop.min || 1"
+                :step="1"
+                controls-position="right"
+                class="drop-count-input"
+                @update:model-value="
+                  updateDrop(row.rarity, index, {
+                    max: Number($event || drop.min || 1),
+                  })
+                "
+              />
+              <el-button
+                :icon="Delete"
+                circle
+                plain
+                type="danger"
+                :disabled="row.drops.length <= 1"
+                aria-label="删除碎片产出"
+                @click="removeDrop(row.rarity, index)"
+              />
+            </div>
+            <el-button
+              :icon="Plus"
+              plain
+              type="primary"
+              class="add-drop-button"
+              @click="addDrop(row.rarity)"
+            >
+              添加碎片
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -50,22 +82,27 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { Delete, Plus } from "@element-plus/icons-vue";
 import type { SelectOption } from "../types";
 
 type Rarity = "N" | "R" | "SR" | "SSR";
-type DecomposeRule = {
+type DecomposeDrop = {
   itemId: number;
   min: number;
   max: number;
 };
-type DecomposeConfigValue = Partial<Record<Rarity, Partial<DecomposeRule>>>;
+type DecomposeRule = {
+  drops: DecomposeDrop[];
+};
+type LegacyDecomposeRule = Partial<DecomposeRule & DecomposeDrop>;
+type DecomposeConfigValue = Partial<Record<Rarity, LegacyDecomposeRule>>;
 
 const rarities: Rarity[] = ["N", "R", "SR", "SSR"];
 const defaults: Record<Rarity, DecomposeRule> = {
-  N: { itemId: 0, min: 1, max: 10 },
-  R: { itemId: 0, min: 10, max: 20 },
-  SR: { itemId: 0, min: 20, max: 40 },
-  SSR: { itemId: 0, min: 40, max: 80 },
+  N: { drops: [{ itemId: 0, min: 1, max: 10 }] },
+  R: { drops: [{ itemId: 0, min: 10, max: 20 }] },
+  SR: { drops: [{ itemId: 0, min: 20, max: 40 }] },
+  SSR: { drops: [{ itemId: 0, min: 40, max: 80 }] },
 };
 
 const props = withDefaults(
@@ -80,7 +117,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (event: "update:modelValue", value: DecomposeConfigValue): void;
+  (event: "update:modelValue", value: Record<Rarity, DecomposeRule>): void;
 }>();
 
 const fragmentOptions = computed(() =>
@@ -88,30 +125,67 @@ const fragmentOptions = computed(() =>
 );
 
 const rows = computed(() =>
-  rarities.map((rarity) => normalizeRule(rarity, props.modelValue[rarity])),
+  rarities.map((rarity) => ({
+    rarity,
+    drops: normalizeRule(rarity, props.modelValue[rarity]).drops,
+  })),
 );
 
-function normalizeRule(rarity: Rarity, input?: Partial<DecomposeRule>) {
+function normalizeRule(rarity: Rarity, input?: LegacyDecomposeRule): DecomposeRule {
   const fallback = defaults[rarity];
+  const rawDrops =
+    Array.isArray(input?.drops) && input.drops.length > 0
+      ? input.drops
+      : input && ("itemId" in input || "min" in input || "max" in input)
+        ? [input]
+        : fallback.drops;
+  return {
+    drops: rawDrops.map((drop, index) =>
+      normalizeDrop(drop, fallback.drops[index] || fallback.drops[0]),
+    ),
+  };
+}
+
+function normalizeDrop(input: Partial<DecomposeDrop>, fallback: DecomposeDrop) {
   const min = normalizePositiveInteger(input?.min, fallback.min);
   const max = Math.max(min, normalizePositiveInteger(input?.max, fallback.max));
   return {
-    rarity,
     itemId: normalizeNonNegativeInteger(input?.itemId, fallback.itemId),
     min,
     max,
   };
 }
 
-function updateRule(rarity: Rarity, patch: Partial<DecomposeRule>) {
+function updateDrop(rarity: Rarity, index: number, patch: Partial<DecomposeDrop>) {
+  updateRule(rarity, (drops) =>
+    drops.map((drop, currentIndex) =>
+      currentIndex === index ? normalizeDrop({ ...drop, ...patch }, drop) : drop,
+    ),
+  );
+}
+
+function addDrop(rarity: Rarity) {
+  updateRule(rarity, (drops) => [...drops, { itemId: 0, min: 1, max: 1 }]);
+}
+
+function removeDrop(rarity: Rarity, index: number) {
+  updateRule(rarity, (drops) =>
+    drops.length <= 1 ? drops : drops.filter((_, currentIndex) => currentIndex !== index),
+  );
+}
+
+function updateRule(
+  rarity: Rarity,
+  updater: (drops: DecomposeDrop[]) => DecomposeDrop[],
+) {
   const nextRules = rarities.reduce(
     (result, item) => {
       const current = normalizeRule(item, props.modelValue[item]);
-      const next = item === rarity ? normalizeRule(item, { ...current, ...patch }) : current;
       result[item] = {
-        itemId: next.itemId,
-        min: next.min,
-        max: next.max,
+        drops:
+          item === rarity
+            ? updater(current.drops).map((drop) => normalizeDrop(drop, drop))
+            : current.drops,
       };
       return result;
     },
@@ -130,3 +204,45 @@ function normalizeNonNegativeInteger(value: unknown, fallback: number) {
   return Number.isInteger(number) && number >= 0 ? number : fallback;
 }
 </script>
+
+<style scoped>
+.drop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drop-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 120px auto 120px 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.drop-item-select {
+  width: 100%;
+}
+
+.drop-count-input {
+  width: 120px;
+}
+
+.drop-count-separator {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.add-drop-button {
+  align-self: flex-start;
+}
+
+@media (max-width: 900px) {
+  .drop-row {
+    grid-template-columns: 1fr 1fr auto 1fr 36px;
+  }
+
+  .drop-item-select {
+    grid-column: 1 / -1;
+  }
+}
+</style>

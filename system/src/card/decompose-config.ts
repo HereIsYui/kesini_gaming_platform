@@ -5,10 +5,14 @@ export const DECOMPOSE_CONFIG_RARITIES = ["N", "R", "SR", "SSR"] as const;
 
 export type DecomposeConfigRarity = (typeof DECOMPOSE_CONFIG_RARITIES)[number];
 
-export interface DecomposeRuleConfig {
+export interface DecomposeDropConfig {
   itemId: number;
   min: number;
   max: number;
+}
+
+export interface DecomposeRuleConfig {
+  drops: DecomposeDropConfig[];
 }
 
 export interface DecomposeConfig {
@@ -17,10 +21,10 @@ export interface DecomposeConfig {
 
 export const DEFAULT_DECOMPOSE_CONFIG: DecomposeConfig = {
   rules: {
-    N: { itemId: 0, min: 1, max: 10 },
-    R: { itemId: 0, min: 10, max: 20 },
-    SR: { itemId: 0, min: 20, max: 40 },
-    SSR: { itemId: 0, min: 40, max: 80 },
+    N: { drops: [{ itemId: 0, min: 1, max: 10 }] },
+    R: { drops: [{ itemId: 0, min: 10, max: 20 }] },
+    SR: { drops: [{ itemId: 0, min: 20, max: 40 }] },
+    SSR: { drops: [{ itemId: 0, min: 40, max: 80 }] },
   },
 };
 
@@ -32,14 +36,18 @@ export function normalizeDecomposeConfig(input: unknown): DecomposeConfig {
     rules: DECOMPOSE_CONFIG_RARITIES.reduce(
       (result, rarity) => {
         const defaultRule = DEFAULT_DECOMPOSE_CONFIG.rules[rarity];
-        const rawRule = (rulesInput[rarity] || {}) as Partial<DecomposeRuleConfig>;
-        const itemId = normalizeInteger(rawRule.itemId, defaultRule.itemId);
-        const min = normalizeInteger(rawRule.min, defaultRule.min);
-        const max = normalizeInteger(rawRule.max, defaultRule.max);
+        const rawRule = (rulesInput[rarity] || {}) as
+          | Partial<DecomposeRuleConfig>
+          | Partial<DecomposeDropConfig>;
+        const rawDrops = getRawDrops(rawRule, defaultRule);
+        const drops = rawDrops.map((drop, index) =>
+          normalizeDrop(drop, defaultRule.drops[index] || defaultRule.drops[0]),
+        );
         result[rarity] = {
-          itemId: Math.max(0, itemId),
-          min: Math.max(1, min),
-          max: Math.max(Math.max(1, min), max),
+          drops:
+            drops.length > 0
+              ? drops
+              : defaultRule.drops.map((drop) => ({ ...drop })),
         };
         return result;
       },
@@ -57,4 +65,35 @@ export function isDecomposeConfigRarity(
 function normalizeInteger(value: unknown, fallback: number): number {
   const number = Number(value);
   return Number.isInteger(number) ? number : fallback;
+}
+
+function getRawDrops(
+  rawRule: Partial<DecomposeRuleConfig> | Partial<DecomposeDropConfig>,
+  defaultRule: DecomposeRuleConfig,
+) {
+  if (
+    "drops" in rawRule &&
+    Array.isArray(rawRule.drops) &&
+    rawRule.drops.length > 0
+  ) {
+    return rawRule.drops as Partial<DecomposeDropConfig>[];
+  }
+  if ("itemId" in rawRule || "min" in rawRule || "max" in rawRule) {
+    return [rawRule as Partial<DecomposeDropConfig>];
+  }
+  return defaultRule.drops;
+}
+
+function normalizeDrop(
+  rawDrop: Partial<DecomposeDropConfig>,
+  defaultDrop: DecomposeDropConfig,
+): DecomposeDropConfig {
+  const itemId = normalizeInteger(rawDrop.itemId, defaultDrop.itemId);
+  const min = Math.max(1, normalizeInteger(rawDrop.min, defaultDrop.min));
+  const max = normalizeInteger(rawDrop.max, defaultDrop.max);
+  return {
+    itemId: Math.max(0, itemId),
+    min,
+    max: Math.max(min, max),
+  };
 }

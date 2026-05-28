@@ -550,10 +550,10 @@ export const decomposeConfigFields: FieldConfig[] = [
     type: "decomposeConfig",
     fullWidth: true,
     defaultValue: {
-      N: { itemId: 0, min: 1, max: 10 },
-      R: { itemId: 0, min: 10, max: 20 },
-      SR: { itemId: 0, min: 20, max: 40 },
-      SSR: { itemId: 0, min: 40, max: 80 },
+      N: { drops: [{ itemId: 0, min: 1, max: 10 }] },
+      R: { drops: [{ itemId: 0, min: 10, max: 20 }] },
+      SR: { drops: [{ itemId: 0, min: 20, max: 40 }] },
+      SSR: { drops: [{ itemId: 0, min: 40, max: 80 }] },
     },
   },
 ];

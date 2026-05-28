@@ -1716,6 +1716,56 @@ describe("CardService 一键分解", () => {
     ]);
   });
 
+  it("一键分解支持同一等级配置多种碎片产出", async () => {
+    const { service } = createBulkDecomposeService({
+      systemConfigRow: {
+        key: "decomposeConfig",
+        value: JSON.stringify({
+          rules: {
+            N: {
+              drops: [
+                { itemId: 9, min: 3, max: 3 },
+                { itemId: 10, min: 2, max: 2 },
+              ],
+            },
+          },
+        }),
+      },
+      extraDropItems: [
+        {
+          id: 9,
+          drop_name: "N级配置碎片",
+          drop_type: 0,
+          disabled: false,
+        },
+        {
+          id: 10,
+          drop_name: "N级额外碎片",
+          drop_type: 0,
+          disabled: false,
+        },
+      ],
+    });
+
+    const result = await service.bulkDecomposeCards("u1", ["N"]);
+
+    expect(result.decomposed).toBe(1);
+    expect(result.fragments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          itemId: 9,
+          itemName: "N级配置碎片",
+          count: 3,
+        }),
+        expect.objectContaining({
+          itemId: 10,
+          itemName: "N级额外碎片",
+          count: 2,
+        }),
+      ]),
+    );
+  });
+
   it("一键分解拒绝选择 UR", async () => {
     const { service } = createBulkDecomposeService();
 

@@ -1600,8 +1600,8 @@ export class AdminService {
   }
 
   private async decorateDecomposeConfig(config: DecomposeConfig) {
-    const itemIds = DECOMPOSE_CONFIG_RARITIES.map(
-      (rarity) => config.rules[rarity].itemId,
+    const itemIds = DECOMPOSE_CONFIG_RARITIES.flatMap((rarity) =>
+      config.rules[rarity].drops.map((drop) => drop.itemId),
     ).filter((itemId) => itemId > 0);
     const items =
       itemIds.length > 0
@@ -1613,10 +1613,21 @@ export class AdminService {
       rules: DECOMPOSE_CONFIG_RARITIES.reduce(
         (result, rarity) => {
           const rule = config.rules[rarity];
-          const item = itemMap.get(rule.itemId);
+          const drops = rule.drops.map((drop) => {
+            const item = itemMap.get(drop.itemId);
+            return {
+              ...drop,
+              itemName: item?.drop_name || "",
+            };
+          });
+          const firstDrop = drops[0];
           result[rarity] = {
             ...rule,
-            itemName: item?.drop_name || "",
+            drops,
+            itemId: firstDrop?.itemId || 0,
+            min: firstDrop?.min || 1,
+            max: firstDrop?.max || 1,
+            itemName: firstDrop?.itemName || "",
           };
           return result;
         },
@@ -1628,7 +1639,9 @@ export class AdminService {
   private async assertDecomposeConfig(config: DecomposeConfig) {
     const itemIds = [
       ...new Set(
-        DECOMPOSE_CONFIG_RARITIES.map((rarity) => config.rules[rarity].itemId)
+        DECOMPOSE_CONFIG_RARITIES.flatMap((rarity) =>
+          config.rules[rarity].drops.map((drop) => drop.itemId),
+        )
           .filter((itemId) => itemId > 0),
       ),
     ];
@@ -1640,24 +1653,30 @@ export class AdminService {
 
     DECOMPOSE_CONFIG_RARITIES.forEach((rarity) => {
       const rule = config.rules[rarity];
-      if (!Number.isInteger(rule.min) || rule.min < 1) {
-        throw new Error(`${rarity} 分解最小数量必须为正整数`);
+      if (rule.drops.length === 0) {
+        throw new Error(`${rarity} 分解产出不能为空`);
       }
-      if (!Number.isInteger(rule.max) || rule.max < rule.min) {
-        throw new Error(`${rarity} 分解最大数量必须大于等于最小数量`);
-      }
-      if (rule.itemId > 0) {
-        const item = itemMap.get(rule.itemId);
-        if (!item) {
-          throw new Error(`${rarity} 分解碎片不存在`);
+      rule.drops.forEach((drop, index) => {
+        const label = `${rarity} 分解第${index + 1}项`;
+        if (!Number.isInteger(drop.min) || drop.min < 1) {
+          throw new Error(`${label}最小数量必须为正整数`);
         }
-        if (item.drop_type !== 0) {
-          throw new Error(`${rarity} 分解产出只能选择卡片碎片`);
+        if (!Number.isInteger(drop.max) || drop.max < drop.min) {
+          throw new Error(`${label}最大数量必须大于等于最小数量`);
         }
-        if (item.disabled === true) {
-          throw new Error(`${rarity} 分解碎片已禁用`);
+        if (drop.itemId > 0) {
+          const item = itemMap.get(drop.itemId);
+          if (!item) {
+            throw new Error(`${label}碎片不存在`);
+          }
+          if (item.drop_type !== 0) {
+            throw new Error(`${label}产出只能选择卡片碎片`);
+          }
+          if (item.disabled === true) {
+            throw new Error(`${label}碎片已禁用`);
+          }
         }
-      }
+      });
     });
   }
 
