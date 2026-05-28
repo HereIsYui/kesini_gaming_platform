@@ -287,17 +287,17 @@ export FILE_ROOT=/data/kesini/public
 
 - [x] P0 第一阶段：卡片收藏锁定、保底进度展示、抽卡历史详情
 - [x] P1 每日/每周任务、活跃度奖励
-- [ ] P2 卡片养成、阵容编队、轻量 PVE 玩法
+- [x] P2 卡片养成、阵容编队、轻量 PVE 玩法
 - [ ] P3 赛季系统、赛季商店、活动排行
 - [ ] P4 玩家主页、卡片展示墙、好友/公会等社交扩展
 
-## 卡片养成与阵容编队
+## 卡片养成、阵容编队与 PVE
 
 P2 已完成第一步：玩家背包卡片支持养成等级、累计投入经验与战力展示。养成消耗该卡片对应碎片，每次提升 1 级；不同稀有度有不同等级上限、碎片消耗和战力成长。锁定、挂售和已达到等级上限的卡片不能继续养成。
 
 P2 已完成第二步：玩家端新增阵容编队，可在 3 个固定位置上阵已拥有卡片并汇总总战力。接口为 `GET /formation` 和 `PUT /formation`；同一张卡不能重复上阵，挂售中的卡片不能上阵，锁定卡允许上阵。
 
-后续 P2 仍待完成：轻量 PVE 关卡与战斗结算。
+P2 已完成第三步：玩家端新增轻量 PVE 关卡，使用当前阵容总战力挑战后台配置的关卡。接口为 `GET /pve/stages`、`POST /pve/stages/:id/challenge` 和 `GET /pve/records`；挑战胜利自动发放关卡奖励并写入星穹币流水，失败记录挑战结果但不发奖励。后台可在“PVE 关卡”配置敌方战力、推荐战力、每日次数、开放时间和胜利奖励，并在“PVE 记录”审计玩家挑战结果。
 
 ## 任务与活跃度
 
@@ -410,6 +410,40 @@ CREATE TABLE user_task_claim (
   PRIMARY KEY (id),
   UNIQUE KEY IDX_user_task_claim_unique (uid, scope, period_key, claim_type, target_key),
   KEY IDX_user_task_claim_period (uid, scope, period_key)
+);
+
+CREATE TABLE pve_stage (
+  id int NOT NULL AUTO_INCREMENT,
+  name varchar(80) NOT NULL,
+  description varchar(1024) NOT NULL DEFAULT '',
+  enemy_power int NOT NULL DEFAULT 100,
+  recommended_power int NOT NULL DEFAULT 100,
+  daily_limit int NOT NULL DEFAULT 3,
+  rewards json NOT NULL,
+  enabled tinyint NOT NULL DEFAULT 1,
+  sort_order int NOT NULL DEFAULT 0,
+  starts_at datetime NULL,
+  ends_at datetime NULL,
+  delete_flag tinyint NOT NULL DEFAULT 0,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updatedAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  KEY IDX_pve_stage_enabled_sort (enabled, sort_order)
+);
+
+CREATE TABLE pve_challenge_record (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  stage_id int NOT NULL,
+  stage_name varchar(80) NOT NULL,
+  formation_power int NOT NULL DEFAULT 0,
+  enemy_power int NOT NULL DEFAULT 0,
+  success tinyint NOT NULL DEFAULT 0,
+  reward_snapshot json NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  KEY IDX_pve_record_uid_created (uid, createdAt),
+  KEY IDX_pve_record_uid_stage_created (uid, stage_id, createdAt)
 );
 ```
 

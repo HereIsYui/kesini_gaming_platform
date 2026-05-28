@@ -34,6 +34,8 @@ import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
 import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
+import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
+import { PveStage } from "src/entity/pveStage.entity";
 import { PoolInfo } from "src/entity/pool.entity";
 import { RedeemCode, RedeemRewards } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
@@ -136,6 +138,12 @@ export class AdminService {
     @Optional()
     @InjectRepository(LaunchActivityClaim)
     private readonly launchActivityClaimRepository?: Repository<LaunchActivityClaim>,
+    @Optional()
+    @InjectRepository(PveStage)
+    private readonly pveStageRepository?: Repository<PveStage>,
+    @Optional()
+    @InjectRepository(PveChallengeRecord)
+    private readonly pveRecordRepository?: Repository<PveChallengeRecord>,
     @Optional()
     private readonly siteConfigService?: SiteConfigService,
   ) {}
@@ -1424,6 +1432,92 @@ export class AdminService {
     );
   }
 
+  async listPveStages(query: PageQuery) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where = query.keyword
+      ? [
+          { name: Like(`%${query.keyword}%`), delete_flag: false },
+          { description: Like(`%${query.keyword}%`), delete_flag: false },
+        ]
+      : { delete_flag: false };
+    return this.findAndPage(
+      this.mustPveStageRepository(),
+      where,
+      page,
+      pageSize,
+      { sort_order: "ASC", id: "ASC" } as any,
+    );
+  }
+
+  async getPveStage(id: number) {
+    const stage = await this.mustFind(
+      this.mustPveStageRepository(),
+      id,
+      "PVE关卡不存在",
+    );
+    if (stage.delete_flag) {
+      throw new Error("PVE关卡不存在");
+    }
+    return stage;
+  }
+
+  async createPveStage(body: Partial<PveStage>) {
+    const normalized = await this.normalizePveStageInput(body, true);
+    const entity = this.mustPveStageRepository().create({
+      ...normalized,
+      delete_flag: false,
+    });
+    this.assertPveStageTimeRange(entity.starts_at, entity.ends_at);
+    return this.mustPveStageRepository().save(entity);
+  }
+
+  async updatePveStage(id: number, body: Partial<PveStage>) {
+    const stage = await this.getPveStage(id);
+    const normalized = await this.normalizePveStageInput(
+      {
+        ...stage,
+        ...body,
+        enabled:
+          body.enabled === undefined || body.enabled === null
+            ? stage.enabled
+            : body.enabled,
+      },
+      false,
+    );
+    Object.assign(stage, normalized);
+    this.assertPveStageTimeRange(stage.starts_at, stage.ends_at);
+    return this.mustPveStageRepository().save(stage);
+  }
+
+  async deletePveStage(id: number) {
+    const stage = await this.getPveStage(id);
+    stage.enabled = false;
+    stage.delete_flag = true;
+    await this.mustPveStageRepository().save(stage);
+    return { deleted: true };
+  }
+
+  async listPveRecords(
+    query: PageQuery & { uid?: string; stageId?: number },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const where: FindOptionsWhere<PveChallengeRecord> = {};
+    if (query.uid) {
+      where.uid = Like(`%${query.uid}%`);
+    }
+    if (query.stageId !== undefined) {
+      where.stage_id = query.stageId;
+    }
+    return this.attachUserDisplayToUidRows(
+      await this.findAndPage(
+        this.mustPveRecordRepository(),
+        where,
+        page,
+        pageSize,
+      ),
+    );
+  }
+
   private getUserDisplayName(user?: User | null) {
     return String(user?.nickname || user?.name || user?.uid || "");
   }
@@ -1910,6 +2004,20 @@ export class AdminService {
     return this.launchActivityClaimRepository;
   }
 
+  private mustPveStageRepository() {
+    if (!this.pveStageRepository) {
+      throw new Error("PVE关卡仓库未初始化");
+    }
+    return this.pveStageRepository;
+  }
+
+  private mustPveRecordRepository() {
+    if (!this.pveRecordRepository) {
+      throw new Error("PVE挑战记录仓库未初始化");
+    }
+    return this.pveRecordRepository;
+  }
+
   private normalizePage(query: PageQuery) {
     const page = Math.max(1, Number(query.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query.pageSize || 20)));
@@ -2138,6 +2246,55 @@ export class AdminService {
       points,
       items: normalizedItems,
       ...(normalizedCards.length > 0 ? { cards: normalizedCards } : {}),
+    };
+  }
+
+  private async normalizePveStageInput(
+    body: Partial<PveStage>,
+    creating: boolean,
+  ) {
+    const name = this.normalizeOptionalString(body.name);
+    if (!name) {
+      throw new Error("关卡名称不能为空");
+    }
+    const enemyPower = this.normalizeIntegerInput(
+      body.enemy_power ?? 100,
+      "敌方战力必须为非负整数",
+      0,
+    );
+    const recommendedPower = this.normalizeIntegerInput(
+      body.recommended_power ?? enemyPower,
+      "推荐战力必须为非负整数",
+      0,
+    );
+    const dailyLimit = this.normalizeIntegerInput(
+      body.daily_limit ?? 3,
+      "每日挑战次数必须为非负整数",
+      0,
+    );
+    const sortOrder = this.normalizeIntegerInput(
+      body.sort_order ?? 0,
+      "排序值必须为非负整数",
+      0,
+    );
+    const rewards = await this.normalizeRewards(
+      body.rewards,
+      "关卡奖励不能为空",
+    );
+    return {
+      name,
+      description: this.normalizeOptionalString(body.description),
+      enemy_power: enemyPower,
+      recommended_power: recommendedPower,
+      daily_limit: dailyLimit,
+      rewards,
+      enabled:
+        body.enabled === undefined || body.enabled === null
+          ? creating
+          : body.enabled === true,
+      sort_order: sortOrder,
+      starts_at: this.parseOptionalDate(body.starts_at),
+      ends_at: this.parseOptionalDate(body.ends_at),
     };
   }
 
@@ -2420,8 +2577,14 @@ export class AdminService {
   }
 
   private async isDropItemReferenced(itemId: number): Promise<boolean> {
-    const [inventoryCount, cards, redeemCodes, exchangeItems, launchConfigs] =
-      await Promise.all([
+    const [
+      inventoryCount,
+      cards,
+      redeemCodes,
+      exchangeItems,
+      launchConfigs,
+      pveStages,
+    ] = await Promise.all([
         this.inventoryRepository.count({ where: { item_id: itemId } }),
         this.cardRepository.find({
           where: { drop_item: Like(`%${itemId}%`) },
@@ -2435,6 +2598,9 @@ export class AdminService {
         this.launchActivityConfigRepository
           ? this.launchActivityConfigRepository.find()
           : Promise.resolve([] as LaunchActivityConfig[]),
+        this.pveStageRepository
+          ? this.pveStageRepository.find({ where: { delete_flag: false } })
+          : Promise.resolve([] as PveStage[]),
       ]);
 
     if (inventoryCount > 0) {
@@ -2460,6 +2626,11 @@ export class AdminService {
       ) ||
       launchConfigs.some((config) =>
         (config.rewards?.items || []).some(
+          (item) => Number(item.itemId) === itemId,
+        ),
+      ) ||
+      pveStages.some((stage) =>
+        (stage.rewards?.items || []).some(
           (item) => Number(item.itemId) === itemId,
         ),
       )
@@ -2521,6 +2692,12 @@ export class AdminService {
   private assertExchangeTimeRange(start?: Date | null, end?: Date | null) {
     if (start && end && start.getTime() >= end.getTime()) {
       throw new Error("兑换项结束时间必须晚于开始时间");
+    }
+  }
+
+  private assertPveStageTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() >= end.getTime()) {
+      throw new Error("关卡结束时间必须晚于开始时间");
     }
   }
 }

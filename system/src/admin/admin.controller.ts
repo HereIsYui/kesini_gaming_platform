@@ -370,6 +370,72 @@ class UserAchievementQueryDto extends PageDto {
   achievementId?: number;
 }
 
+class PveRecordQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  stageId?: number;
+}
+
+class PveStageDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  enemy_power?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  recommended_power?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  daily_limit?: number;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+    cards?: Array<{ cardId: number; rarity: string; num: number }>;
+  };
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sort_order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+}
+
 class AchievementConfigDto {
   @IsOptional()
   @IsString()
@@ -807,6 +873,63 @@ export class AdminController {
     return ResponseDto.success(
       await this.achievementService.listUserAchievements(query),
       "获取玩家成就记录成功",
+    );
+  }
+
+  @Get("pve-stages")
+  async listPveStages(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listPveStages(query),
+      "获取PVE关卡成功",
+    );
+  }
+
+  @Get("pve-stages/:id")
+  async getPveStage(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getPveStage(id),
+      "获取PVE关卡详情成功",
+    );
+  }
+
+  @Post("pve-stages")
+  async createPveStage(@Body() body: PveStageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.createPveStage(body as any),
+      "创建PVE关卡成功",
+    );
+  }
+
+  @Patch("pve-stages/:id")
+  async updatePveStage(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: PveStageDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updatePveStage(id, body as any),
+      "更新PVE关卡成功",
+    );
+  }
+
+  @Delete("pve-stages/:id")
+  async deletePveStage(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.deletePveStage(id),
+      "删除PVE关卡成功",
+    );
+  }
+
+  @Get("pve-records")
+  async listPveRecords(
+    @Query() query: PveRecordQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listPveRecords(query),
+      "获取PVE挑战记录成功",
     );
   }
 

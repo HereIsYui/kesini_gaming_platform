@@ -526,6 +526,63 @@ export interface AchievementNotification {
   rewards: RedeemRewards;
 }
 
+export interface PveStage {
+  id: number;
+  name: string;
+  description?: string;
+  enemyPower: number;
+  recommendedPower: number;
+  dailyLimit: number;
+  todayCount: number;
+  remainingAttempts: number;
+  canChallenge: boolean;
+  unavailableReason?: string;
+  rewards: RedeemRewards;
+  enabled: boolean;
+  sortOrder?: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
+export interface PveOverview {
+  formation: {
+    slotCount: number;
+    filledCount: number;
+    totalPower: number;
+  };
+  list: PveStage[];
+}
+
+export interface PveChallengeRecord {
+  id: number;
+  uid: string;
+  stageId: number;
+  stageName: string;
+  formationPower: number;
+  enemyPower: number;
+  success: boolean;
+  rewards?: RedeemRewards | null;
+  createdAt: string;
+}
+
+export interface PveChallengeResult {
+  record: PveChallengeRecord;
+  stage: PveStage;
+  success: boolean;
+  rewards?: RedeemRewards | null;
+  formationPower: number;
+  enemyPower: number;
+  pointAfter?: number;
+}
+
+export interface PveRecordsResponse {
+  list: PveChallengeRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export type PointLedgerSourceType =
   | "draw_once"
   | "draw_ten"
@@ -536,6 +593,7 @@ export type PointLedgerSourceType =
   | "exchange_shop"
   | "achievement"
   | "task"
+  | "pve"
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle";

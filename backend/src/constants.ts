@@ -21,6 +21,8 @@ export type PageKey =
   | "launch-activity-claims"
   | "achievements"
   | "user-achievements"
+  | "pve-stages"
+  | "pve-records"
   | "trade-config"
   | "trade-listings"
   | "trade-records"
@@ -58,6 +60,8 @@ export const pageKeys: PageKey[] = [
   "launch-activity-claims",
   "achievements",
   "user-achievements",
+  "pve-stages",
+  "pve-records",
   "trade-config",
   "trade-listings",
   "trade-records",
@@ -82,6 +86,7 @@ export const routeAliases: Record<string, PageKey> = {
   config: "gacha-config",
   trade: "trade-listings",
   recharge: "recharge-records",
+  pve: "pve-stages",
 };
 
 export const rarityOptions: SelectOption[] = [
@@ -473,6 +478,58 @@ export const userAchievementFields: FieldConfig[] = [
   { key: "achieved", label: "状态", readonly: true },
   { key: "rewards", label: "奖励", readonly: true },
   { key: "achievedAt", label: "达成时间", readonly: true },
+];
+
+export const pveStageFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "name", label: "关卡名称", placeholder: "例如：星港巡逻" },
+  { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
+  {
+    key: "enemy_power",
+    label: "敌方战力",
+    type: "number",
+    defaultValue: 100,
+  },
+  {
+    key: "recommended_power",
+    label: "推荐战力",
+    type: "number",
+    defaultValue: 100,
+  },
+  {
+    key: "daily_limit",
+    label: "每日次数",
+    type: "number",
+    defaultValue: 3,
+  },
+  { key: "sort_order", label: "排序", type: "number", defaultValue: 0 },
+  { key: "starts_at", label: "开始时间", type: "datetime" },
+  { key: "ends_at", label: "结束时间", type: "datetime" },
+  { key: "description", label: "说明", type: "textarea", fullWidth: true },
+  {
+    key: "rewards",
+    label: "胜利奖励",
+    type: "rewards",
+    fullWidth: true,
+    allowCardRewards: true,
+  },
+];
+
+export const pveRecordFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
+  { key: "stage_name", label: "关卡", readonly: true },
+  { key: "success", label: "结果", readonly: true },
+  { key: "formation_power", label: "阵容战力", readonly: true },
+  { key: "enemy_power", label: "敌方战力", readonly: true },
+  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "createdAt", label: "挑战时间", readonly: true },
 ];
 
 export const tradeListingFields: FieldConfig[] = [

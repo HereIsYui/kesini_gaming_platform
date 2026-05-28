@@ -73,6 +73,11 @@ import type {
   PointLedgerRecord,
   PointLedgerRecordsResponse,
   PointLedgerSourceType,
+  PveChallengeRecord,
+  PveChallengeResult,
+  PveOverview,
+  PveRecordsResponse,
+  PveStage,
   SiteConfig,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
@@ -106,6 +111,7 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "formation", label: "阵容", icon: Swords },
+  { key: "pve", label: "关卡", icon: Trophy },
   { key: "synthesize", label: "图鉴", icon: Package },
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
@@ -121,9 +127,9 @@ const desktopPrimarySectionKeys = [
   "draw",
   "bag",
   "formation",
+  "pve",
   "synthesize",
   "tasks",
-  "trade",
 ] as const satisfies readonly SectionKey[];
 
 const desktopPrimaryItems = sectionItems.filter((item) =>
@@ -212,6 +218,10 @@ const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
 const formationEditingPosition = ref<number | null>(null);
+const pveOverview = ref<PveOverview | null>(null);
+const pveRecords = ref<PveRecordsResponse | null>(null);
+const pveRecordPage = ref(1);
+const pveRecordTotalPages = ref(1);
 const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
@@ -310,6 +320,9 @@ const busy = reactive({
   upgrade: false,
   formation: false,
   formationCandidates: false,
+  pve: false,
+  pveChallenge: false,
+  pveRecords: false,
   recharge: false,
   bulkDecompose: false,
   bulkDecomposePreview: false,
@@ -623,6 +636,7 @@ const pointSourceOptions = [
   { value: "exchange_shop", label: "兑换商店" },
   { value: "achievement", label: "成就奖励" },
   { value: "task", label: "任务奖励" },
+  { value: "pve", label: "关卡奖励" },
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
   { value: "shop_recycle", label: "商店回收" },
@@ -711,6 +725,21 @@ const formationEditingSlot = computed(() =>
   formationSlots.value.find(
     (slot) => slot.position === formationEditingPosition.value,
   ),
+);
+const pveStages = computed<PveStage[]>(() => pveOverview.value?.list || []);
+const pveFormation = computed(
+  () =>
+    pveOverview.value?.formation || {
+      slotCount: formation.value?.slotCount || 3,
+      filledCount: formationFilledCount.value,
+      totalPower: formation.value?.totalPower || 0,
+    },
+);
+const pveRecentRecords = computed<PveChallengeRecord[]>(
+  () => pveRecords.value?.list || [],
+);
+const pveClearedCount = computed(
+  () => pveRecentRecords.value.filter((record) => record.success).length,
 );
 const bestResult = computed(() => {
   return [...lastResults.value].sort(
@@ -802,6 +831,9 @@ watch(activeSection, async (section) => {
   }
   if (section === "formation" && isAuthed.value) {
     await loadFormation();
+  }
+  if (section === "pve" && isAuthed.value) {
+    await Promise.all([loadPveStages(), loadPveRecords()]);
   }
 });
 
@@ -927,6 +959,10 @@ function logout() {
   formationCandidates.value = [];
   formationPickerOpen.value = false;
   formationEditingPosition.value = null;
+  pveOverview.value = null;
+  pveRecords.value = null;
+  pveRecordPage.value = 1;
+  pveRecordTotalPages.value = 1;
   catalogItems.value = null;
   catalogError.value = "";
   launchActivity.value = null;
@@ -1074,6 +1110,8 @@ async function loadPrivateData() {
     loadStats(),
     loadUserCards(),
     loadFormation(),
+    loadPveStages(),
+    loadPveRecords(),
     loadUserCatalog(),
     loadLaunchActivity(),
     loadDailySignIn(),
@@ -1307,11 +1345,111 @@ async function saveFormationSlot(position: number, cardUuid: string | null) {
     notify("success", cardUuid ? "卡片已上阵" : "阵容位置已清空");
     formationPickerOpen.value = false;
     formationEditingPosition.value = null;
+    if (pveOverview.value) {
+      await loadPveStages();
+    }
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
     busy.formation = false;
   }
+}
+
+async function loadPveStages() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.pve = true;
+  try {
+    pveOverview.value = await request<PveOverview>("/pve/stages");
+  } catch (error) {
+    if (activeSection.value === "pve") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.pve = false;
+  }
+}
+
+async function loadPveRecords(page = pveRecordPage.value) {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.pveRecords = true;
+  try {
+    const data = await request<PveRecordsResponse>(
+      `/pve/records${toQuery({ page, pageSize: 6 })}`,
+    );
+    pveRecords.value = data;
+    pveRecordPage.value = data.page || page;
+    pveRecordTotalPages.value = data.totalPages || 1;
+  } catch (error) {
+    if (activeSection.value === "pve") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.pveRecords = false;
+  }
+}
+
+async function refreshPve() {
+  await Promise.all([loadPveStages(), loadPveRecords()]);
+}
+
+async function challengePveStage(stage: PveStage) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再挑战关卡");
+    return;
+  }
+  if (!stage.canChallenge) {
+    notify("info", stage.unavailableReason || "当前无法挑战");
+    return;
+  }
+  busy.pveChallenge = true;
+  try {
+    const data = await request<PveChallengeResult>(
+      `/pve/stages/${stage.id}/challenge`,
+      { method: "POST" },
+    );
+    if (stats.value && typeof data.pointAfter === "number") {
+      stats.value.point = data.pointAfter;
+    }
+    if (currentUser.value && typeof data.pointAfter === "number") {
+      currentUser.value.point = data.pointAfter;
+      setStoredUser(currentUser.value);
+    }
+    notify(
+      data.success ? "success" : "info",
+      data.success
+        ? `挑战胜利：${formatRewards(data.rewards || undefined)}`
+        : `挑战失败：战力 ${data.formationPower} / ${data.enemyPower}`,
+    );
+    await Promise.all([
+      loadPveStages(),
+      loadPveRecords(1),
+      loadStats(),
+      loadUserCards(),
+      loadUserCatalog(),
+      loadAchievements(),
+      loadAchievementNotifications(),
+      pointRecords.value ? loadPointRecords() : Promise.resolve(),
+    ]);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.pveChallenge = false;
+  }
+}
+
+function changePveRecordPage(delta: number) {
+  const next = Math.min(
+    Math.max(1, pveRecordPage.value + delta),
+    pveRecordTotalPages.value,
+  );
+  if (next === pveRecordPage.value) {
+    return;
+  }
+  void loadPveRecords(next);
 }
 
 function resetUserCards() {
@@ -2519,6 +2657,10 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `${String(meta("taskName") || meta("milestone") || "任务")} · ${String(
         meta("periodKey") || "-",
       )}`;
+    case "pve":
+      return `${String(meta("stageName") || "关卡")} · 战力 ${String(
+        meta("formationPower") || "-",
+      )}/${String(meta("enemyPower") || "-")}`;
     case "trade_buy":
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
     case "trade_sell":
@@ -2669,6 +2811,25 @@ function formatRewards(rewards?: {
     parts.push(`${card.cardName || `卡片 ${card.cardId}`} ${card.rarity} x${card.num}`);
   });
   return parts.length > 0 ? parts.join("，") : "无奖励";
+}
+
+function pvePowerPercent(stage: PveStage) {
+  const enemyPower = Math.max(1, Number(stage.enemyPower || 0));
+  return Math.max(
+    0,
+    Math.min(100, Math.round((pveFormation.value.totalPower / enemyPower) * 100)),
+  );
+}
+
+function pveStageLevelLabel(stage: PveStage) {
+  const power = Number(stage.enemyPower || 0);
+  if (power >= 5000) {
+    return "高危";
+  }
+  if (power >= 2000) {
+    return "精英";
+  }
+  return "巡逻";
 }
 
 function achievementProgressPercent(achievement: AchievementRecord) {
@@ -3716,6 +3877,176 @@ function leaderboardRankLabel(rank?: number) {
                 <span>选择卡片</span>
               </button>
             </article>
+          </div>
+        </template>
+      </section>
+
+      <section
+        v-if="activeSection === 'pve'"
+        class="panel pve-panel"
+        data-section="pve"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">轻量关卡</p>
+            <h2>星港挑战</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.pve || busy.pveRecords"
+            @click="refreshPve"
+          >
+            <RefreshCw
+              :size="16"
+              :class="{ spin: busy.pve || busy.pveRecords }"
+            />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>登录后挑战关卡</strong>
+          <span>先配置阵容，再用总战力挑战开放中的关卡。</span>
+        </div>
+        <div v-else-if="busy.pve && !pveOverview" class="skeleton-grid">
+          <span v-for="item in 4" :key="item"></span>
+        </div>
+        <template v-else>
+          <div class="pve-summary">
+            <article>
+              <small>阵容战力</small>
+              <strong>{{ pveFormation.totalPower }}</strong>
+            </article>
+            <article>
+              <small>上阵卡片</small>
+              <strong>{{ pveFormation.filledCount }} / {{ pveFormation.slotCount }}</strong>
+            </article>
+            <article>
+              <small>开放关卡</small>
+              <strong>{{ pveStages.length }}</strong>
+            </article>
+            <article>
+              <small>本页胜场</small>
+              <strong>{{ pveClearedCount }}</strong>
+            </article>
+          </div>
+
+          <div v-if="pveStages.length === 0" class="empty-state">
+            <Trophy :size="30" />
+            <strong>暂无开放关卡</strong>
+            <span>稍后再来查看新的挑战。</span>
+          </div>
+          <div v-else class="pve-stage-grid">
+            <article
+              v-for="stage in pveStages"
+              :key="stage.id"
+              class="pve-stage-card"
+            >
+              <header>
+                <span>{{ pveStageLevelLabel(stage) }}</span>
+                <b>{{ stage.remainingAttempts }}/{{ stage.dailyLimit }} 次</b>
+              </header>
+              <h3>{{ stage.name }}</h3>
+              <p>{{ stage.description || "完成挑战即可获得胜利奖励。" }}</p>
+
+              <div
+                class="pve-power-meter"
+                :style="{ '--progress': `${pvePowerPercent(stage)}%` }"
+              >
+                <div>
+                  <span>我方 {{ pveFormation.totalPower }}</span>
+                  <span>敌方 {{ stage.enemyPower }}</span>
+                </div>
+                <i></i>
+              </div>
+
+              <dl class="pve-stage-meta">
+                <div>
+                  <dt>推荐战力</dt>
+                  <dd>{{ stage.recommendedPower }}</dd>
+                </div>
+                <div>
+                  <dt>胜利奖励</dt>
+                  <dd>{{ formatRewards(stage.rewards) }}</dd>
+                </div>
+              </dl>
+
+              <button
+                class="primary-action wide"
+                type="button"
+                :disabled="busy.pveChallenge || !stage.canChallenge"
+                @click="challengePveStage(stage)"
+              >
+                <LoaderCircle
+                  v-if="busy.pveChallenge"
+                  :size="17"
+                  class="spin"
+                />
+                <Swords v-else :size="17" />
+                {{ stage.canChallenge ? "挑战" : stage.unavailableReason || "不可挑战" }}
+              </button>
+            </article>
+          </div>
+
+          <div class="pve-record-panel">
+            <div class="section-subhead">
+              <div>
+                <p class="eyebrow">挑战记录</p>
+                <h3>最近结算</h3>
+              </div>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="busy.pveRecords"
+                @click="loadPveRecords(1)"
+              >
+                <RefreshCw :size="15" :class="{ spin: busy.pveRecords }" />
+                更新
+              </button>
+            </div>
+            <div v-if="busy.pveRecords && !pveRecords" class="skeleton-grid">
+              <span v-for="item in 3" :key="item"></span>
+            </div>
+            <div v-else-if="pveRecentRecords.length === 0" class="empty-mini">
+              暂无挑战记录
+            </div>
+            <div v-else class="pve-record-list">
+              <article
+                v-for="record in pveRecentRecords"
+                :key="record.id"
+                :class="{ success: record.success }"
+              >
+                <div>
+                  <strong>{{ record.stageName }}</strong>
+                  <span>{{ record.success ? "胜利" : "失败" }} · {{ formatDate(record.createdAt) }}</span>
+                </div>
+                <small>战力 {{ record.formationPower }} / {{ record.enemyPower }}</small>
+                <b>{{ record.success ? formatRewards(record.rewards || undefined) : "未获得奖励" }}</b>
+              </article>
+            </div>
+            <div v-if="pveRecords" class="pager">
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="pveRecordPage <= 1 || busy.pveRecords"
+                @click="changePveRecordPage(-1)"
+              >
+                <ChevronLeft :size="15" />
+                上一页
+              </button>
+              <span>第 {{ pveRecordPage }} / {{ pveRecordTotalPages }} 页</span>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="pveRecordPage >= pveRecordTotalPages || busy.pveRecords"
+                @click="changePveRecordPage(1)"
+              >
+                下一页
+                <ChevronRight :size="15" />
+              </button>
+            </div>
           </div>
         </template>
       </section>

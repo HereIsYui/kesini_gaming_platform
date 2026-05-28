@@ -3335,6 +3335,219 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+.pve-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.pve-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pve-summary article {
+  display: grid;
+  gap: 7px;
+  min-height: 88px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 14px;
+}
+
+.pve-summary small {
+  color: var(--text-soft);
+}
+
+.pve-summary strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pve-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.pve-stage-card {
+  display: grid;
+  gap: 13px;
+  align-content: start;
+  min-height: 330px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(84, 216, 255, 0.08), transparent 44%),
+    rgba(255, 255, 255, 0.055);
+  padding: 16px;
+}
+
+.pve-stage-card header,
+.section-subhead {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pve-stage-card header span,
+.pve-stage-card header b {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 5px 9px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pve-stage-card header b {
+  color: var(--primary-strong);
+}
+
+.pve-stage-card h3,
+.section-subhead h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.pve-stage-card p {
+  min-height: 42px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.pve-power-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.pve-power-meter div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pve-power-meter i {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.pve-power-meter i::before {
+  display: block;
+  width: var(--progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  content: "";
+}
+
+.pve-stage-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.pve-stage-meta div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.pve-stage-meta dt,
+.pve-stage-meta dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.pve-stage-meta dt {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pve-stage-meta dd {
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.pve-record-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 14px;
+}
+
+.section-subhead .eyebrow {
+  margin-bottom: 2px;
+}
+
+.pve-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.pve-record-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(120px, auto) minmax(160px, 0.9fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 10px 12px;
+}
+
+.pve-record-list article.success {
+  border-color: rgba(97, 229, 162, 0.28);
+}
+
+.pve-record-list strong,
+.pve-record-list span,
+.pve-record-list small,
+.pve-record-list b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pve-record-list div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pve-record-list span,
+.pve-record-list small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pve-record-list b {
+  color: var(--primary-strong);
+  font-size: 13px;
+}
+
 .upgrade-compare b {
   color: var(--primary-strong);
   font-size: 13px;
@@ -4818,6 +5031,7 @@ h3 {
   .leaderboard-panel,
   .achievement-panel,
   .formation-panel,
+  .pve-panel,
   .trade-panel,
   .redeem-panel,
   .shop-panel,
@@ -4981,6 +5195,8 @@ h3 {
   .achievement-grid,
   .formation-summary,
   .formation-slot-grid,
+  .pve-summary,
+  .pve-stage-grid,
   .podium-grid,
   .trade-config-strip {
     grid-template-columns: 1fr;
@@ -4989,6 +5205,7 @@ h3 {
   .trade-grid,
   .upgrade-compare,
   .formation-candidate,
+  .pve-record-list article,
   .trade-card,
   .trade-list article {
     grid-template-columns: 1fr;

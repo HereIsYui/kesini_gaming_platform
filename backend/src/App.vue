@@ -355,6 +355,46 @@
           search-placeholder="按 UID 查询"
         />
 
+        <AdminTable
+          v-else-if="active === 'pve-stages'"
+          title="PVE 关卡"
+          endpoint="/admin/pve-stages"
+          :fields="pveStageFields"
+          :item-options="itemOptions"
+          :card-options="adminOptions?.cards || []"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索关卡名称或说明"
+        >
+          <template #cell="{ field, row }">
+            <el-tag v-if="field.key === 'enabled'" :type="row.enabled !== false ? 'success' : 'info'">
+              {{ row.enabled !== false ? "上线" : "下线" }}
+            </el-tag>
+            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+          </template>
+        </AdminTable>
+
+        <AdminTable
+          v-else-if="active === 'pve-records'"
+          title="PVE 挑战记录"
+          endpoint="/admin/pve-records"
+          :fields="pveRecordFields"
+          keyword-param="uid"
+          search-placeholder="按 UID 查询"
+        >
+          <template #cell="{ field, row }">
+            <el-tag
+              v-if="field.key === 'success'"
+              :type="row.success === true ? 'success' : 'danger'"
+            >
+              {{ row.success === true ? "胜利" : "失败" }}
+            </el-tag>
+            <span v-else>{{ formatFieldValue(field, getValue(row, field.key)) }}</span>
+          </template>
+        </AdminTable>
+
         <ConfigPanel
           v-else-if="active === 'trade-config'"
           title="交易配置"
@@ -542,6 +582,8 @@ import {
   pageKeys,
   pityFields,
   poolFields,
+  pveRecordFields,
+  pveStageFields,
   rechargeConfigFields,
   rechargeRecordFields,
   redeemCodeFields,
@@ -758,6 +800,20 @@ const pageDefinitions = computed(() => [
     key: "user-achievements",
     label: "成就记录",
     description: "查看玩家成就进度、达成时间和通知状态。",
+    group: "运营工具",
+    icon: Files,
+  },
+  {
+    key: "pve-stages",
+    label: "PVE 关卡",
+    description: "配置轻量关卡、战力门槛、每日次数和胜利奖励。",
+    group: "运营工具",
+    icon: MagicStick,
+  },
+  {
+    key: "pve-records",
+    label: "PVE 记录",
+    description: "查看玩家关卡挑战结果、阵容战力和奖励快照。",
     group: "运营工具",
     icon: Files,
   },

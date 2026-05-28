@@ -16,6 +16,7 @@ export type PointLedgerSourceType =
   | "exchange_shop"
   | "achievement"
   | "task"
+  | "pve"
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle";

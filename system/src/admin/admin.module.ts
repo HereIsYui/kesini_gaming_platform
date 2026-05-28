@@ -25,6 +25,8 @@ import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
+import { PveStage } from "src/entity/pveStage.entity";
 import { AdminController } from "./admin.controller";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
@@ -52,6 +54,8 @@ import { AdminService } from "./admin.service";
       TradeRecord,
       TradeConfig,
       SystemConfig,
+      PveStage,
+      PveChallengeRecord,
     ]),
     AuthModule,
     AchievementModule,

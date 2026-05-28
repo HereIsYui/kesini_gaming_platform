@@ -29,6 +29,8 @@ import { AchievementEvent } from "./entity/achievementEvent.entity";
 import { UserAchievement } from "./entity/userAchievement.entity";
 import { UserTaskClaim } from "./entity/userTaskClaim.entity";
 import { UserFormationSlot } from "./entity/userFormationSlot.entity";
+import { PveStage } from "./entity/pveStage.entity";
+import { PveChallengeRecord } from "./entity/pveChallengeRecord.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -46,6 +48,7 @@ import { DailySignInModule } from "./daily-sign-in/daily-sign-in.module";
 import { ShopModule } from "./shop/shop.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { FormationModule } from "./formation/formation.module";
+import { PveModule } from "./pve/pve.module";
 
 @Module({
   imports: [
@@ -81,6 +84,8 @@ import { FormationModule } from "./formation/formation.module";
       UserAchievement,
       UserTaskClaim,
       UserFormationSlot,
+      PveStage,
+      PveChallengeRecord,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -98,6 +103,7 @@ import { FormationModule } from "./formation/formation.module";
     ShopModule,
     TasksModule,
     FormationModule,
+    PveModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],
