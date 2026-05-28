@@ -291,11 +291,13 @@ export FILE_ROOT=/data/kesini/public
 - [ ] P3 赛季系统、赛季商店、活动排行
 - [ ] P4 玩家主页、卡片展示墙、好友/公会等社交扩展
 
-## 卡片养成
+## 卡片养成与阵容编队
 
 P2 已完成第一步：玩家背包卡片支持养成等级、累计投入经验与战力展示。养成消耗该卡片对应碎片，每次提升 1 级；不同稀有度有不同等级上限、碎片消耗和战力成长。锁定、挂售和已达到等级上限的卡片不能继续养成。
 
-后续 P2 仍待完成：阵容编队、轻量 PVE 关卡与战斗结算。
+P2 已完成第二步：玩家端新增阵容编队，可在 3 个固定位置上阵已拥有卡片并汇总总战力。接口为 `GET /formation` 和 `PUT /formation`；同一张卡不能重复上阵，挂售中的卡片不能上阵，锁定卡允许上阵。
+
+后续 P2 仍待完成：轻量 PVE 关卡与战斗结算。
 
 ## 任务与活跃度
 
@@ -317,6 +319,18 @@ ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
 ALTER TABLE user_card ADD COLUMN locked tinyint NOT NULL DEFAULT 0;
 ALTER TABLE user_card ADD COLUMN cultivation_level int NOT NULL DEFAULT 1;
 ALTER TABLE user_card ADD COLUMN cultivation_exp int NOT NULL DEFAULT 0;
+
+CREATE TABLE user_formation_slot (
+  id int NOT NULL AUTO_INCREMENT,
+  uid varchar(255) NOT NULL,
+  position int NOT NULL,
+  card_uuid varchar(80) NOT NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updatedAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_user_formation_uid_position (uid, position),
+  UNIQUE KEY IDX_user_formation_uid_card (uid, card_uuid)
+);
 
 CREATE TABLE daily_sign_in_record (
   id int NOT NULL AUTO_INCREMENT,

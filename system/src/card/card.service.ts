@@ -31,20 +31,17 @@ import {
   isDecomposeConfigRarity,
   normalizeDecomposeConfig,
 } from "./decompose-config";
+import {
+  calculateCultivationPower,
+  getCultivationExp,
+  getCultivationLevel,
+  getCultivationMaxLevel,
+  getCultivationUpgradeCost,
+} from "./cultivation";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
 const DEFAULT_DRAW_POOL_ID = 1;
-const CULTIVATION_CONFIG: Record<
-  CardRarity,
-  { maxLevel: number; costBase: number; powerBase: number; powerGrowth: number }
-> = {
-  N: { maxLevel: 20, costBase: 4, powerBase: 100, powerGrowth: 12 },
-  R: { maxLevel: 30, costBase: 8, powerBase: 180, powerGrowth: 22 },
-  SR: { maxLevel: 40, costBase: 16, powerBase: 320, powerGrowth: 38 },
-  SSR: { maxLevel: 50, costBase: 30, powerBase: 600, powerGrowth: 72 },
-  UR: { maxLevel: 60, costBase: 50, powerBase: 1000, powerGrowth: 120 },
-};
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -694,27 +691,27 @@ export class CardService {
           isListed: Boolean(activeListing),
           tradeListingId: activeListing?.id || null,
           tradePrice: activeListing?.price || null,
-          cultivationLevel: this.getCultivationLevel(userCard),
-          cultivationExp: this.getCultivationExp(userCard),
-          cultivationMaxLevel: this.getCultivationMaxLevel(
+          cultivationLevel: getCultivationLevel(userCard),
+          cultivationExp: getCultivationExp(userCard),
+          cultivationMaxLevel: getCultivationMaxLevel(
             userCard.card_level || this.getHighestRarity(card.card_level),
           ),
-          power: this.calculateCultivationPower(
+          power: calculateCultivationPower(
             userCard.card_level || this.getHighestRarity(card.card_level),
-            this.getCultivationLevel(userCard),
+            getCultivationLevel(userCard),
           ),
           canUpgrade:
             !activeListing &&
             userCard.locked !== true &&
-            this.getCultivationLevel(userCard) <
-              this.getCultivationMaxLevel(
+            getCultivationLevel(userCard) <
+              getCultivationMaxLevel(
                 userCard.card_level || this.getHighestRarity(card.card_level),
               ),
           upgradeableUuid:
             !activeListing &&
             userCard.locked !== true &&
-            this.getCultivationLevel(userCard) <
-              this.getCultivationMaxLevel(
+            getCultivationLevel(userCard) <
+              getCultivationMaxLevel(
                 userCard.card_level || this.getHighestRarity(card.card_level),
               )
               ? userCard.card_uuid
@@ -845,8 +842,8 @@ export class CardService {
         throw new Error("未知的卡片等级");
       }
 
-      const currentLevel = this.getCultivationLevel(userCard);
-      const maxLevel = this.getCultivationMaxLevel(rarity);
+      const currentLevel = getCultivationLevel(userCard);
+      const maxLevel = getCultivationMaxLevel(rarity);
       if (currentLevel >= maxLevel) {
         throw new Error("卡片已达到当前稀有度等级上限");
       }
@@ -857,7 +854,7 @@ export class CardService {
         where: { user_id: user.id, item_id: fragmentItem.id },
         lock: { mode: "pessimistic_write" },
       });
-      const cost = this.getCultivationUpgradeCost(rarity, currentLevel);
+      const cost = getCultivationUpgradeCost(rarity, currentLevel);
       if (!inventory || inventory.num < cost) {
         throw new Error(
           `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${inventory?.num || 0}个`,
@@ -867,7 +864,7 @@ export class CardService {
       const before = this.createCultivationSnapshot(userCard, card, rarity);
       inventory.num -= cost;
       userCard.cultivation_level = currentLevel + 1;
-      userCard.cultivation_exp = this.getCultivationExp(userCard) + cost;
+      userCard.cultivation_exp = getCultivationExp(userCard) + cost;
       await inventoryRepository.save(inventory);
       await userCardRepository.save(userCard);
       const after = this.createCultivationSnapshot(userCard, card, rarity);
@@ -1006,8 +1003,8 @@ export class CardService {
           upgradeableUuid: null,
           cultivationLevel: 1,
           cultivationExp: 0,
-          cultivationMaxLevel: this.getCultivationMaxLevel(rarity),
-          power: this.calculateCultivationPower(rarity, 1),
+          cultivationMaxLevel: getCultivationMaxLevel(rarity),
+          power: calculateCultivationPower(rarity, 1),
           latestObtainedAt: null,
         };
         groupMap.set(key, group);
@@ -1015,8 +1012,8 @@ export class CardService {
 
       const isListed = activeListingSet.has(userCard.card_uuid);
       const isLocked = userCard.locked === true;
-      const cultivationLevel = this.getCultivationLevel(userCard);
-      const cultivationExp = this.getCultivationExp(userCard);
+      const cultivationLevel = getCultivationLevel(userCard);
+      const cultivationExp = getCultivationExp(userCard);
       group.count += 1;
       group.listedCount += isListed ? 1 : 0;
       group.lockedCount += isLocked ? 1 : 0;
@@ -1037,7 +1034,7 @@ export class CardService {
       ) {
         group.cultivationLevel = cultivationLevel;
         group.cultivationExp = cultivationExp;
-        group.power = this.calculateCultivationPower(rarity, cultivationLevel);
+        group.power = calculateCultivationPower(rarity, cultivationLevel);
       }
       if (
         !isListed &&
@@ -2244,50 +2241,17 @@ export class CardService {
     }
   }
 
-  private getCultivationLevel(userCard: UserCard): number {
-    const level = Number(userCard.cultivation_level || 1);
-    return Number.isInteger(level) && level > 0 ? level : 1;
-  }
-
-  private getCultivationExp(userCard: UserCard): number {
-    const exp = Number(userCard.cultivation_exp || 0);
-    return Number.isInteger(exp) && exp > 0 ? exp : 0;
-  }
-
-  private getCultivationMaxLevel(rarity: string): number {
-    const normalized = this.normalizeRarity(rarity);
-    return CULTIVATION_CONFIG[normalized].maxLevel;
-  }
-
-  private getCultivationUpgradeCost(
-    rarity: CardRarity,
-    currentLevel: number,
-  ): number {
-    const config = CULTIVATION_CONFIG[rarity];
-    return config.costBase * Math.max(1, currentLevel);
-  }
-
-  private calculateCultivationPower(rarity: string, level: number): number {
-    const normalized = this.normalizeRarity(rarity);
-    const config = CULTIVATION_CONFIG[normalized];
-    const safeLevel = Math.max(
-      1,
-      Math.min(config.maxLevel, Math.floor(Number(level || 1))),
-    );
-    return config.powerBase + (safeLevel - 1) * config.powerGrowth;
-  }
-
   private createCultivationSnapshot(
     userCard: UserCard,
     card: CardItem,
     rarity: CardRarity,
   ) {
-    const level = this.getCultivationLevel(userCard);
+    const level = getCultivationLevel(userCard);
     return {
       level,
-      exp: this.getCultivationExp(userCard),
-      maxLevel: this.getCultivationMaxLevel(rarity),
-      power: this.calculateCultivationPower(rarity, level),
+      exp: getCultivationExp(userCard),
+      maxLevel: getCultivationMaxLevel(rarity),
+      power: calculateCultivationPower(rarity, level),
       cardName: card.card_name,
       rarity,
     };
@@ -2308,13 +2272,13 @@ export class CardService {
     const nextLevel = Math.min(current.maxLevel, current.level + 1);
     const cost =
       current.level < current.maxLevel
-        ? this.getCultivationUpgradeCost(rarity, current.level)
+        ? getCultivationUpgradeCost(rarity, current.level)
         : 0;
     const next = {
       level: nextLevel,
       exp: current.exp + cost,
       maxLevel: current.maxLevel,
-      power: this.calculateCultivationPower(rarity, nextLevel),
+      power: calculateCultivationPower(rarity, nextLevel),
       cardName: card.card_name,
       rarity,
     };

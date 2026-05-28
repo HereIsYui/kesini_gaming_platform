@@ -13,6 +13,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/draw", name: "draw", component: PageShell },
   { path: "/result", redirect: "/draw" },
   { path: "/bag", name: "bag", component: PageShell },
+  { path: "/formation", name: "formation", component: PageShell },
   { path: "/synthesize", name: "synthesize", component: PageShell },
   { path: "/points", name: "points", component: PageShell },
   { path: "/leaderboard", name: "leaderboard", component: PageShell },

@@ -399,6 +399,32 @@ export interface CardUpgradeResponse {
   };
 }
 
+export interface FormationCard {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  cardDesc?: string;
+  cardImage?: string;
+  cardLevel: CardRarity | string;
+  cardType: number;
+  poolId?: number;
+  cultivationLevel: number;
+  power: number;
+  locked: boolean;
+  obtainedAt?: string;
+}
+
+export interface FormationSlot {
+  position: number;
+  card: FormationCard | null;
+}
+
+export interface FormationOverview {
+  slotCount: number;
+  totalPower: number;
+  slots: FormationSlot[];
+}
+
 export interface DrawHistoryDetail {
   cardId: number;
   cardName: string;

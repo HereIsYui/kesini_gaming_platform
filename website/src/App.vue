@@ -22,6 +22,7 @@ import {
   Sparkles,
   Store,
   Sun,
+  Swords,
   Ticket,
   Trophy,
   Unlock,
@@ -61,6 +62,7 @@ import type {
   DrawHistoryResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
+  FormationOverview,
   GachaResult,
   InventoryItem,
   LaunchActivityClaimResponse,
@@ -103,6 +105,7 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "bag", label: "背包", icon: Boxes },
+  { key: "formation", label: "阵容", icon: Swords },
   { key: "synthesize", label: "图鉴", icon: Package },
   { key: "points", label: "星穹币", icon: Coins },
   { key: "leaderboard", label: "排行", icon: Trophy },
@@ -182,6 +185,10 @@ const drawHistory = ref<DrawHistoryResponse | null>(null);
 const drawHistoryOpen = ref(false);
 const drawHistoryPage = ref(1);
 const userCards = ref<UserCardsResponse | null>(null);
+const formation = ref<FormationOverview | null>(null);
+const formationCandidates = ref<UserCardsResponse["list"]>([]);
+const formationPickerOpen = ref(false);
+const formationEditingPosition = ref<number | null>(null);
 const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
@@ -278,6 +285,8 @@ const busy = reactive({
   trade: false,
   recycle: false,
   upgrade: false,
+  formation: false,
+  formationCandidates: false,
   recharge: false,
   bulkDecompose: false,
   bulkDecomposePreview: false,
@@ -649,6 +658,34 @@ const upgradePowerGain = computed(() => {
   }
   return Math.max(0, preview.next.power - preview.current.power);
 });
+const formationSlots = computed(() => {
+  const slotCount = formation.value?.slotCount || 3;
+  return Array.from({ length: slotCount }, (_, index) => {
+    const position = index + 1;
+    return (
+      formation.value?.slots.find((slot) => slot.position === position) || {
+        position,
+        card: null,
+      }
+    );
+  });
+});
+const formationFilledCount = computed(
+  () => formationSlots.value.filter((slot) => slot.card).length,
+);
+const formationCurrentUuids = computed(
+  () =>
+    new Set(
+      formationSlots.value
+        .map((slot) => slot.card?.uuid)
+        .filter((uuid): uuid is string => Boolean(uuid)),
+    ),
+);
+const formationEditingSlot = computed(() =>
+  formationSlots.value.find(
+    (slot) => slot.position === formationEditingPosition.value,
+  ),
+);
 const bestResult = computed(() => {
   return [...lastResults.value].sort(
     (a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0),
@@ -735,6 +772,9 @@ watch(activeSection, async (section) => {
   }
   if (section === "tasks" && isAuthed.value) {
     await loadTasks();
+  }
+  if (section === "formation" && isAuthed.value) {
+    await loadFormation();
   }
 });
 
@@ -854,6 +894,10 @@ function logout() {
   drawHistoryOpen.value = false;
   drawHistoryPage.value = 1;
   userCards.value = null;
+  formation.value = null;
+  formationCandidates.value = [];
+  formationPickerOpen.value = false;
+  formationEditingPosition.value = null;
   catalogItems.value = null;
   catalogError.value = "";
   launchActivity.value = null;
@@ -1000,6 +1044,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadUserCards(),
+    loadFormation(),
     loadUserCatalog(),
     loadLaunchActivity(),
     loadDailySignIn(),
@@ -1140,6 +1185,103 @@ async function loadUserCards(options: { append?: boolean } = {}) {
     } else {
       busy.assets = false;
     }
+  }
+}
+
+async function loadFormation() {
+  if (!isAuthed.value) {
+    return;
+  }
+  busy.formation = true;
+  try {
+    formation.value = await request<FormationOverview>("/formation");
+  } catch (error) {
+    if (activeSection.value === "formation") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.formation = false;
+  }
+}
+
+async function loadFormationCandidates() {
+  if (!isAuthed.value) {
+    formationCandidates.value = [];
+    return;
+  }
+  busy.formationCandidates = true;
+  try {
+    const data = await request<UserCardsResponse>(
+      `/card/user/cards${toQuery({
+        grouped: false,
+        page: 1,
+        pageSize: 100,
+      })}`,
+    );
+    formationCandidates.value = data.list || [];
+  } catch (error) {
+    formationCandidates.value = [];
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.formationCandidates = false;
+  }
+}
+
+async function openFormationPicker(position: number) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再配置阵容");
+    return;
+  }
+  formationEditingPosition.value = position;
+  formationPickerOpen.value = true;
+  await loadFormationCandidates();
+}
+
+function closeFormationPicker() {
+  if (busy.formation) {
+    return;
+  }
+  formationPickerOpen.value = false;
+  formationEditingPosition.value = null;
+}
+
+function candidateUuid(card: UserCardsResponse["list"][number]) {
+  return (
+    card.uuid ||
+    card.upgradeableUuid ||
+    card.lockableUuid ||
+    card.unlockableUuid ||
+    ""
+  );
+}
+
+function isFormationCandidateSelected(card: UserCardsResponse["list"][number]) {
+  const uuid = candidateUuid(card);
+  return Boolean(uuid && formationCurrentUuids.value.has(uuid));
+}
+
+async function saveFormationSlot(position: number, cardUuid: string | null) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录后再配置阵容");
+    return;
+  }
+  const slots = formationSlots.value.map((slot) => ({
+    position: slot.position,
+    cardUuid: slot.position === position ? cardUuid : slot.card?.uuid || null,
+  }));
+  busy.formation = true;
+  try {
+    formation.value = await request<FormationOverview>("/formation", {
+      method: "PUT",
+      body: JSON.stringify({ slots }),
+    });
+    notify("success", cardUuid ? "卡片已上阵" : "阵容位置已清空");
+    formationPickerOpen.value = false;
+    formationEditingPosition.value = null;
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.formation = false;
   }
 }
 
@@ -3317,6 +3459,131 @@ function leaderboardRankLabel(rank?: number) {
       </section>
 
       <section
+        v-if="activeSection === 'formation'"
+        class="panel formation-panel"
+        data-section="formation"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">阵容编队</p>
+            <h2>出战卡组</h2>
+          </div>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="busy.formation"
+            @click="loadFormation"
+          >
+            <RefreshCw :size="16" :class="{ spin: busy.formation }" />
+            刷新
+          </button>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>登录后配置阵容</strong>
+          <span>选择已拥有的卡片组成出战卡组。</span>
+        </div>
+        <div v-else-if="busy.formation && !formation" class="skeleton-grid">
+          <span v-for="item in 3" :key="item"></span>
+        </div>
+        <template v-else>
+          <div class="formation-summary">
+            <article>
+              <small>总战力</small>
+              <strong>{{ formation?.totalPower || 0 }}</strong>
+            </article>
+            <article>
+              <small>上阵</small>
+              <strong>{{ formationFilledCount }} / {{ formation?.slotCount || 3 }}</strong>
+            </article>
+            <article>
+              <small>当前目标</small>
+              <strong>编队成型</strong>
+            </article>
+          </div>
+
+          <div class="formation-slot-grid">
+            <article
+              v-for="slot in formationSlots"
+              :key="slot.position"
+              class="formation-slot"
+              :class="{ empty: !slot.card }"
+            >
+              <header>
+                <span>位置 {{ slot.position }}</span>
+                <b v-if="slot.card">战力 {{ slot.card.power }}</b>
+                <b v-else>待上阵</b>
+              </header>
+              <template v-if="slot.card">
+                <div
+                  class="formation-card-media"
+                  :class="{ 'has-media': hasCardMedia(slot.card.cardImage) }"
+                >
+                  <video
+                    v-if="isCardVideo(slot.card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(slot.card.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(slot.card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(slot.card.cardImage)"
+                    :alt="slot.card.cardName"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <span class="rarity-badge">{{ slot.card.cardLevel }}</span>
+                </div>
+                <div class="formation-card-body">
+                  <h3>{{ slot.card.cardName }}</h3>
+                  <p>{{ cardIntroText(slot.card.cardDesc) }}</p>
+                  <div class="tag-row">
+                    <span>Lv.{{ slot.card.cultivationLevel || 1 }}</span>
+                    <span>{{ cardTypeLabel(slot.card.cardType) }}</span>
+                    <span v-if="slot.card.locked">已锁定</span>
+                  </div>
+                </div>
+                <footer>
+                  <button
+                    class="secondary-action compact"
+                    type="button"
+                    :disabled="busy.formation"
+                    @click="openFormationPicker(slot.position)"
+                  >
+                    <Swords :size="15" />
+                    更换
+                  </button>
+                  <button
+                    class="danger-action compact"
+                    type="button"
+                    :disabled="busy.formation"
+                    @click="saveFormationSlot(slot.position, null)"
+                  >
+                    移除
+                  </button>
+                </footer>
+              </template>
+              <button
+                v-else
+                class="formation-empty-action"
+                type="button"
+                :disabled="busy.formation"
+                @click="openFormationPicker(slot.position)"
+              >
+                <Swords :size="22" />
+                <span>选择卡片</span>
+              </button>
+            </article>
+          </div>
+        </template>
+      </section>
+
+      <section
         v-if="activeSection === 'synthesize'"
         class="panel catalog-panel synthesize-panel"
         data-section="synthesize"
@@ -4931,6 +5198,151 @@ function leaderboardRankLabel(rank?: number) {
               <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
               <Coins v-else :size="18" />
               确认充值
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="formationPickerOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeFormationPicker"
+      >
+        <section
+          class="trade-listing-modal formation-picker-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="选择上阵卡片"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">阵容编队</p>
+              <h2>位置 {{ formationEditingPosition || "-" }}</h2>
+              <span>
+                当前
+                {{ formationEditingSlot?.card?.cardName || "空位" }}
+              </span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.formation"
+              @click="closeFormationPicker"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body formation-picker-body">
+            <div
+              v-if="busy.formationCandidates"
+              class="empty-state compact"
+            >
+              <LoaderCircle :size="26" class="spin" />
+              <strong>正在读取背包</strong>
+              <span>可上阵卡片同步中。</span>
+            </div>
+            <div
+              v-else-if="formationCandidates.length === 0"
+              class="empty-state compact"
+            >
+              <Package :size="26" />
+              <strong>暂无可选卡片</strong>
+              <span>获得卡片后即可加入阵容。</span>
+            </div>
+            <div v-else class="formation-candidate-list">
+              <article
+                v-for="card in formationCandidates"
+                :key="candidateUuid(card) || `${card.cardId}-${card.cardName}`"
+                class="formation-candidate"
+                :class="[
+                  rarityClass(card.cardLevel),
+                  {
+                    listed: card.isListed,
+                    selected: isFormationCandidateSelected(card),
+                  },
+                ]"
+              >
+                <div
+                  class="formation-candidate-media"
+                  :class="{ 'has-media': hasCardMedia(card.cardImage) }"
+                >
+                  <video
+                    v-if="isCardVideo(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    :alt="card.cardName"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <span class="rarity-badge">{{ card.cardLevel }}</span>
+                </div>
+                <div class="formation-candidate-body">
+                  <strong>{{ card.cardName }}</strong>
+                  <span>
+                    Lv.{{ card.cultivationLevel || 1 }} · 战力
+                    {{ card.power || 0 }}
+                  </span>
+                  <div class="tag-row">
+                    <span>{{ cardTypeLabel(card.cardType) }}</span>
+                    <span v-if="card.locked">已锁定</span>
+                    <span v-if="card.isListed">挂售中</span>
+                  </div>
+                </div>
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="
+                    busy.formation ||
+                    card.isListed ||
+                    !candidateUuid(card) ||
+                    isFormationCandidateSelected(card)
+                  "
+                  @click="
+                    saveFormationSlot(
+                      formationEditingPosition || 1,
+                      candidateUuid(card),
+                    )
+                  "
+                >
+                  {{
+                    isFormationCandidateSelected(card)
+                      ? "已上阵"
+                      : card.isListed
+                        ? "挂售中"
+                        : "上阵"
+                  }}
+                </button>
+              </article>
+            </div>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.formation"
+              @click="closeFormationPicker"
+            >
+              取消
+            </button>
+            <button
+              class="danger-action"
+              type="button"
+              :disabled="busy.formation || !formationEditingSlot?.card"
+              @click="saveFormationSlot(formationEditingPosition || 1, null)"
+            >
+              清空位置
             </button>
           </footer>
         </section>
