@@ -301,17 +301,12 @@ option {
 .desktop-nav {
   display: flex;
   min-width: 0;
-  overflow-x: auto;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
-  scrollbar-width: none;
-}
-
-.desktop-nav::-webkit-scrollbar {
-  display: none;
 }
 
 .desktop-nav a,
+.desktop-more-trigger,
 .mobile-nav a {
   display: inline-flex;
   flex: 0 0 auto;
@@ -329,10 +324,58 @@ option {
 }
 
 .desktop-nav a.active,
+.desktop-more-trigger.active,
 .mobile-nav a.active {
   border-color: var(--border-strong);
   color: var(--text);
   background: rgba(84, 216, 255, 0.13);
+}
+
+.desktop-more-trigger {
+  min-width: 84px;
+}
+
+.desktop-nav-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.desktop-more-menu {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  width: 168px;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(7, 12, 24, 0.96);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  padding: 8px;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  backdrop-filter: blur(18px);
+}
+
+:root[data-theme="light"] .desktop-more-menu {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.desktop-nav-more.open .desktop-more-menu,
+.desktop-nav-more:focus-within .desktop-more-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.desktop-more-menu a {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .top-actions {

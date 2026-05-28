@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
+  MoreHorizontal,
   Moon,
   Package,
   Recycle,
@@ -115,6 +116,29 @@ const sectionItems = [
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
+type SectionKey = (typeof sectionItems)[number]["key"];
+
+const desktopPrimarySectionKeys = [
+  "draw",
+  "bag",
+  "formation",
+  "synthesize",
+  "tasks",
+  "trade",
+] as const satisfies readonly SectionKey[];
+
+const desktopPrimaryItems = sectionItems.filter((item) =>
+  desktopPrimarySectionKeys.includes(
+    item.key as (typeof desktopPrimarySectionKeys)[number],
+  ),
+);
+const desktopMoreItems = sectionItems.filter(
+  (item) =>
+    !desktopPrimarySectionKeys.includes(
+      item.key as (typeof desktopPrimarySectionKeys)[number],
+    ),
+);
+
 const leaderboardTabs: Array<{
   key: LeaderboardMetric;
   label: string;
@@ -137,7 +161,6 @@ const leaderboardTabs: Array<{
   },
 ];
 
-type SectionKey = (typeof sectionItems)[number]["key"];
 type FeedbackType = "success" | "error" | "info";
 type DrawPhase = "idle" | "charging" | "burst";
 type ThemeMode = "dark" | "light";
@@ -163,6 +186,7 @@ const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
+const moreNavOpen = ref(false);
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -304,6 +328,9 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const activeMoreSection = computed(() =>
+  desktopMoreItems.some((item) => item.key === activeSection.value),
+);
 const playerDisplayName = computed(
   () =>
     currentUser.value?.nickname ||
@@ -767,6 +794,7 @@ watch(activePoolId, async (poolId) => {
 });
 
 watch(activeSection, async (section) => {
+  moreNavOpen.value = false;
   if (section === "synthesize") {
     await loadUserCatalog();
   }
@@ -2756,7 +2784,7 @@ function leaderboardRankLabel(rank?: number) {
 
       <nav class="desktop-nav" aria-label="页面导航">
         <RouterLink
-          v-for="item in sectionItems"
+          v-for="item in desktopPrimaryItems"
           :key="item.key"
           :to="{ name: item.key }"
           :class="{ active: activeSection === item.key }"
@@ -2764,6 +2792,37 @@ function leaderboardRankLabel(rank?: number) {
           <component :is="item.icon" :size="16" />
           {{ item.label }}
         </RouterLink>
+        <div
+          class="desktop-nav-more"
+          :class="{ open: moreNavOpen }"
+          @keydown.escape="moreNavOpen = false"
+        >
+          <button
+            class="desktop-more-trigger"
+            type="button"
+            :class="{ active: activeMoreSection }"
+            :aria-expanded="moreNavOpen"
+            aria-haspopup="true"
+            aria-label="更多导航"
+            @click="moreNavOpen = !moreNavOpen"
+          >
+            <MoreHorizontal :size="16" />
+            更多
+          </button>
+          <div class="desktop-more-menu" role="menu">
+            <RouterLink
+              v-for="item in desktopMoreItems"
+              :key="item.key"
+              :to="{ name: item.key }"
+              :class="{ active: activeSection === item.key }"
+              role="menuitem"
+              @click="moreNavOpen = false"
+            >
+              <component :is="item.icon" :size="16" />
+              {{ item.label }}
+            </RouterLink>
+          </div>
+        </div>
       </nav>
 
       <div class="top-actions">
