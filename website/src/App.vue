@@ -147,19 +147,13 @@ const navGroups = [
     key: "collection",
     label: "收藏",
     icon: Boxes,
-    sectionKeys: ["profile", "bag", "formation"],
+    sectionKeys: ["bag", "formation"],
   },
   {
     key: "growth",
     label: "成长",
     icon: ShieldCheck,
     sectionKeys: ["tasks", "season", "achievements", "leaderboard"],
-  },
-  {
-    key: "assets",
-    label: "资产",
-    icon: Coins,
-    sectionKeys: ["points", "trade", "redeem"],
   },
 ] as const satisfies readonly {
   key: string;
@@ -182,6 +176,17 @@ function navItemsForGroup(group: NavGroup) {
     .map((key) => sectionItemMap.get(key))
     .filter((item): item is SectionItem => Boolean(item));
 }
+
+const accountMenuSectionKeys = [
+  "profile",
+  "points",
+  "trade",
+  "redeem",
+] as const satisfies readonly SectionKey[];
+
+const accountMenuItems = accountMenuSectionKeys
+  .map((key) => sectionItemMap.get(key))
+  .filter((item): item is SectionItem => Boolean(item));
 
 const leaderboardTabs: Array<{
   key: LeaderboardMetric;
@@ -231,6 +236,7 @@ const CARD_DESC_DETAIL_THRESHOLD = 34;
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
 const userMenuOpen = ref(false);
+const userMenuHoverPaused = ref(false);
 const activeNavGroupKey = ref<NavGroupKey>("play");
 const manualToken = ref("");
 const token = ref(getToken());
@@ -394,8 +400,8 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
-const routeGroupKey = computed<NavGroupKey>(
-  () => sectionGroupMap.get(activeSection.value) || "play",
+const routeGroupKey = computed<NavGroupKey | null>(
+  () => sectionGroupMap.get(activeSection.value) || null,
 );
 const activeNavGroup = computed<NavGroup>(
   () =>
@@ -460,10 +466,29 @@ function selectNavGroup(key: NavGroupKey) {
   activeNavGroupKey.value = key;
 }
 
+function toggleUserMenu() {
+  userMenuHoverPaused.value = false;
+  userMenuOpen.value = !userMenuOpen.value;
+}
+
+function closeUserMenu(event?: Event) {
+  userMenuOpen.value = false;
+  userMenuHoverPaused.value = true;
+  if (event?.currentTarget instanceof HTMLElement) {
+    event.currentTarget.blur();
+  }
+}
+
+function resetUserMenuHover() {
+  userMenuHoverPaused.value = false;
+}
+
 watch(
   routeGroupKey,
   (key) => {
-    activeNavGroupKey.value = key;
+    if (key) {
+      activeNavGroupKey.value = key;
+    }
   },
   { immediate: true },
 );
@@ -3391,8 +3416,9 @@ function leaderboardRankLabel(rank?: number) {
         </button>
         <div
           class="user-menu-wrap"
-          :class="{ open: userMenuOpen }"
+          :class="{ open: userMenuOpen, 'hover-paused': userMenuHoverPaused }"
           @keydown.escape="userMenuOpen = false"
+          @mouseleave="resetUserMenuHover"
         >
           <button
             class="user-menu-trigger"
@@ -3400,7 +3426,7 @@ function leaderboardRankLabel(rank?: number) {
             :aria-expanded="userMenuOpen"
             aria-haspopup="true"
             :aria-label="isAuthed ? '玩家菜单' : '登录菜单'"
-            @click="userMenuOpen = !userMenuOpen"
+            @click="toggleUserMenu"
           >
             <span class="user-menu-avatar">
               <img
@@ -3437,6 +3463,20 @@ function leaderboardRankLabel(rank?: number) {
                 <span>星穹币余额</span>
                 <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
               </div>
+              <nav class="user-menu-shortcuts" aria-label="快捷入口">
+                <RouterLink
+                  v-for="item in accountMenuItems"
+                  :key="item.key"
+                  class="user-menu-link"
+                  :to="{ name: item.key }"
+                  :class="{ active: activeSection === item.key }"
+                  role="menuitem"
+                  @click="closeUserMenu"
+                >
+                  <component :is="item.icon" :size="16" />
+                  {{ item.label }}
+                </RouterLink>
+              </nav>
               <button
                 class="user-menu-link danger"
                 type="button"
@@ -3453,8 +3493,8 @@ function leaderboardRankLabel(rank?: number) {
                   <UserRound :size="22" />
                 </span>
                 <div>
-                  <strong>登录后同步资产</strong>
-                  <small>抽卡、背包与交易会在登录后加载。</small>
+                  <strong>登录</strong>
+                  <small>同步资产数据</small>
                 </div>
               </div>
               <div class="guest-login-actions">
@@ -3471,21 +3511,6 @@ function leaderboardRankLabel(rank?: number) {
                   />
                   <LogIn v-else :size="18" />
                   登录
-                </button>
-                <label class="token-box debug-token-box compact">
-                  <span>临时凭证</span>
-                  <textarea
-                    v-model="manualToken"
-                    placeholder="粘贴凭证"
-                  ></textarea>
-                </label>
-                <button
-                  class="secondary-action wide"
-                  type="button"
-                  @click="applyManualToken"
-                >
-                  <ShieldCheck :size="18" />
-                  进入
                 </button>
               </div>
             </template>
@@ -3816,7 +3841,7 @@ function leaderboardRankLabel(rank?: number) {
             </p>
             <h2>{{ profileDisplayName }}</h2>
           </div>
-          <div class="profile-actions">
+          <div class="section-actions profile-actions">
             <button
               v-if="profileCanEdit"
               class="primary-action compact"
@@ -4339,15 +4364,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">阵容编队</p>
             <h2>出战卡组</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.formation"
-            @click="loadFormation"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.formation }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.formation"
+              @click="loadFormation"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.formation }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -4467,18 +4494,20 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">轻量关卡</p>
             <h2>星港挑战</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.pve || busy.pveRecords"
-            @click="refreshPve"
-          >
-            <RefreshCw
-              :size="16"
-              :class="{ spin: busy.pve || busy.pveRecords }"
-            />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.pve || busy.pveRecords"
+              @click="refreshPve"
+            >
+              <RefreshCw
+                :size="16"
+                :class="{ spin: busy.pve || busy.pveRecords }"
+              />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -4801,15 +4830,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">星穹币流水</p>
             <h2>星穹币变化记录</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.points"
-            @click="loadPointRecords"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.points }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.points"
+              @click="loadPointRecords"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.points }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -4938,15 +4969,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">匿名交易</p>
             <h2>卡片交易市场</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.trade"
-            @click="loadTradeData"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.trade }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.trade"
+              @click="loadTradeData"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.trade }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -5277,15 +5310,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">玩家排行</p>
             <h2>收藏榜单</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.leaderboard"
-            @click="loadLeaderboard"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.leaderboard }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.leaderboard"
+              @click="loadLeaderboard"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.leaderboard }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -5411,15 +5446,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">任务中心</p>
             <h2>日常与周常</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.tasks"
-            @click="loadTasks"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.tasks }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.tasks"
+              @click="loadTasks"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.tasks }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -5581,15 +5618,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">赛季远征</p>
             <h2>{{ activeSeason?.name || "当前赛季" }}</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.season"
-            @click="loadSeasonOverview"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.season }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.season"
+              @click="loadSeasonOverview"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.season }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -5803,15 +5842,17 @@ function leaderboardRankLabel(rank?: number) {
             <p class="eyebrow">成就图鉴</p>
             <h2>目标进度</h2>
           </div>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="busy.achievements"
-            @click="loadAchievements"
-          >
-            <RefreshCw :size="16" :class="{ spin: busy.achievements }" />
-            刷新
-          </button>
+          <div class="section-actions">
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.achievements"
+              @click="loadAchievements"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.achievements }" />
+              刷新
+            </button>
+          </div>
         </div>
 
         <div v-if="!isAuthed" class="empty-state">
@@ -5991,15 +6032,17 @@ function leaderboardRankLabel(rank?: number) {
               <p class="eyebrow">兑换商店</p>
               <h2>物品消费</h2>
             </div>
-            <button
-              class="secondary-action"
-              type="button"
-              :disabled="busy.shop"
-              @click="loadExchangeItems"
-            >
-              <RefreshCw :size="16" :class="{ spin: busy.shop }" />
-              刷新
-            </button>
+            <div class="section-actions">
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="busy.shop"
+                @click="loadExchangeItems"
+              >
+                <RefreshCw :size="16" :class="{ spin: busy.shop }" />
+                刷新
+              </button>
+            </div>
           </div>
 
           <div v-if="!isAuthed" class="empty-state">
