@@ -27,6 +27,7 @@ import {
   Trophy,
   Unlock,
   UserRound,
+  UsersRound,
   WandSparkles,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
@@ -62,6 +63,8 @@ import type {
   DrawHistoryResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
+  FriendRelationRecord,
+  FriendsOverviewResponse,
   FormationOverview,
   GachaResult,
   InventoryItem,
@@ -80,6 +83,7 @@ import type {
   PveStage,
   PlayerProfileResponse,
   SaveShowcaseRequest,
+  SendFriendRequestRequest,
   SiteConfig,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
@@ -116,6 +120,7 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "profile", label: "主页", icon: UserRound },
+  { key: "friends", label: "好友", icon: UsersRound },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "formation", label: "阵容", icon: Swords },
   { key: "pve", label: "关卡", icon: Trophy },
@@ -150,6 +155,7 @@ const primaryNavItems = primaryNavSectionKeys
 
 const accountMenuSectionKeys = [
   "profile",
+  "friends",
   "bag",
   "formation",
   "tasks",
@@ -238,6 +244,9 @@ const playerProfile = ref<PlayerProfileResponse | null>(null);
 const profileCandidates = ref<UserCardsResponse["list"]>([]);
 const profilePickerOpen = ref(false);
 const profileSelectedUuids = ref<string[]>([]);
+const friendsOverview = ref<FriendsOverviewResponse | null>(null);
+const friendTargetUid = ref("");
+const friendActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -335,6 +344,7 @@ const busy = reactive({
   profile: false,
   profileCandidates: false,
   profileSaving: false,
+  friends: false,
   cardsMore: false,
   leaderboard: false,
   points: false,
@@ -379,10 +389,16 @@ const profileRouteUid = computed(() =>
   isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
 );
 const profileDisplayName = computed(
-  () => playerProfile.value?.user.nickname || playerProfile.value?.user.uid || "玩家主页",
+  () =>
+    playerProfile.value?.user.nickname ||
+    playerProfile.value?.user.uid ||
+    "玩家主页",
 );
 const profileInitial = computed(() =>
-  String(profileDisplayName.value || "?").trim().slice(0, 1).toUpperCase(),
+  String(profileDisplayName.value || "?")
+    .trim()
+    .slice(0, 1)
+    .toUpperCase(),
 );
 const profileCanEdit = computed(
   () =>
@@ -426,6 +442,53 @@ const profileFormation = computed(
     },
 );
 const profileSelectedSet = computed(() => new Set(profileSelectedUuids.value));
+const friendRows = computed(() => friendsOverview.value?.friends || []);
+const incomingFriendRequests = computed(
+  () => friendsOverview.value?.incoming || [],
+);
+const outgoingFriendRequests = computed(
+  () => friendsOverview.value?.outgoing || [],
+);
+const profileFriendRelation = computed<FriendRelationRecord | null>(() => {
+  const uid = playerProfile.value?.user.uid;
+  if (!uid) {
+    return null;
+  }
+  return (
+    friendRows.value.find((item) => item.user.uid === uid) ||
+    incomingFriendRequests.value.find((item) => item.user.uid === uid) ||
+    outgoingFriendRequests.value.find((item) => item.user.uid === uid) ||
+    null
+  );
+});
+const showProfileFriendAction = computed(
+  () =>
+    Boolean(isAuthed.value) &&
+    Boolean(isPublicProfileRoute.value) &&
+    Boolean(playerProfile.value?.user.uid) &&
+    playerProfile.value?.user.uid !== currentUser.value?.uid,
+);
+const profileFriendActionLabel = computed(() => {
+  const relation = profileFriendRelation.value;
+  if (relation?.status === "accepted") {
+    return "已添加";
+  }
+  if (relation?.status === "pending") {
+    return outgoingFriendRequests.value.some((item) => item.id === relation.id)
+      ? "已申请"
+      : "通过";
+  }
+  return "添加";
+});
+const profileFriendActionDisabled = computed(() => {
+  const relation = profileFriendRelation.value;
+  return (
+    busy.friends ||
+    friendActionBusy.value !== "" ||
+    relation?.status === "accepted" ||
+    outgoingFriendRequests.value.some((item) => item.id === relation?.id)
+  );
+});
 
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
@@ -938,6 +1001,12 @@ watch(activeSection, async (section) => {
   userMenuOpen.value = false;
   if (section === "profile") {
     await loadPlayerProfile();
+    if (isAuthed.value) {
+      await loadFriends(false);
+    }
+  }
+  if (section === "friends" && isAuthed.value) {
+    await loadFriends();
   }
   if (section === "synthesize") {
     await loadUserCatalog();
@@ -961,6 +1030,9 @@ watch(
   async () => {
     if (activeSection.value === "profile") {
       await loadPlayerProfile();
+      if (isAuthed.value) {
+        await loadFriends(false);
+      }
     }
   },
 );
@@ -1087,6 +1159,9 @@ function logout() {
   profileCandidates.value = [];
   profilePickerOpen.value = false;
   profileSelectedUuids.value = [];
+  friendsOverview.value = null;
+  friendTargetUid.value = "";
+  friendActionBusy.value = "";
   formation.value = null;
   formationCandidates.value = [];
   formationPickerOpen.value = false;
@@ -1246,6 +1321,7 @@ async function loadPrivateData() {
     loadStats(),
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
+    loadFriends(false),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1520,6 +1596,141 @@ async function copyProfileLink() {
   } catch {
     notify("error", "复制失败");
   }
+}
+
+async function loadFriends(showError = activeSection.value === "friends") {
+  if (!isAuthed.value) {
+    friendsOverview.value = null;
+    return;
+  }
+  busy.friends = true;
+  try {
+    friendsOverview.value = await request<FriendsOverviewResponse>("/friends");
+  } catch (error) {
+    friendsOverview.value = null;
+    if (showError) {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.friends = false;
+  }
+}
+
+async function sendFriendRequest(uid: string) {
+  const targetUid = String(uid || "").trim();
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return false;
+  }
+  if (!targetUid) {
+    notify("error", "请输入 UID");
+    return false;
+  }
+  friendActionBusy.value = `send:${targetUid}`;
+  try {
+    const payload: SendFriendRequestRequest = { uid: targetUid };
+    await request<FriendRelationRecord>("/friends/requests", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    notify("success", "已申请");
+    await loadFriends(false);
+    return true;
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+    return false;
+  } finally {
+    friendActionBusy.value = "";
+  }
+}
+
+async function sendManualFriendRequest() {
+  const targetUid = friendTargetUid.value.trim();
+  if (await sendFriendRequest(targetUid)) {
+    friendTargetUid.value = "";
+  }
+}
+
+async function acceptFriendRequest(requestId: number) {
+  friendActionBusy.value = `accept:${requestId}`;
+  try {
+    await request<FriendRelationRecord>(
+      `/friends/requests/${requestId}/accept`,
+      {
+        method: "POST",
+      },
+    );
+    notify("success", "已通过");
+    await loadFriends(false);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    friendActionBusy.value = "";
+  }
+}
+
+async function rejectFriendRequest(requestId: number) {
+  friendActionBusy.value = `reject:${requestId}`;
+  try {
+    await request<FriendRelationRecord>(
+      `/friends/requests/${requestId}/reject`,
+      {
+        method: "POST",
+      },
+    );
+    notify("success", "已拒绝");
+    await loadFriends(false);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    friendActionBusy.value = "";
+  }
+}
+
+async function cancelFriendRequest(requestId: number) {
+  friendActionBusy.value = `cancel:${requestId}`;
+  try {
+    await request<FriendRelationRecord>(`/friends/requests/${requestId}`, {
+      method: "DELETE",
+    });
+    notify("success", "已取消");
+    await loadFriends(false);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    friendActionBusy.value = "";
+  }
+}
+
+async function removeFriend(uid: string) {
+  const targetUid = String(uid || "").trim();
+  if (!targetUid) {
+    return;
+  }
+  friendActionBusy.value = `remove:${targetUid}`;
+  try {
+    await request(`/friends/${encodeURIComponent(targetUid)}`, {
+      method: "DELETE",
+    });
+    notify("success", "已删除");
+    await loadFriends(false);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    friendActionBusy.value = "";
+  }
+}
+
+async function handleProfileFriendAction() {
+  const uid = playerProfile.value?.user.uid || "";
+  const relation = profileFriendRelation.value;
+  if (relation?.status === "pending") {
+    if (incomingFriendRequests.value.some((item) => item.id === relation.id)) {
+      await acceptFriendRequest(relation.id);
+    }
+    return;
+  }
+  await sendFriendRequest(uid);
 }
 
 async function loadFormation() {
@@ -3737,10 +3948,7 @@ function leaderboardRankLabel(rank?: number) {
             </button>
             <label class="token-box debug-token-box">
               <span>临时凭证</span>
-              <textarea
-                v-model="manualToken"
-                placeholder="粘贴凭证"
-              ></textarea>
+              <textarea v-model="manualToken" placeholder="粘贴凭证"></textarea>
             </label>
             <button
               class="secondary-action wide"
@@ -3776,6 +3984,16 @@ function leaderboardRankLabel(rank?: number) {
             >
               <Package :size="16" />
               编辑
+            </button>
+            <button
+              v-if="showProfileFriendAction"
+              class="primary-action compact"
+              type="button"
+              :disabled="profileFriendActionDisabled"
+              @click="handleProfileFriendAction"
+            >
+              <UsersRound :size="16" />
+              {{ profileFriendActionLabel }}
             </button>
             <button
               v-if="profileShareUrl"
@@ -3846,7 +4064,9 @@ function leaderboardRankLabel(rank?: number) {
             <article>
               <small>上阵</small>
               <strong>
-                {{ profileFormation.filledCount }}/{{ profileFormation.slotCount }}
+                {{ profileFormation.filledCount }}/{{
+                  profileFormation.slotCount
+                }}
               </strong>
             </article>
           </div>
@@ -3869,7 +4089,10 @@ function leaderboardRankLabel(rank?: number) {
                 <h3>精选卡片</h3>
               </div>
             </div>
-            <div v-if="profileShowcase.length === 0" class="empty-state compact">
+            <div
+              v-if="profileShowcase.length === 0"
+              class="empty-state compact"
+            >
               <Package :size="26" />
               <strong>暂无展示</strong>
               <span>公开主页会展示精选卡片。</span>
@@ -3923,6 +4146,245 @@ function leaderboardRankLabel(rank?: number) {
               </article>
             </div>
           </section>
+        </template>
+      </section>
+
+      <section
+        v-if="activeSection === 'friends'"
+        class="panel friends-panel"
+        data-section="friends"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">好友</p>
+            <h2>好友列表</h2>
+          </div>
+          <div class="section-actions friends-actions">
+            <form
+              v-if="isAuthed"
+              class="friend-add-form"
+              @submit.prevent="sendManualFriendRequest"
+            >
+              <input v-model="friendTargetUid" placeholder="玩家 UID" />
+              <button
+                class="primary-action compact"
+                type="submit"
+                :disabled="busy.friends || friendActionBusy !== ''"
+              >
+                <UsersRound :size="16" />
+                添加
+              </button>
+            </form>
+            <button
+              v-if="isAuthed"
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.friends"
+              @click="loadFriends()"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.friends }" />
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>请先登录</strong>
+          <span>登录后查看</span>
+        </div>
+        <div v-else-if="busy.friends && !friendsOverview" class="skeleton-grid">
+          <span v-for="item in 3" :key="item"></span>
+        </div>
+        <template v-else>
+          <div class="friends-summary">
+            <article>
+              <small>好友</small>
+              <strong>{{ friendsOverview?.counts.friends || 0 }}</strong>
+            </article>
+            <article>
+              <small>收到</small>
+              <strong>{{ friendsOverview?.counts.incoming || 0 }}</strong>
+            </article>
+            <article>
+              <small>发出</small>
+              <strong>{{ friendsOverview?.counts.outgoing || 0 }}</strong>
+            </article>
+          </div>
+
+          <div class="friends-layout">
+            <section class="friends-block">
+              <div class="section-title-row">
+                <div>
+                  <p class="eyebrow">好友</p>
+                  <h3>已添加</h3>
+                </div>
+              </div>
+              <div v-if="friendRows.length === 0" class="empty-mini">
+                暂无好友
+              </div>
+              <div v-else class="friend-list">
+                <article
+                  v-for="friend in friendRows"
+                  :key="friend.id"
+                  class="friend-row"
+                >
+                  <span class="friend-avatar">
+                    <img
+                      v-if="friend.user.avatar"
+                      :src="friend.user.avatar"
+                      :alt="friend.user.nickname"
+                    />
+                    <span v-else>
+                      {{ friend.user.nickname.slice(0, 1).toUpperCase() }}
+                    </span>
+                  </span>
+                  <div class="friend-info">
+                    <strong>{{ friend.user.nickname }}</strong>
+                    <span>UID {{ friend.user.uid }}</span>
+                  </div>
+                  <div class="friend-row-actions">
+                    <RouterLink
+                      class="secondary-action compact"
+                      :to="{
+                        name: 'publicProfile',
+                        params: { uid: friend.user.uid },
+                      }"
+                    >
+                      查看
+                    </RouterLink>
+                    <button
+                      class="danger-action compact"
+                      type="button"
+                      :disabled="
+                        friendActionBusy === `remove:${friend.user.uid}`
+                      "
+                      @click="removeFriend(friend.user.uid)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="friends-block">
+              <div class="section-title-row">
+                <div>
+                  <p class="eyebrow">收到</p>
+                  <h3>好友申请</h3>
+                </div>
+              </div>
+              <div
+                v-if="incomingFriendRequests.length === 0"
+                class="empty-mini"
+              >
+                暂无申请
+              </div>
+              <div v-else class="friend-list">
+                <article
+                  v-for="requestItem in incomingFriendRequests"
+                  :key="requestItem.id"
+                  class="friend-row"
+                >
+                  <span class="friend-avatar">
+                    <img
+                      v-if="requestItem.user.avatar"
+                      :src="requestItem.user.avatar"
+                      :alt="requestItem.user.nickname"
+                    />
+                    <span v-else>
+                      {{ requestItem.user.nickname.slice(0, 1).toUpperCase() }}
+                    </span>
+                  </span>
+                  <div class="friend-info">
+                    <strong>{{ requestItem.user.nickname }}</strong>
+                    <span>UID {{ requestItem.user.uid }}</span>
+                  </div>
+                  <div class="friend-row-actions">
+                    <button
+                      class="primary-action compact"
+                      type="button"
+                      :disabled="
+                        friendActionBusy === `accept:${requestItem.id}`
+                      "
+                      @click="acceptFriendRequest(requestItem.id)"
+                    >
+                      通过
+                    </button>
+                    <button
+                      class="secondary-action compact"
+                      type="button"
+                      :disabled="
+                        friendActionBusy === `reject:${requestItem.id}`
+                      "
+                      @click="rejectFriendRequest(requestItem.id)"
+                    >
+                      拒绝
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="friends-block">
+              <div class="section-title-row">
+                <div>
+                  <p class="eyebrow">发出</p>
+                  <h3>等待通过</h3>
+                </div>
+              </div>
+              <div
+                v-if="outgoingFriendRequests.length === 0"
+                class="empty-mini"
+              >
+                暂无发出
+              </div>
+              <div v-else class="friend-list">
+                <article
+                  v-for="requestItem in outgoingFriendRequests"
+                  :key="requestItem.id"
+                  class="friend-row"
+                >
+                  <span class="friend-avatar">
+                    <img
+                      v-if="requestItem.user.avatar"
+                      :src="requestItem.user.avatar"
+                      :alt="requestItem.user.nickname"
+                    />
+                    <span v-else>
+                      {{ requestItem.user.nickname.slice(0, 1).toUpperCase() }}
+                    </span>
+                  </span>
+                  <div class="friend-info">
+                    <strong>{{ requestItem.user.nickname }}</strong>
+                    <span>UID {{ requestItem.user.uid }}</span>
+                  </div>
+                  <div class="friend-row-actions">
+                    <RouterLink
+                      class="secondary-action compact"
+                      :to="{
+                        name: 'publicProfile',
+                        params: { uid: requestItem.user.uid },
+                      }"
+                    >
+                      查看
+                    </RouterLink>
+                    <button
+                      class="secondary-action compact"
+                      type="button"
+                      :disabled="
+                        friendActionBusy === `cancel:${requestItem.id}`
+                      "
+                      @click="cancelFriendRequest(requestItem.id)"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
         </template>
       </section>
 
@@ -6590,7 +7052,9 @@ function leaderboardRankLabel(rank?: number) {
             <button
               class="danger-action"
               type="button"
-              :disabled="busy.profileSaving || profileSelectedUuids.length === 0"
+              :disabled="
+                busy.profileSaving || profileSelectedUuids.length === 0
+              "
               @click="profileSelectedUuids = []"
             >
               清空
@@ -6601,11 +7065,7 @@ function leaderboardRankLabel(rank?: number) {
               :disabled="busy.profileSaving"
               @click="saveProfileShowcase"
             >
-              <LoaderCircle
-                v-if="busy.profileSaving"
-                :size="18"
-                class="spin"
-              />
+              <LoaderCircle v-if="busy.profileSaving" :size="18" class="spin" />
               <Package v-else :size="18" />
               保存
             </button>

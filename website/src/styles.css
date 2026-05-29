@@ -722,6 +722,7 @@ option {
 .inventory-panel,
 .catalog-panel,
 .profile-panel,
+.friends-panel,
 .points-panel,
 .leaderboard-panel,
 .task-panel,
@@ -3410,6 +3411,140 @@ h3 {
   font-size: 12px;
 }
 
+.friends-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.friends-actions {
+  align-items: stretch;
+}
+
+.friend-add-form {
+  display: flex;
+  gap: 8px;
+  min-width: min(320px, 100%);
+}
+
+.friend-add-form input {
+  min-width: 0;
+}
+
+.friend-add-form .primary-action {
+  flex: 0 0 auto;
+}
+
+.friends-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.friends-summary article {
+  display: grid;
+  gap: 7px;
+  min-height: 82px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 14px;
+}
+
+.friends-summary small {
+  color: var(--text-soft);
+}
+
+.friends-summary strong {
+  color: var(--text);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.friends-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.friends-block {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 14px;
+}
+
+.friends-block:first-child {
+  grid-row: span 2;
+}
+
+.friend-list {
+  display: grid;
+  gap: 10px;
+}
+
+.friend-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 10px;
+}
+
+.friend-avatar {
+  display: grid;
+  width: 46px;
+  aspect-ratio: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(150, 242, 255, 0.28);
+  border-radius: 50%;
+  color: var(--primary-strong);
+  background: rgba(84, 216, 255, 0.12);
+  font-weight: 800;
+}
+
+.friend-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.friend-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.friend-info strong,
+.friend-info span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-info span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.friend-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+:root[data-theme="light"] .danger-action {
+  color: #9f233d;
+  background: rgba(217, 59, 90, 0.1);
+}
+
 .formation-panel {
   display: grid;
   gap: 16px;
@@ -4704,10 +4839,9 @@ h3 {
 
 .achievement-filter-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.45fr) minmax(
-      160px,
-      0.6fr
-    ) auto;
+  grid-template-columns:
+    minmax(260px, 1fr) minmax(140px, 0.45fr) minmax(160px, 0.6fr)
+    auto;
   gap: 10px;
   align-items: center;
 }
@@ -5618,6 +5752,7 @@ h3 {
   .formation-panel,
   .pve-panel,
   .profile-panel,
+  .friends-panel,
   .trade-panel,
   .redeem-panel,
   .shop-panel,
@@ -5774,6 +5909,27 @@ h3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .friends-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .friends-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .friends-block:first-child {
+    grid-row: auto;
+  }
+
+  .friend-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .friend-row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .profile-candidate {
     grid-template-columns: 62px minmax(0, 1fr);
   }
@@ -5811,6 +5967,7 @@ h3 {
   .achievement-summary,
   .achievement-grid,
   .profile-candidate-list,
+  .friends-layout,
   .formation-summary,
   .formation-slot-grid,
   .pve-summary,
@@ -5993,6 +6150,17 @@ h3 {
   .player-avatar {
     width: 52px;
     height: 52px;
+  }
+
+  .friend-add-form {
+    flex-direction: column;
+  }
+
+  .friend-add-form .primary-action,
+  .friend-row-actions .primary-action,
+  .friend-row-actions .secondary-action,
+  .friend-row-actions .danger-action {
+    width: 100%;
   }
 
   .point-card {

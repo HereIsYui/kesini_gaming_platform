@@ -195,6 +195,43 @@ export interface SaveShowcaseRequest {
   cardUuids: string[];
 }
 
+export type FriendRequestStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "cancelled";
+
+export interface FriendUser {
+  uid: string;
+  nickname: string;
+  avatar: string;
+  createdAt?: string | null;
+}
+
+export interface FriendRelationRecord {
+  id: number;
+  status: FriendRequestStatus;
+  user: FriendUser;
+  createdAt?: string;
+  updatedAt?: string;
+  respondedAt?: string | null;
+}
+
+export interface FriendsOverviewResponse {
+  friends: FriendRelationRecord[];
+  incoming: FriendRelationRecord[];
+  outgoing: FriendRelationRecord[];
+  counts: {
+    friends: number;
+    incoming: number;
+    outgoing: number;
+  };
+}
+
+export interface SendFriendRequestRequest {
+  uid: string;
+}
+
 export interface UserCatalogItem {
   key: string;
   card: CardItem;
