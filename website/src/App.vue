@@ -129,29 +129,59 @@ const sectionItems = [
   { key: "redeem", label: "兑换", icon: Gift },
 ] as const;
 
+type SectionItem = (typeof sectionItems)[number];
 type SectionKey = (typeof sectionItems)[number]["key"];
 
-const desktopPrimarySectionKeys = [
-  "draw",
-  "profile",
-  "bag",
-  "formation",
-  "pve",
-  "synthesize",
-  "tasks",
-] as const satisfies readonly SectionKey[];
+const sectionItemMap = new Map<SectionKey, SectionItem>(
+  sectionItems.map((item) => [item.key, item]),
+);
 
-const desktopPrimaryItems = sectionItems.filter((item) =>
-  desktopPrimarySectionKeys.includes(
-    item.key as (typeof desktopPrimarySectionKeys)[number],
+const navGroups = [
+  {
+    key: "play",
+    label: "玩法",
+    icon: Sparkles,
+    sectionKeys: ["draw", "pve", "synthesize"],
+  },
+  {
+    key: "collection",
+    label: "收藏",
+    icon: Boxes,
+    sectionKeys: ["profile", "bag", "formation"],
+  },
+  {
+    key: "growth",
+    label: "成长",
+    icon: ShieldCheck,
+    sectionKeys: ["tasks", "season", "achievements", "leaderboard"],
+  },
+  {
+    key: "assets",
+    label: "资产",
+    icon: Coins,
+    sectionKeys: ["points", "trade", "redeem"],
+  },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  icon: SectionItem["icon"];
+  sectionKeys: readonly SectionKey[];
+}[];
+
+type NavGroup = (typeof navGroups)[number];
+type NavGroupKey = NavGroup["key"];
+
+const sectionGroupMap = new Map<SectionKey, NavGroupKey>(
+  navGroups.flatMap((group) =>
+    group.sectionKeys.map((key) => [key, group.key] as const),
   ),
 );
-const userMenuItems = sectionItems.filter(
-  (item) =>
-    !desktopPrimarySectionKeys.includes(
-      item.key as (typeof desktopPrimarySectionKeys)[number],
-    ),
-);
+
+function navItemsForGroup(group: NavGroup) {
+  return group.sectionKeys
+    .map((key) => sectionItemMap.get(key))
+    .filter((item): item is SectionItem => Boolean(item));
+}
 
 const leaderboardTabs: Array<{
   key: LeaderboardMetric;
@@ -201,6 +231,7 @@ const CARD_DESC_DETAIL_THRESHOLD = 34;
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
 const userMenuOpen = ref(false);
+const activeNavGroupKey = ref<NavGroupKey>("play");
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -363,6 +394,15 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const routeGroupKey = computed<NavGroupKey>(
+  () => sectionGroupMap.get(activeSection.value) || "play",
+);
+const activeNavGroup = computed<NavGroup>(
+  () =>
+    navGroups.find((group) => group.key === activeNavGroupKey.value) ||
+    navGroups[0],
+);
+const activeNavItems = computed(() => navItemsForGroup(activeNavGroup.value));
 const isPublicProfileRoute = computed(() => route.name === "publicProfile");
 const profileRouteUid = computed(() =>
   isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
@@ -383,9 +423,6 @@ const profileShareUrl = computed(() => {
   const uid = playerProfile.value?.user.uid || currentUser.value?.uid || "";
   return uid ? `${window.location.origin}/u/${encodeURIComponent(uid)}` : "";
 });
-const activeUserMenuSection = computed(() =>
-  userMenuItems.some((item) => item.key === activeSection.value),
-);
 const playerDisplayName = computed(
   () =>
     currentUser.value?.nickname ||
@@ -418,6 +455,19 @@ const profileFormation = computed(
     },
 );
 const profileSelectedSet = computed(() => new Set(profileSelectedUuids.value));
+
+function selectNavGroup(key: NavGroupKey) {
+  activeNavGroupKey.value = key;
+}
+
+watch(
+  routeGroupKey,
+  (key) => {
+    activeNavGroupKey.value = key;
+  },
+  { immediate: true },
+);
+
 const launchActivityInfo = computed(
   () => launchActivity.value?.activity || null,
 );
@@ -3290,15 +3340,29 @@ function leaderboardRankLabel(rank?: number) {
       </RouterLink>
 
       <nav class="desktop-nav" aria-label="页面导航">
-        <RouterLink
-          v-for="item in desktopPrimaryItems"
-          :key="item.key"
-          :to="{ name: item.key }"
-          :class="{ active: activeSection === item.key }"
-        >
-          <component :is="item.icon" :size="16" />
-          {{ item.label }}
-        </RouterLink>
+        <div class="nav-group-tabs" aria-label="导航分组">
+          <button
+            v-for="group in navGroups"
+            :key="group.key"
+            type="button"
+            :class="{ active: activeNavGroupKey === group.key }"
+            @click="selectNavGroup(group.key)"
+          >
+            <component :is="group.icon" :size="15" />
+            <span>{{ group.label }}</span>
+          </button>
+        </div>
+        <div class="nav-section-tabs" aria-label="分组入口">
+          <RouterLink
+            v-for="item in activeNavItems"
+            :key="item.key"
+            :to="{ name: item.key }"
+            :class="{ active: activeSection === item.key }"
+          >
+            <component :is="item.icon" :size="16" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+        </div>
       </nav>
 
       <div class="top-actions">
@@ -3333,7 +3397,6 @@ function leaderboardRankLabel(rank?: number) {
           <button
             class="user-menu-trigger"
             type="button"
-            :class="{ active: activeUserMenuSection }"
             :aria-expanded="userMenuOpen"
             aria-haspopup="true"
             :aria-label="isAuthed ? '玩家菜单' : '登录菜单'"
@@ -3374,20 +3437,6 @@ function leaderboardRankLabel(rank?: number) {
                 <span>星穹币余额</span>
                 <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
               </div>
-              <nav class="user-menu-links" aria-label="用户菜单导航">
-                <RouterLink
-                  v-for="item in userMenuItems"
-                  :key="item.key"
-                  class="user-menu-link"
-                  :to="{ name: item.key }"
-                  :class="{ active: activeSection === item.key }"
-                  role="menuitem"
-                  @click="userMenuOpen = false"
-                >
-                  <component :is="item.icon" :size="16" />
-                  {{ item.label }}
-                </RouterLink>
-              </nav>
               <button
                 class="user-menu-link danger"
                 type="button"
@@ -3446,6 +3495,18 @@ function leaderboardRankLabel(rank?: number) {
     </header>
 
     <main class="page">
+      <nav class="section-nav" aria-label="当前分组导航">
+        <RouterLink
+          v-for="item in activeNavItems"
+          :key="item.key"
+          :to="{ name: item.key }"
+          :class="{ active: activeSection === item.key }"
+        >
+          <component :is="item.icon" :size="16" />
+          <span>{{ item.label }}</span>
+        </RouterLink>
+      </nav>
+
       <section
         v-if="activeSection === 'draw'"
         class="hero-grid"
@@ -4261,7 +4322,7 @@ function leaderboardRankLabel(rank?: number) {
               @click="loadMoreUserCards"
             >
               <LoaderCircle v-if="busy.cardsMore" :size="16" class="spin" />
-              {{ busy.cardsMore ? "加载中" : "更多" }}
+              {{ busy.cardsMore ? "加载中" : "加载" }}
             </button>
             <span v-else class="load-more-done">已全部</span>
           </div>
@@ -6060,15 +6121,16 @@ function leaderboardRankLabel(rank?: number) {
     </main>
 
     <nav class="mobile-nav" aria-label="移动端导航">
-      <RouterLink
-        v-for="item in sectionItems"
-        :key="item.key"
-        :to="{ name: item.key }"
-        :class="{ active: activeSection === item.key }"
+      <button
+        v-for="group in navGroups"
+        :key="group.key"
+        type="button"
+        :class="{ active: activeNavGroupKey === group.key }"
+        @click="selectNavGroup(group.key)"
       >
-        <component :is="item.icon" :size="18" />
-        <span>{{ item.label }}</span>
-      </RouterLink>
+        <component :is="group.icon" :size="18" />
+        <span>{{ group.label }}</span>
+      </button>
     </nav>
 
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
