@@ -158,6 +158,43 @@ export interface UserCardsResponse {
   totalPages: number;
 }
 
+export interface ShowcaseCard {
+  position: number;
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  cardDesc?: string;
+  cardImage?: string;
+  cardLevel: CardRarity | string;
+  cardType: number;
+  poolId?: number;
+  cultivationLevel: number;
+  power: number;
+  locked: boolean;
+  obtainedAt?: string;
+}
+
+export interface PlayerProfileResponse {
+  user: {
+    uid: string;
+    nickname: string;
+    avatar: string;
+    cardCounts: Record<CardRarity, number>;
+    totalCards: number;
+    createdAt?: string | null;
+  };
+  formation: {
+    slotCount: number;
+    filledCount: number;
+    totalPower: number;
+  };
+  showcase: ShowcaseCard[];
+}
+
+export interface SaveShowcaseRequest {
+  cardUuids: string[];
+}
+
 export interface UserCatalogItem {
   key: string;
   card: CardItem;

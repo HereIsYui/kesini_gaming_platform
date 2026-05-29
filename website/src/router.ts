@@ -11,6 +11,8 @@ const PageShell = {
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/draw" },
   { path: "/draw", name: "draw", component: PageShell },
+  { path: "/profile", name: "profile", component: PageShell },
+  { path: "/u/:uid", name: "publicProfile", component: PageShell },
   { path: "/result", redirect: "/draw" },
   { path: "/bag", name: "bag", component: PageShell },
   { path: "/formation", name: "formation", component: PageShell },

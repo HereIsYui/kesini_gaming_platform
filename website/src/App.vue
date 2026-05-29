@@ -78,6 +78,8 @@ import type {
   PveOverview,
   PveRecordsResponse,
   PveStage,
+  PlayerProfileResponse,
+  SaveShowcaseRequest,
   SiteConfig,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
@@ -113,6 +115,7 @@ const rarityRank: Record<string, number> = {
 
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
+  { key: "profile", label: "主页", icon: UserRound },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "formation", label: "阵容", icon: Swords },
   { key: "pve", label: "关卡", icon: Trophy },
@@ -130,6 +133,7 @@ type SectionKey = (typeof sectionItems)[number]["key"];
 
 const desktopPrimarySectionKeys = [
   "draw",
+  "profile",
   "bag",
   "formation",
   "pve",
@@ -219,6 +223,10 @@ const drawHistory = ref<DrawHistoryResponse | null>(null);
 const drawHistoryOpen = ref(false);
 const drawHistoryPage = ref(1);
 const userCards = ref<UserCardsResponse | null>(null);
+const playerProfile = ref<PlayerProfileResponse | null>(null);
+const profileCandidates = ref<UserCardsResponse["list"]>([]);
+const profilePickerOpen = ref(false);
+const profileSelectedUuids = ref<string[]>([]);
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -313,6 +321,9 @@ const busy = reactive({
   auth: false,
   drawing: false,
   assets: false,
+  profile: false,
+  profileCandidates: false,
+  profileSaving: false,
   cardsMore: false,
   leaderboard: false,
   points: false,
@@ -345,9 +356,32 @@ const achievementToastTimers = new Map<number, number>();
 
 const isAuthed = computed(() => Boolean(token.value));
 const activeSection = computed<SectionKey>(() => {
+  if (route.name === "publicProfile") {
+    return "profile";
+  }
   return sectionItems.some((item) => item.key === route.name)
     ? (route.name as SectionKey)
     : "draw";
+});
+const isPublicProfileRoute = computed(() => route.name === "publicProfile");
+const profileRouteUid = computed(() =>
+  isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
+);
+const profileDisplayName = computed(
+  () => playerProfile.value?.user.nickname || playerProfile.value?.user.uid || "玩家主页",
+);
+const profileInitial = computed(() =>
+  String(profileDisplayName.value || "?").trim().slice(0, 1).toUpperCase(),
+);
+const profileCanEdit = computed(
+  () =>
+    Boolean(isAuthed.value) &&
+    Boolean(currentUser.value?.uid) &&
+    playerProfile.value?.user.uid === currentUser.value?.uid,
+);
+const profileShareUrl = computed(() => {
+  const uid = playerProfile.value?.user.uid || currentUser.value?.uid || "";
+  return uid ? `${window.location.origin}/u/${encodeURIComponent(uid)}` : "";
 });
 const activeUserMenuSection = computed(() =>
   userMenuItems.some((item) => item.key === activeSection.value),
@@ -368,6 +402,22 @@ const playerInitial = computed(() =>
 const playerUidLabel = computed(() =>
   currentUser.value?.uid ? `UID ${currentUser.value.uid}` : "身份已验证",
 );
+const profileCardCountRows = computed(() =>
+  rarityOrder.map((rarity) => ({
+    rarity,
+    count: playerProfile.value?.user.cardCounts?.[rarity] || 0,
+  })),
+);
+const profileShowcase = computed(() => playerProfile.value?.showcase || []);
+const profileFormation = computed(
+  () =>
+    playerProfile.value?.formation || {
+      slotCount: 3,
+      filledCount: 0,
+      totalPower: 0,
+    },
+);
+const profileSelectedSet = computed(() => new Set(profileSelectedUuids.value));
 const launchActivityInfo = computed(
   () => launchActivity.value?.activity || null,
 );
@@ -831,6 +881,9 @@ onMounted(async () => {
   if (isAuthed.value) {
     await loadPrivateData();
   }
+  if (activeSection.value === "profile") {
+    await loadPlayerProfile();
+  }
 });
 
 watch(
@@ -857,6 +910,9 @@ watch(activePoolId, async (poolId) => {
 
 watch(activeSection, async (section) => {
   userMenuOpen.value = false;
+  if (section === "profile") {
+    await loadPlayerProfile();
+  }
   if (section === "synthesize") {
     await loadUserCatalog();
   }
@@ -873,6 +929,15 @@ watch(activeSection, async (section) => {
     await Promise.all([loadPveStages(), loadPveRecords()]);
   }
 });
+
+watch(
+  () => [route.name, String(route.params.uid || ""), token.value],
+  async () => {
+    if (activeSection.value === "profile") {
+      await loadPlayerProfile();
+    }
+  },
+);
 
 function notify(type: FeedbackType, text: string) {
   feedback.value = { type, text };
@@ -971,13 +1036,13 @@ async function loginWithOpenId() {
 async function applyManualToken() {
   const value = manualToken.value.trim();
   if (!value) {
-    notify("error", "请输入用于调试的 JWT Token");
+    notify("error", "请输入临时凭证");
     return;
   }
   setToken(value);
   token.value = value;
   currentUser.value = null;
-  notify("info", "Token 已写入，正在加载玩家资产");
+  notify("info", "正在加载资产");
   await loadPrivateData();
   userMenuOpen.value = false;
 }
@@ -992,6 +1057,10 @@ function logout() {
   drawHistoryOpen.value = false;
   drawHistoryPage.value = 1;
   userCards.value = null;
+  playerProfile.value = null;
+  profileCandidates.value = [];
+  profilePickerOpen.value = false;
+  profileSelectedUuids.value = [];
   formation.value = null;
   formationCandidates.value = [];
   formationPickerOpen.value = false;
@@ -1150,6 +1219,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadUserCards(),
+    activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1294,6 +1364,135 @@ async function loadUserCards(options: { append?: boolean } = {}) {
     } else {
       busy.assets = false;
     }
+  }
+}
+
+async function loadPlayerProfile() {
+  if (isPublicProfileRoute.value && !profileRouteUid.value) {
+    playerProfile.value = null;
+    return;
+  }
+  if (!isPublicProfileRoute.value && !isAuthed.value) {
+    playerProfile.value = null;
+    return;
+  }
+
+  busy.profile = true;
+  try {
+    playerProfile.value = await request<PlayerProfileResponse>(
+      isPublicProfileRoute.value
+        ? `/profile/${encodeURIComponent(profileRouteUid.value)}`
+        : "/profile/me",
+    );
+  } catch (error) {
+    playerProfile.value = null;
+    if (activeSection.value === "profile") {
+      notify("error", getErrorMessage(error));
+    }
+  } finally {
+    busy.profile = false;
+  }
+}
+
+async function loadProfileCandidates() {
+  if (!isAuthed.value) {
+    profileCandidates.value = [];
+    return;
+  }
+  busy.profileCandidates = true;
+  try {
+    const data = await request<UserCardsResponse>(
+      `/card/user/cards${toQuery({
+        grouped: false,
+        page: 1,
+        pageSize: 100,
+      })}`,
+    );
+    profileCandidates.value = data.list || [];
+  } catch (error) {
+    profileCandidates.value = [];
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.profileCandidates = false;
+  }
+}
+
+async function openProfilePicker() {
+  if (!profileCanEdit.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  profileSelectedUuids.value = profileShowcase.value.map((card) => card.uuid);
+  profilePickerOpen.value = true;
+  await loadProfileCandidates();
+}
+
+function closeProfilePicker() {
+  if (busy.profileSaving) {
+    return;
+  }
+  profilePickerOpen.value = false;
+  profileSelectedUuids.value = [];
+}
+
+function isProfileCandidateSelected(card: UserCardsResponse["list"][number]) {
+  const uuid = candidateUuid(card);
+  return Boolean(uuid && profileSelectedSet.value.has(uuid));
+}
+
+function toggleProfileCandidate(card: UserCardsResponse["list"][number]) {
+  const uuid = candidateUuid(card);
+  if (!uuid) {
+    return;
+  }
+  if (profileSelectedSet.value.has(uuid)) {
+    profileSelectedUuids.value = profileSelectedUuids.value.filter(
+      (item) => item !== uuid,
+    );
+    return;
+  }
+  if (profileSelectedUuids.value.length >= 6) {
+    notify("info", "最多 6 张");
+    return;
+  }
+  profileSelectedUuids.value = [...profileSelectedUuids.value, uuid];
+}
+
+async function saveProfileShowcase() {
+  if (!profileCanEdit.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  busy.profileSaving = true;
+  try {
+    const payload: SaveShowcaseRequest = {
+      cardUuids: [...profileSelectedUuids.value],
+    };
+    playerProfile.value = await request<PlayerProfileResponse>(
+      "/profile/showcase",
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    );
+    profilePickerOpen.value = false;
+    notify("success", "展示已保存");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.profileSaving = false;
+  }
+}
+
+async function copyProfileLink() {
+  if (!profileShareUrl.value) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(profileShareUrl.value);
+    notify("success", "链接已复制");
+  } catch {
+    notify("error", "复制失败");
   }
 }
 
@@ -2086,6 +2285,11 @@ function closeResultModal() {
 function cardIntroText(desc?: string | null) {
   const text = String(desc || "").trim();
   return text || "暂无介绍";
+}
+
+function shortCardIntro(desc?: string | null) {
+  const text = cardIntroText(desc);
+  return text.length > 15 ? `${text.slice(0, 15)}…` : text;
 }
 
 function hasCardIntroDetail(desc?: string | null) {
@@ -3217,13 +3421,13 @@ function leaderboardRankLabel(rank?: number) {
                     class="spin"
                   />
                   <LogIn v-else :size="18" />
-                  使用 OpenID 登录
+                  登录
                 </button>
                 <label class="token-box debug-token-box compact">
-                  <span>本地调试 Token</span>
+                  <span>临时凭证</span>
                   <textarea
                     v-model="manualToken"
-                    placeholder="粘贴玩家 JWT，仅保存在当前浏览器"
+                    placeholder="粘贴凭证"
                   ></textarea>
                 </label>
                 <button
@@ -3232,7 +3436,7 @@ function leaderboardRankLabel(rank?: number) {
                   @click="applyManualToken"
                 >
                   <ShieldCheck :size="18" />
-                  使用 Token 进入
+                  进入
                 </button>
               </div>
             </template>
@@ -3518,13 +3722,13 @@ function leaderboardRankLabel(rank?: number) {
                 class="spin"
               />
               <LogIn v-else :size="18" />
-              使用 OpenID 登录
+              登录
             </button>
             <label class="token-box debug-token-box">
-              <span>本地调试 Token</span>
+              <span>临时凭证</span>
               <textarea
                 v-model="manualToken"
-                placeholder="粘贴玩家 JWT，仅保存在当前浏览器"
+                placeholder="粘贴凭证"
               ></textarea>
             </label>
             <button
@@ -3533,10 +3737,182 @@ function leaderboardRankLabel(rank?: number) {
               @click="applyManualToken"
             >
               <ShieldCheck :size="18" />
-              使用 Token 进入
+              进入
             </button>
           </div>
         </aside>
+      </section>
+
+      <section
+        v-if="activeSection === 'profile'"
+        class="panel profile-panel"
+        data-section="profile"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">
+              {{ profileCanEdit ? "我的主页" : "玩家主页" }}
+            </p>
+            <h2>{{ profileDisplayName }}</h2>
+          </div>
+          <div class="profile-actions">
+            <button
+              v-if="profileCanEdit"
+              class="primary-action compact"
+              type="button"
+              :disabled="busy.profile || busy.profileCandidates"
+              @click="openProfilePicker"
+            >
+              <Package :size="16" />
+              编辑
+            </button>
+            <button
+              v-if="profileShareUrl"
+              class="secondary-action compact"
+              type="button"
+              @click="copyProfileLink"
+            >
+              <Share2 :size="16" />
+              复制
+            </button>
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.profile"
+              @click="loadPlayerProfile"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.profile }" />
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!isPublicProfileRoute && !isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>登录后查看主页</strong>
+          <span>展示卡片和战力。</span>
+        </div>
+        <div v-else-if="busy.profile && !playerProfile" class="empty-state">
+          <LoaderCircle :size="30" class="spin" />
+          <strong>正在读取主页</strong>
+          <span>稍候片刻</span>
+        </div>
+        <div v-else-if="!playerProfile" class="empty-state">
+          <UserRound :size="30" />
+          <strong>暂无主页</strong>
+          <span>玩家资料未找到。</span>
+        </div>
+        <template v-else>
+          <div class="profile-hero">
+            <div class="profile-avatar">
+              <img
+                v-if="playerProfile.user.avatar"
+                :src="playerProfile.user.avatar"
+                :alt="profileDisplayName"
+              />
+              <span v-else>{{ profileInitial }}</span>
+            </div>
+            <div>
+              <p class="eyebrow">玩家名片</p>
+              <h3>{{ profileDisplayName }}</h3>
+              <span>UID {{ playerProfile.user.uid }}</span>
+            </div>
+          </div>
+
+          <div class="profile-summary">
+            <article>
+              <small>收藏</small>
+              <strong>{{ playerProfile.user.totalCards }}</strong>
+            </article>
+            <article>
+              <small>展示</small>
+              <strong>{{ profileShowcase.length }}</strong>
+            </article>
+            <article>
+              <small>阵容</small>
+              <strong>{{ profileFormation.totalPower }}</strong>
+            </article>
+            <article>
+              <small>上阵</small>
+              <strong>
+                {{ profileFormation.filledCount }}/{{ profileFormation.slotCount }}
+              </strong>
+            </article>
+          </div>
+
+          <div class="profile-rarity-strip" aria-label="稀有度收藏">
+            <span
+              v-for="row in profileCardCountRows"
+              :key="row.rarity"
+              class="summary-pill"
+              :class="rarityClass(row.rarity)"
+            >
+              {{ row.rarity }} {{ row.count }}
+            </span>
+          </div>
+
+          <section class="profile-block">
+            <div class="section-title-row">
+              <div>
+                <p class="eyebrow">展示墙</p>
+                <h3>精选卡片</h3>
+              </div>
+            </div>
+            <div v-if="profileShowcase.length === 0" class="empty-state compact">
+              <Package :size="26" />
+              <strong>暂无展示</strong>
+              <span>公开主页会展示精选卡片。</span>
+            </div>
+            <div v-else class="showcase-grid">
+              <article
+                v-for="card in profileShowcase"
+                :key="card.uuid"
+                class="result-card showcase-card"
+                :class="rarityClass(card.cardLevel)"
+              >
+                <div class="card-face">
+                  <div
+                    class="card-media-frame"
+                    :class="{ 'has-media': hasCardMedia(card.cardImage) }"
+                  >
+                    <video
+                      v-if="isCardVideo(card.cardImage)"
+                      class="card-art-media"
+                      :src="cardMediaUrl(card.cardImage)"
+                      muted
+                      loop
+                      autoplay
+                      playsinline
+                      @error="hideBrokenCardMedia"
+                    />
+                    <img
+                      v-else-if="cardMediaUrl(card.cardImage)"
+                      class="card-art-media"
+                      :src="cardMediaUrl(card.cardImage)"
+                      :alt="card.cardName"
+                      @error="hideBrokenCardMedia"
+                    />
+                    <div class="card-sigil"></div>
+                    <div class="result-card-top">
+                      <span class="rarity-badge">{{ card.cardLevel }}</span>
+                      <span class="card-type-pill">
+                        {{ cardTypeLabel(card.cardType) }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="card-content">
+                    <h3 class="card-name">{{ card.cardName }}</h3>
+                    <p>{{ shortCardIntro(card.cardDesc) }}</p>
+                    <div class="tag-row">
+                      <span>Lv.{{ card.cultivationLevel || 1 }}</span>
+                      <span>战力 {{ card.power || 0 }}</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </template>
       </section>
 
       <section
@@ -6073,6 +6449,136 @@ function leaderboardRankLabel(rank?: number) {
               <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
               <Coins v-else :size="18" />
               确认充值
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="profilePickerOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeProfilePicker"
+      >
+        <section
+          class="trade-listing-modal profile-picker-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="选择展示卡片"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">展示墙</p>
+              <h2>选择卡片</h2>
+              <span>{{ profileSelectedUuids.length }}/6</span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.profileSaving"
+              @click="closeProfilePicker"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body profile-picker-body">
+            <div v-if="busy.profileCandidates" class="empty-state compact">
+              <LoaderCircle :size="26" class="spin" />
+              <strong>正在读取背包</strong>
+              <span>稍候片刻</span>
+            </div>
+            <div
+              v-else-if="profileCandidates.length === 0"
+              class="empty-state compact"
+            >
+              <Package :size="26" />
+              <strong>暂无卡片</strong>
+              <span>获得卡片后可展示。</span>
+            </div>
+            <div v-else class="profile-candidate-list">
+              <article
+                v-for="card in profileCandidates"
+                :key="candidateUuid(card) || `${card.cardId}-${card.cardName}`"
+                class="profile-candidate"
+                :class="[
+                  rarityClass(card.cardLevel),
+                  { selected: isProfileCandidateSelected(card) },
+                ]"
+              >
+                <div
+                  class="profile-candidate-media"
+                  :class="{ 'has-media': hasCardMedia(card.cardImage) }"
+                >
+                  <video
+                    v-if="isCardVideo(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(card.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(card.cardImage)"
+                    :alt="card.cardName"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <span class="rarity-badge">{{ card.cardLevel }}</span>
+                </div>
+                <div class="profile-candidate-body">
+                  <strong>{{ card.cardName }}</strong>
+                  <span>Lv.{{ card.cultivationLevel || 1 }}</span>
+                  <div class="tag-row">
+                    <span>战力 {{ card.power || 0 }}</span>
+                    <span v-if="card.locked">已锁定</span>
+                  </div>
+                </div>
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="!candidateUuid(card) || busy.profileSaving"
+                  @click="toggleProfileCandidate(card)"
+                >
+                  {{ isProfileCandidateSelected(card) ? "已选" : "选择" }}
+                </button>
+              </article>
+            </div>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.profileSaving"
+              @click="closeProfilePicker"
+            >
+              取消
+            </button>
+            <button
+              class="danger-action"
+              type="button"
+              :disabled="busy.profileSaving || profileSelectedUuids.length === 0"
+              @click="profileSelectedUuids = []"
+            >
+              清空
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.profileSaving"
+              @click="saveProfileShowcase"
+            >
+              <LoaderCircle
+                v-if="busy.profileSaving"
+                :size="18"
+                class="spin"
+              />
+              <Package v-else :size="18" />
+              保存
             </button>
           </footer>
         </section>
