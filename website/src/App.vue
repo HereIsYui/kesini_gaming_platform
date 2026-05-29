@@ -245,6 +245,7 @@ const profileCandidates = ref<UserCardsResponse["list"]>([]);
 const profilePickerOpen = ref(false);
 const profileSelectedUuids = ref<string[]>([]);
 const friendsOverview = ref<FriendsOverviewResponse | null>(null);
+const friendsError = ref("");
 const friendTargetUid = ref("");
 const friendActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
@@ -461,6 +462,16 @@ const profileFriendRelation = computed<FriendRelationRecord | null>(() => {
     null
   );
 });
+const isProfileFriendIncoming = computed(() =>
+  incomingFriendRequests.value.some(
+    (item) => item.id === profileFriendRelation.value?.id,
+  ),
+);
+const isProfileFriendOutgoing = computed(() =>
+  outgoingFriendRequests.value.some(
+    (item) => item.id === profileFriendRelation.value?.id,
+  ),
+);
 const showProfileFriendAction = computed(
   () =>
     Boolean(isAuthed.value) &&
@@ -474,11 +485,28 @@ const profileFriendActionLabel = computed(() => {
     return "已添加";
   }
   if (relation?.status === "pending") {
-    return outgoingFriendRequests.value.some((item) => item.id === relation.id)
-      ? "已申请"
-      : "通过";
+    return isProfileFriendOutgoing.value ? "已申请" : "通过";
   }
   return "添加";
+});
+const profileFriendStatusLabel = computed(() => {
+  if (!showProfileFriendAction.value) {
+    return "";
+  }
+  if (friendsError.value && !friendsOverview.value) {
+    return "";
+  }
+  if (busy.friends && !friendsOverview.value) {
+    return "读取中";
+  }
+  const relation = profileFriendRelation.value;
+  if (relation?.status === "accepted") {
+    return "好友";
+  }
+  if (relation?.status === "pending") {
+    return isProfileFriendIncoming.value ? "待通过" : "已申请";
+  }
+  return "未添加";
 });
 const profileFriendActionDisabled = computed(() => {
   const relation = profileFriendRelation.value;
@@ -486,7 +514,7 @@ const profileFriendActionDisabled = computed(() => {
     busy.friends ||
     friendActionBusy.value !== "" ||
     relation?.status === "accepted" ||
-    outgoingFriendRequests.value.some((item) => item.id === relation?.id)
+    isProfileFriendOutgoing.value
   );
 });
 
@@ -1160,6 +1188,7 @@ function logout() {
   profilePickerOpen.value = false;
   profileSelectedUuids.value = [];
   friendsOverview.value = null;
+  friendsError.value = "";
   friendTargetUid.value = "";
   friendActionBusy.value = "";
   formation.value = null;
@@ -1601,15 +1630,18 @@ async function copyProfileLink() {
 async function loadFriends(showError = activeSection.value === "friends") {
   if (!isAuthed.value) {
     friendsOverview.value = null;
+    friendsError.value = "";
     return;
   }
   busy.friends = true;
+  friendsError.value = "";
   try {
     friendsOverview.value = await request<FriendsOverviewResponse>("/friends");
   } catch (error) {
+    friendsError.value = getErrorMessage(error);
     friendsOverview.value = null;
     if (showError) {
-      notify("error", getErrorMessage(error));
+      notify("error", friendsError.value);
     }
   } finally {
     busy.friends = false;
@@ -4045,6 +4077,9 @@ function leaderboardRankLabel(rank?: number) {
               <p class="eyebrow">玩家名片</p>
               <h3>{{ profileDisplayName }}</h3>
               <span>UID {{ playerProfile.user.uid }}</span>
+              <span v-if="profileFriendStatusLabel" class="profile-status-pill">
+                {{ profileFriendStatusLabel }}
+              </span>
             </div>
           </div>
 
@@ -4196,6 +4231,14 @@ function leaderboardRankLabel(rank?: number) {
         <div v-else-if="busy.friends && !friendsOverview" class="skeleton-grid">
           <span v-for="item in 3" :key="item"></span>
         </div>
+        <div v-else-if="friendsError" class="empty-state">
+          <UsersRound :size="30" />
+          <strong>好友加载失败</strong>
+          <span>{{ friendsError }}</span>
+          <button class="secondary-action" type="button" @click="loadFriends()">
+            重试
+          </button>
+        </div>
         <template v-else>
           <div class="friends-summary">
             <article>
@@ -4302,6 +4345,15 @@ function leaderboardRankLabel(rank?: number) {
                     <span>UID {{ requestItem.user.uid }}</span>
                   </div>
                   <div class="friend-row-actions">
+                    <RouterLink
+                      class="secondary-action compact"
+                      :to="{
+                        name: 'publicProfile',
+                        params: { uid: requestItem.user.uid },
+                      }"
+                    >
+                      查看
+                    </RouterLink>
                     <button
                       class="primary-action compact"
                       type="button"
@@ -5770,11 +5822,15 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <div v-else class="leaderboard-board">
             <div class="podium-grid">
-              <article
+              <RouterLink
                 v-for="entry in podiumEntries"
                 :key="`podium-${activeLeaderboardMetric}-${entry.uid}`"
                 class="podium-card"
                 :class="`rank-${entry.rank}`"
+                :to="{
+                  name: 'publicProfile',
+                  params: { uid: entry.uid },
+                }"
               >
                 <span class="rank-badge">{{
                   leaderboardRankLabel(entry.rank)
@@ -5790,14 +5846,19 @@ function leaderboardRankLabel(rank?: number) {
                 <h3>{{ entry.nickname || entry.uid }}</h3>
                 <p>{{ entry.uid }}</p>
                 <strong>{{ formatLeaderboardValue(entry.value) }}</strong>
-              </article>
+              </RouterLink>
             </div>
 
             <div v-if="leaderboardRows.length" class="leaderboard-list">
-              <article
+              <RouterLink
                 v-for="entry in leaderboardRows"
                 :key="`${activeLeaderboardMetric}-${entry.uid}`"
+                class="leaderboard-row"
                 :class="{ mine: entry.uid === activeLeaderboardBoard?.me?.uid }"
+                :to="{
+                  name: 'publicProfile',
+                  params: { uid: entry.uid },
+                }"
               >
                 <b>{{ leaderboardRankLabel(entry.rank) }}</b>
                 <img
@@ -5813,7 +5874,7 @@ function leaderboardRankLabel(rank?: number) {
                   <span>{{ entry.uid }}</span>
                 </div>
                 <em>{{ formatLeaderboardValue(entry.value) }}</em>
-              </article>
+              </RouterLink>
             </div>
           </div>
 
@@ -6088,10 +6149,15 @@ function leaderboardRankLabel(rank?: number) {
               暂无排行记录
             </div>
             <div v-else class="season-rank-list">
-              <article
+              <RouterLink
                 v-for="entry in seasonLeaderboardRows.slice(0, 10)"
                 :key="entry.uid"
+                class="season-rank-row"
                 :class="{ mine: entry.uid === currentUser?.uid }"
+                :to="{
+                  name: 'publicProfile',
+                  params: { uid: entry.uid },
+                }"
               >
                 <b>{{ leaderboardRankLabel(entry.rank) }}</b>
                 <img
@@ -6107,7 +6173,7 @@ function leaderboardRankLabel(rank?: number) {
                   <span>UID {{ entry.uid }}</span>
                 </div>
                 <em>{{ entry.value }} 积分</em>
-              </article>
+              </RouterLink>
             </div>
           </section>
 

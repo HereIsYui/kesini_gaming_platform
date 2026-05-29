@@ -3290,6 +3290,20 @@ h3 {
   font-size: 13px;
 }
 
+.profile-status-pill {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 26px;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--primary-strong);
+  background: rgba(84, 216, 255, 0.12);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .profile-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4396,10 +4410,13 @@ h3 {
 }
 
 .podium-card,
-.leaderboard-list article {
+.leaderboard-list article,
+.leaderboard-list .leaderboard-row {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  text-decoration: none;
 }
 
 .podium-card {
@@ -4411,6 +4428,7 @@ h3 {
   overflow: hidden;
   padding: 18px;
   text-align: center;
+  text-decoration: none;
 }
 
 .podium-card::before {
@@ -4505,7 +4523,8 @@ h3 {
   gap: 9px;
 }
 
-.leaderboard-list article {
+.leaderboard-list article,
+.leaderboard-list .leaderboard-row {
   display: grid;
   grid-template-columns: 58px 38px minmax(0, 1fr) auto;
   gap: 10px;
@@ -4513,7 +4532,8 @@ h3 {
   padding: 11px 12px;
 }
 
-.leaderboard-list article.mine {
+.leaderboard-list article.mine,
+.leaderboard-list .leaderboard-row.mine {
   border-color: var(--border-strong);
   background: rgba(84, 216, 255, 0.1);
 }
@@ -4671,6 +4691,7 @@ h3 {
 }
 
 .season-rank-list article,
+.season-rank-list .season-rank-row,
 .season-record-list article {
   display: grid;
   gap: 10px;
@@ -4678,14 +4699,18 @@ h3 {
   border: 1px solid rgba(196, 220, 255, 0.12);
   border-radius: calc(var(--radius) - 1px);
   background: rgba(255, 255, 255, 0.045);
+  color: inherit;
   padding: 10px 12px;
+  text-decoration: none;
 }
 
-.season-rank-list article {
+.season-rank-list article,
+.season-rank-list .season-rank-row {
   grid-template-columns: 58px 38px minmax(0, 1fr) auto;
 }
 
-.season-rank-list article.mine {
+.season-rank-list article.mine,
+.season-rank-list .season-rank-row.mine {
   border-color: var(--border-strong);
   background: rgba(84, 216, 255, 0.1);
 }
@@ -6019,7 +6044,8 @@ h3 {
     justify-self: start;
   }
 
-  .leaderboard-list article {
+  .leaderboard-list article,
+  .leaderboard-list .leaderboard-row {
     grid-template-columns: 46px 34px minmax(0, 1fr);
   }
 
@@ -6027,7 +6053,8 @@ h3 {
     grid-column: 3;
   }
 
-  .season-rank-list article {
+  .season-rank-list article,
+  .season-rank-list .season-rank-row {
     grid-template-columns: 46px 34px minmax(0, 1fr);
   }
 
