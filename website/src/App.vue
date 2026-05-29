@@ -136,49 +136,24 @@ const sectionItemMap = new Map<SectionKey, SectionItem>(
   sectionItems.map((item) => [item.key, item]),
 );
 
-const navGroups = [
-  {
-    key: "play",
-    label: "玩法",
-    icon: Sparkles,
-    sectionKeys: ["draw", "pve", "synthesize"],
-  },
-  {
-    key: "collection",
-    label: "收藏",
-    icon: Boxes,
-    sectionKeys: ["bag", "formation"],
-  },
-  {
-    key: "growth",
-    label: "成长",
-    icon: ShieldCheck,
-    sectionKeys: ["tasks", "season", "achievements", "leaderboard"],
-  },
-] as const satisfies readonly {
-  key: string;
-  label: string;
-  icon: SectionItem["icon"];
-  sectionKeys: readonly SectionKey[];
-}[];
+const primaryNavSectionKeys = [
+  "draw",
+  "pve",
+  "synthesize",
+  "season",
+  "leaderboard",
+] as const satisfies readonly SectionKey[];
 
-type NavGroup = (typeof navGroups)[number];
-type NavGroupKey = NavGroup["key"];
-
-const sectionGroupMap = new Map<SectionKey, NavGroupKey>(
-  navGroups.flatMap((group) =>
-    group.sectionKeys.map((key) => [key, group.key] as const),
-  ),
-);
-
-function navItemsForGroup(group: NavGroup) {
-  return group.sectionKeys
-    .map((key) => sectionItemMap.get(key))
-    .filter((item): item is SectionItem => Boolean(item));
-}
+const primaryNavItems = primaryNavSectionKeys
+  .map((key) => sectionItemMap.get(key))
+  .filter((item): item is SectionItem => Boolean(item));
 
 const accountMenuSectionKeys = [
   "profile",
+  "bag",
+  "formation",
+  "tasks",
+  "achievements",
   "points",
   "trade",
   "redeem",
@@ -237,7 +212,6 @@ const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
 const userMenuOpen = ref(false);
 const userMenuHoverPaused = ref(false);
-const activeNavGroupKey = ref<NavGroupKey>("play");
 const manualToken = ref("");
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
@@ -400,15 +374,6 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
-const routeGroupKey = computed<NavGroupKey | null>(
-  () => sectionGroupMap.get(activeSection.value) || null,
-);
-const activeNavGroup = computed<NavGroup>(
-  () =>
-    navGroups.find((group) => group.key === activeNavGroupKey.value) ||
-    navGroups[0],
-);
-const activeNavItems = computed(() => navItemsForGroup(activeNavGroup.value));
 const isPublicProfileRoute = computed(() => route.name === "publicProfile");
 const profileRouteUid = computed(() =>
   isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
@@ -462,10 +427,6 @@ const profileFormation = computed(
 );
 const profileSelectedSet = computed(() => new Set(profileSelectedUuids.value));
 
-function selectNavGroup(key: NavGroupKey) {
-  activeNavGroupKey.value = key;
-}
-
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
   userMenuOpen.value = !userMenuOpen.value;
@@ -482,16 +443,6 @@ function closeUserMenu(event?: Event) {
 function resetUserMenuHover() {
   userMenuHoverPaused.value = false;
 }
-
-watch(
-  routeGroupKey,
-  (key) => {
-    if (key) {
-      activeNavGroupKey.value = key;
-    }
-  },
-  { immediate: true },
-);
 
 const launchActivityInfo = computed(
   () => launchActivity.value?.activity || null,
@@ -3365,29 +3316,15 @@ function leaderboardRankLabel(rank?: number) {
       </RouterLink>
 
       <nav class="desktop-nav" aria-label="页面导航">
-        <div class="nav-group-tabs" aria-label="导航分组">
-          <button
-            v-for="group in navGroups"
-            :key="group.key"
-            type="button"
-            :class="{ active: activeNavGroupKey === group.key }"
-            @click="selectNavGroup(group.key)"
-          >
-            <component :is="group.icon" :size="15" />
-            <span>{{ group.label }}</span>
-          </button>
-        </div>
-        <div class="nav-section-tabs" aria-label="分组入口">
-          <RouterLink
-            v-for="item in activeNavItems"
-            :key="item.key"
-            :to="{ name: item.key }"
-            :class="{ active: activeSection === item.key }"
-          >
-            <component :is="item.icon" :size="16" />
-            <span>{{ item.label }}</span>
-          </RouterLink>
-        </div>
+        <RouterLink
+          v-for="item in primaryNavItems"
+          :key="item.key"
+          :to="{ name: item.key }"
+          :class="{ active: activeSection === item.key }"
+        >
+          <component :is="item.icon" :size="16" />
+          <span>{{ item.label }}</span>
+        </RouterLink>
       </nav>
 
       <div class="top-actions">
@@ -3520,18 +3457,6 @@ function leaderboardRankLabel(rank?: number) {
     </header>
 
     <main class="page">
-      <nav class="section-nav" aria-label="当前分组导航">
-        <RouterLink
-          v-for="item in activeNavItems"
-          :key="item.key"
-          :to="{ name: item.key }"
-          :class="{ active: activeSection === item.key }"
-        >
-          <component :is="item.icon" :size="16" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-      </nav>
-
       <section
         v-if="activeSection === 'draw'"
         class="hero-grid"
@@ -6164,16 +6089,15 @@ function leaderboardRankLabel(rank?: number) {
     </main>
 
     <nav class="mobile-nav" aria-label="移动端导航">
-      <button
-        v-for="group in navGroups"
-        :key="group.key"
-        type="button"
-        :class="{ active: activeNavGroupKey === group.key }"
-        @click="selectNavGroup(group.key)"
+      <RouterLink
+        v-for="item in primaryNavItems"
+        :key="item.key"
+        :to="{ name: item.key }"
+        :class="{ active: activeSection === item.key }"
       >
-        <component :is="group.icon" :size="18" />
-        <span>{{ group.label }}</span>
-      </button>
+        <component :is="item.icon" :size="18" />
+        <span>{{ item.label }}</span>
+      </RouterLink>
     </nav>
 
     <div v-if="feedback" class="toast" :class="feedback.type" role="status">
