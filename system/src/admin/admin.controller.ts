@@ -217,10 +217,6 @@ class RechargeConfigPatchDto {
   gold_finger_key?: string;
 
   @IsOptional()
-  @IsString()
-  fishpi_api_key?: string;
-
-  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

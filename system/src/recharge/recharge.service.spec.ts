@@ -155,13 +155,6 @@ describe("RechargeService", () => {
     await expect(service.recharge("u1", 10, "r2")).rejects.toThrow(
       "后台未配置鱼排金手指密钥",
     );
-
-    configRepository.findOne.mockResolvedValue(
-      createEnabledConfig({ enabled: true, fishpi_api_key: "" }),
-    );
-    await expect(service.recharge("u1", 10, "r3")).rejects.toThrow(
-      "后台未配置鱼排查询密钥",
-    );
   });
 
   it("非法金额会被拒绝", async () => {
@@ -381,7 +374,7 @@ describe("RechargeService", () => {
     );
   });
 
-  it("鱼排扣分成功后增加星穹币并写入成功记录", async () => {
+  it("鱼排查询密钥为空时仍会用新接口校验积分并完成充值", async () => {
     const user = { uid: "u1", name: "fish-user", point: 20 };
     let savedRecord: any = null;
     const recordRepository = createRepository({
@@ -413,7 +406,9 @@ describe("RechargeService", () => {
         [
           RechargeConfig,
           createRepository({
-            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+            findOne: jest
+              .fn()
+              .mockResolvedValue(createEnabledConfig({ fishpi_api_key: "" })),
           }),
         ],
         [RechargeRecord, recordRepository],
@@ -443,7 +438,7 @@ describe("RechargeService", () => {
       }),
     );
     expect(mockedAxios.get).toHaveBeenCalledWith(
-      "https://fishpi.cn/user/fish-user?apiKey=api-key",
+      "https://fishpi.cn/user/fish-user/point",
       expect.objectContaining({
         headers: expect.objectContaining({
           "User-Agent": "Kesini-Gacha-Platform/1.0",

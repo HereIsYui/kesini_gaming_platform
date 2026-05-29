@@ -19,7 +19,7 @@ export class RechargeConfig {
   @Column({ length: 255, default: "" })
   gold_finger_key: string;
 
-  // 鱼排开放 API Key，用于充值前查询用户鱼排积分
+  // 历史兼容字段；当前充值前积分查询接口不再需要 API Key
   @Column({ length: 255, default: "" })
   fishpi_api_key: string;
 

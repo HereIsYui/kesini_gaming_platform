@@ -50,7 +50,8 @@ export class RechargeService {
       maxAmount: Number(config.max_amount || 9999),
       ratio: this.getRechargeRatio(config),
       hasGoldFingerKey: Boolean(String(config.gold_finger_key || "").trim()),
-      hasFishpiApiKey: Boolean(String(config.fishpi_api_key || "").trim()),
+      // 兼容旧前端字段，新鱼排积分查询接口不再需要 API Key。
+      hasFishpiApiKey: true,
     };
   }
 
@@ -115,11 +116,8 @@ export class RechargeService {
 
     let thirdPartyResponse: unknown;
     try {
-      const balanceResponse = await this.callFishpiUserInfo(
-        config,
-        fishpiUserName,
-      );
-      const userPoint = this.extractFishpiUserPoint(balanceResponse);
+      const balanceResponse = await this.callFishpiPoint(fishpiUserName);
+      const userPoint = this.extractFishpiPoint(balanceResponse);
       this.assertFishpiBalance(userPoint, fishpiCost);
       const deductResponse = await this.callFishpiDeduct(
         config,
@@ -257,37 +255,6 @@ export class RechargeService {
     return saved;
   }
 
-  private async callFishpiUserInfo(config: RechargeConfig, userName: string) {
-    const apiKey = String(config.fishpi_api_key || "").trim();
-    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(
-      userName,
-    )}?apiKey=${encodeURIComponent(apiKey)}`;
-    try {
-      const response = await axios.get(endpoint, {
-        timeout: 10000,
-        headers: FISHPI_HEADERS,
-      });
-      if (
-        response.data?.code !== undefined &&
-        !this.isFishpiSuccess(response.data)
-      ) {
-        throw new Error(
-          this.getFishpiErrorMessage(response.data, "鱼排积分查询失败"),
-        );
-      }
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const message = this.getFishpiErrorMessage(
-          error.response?.data,
-          "鱼排积分查询失败",
-        );
-        throw new Error(message || error.message || "鱼排积分查询失败");
-      }
-      throw error;
-    }
-  }
-
   private async callFishpiPoint(userName: string) {
     const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(
       userName,
@@ -358,9 +325,6 @@ export class RechargeService {
     if (!String(config.gold_finger_key || "").trim()) {
       throw new Error("后台未配置鱼排金手指密钥");
     }
-    if (!String(config.fishpi_api_key || "").trim()) {
-      throw new Error("后台未配置鱼排查询密钥");
-    }
     if (amount < Number(config.min_amount || 1)) {
       throw new Error(`充值金额不能小于${config.min_amount}`);
     }
@@ -430,16 +394,6 @@ export class RechargeService {
       .replace(/\{amount\}/g, String(localAmount))
       .replace(/\{points\}/g, String(localAmount))
       .replace(/\{fishpiCost\}/g, String(fishpiCost));
-  }
-
-  private extractFishpiUserPoint(data: any): number {
-    const payload = data?.data || data;
-    const rawPoint = payload?.userPoint;
-    const point = Number(rawPoint);
-    if (!Number.isFinite(point)) {
-      throw new Error("鱼排积分查询结果缺少 userPoint");
-    }
-    return point;
   }
 
   private extractFishpiPoint(data: any): number {

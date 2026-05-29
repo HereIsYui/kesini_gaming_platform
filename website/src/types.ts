@@ -469,7 +469,6 @@ export interface RechargeConfig {
   maxAmount: number;
   ratio: number;
   hasGoldFingerKey: boolean;
-  hasFishpiApiKey: boolean;
 }
 
 export interface RechargePointsResponse {

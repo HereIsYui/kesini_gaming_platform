@@ -2345,10 +2345,6 @@ function openRechargeModal() {
     notify("error", "后台尚未配置充值密钥");
     return;
   }
-  if (!rechargeConfig.value.hasFishpiApiKey) {
-    notify("error", "后台尚未配置鱼排查询密钥");
-    return;
-  }
   rechargeAmount.value = Math.max(
     rechargeConfig.value.minAmount || 1,
     Math.min(

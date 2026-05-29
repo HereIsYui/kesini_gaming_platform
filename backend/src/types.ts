@@ -227,9 +227,6 @@ export interface RechargeConfigRecord {
   hasGoldFingerKey?: boolean;
   maskedGoldFingerKey?: string;
   gold_finger_key?: string;
-  hasFishpiApiKey?: boolean;
-  maskedFishpiApiKey?: string;
-  fishpi_api_key?: string;
   createdAt?: string;
   updatedAt?: string;
 }
