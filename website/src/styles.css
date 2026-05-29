@@ -5349,6 +5349,10 @@ h3 {
   background: rgba(8, 12, 23, 0.94);
 }
 
+:root[data-theme="light"] .result-modal-actions {
+  background: rgba(255, 255, 255, 0.96);
+}
+
 .draw-result-modal .result-modal-head,
 .draw-result-modal .result-modal-actions {
   gap: 10px;
