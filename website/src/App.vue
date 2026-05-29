@@ -63,6 +63,7 @@ import type {
   DrawHistoryResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
+  FishpiPointResponse,
   FriendRelationRecord,
   FriendsOverviewResponse,
   FormationOverview,
@@ -236,6 +237,8 @@ const poolDetailError = ref("");
 const poolDetailPool = ref<PoolInfo | null>(null);
 const poolDetailCards = ref<CardItem[]>([]);
 const stats = ref<UserGachaStats | null>(null);
+const fishpiPoint = ref<FishpiPointResponse | null>(null);
+const fishpiPointError = ref("");
 const drawHistory = ref<DrawHistoryResponse | null>(null);
 const drawHistoryOpen = ref(false);
 const drawHistoryPage = ref(1);
@@ -341,6 +344,7 @@ const busy = reactive({
   public: false,
   auth: false,
   drawing: false,
+  fishpiPoint: false,
   assets: false,
   profile: false,
   profileCandidates: false,
@@ -391,9 +395,11 @@ const profileRouteUid = computed(() =>
 );
 const profileDisplayName = computed(
   () =>
-    playerProfile.value?.user.nickname ||
-    playerProfile.value?.user.uid ||
-    "玩家主页",
+    publicPlayerName(
+      playerProfile.value?.user.nickname,
+      playerProfile.value?.user.uid,
+      "玩家主页",
+    ),
 );
 const profileInitial = computed(() =>
   String(profileDisplayName.value || "?")
@@ -412,11 +418,14 @@ const profileShareUrl = computed(() => {
   return uid ? `${window.location.origin}/u/${encodeURIComponent(uid)}` : "";
 });
 const playerDisplayName = computed(
-  () =>
-    currentUser.value?.nickname ||
-    currentUser.value?.name ||
-    currentUser.value?.uid ||
-    "已登录玩家",
+  () => {
+    const uid = currentUser.value?.uid;
+    return publicPlayerName(
+      currentUser.value?.nickname,
+      uid,
+      publicPlayerName(currentUser.value?.name, uid, "已登录玩家"),
+    );
+  },
 );
 const playerInitial = computed(() =>
   String(playerDisplayName.value || "?")
@@ -424,9 +433,19 @@ const playerInitial = computed(() =>
     .slice(0, 1)
     .toUpperCase(),
 );
-const playerUidLabel = computed(() =>
-  currentUser.value?.uid ? `UID ${currentUser.value.uid}` : "身份已验证",
-);
+const playerStatusLabel = computed(() => "身份已验证");
+const fishpiPointLabel = computed(() => {
+  if (busy.fishpiPoint && !fishpiPoint.value) {
+    return "同步中";
+  }
+  if (fishpiPoint.value) {
+    return String(Math.floor(fishpiPoint.value.point));
+  }
+  if (fishpiPointError.value) {
+    return "未同步";
+  }
+  return "--";
+});
 const profileCardCountRows = computed(() =>
   rarityOrder.map((rarity) => ({
     rarity,
@@ -1073,6 +1092,16 @@ function notify(type: FeedbackType, text: string) {
   }, 4200);
 }
 
+function publicPlayerName(
+  name?: string | null,
+  uid?: string | null,
+  fallback = "玩家",
+) {
+  const value = String(name || "").trim();
+  const rawUid = String(uid || "").trim();
+  return value && value !== rawUid ? value : fallback;
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
 }
@@ -1179,6 +1208,8 @@ function logout() {
   token.value = "";
   currentUser.value = null;
   stats.value = null;
+  fishpiPoint.value = null;
+  fishpiPointError.value = "";
   drawHistory.value = null;
   drawHistoryOpen.value = false;
   drawHistoryPage.value = 1;
@@ -1348,6 +1379,7 @@ async function loadPrivateData() {
   }
   const results = await Promise.allSettled([
     loadStats(),
+    loadFishpiPoint(),
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
@@ -1376,6 +1408,28 @@ async function loadPrivateData() {
 
 async function loadStats() {
   stats.value = await request<UserGachaStats>("/card/stats");
+}
+
+async function loadFishpiPoint(showError = false) {
+  if (!isAuthed.value) {
+    fishpiPoint.value = null;
+    fishpiPointError.value = "";
+    return;
+  }
+  busy.fishpiPoint = true;
+  fishpiPointError.value = "";
+  try {
+    fishpiPoint.value =
+      await request<FishpiPointResponse>("/recharge/fishpi-point");
+  } catch (error) {
+    fishpiPoint.value = null;
+    fishpiPointError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", fishpiPointError.value);
+    }
+  } finally {
+    busy.fishpiPoint = false;
+  }
 }
 
 async function loadDrawHistory(page = drawHistoryPage.value) {
@@ -1655,7 +1709,7 @@ async function sendFriendRequest(uid: string) {
     return false;
   }
   if (!targetUid) {
-    notify("error", "请输入 UID");
+    notify("error", "请输入玩家名");
     return false;
   }
   friendActionBusy.value = `send:${targetUid}`;
@@ -3529,7 +3583,7 @@ function formatCosts(
 }
 
 function leaderboardInitial(entry: LeaderboardEntry) {
-  return (entry.nickname || entry.uid || "?").slice(0, 1).toUpperCase();
+  return publicPlayerName(entry.nickname, entry.uid).slice(0, 1).toUpperCase();
 }
 
 function formatLeaderboardValue(value?: number) {
@@ -3636,12 +3690,20 @@ function leaderboardRankLabel(rank?: number) {
                 </span>
                 <div>
                   <strong>{{ playerDisplayName }}</strong>
-                  <small>{{ playerUidLabel }}</small>
+                  <small>{{ playerStatusLabel }}</small>
                 </div>
               </div>
-              <div class="user-menu-balance">
-                <span>星穹币余额</span>
-                <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
+              <div class="user-menu-balances">
+                <div class="user-menu-balance">
+                  <span>星穹币</span>
+                  <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
+                </div>
+                <div class="user-menu-balance">
+                  <span>鱼排积分</span>
+                  <strong :class="{ muted: fishpiPointError && !fishpiPoint }">
+                    {{ fishpiPointLabel }}
+                  </strong>
+                </div>
               </div>
               <nav class="user-menu-shortcuts" aria-label="快捷入口">
                 <RouterLink
@@ -3844,7 +3906,7 @@ function leaderboardRankLabel(rank?: number) {
             <div class="player-info">
               <p class="eyebrow">玩家身份</p>
               <h2>{{ playerDisplayName }}</h2>
-              <span>{{ playerUidLabel }}</span>
+              <span>{{ playerStatusLabel }}</span>
             </div>
             <span class="status-pill online">
               <span class="status-dot online"></span>
@@ -3865,7 +3927,7 @@ function leaderboardRankLabel(rank?: number) {
 
           <div v-if="isAuthed" class="point-card">
             <div class="point-card-head">
-              <span>星穹币余额</span>
+              <span>资产余额</span>
               <button
                 class="recharge-trigger"
                 type="button"
@@ -3876,7 +3938,18 @@ function leaderboardRankLabel(rank?: number) {
                 充值
               </button>
             </div>
-            <strong>{{ stats?.point || 0 }}</strong>
+            <div class="point-card-metrics">
+              <div>
+                <span>星穹币</span>
+                <strong>{{ stats?.point || 0 }}</strong>
+              </div>
+              <div>
+                <span>鱼排积分</span>
+                <strong :class="{ muted: fishpiPointError && !fishpiPoint }">
+                  {{ fishpiPointLabel }}
+                </strong>
+              </div>
+            </div>
             <small>
               当前卡池 {{ selectedPool?.pool_name || "未选择" }} · 充值
               {{ rechargeRangeLabel }}
@@ -4076,7 +4149,7 @@ function leaderboardRankLabel(rank?: number) {
             <div>
               <p class="eyebrow">玩家名片</p>
               <h3>{{ profileDisplayName }}</h3>
-              <span>UID {{ playerProfile.user.uid }}</span>
+              <span>{{ profileCanEdit ? "我的主页" : "公开主页" }}</span>
               <span v-if="profileFriendStatusLabel" class="profile-status-pill">
                 {{ profileFriendStatusLabel }}
               </span>
@@ -4200,7 +4273,7 @@ function leaderboardRankLabel(rank?: number) {
               class="friend-add-form"
               @submit.prevent="sendManualFriendRequest"
             >
-              <input v-model="friendTargetUid" placeholder="玩家 UID" />
+              <input v-model="friendTargetUid" placeholder="玩家名" />
               <button
                 class="primary-action compact"
                 type="submit"
@@ -4276,15 +4349,21 @@ function leaderboardRankLabel(rank?: number) {
                     <img
                       v-if="friend.user.avatar"
                       :src="friend.user.avatar"
-                      :alt="friend.user.nickname"
+                      :alt="publicPlayerName(friend.user.nickname, friend.user.uid)"
                     />
                     <span v-else>
-                      {{ friend.user.nickname.slice(0, 1).toUpperCase() }}
+                      {{
+                        publicPlayerName(friend.user.nickname, friend.user.uid)
+                          .slice(0, 1)
+                          .toUpperCase()
+                      }}
                     </span>
                   </span>
                   <div class="friend-info">
-                    <strong>{{ friend.user.nickname }}</strong>
-                    <span>UID {{ friend.user.uid }}</span>
+                    <strong>{{
+                      publicPlayerName(friend.user.nickname, friend.user.uid)
+                    }}</strong>
+                    <span>已添加</span>
                   </div>
                   <div class="friend-row-actions">
                     <RouterLink
@@ -4334,15 +4413,32 @@ function leaderboardRankLabel(rank?: number) {
                     <img
                       v-if="requestItem.user.avatar"
                       :src="requestItem.user.avatar"
-                      :alt="requestItem.user.nickname"
+                      :alt="
+                        publicPlayerName(
+                          requestItem.user.nickname,
+                          requestItem.user.uid,
+                        )
+                      "
                     />
                     <span v-else>
-                      {{ requestItem.user.nickname.slice(0, 1).toUpperCase() }}
+                      {{
+                        publicPlayerName(
+                          requestItem.user.nickname,
+                          requestItem.user.uid,
+                        )
+                          .slice(0, 1)
+                          .toUpperCase()
+                      }}
                     </span>
                   </span>
                   <div class="friend-info">
-                    <strong>{{ requestItem.user.nickname }}</strong>
-                    <span>UID {{ requestItem.user.uid }}</span>
+                    <strong>{{
+                      publicPlayerName(
+                        requestItem.user.nickname,
+                        requestItem.user.uid,
+                      )
+                    }}</strong>
+                    <span>待处理</span>
                   </div>
                   <div class="friend-row-actions">
                     <RouterLink
@@ -4402,15 +4498,32 @@ function leaderboardRankLabel(rank?: number) {
                     <img
                       v-if="requestItem.user.avatar"
                       :src="requestItem.user.avatar"
-                      :alt="requestItem.user.nickname"
+                      :alt="
+                        publicPlayerName(
+                          requestItem.user.nickname,
+                          requestItem.user.uid,
+                        )
+                      "
                     />
                     <span v-else>
-                      {{ requestItem.user.nickname.slice(0, 1).toUpperCase() }}
+                      {{
+                        publicPlayerName(
+                          requestItem.user.nickname,
+                          requestItem.user.uid,
+                        )
+                          .slice(0, 1)
+                          .toUpperCase()
+                      }}
                     </span>
                   </span>
                   <div class="friend-info">
-                    <strong>{{ requestItem.user.nickname }}</strong>
-                    <span>UID {{ requestItem.user.uid }}</span>
+                    <strong>{{
+                      publicPlayerName(
+                        requestItem.user.nickname,
+                        requestItem.user.uid,
+                      )
+                    }}</strong>
+                    <span>等待中</span>
                   </div>
                   <div class="friend-row-actions">
                     <RouterLink
@@ -5838,13 +5951,13 @@ function leaderboardRankLabel(rank?: number) {
                 <img
                   v-if="entry.avatar"
                   :src="entry.avatar"
-                  :alt="entry.nickname"
+                  :alt="publicPlayerName(entry.nickname, entry.uid)"
                 />
                 <span v-else class="avatar-fallback">{{
                   leaderboardInitial(entry)
                 }}</span>
-                <h3>{{ entry.nickname || entry.uid }}</h3>
-                <p>{{ entry.uid }}</p>
+                <h3>{{ publicPlayerName(entry.nickname, entry.uid) }}</h3>
+                <p>{{ activeLeaderboardTab.label }}</p>
                 <strong>{{ formatLeaderboardValue(entry.value) }}</strong>
               </RouterLink>
             </div>
@@ -5864,14 +5977,14 @@ function leaderboardRankLabel(rank?: number) {
                 <img
                   v-if="entry.avatar"
                   :src="entry.avatar"
-                  :alt="entry.nickname"
+                  :alt="publicPlayerName(entry.nickname, entry.uid)"
                 />
                 <span v-else class="avatar-fallback small">{{
                   leaderboardInitial(entry)
                 }}</span>
                 <div>
-                  <strong>{{ entry.nickname || entry.uid }}</strong>
-                  <span>{{ entry.uid }}</span>
+                  <strong>{{ publicPlayerName(entry.nickname, entry.uid) }}</strong>
+                  <span>{{ activeLeaderboardTab.label }}</span>
                 </div>
                 <em>{{ formatLeaderboardValue(entry.value) }}</em>
               </RouterLink>
@@ -6163,14 +6276,14 @@ function leaderboardRankLabel(rank?: number) {
                 <img
                   v-if="entry.avatar"
                   :src="entry.avatar"
-                  :alt="entry.nickname"
+                  :alt="publicPlayerName(entry.nickname, entry.uid)"
                 />
                 <span v-else class="avatar-fallback small">
                   {{ leaderboardInitial(entry) }}
                 </span>
                 <div>
-                  <strong>{{ entry.nickname || entry.uid }}</strong>
-                  <span>UID {{ entry.uid }}</span>
+                  <strong>{{ publicPlayerName(entry.nickname, entry.uid) }}</strong>
+                  <span>赛季积分</span>
                 </div>
                 <em>{{ entry.value }} 积分</em>
               </RouterLink>

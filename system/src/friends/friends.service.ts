@@ -53,14 +53,15 @@ export class FriendsService {
 
   async sendRequest(uid: string, targetUid: string) {
     const requesterUid = this.normalizeUid(uid);
-    const receiverUid = this.normalizeUid(targetUid);
-    if (requesterUid === receiverUid) {
-      throw new Error("不能添加自己");
-    }
+    const targetValue = this.normalizeUid(targetUid);
 
     return this.dataSource.transaction(async (manager) => {
       await this.findUser(manager, requesterUid);
-      await this.findUser(manager, receiverUid);
+      const receiver = await this.findUserByUidOrName(manager, targetValue);
+      const receiverUid = receiver.uid;
+      if (requesterUid === receiverUid) {
+        throw new Error("不能添加自己");
+      }
 
       const repository = manager.getRepository(UserFriend);
       const relationKey = this.getRelationKey(requesterUid, receiverUid);
@@ -213,6 +214,19 @@ export class FriendsService {
     return user;
   }
 
+  private async findUserByUidOrName(
+    manager: DataSource | EntityManager,
+    value: string,
+  ) {
+    const user = await manager.getRepository(User).findOne({
+      where: [{ uid: value }, { name: value }],
+    });
+    if (!user) {
+      throw new Error("玩家不存在");
+    }
+    return user;
+  }
+
   private async getRelatedUsers(
     uid: string,
     relations: UserFriend[],
@@ -274,7 +288,7 @@ export class FriendsService {
   private toPublicUser(user: User) {
     return {
       uid: user.uid,
-      nickname: user.nickname || user.name || user.uid,
+      nickname: user.nickname || user.name || "玩家",
       avatar: user.avatar || "",
       createdAt: user.createdAt || null,
     };

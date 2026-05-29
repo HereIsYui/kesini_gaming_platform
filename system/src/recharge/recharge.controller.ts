@@ -45,6 +45,23 @@ export class RechargeController {
     );
   }
 
+  @Get("fishpi-point")
+  @UseGuards(JwtAuthGuard)
+  async getFishpiPoint(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      return ResponseDto.success(
+        await this.rechargeService.getFishpiPoint(user.uid),
+        "查询成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "查询失败");
+    }
+  }
+
   @Post("points")
   @UseGuards(JwtAuthGuard)
   async rechargePoints(

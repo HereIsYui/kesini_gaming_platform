@@ -630,7 +630,7 @@ export class SeasonService {
     return {
       rank: 0,
       uid,
-      nickname: user?.nickname || user?.name || uid,
+      nickname: user?.nickname || user?.name || "玩家",
       avatar: user?.avatar || "",
       value,
     };

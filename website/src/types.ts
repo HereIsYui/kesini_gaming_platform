@@ -480,6 +480,11 @@ export interface RechargePointsResponse {
   pointAfter: number;
 }
 
+export interface FishpiPointResponse {
+  userName: string;
+  point: number;
+}
+
 export interface BulkDecomposeFragment {
   itemId: number;
   itemName: string;

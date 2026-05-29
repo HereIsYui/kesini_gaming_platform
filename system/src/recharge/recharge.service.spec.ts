@@ -54,6 +54,83 @@ describe("RechargeService", () => {
     mockedAxios.get.mockResolvedValue({ data: { userPoint: 9999 } });
   });
 
+  it("查询当前用户鱼排积分", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "u1",
+        name: "fish-user",
+        point: 20,
+      }),
+    });
+    mockedAxios.get.mockResolvedValue({
+      data: { code: 0, data: { userPoint: 156625, userName: "fish-user" } },
+    });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [RechargeConfig, createRepository()],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("u1")).resolves.toEqual({
+      userName: "fish-user",
+      point: 156625,
+    });
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      "https://fishpi.cn/user/fish-user/point",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "Kesini-Gacha-Platform/1.0",
+        }),
+      }),
+    );
+  });
+
+  it("鱼排积分查询缺少用户名时返回错误", async () => {
+    const { service } = createService(
+      new Map<any, any>([
+        [RechargeConfig, createRepository()],
+        [RechargeRecord, createRepository()],
+        [
+          User,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({ uid: "u1", name: "" }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("u1")).rejects.toThrow(
+      "缺少鱼排用户名",
+    );
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it("鱼排积分查询结果异常时返回错误", async () => {
+    mockedAxios.get.mockResolvedValue({ data: { code: 0, data: {} } });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [RechargeConfig, createRepository()],
+        [RechargeRecord, createRepository()],
+        [
+          User,
+          createRepository({
+            findOne: jest
+              .fn()
+              .mockResolvedValue({ uid: "u1", name: "fish-user" }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("u1")).rejects.toThrow(
+      "鱼排积分查询结果异常",
+    );
+  });
+
   it("配置关闭或缺少金手指密钥时拒绝充值", async () => {
     const configRepository = createRepository({
       findOne: jest

@@ -27,6 +27,11 @@ export interface RechargeConfigView {
   hasFishpiApiKey: boolean;
 }
 
+export interface FishpiPointView {
+  userName: string;
+  point: number;
+}
+
 @Injectable()
 export class RechargeService {
   constructor(
@@ -46,6 +51,25 @@ export class RechargeService {
       ratio: this.getRechargeRatio(config),
       hasGoldFingerKey: Boolean(String(config.gold_finger_key || "").trim()),
       hasFishpiApiKey: Boolean(String(config.fishpi_api_key || "").trim()),
+    };
+  }
+
+  async getFishpiPoint(uid: string): Promise<FishpiPointView> {
+    const userRepository = this.dataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+
+    const fishpiUserName = String(user.name || "").trim();
+    if (!fishpiUserName) {
+      throw new Error("缺少鱼排用户名");
+    }
+
+    const data = await this.callFishpiPoint(fishpiUserName);
+    return {
+      userName: fishpiUserName,
+      point: this.extractFishpiPoint(data),
     };
   }
 
@@ -264,6 +288,36 @@ export class RechargeService {
     }
   }
 
+  private async callFishpiPoint(userName: string) {
+    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(
+      userName,
+    )}/point`;
+    try {
+      const response = await axios.get(endpoint, {
+        timeout: 10000,
+        headers: FISHPI_HEADERS,
+      });
+      if (
+        response.data?.code !== undefined &&
+        !this.isFishpiSuccess(response.data)
+      ) {
+        throw new Error(
+          this.getFishpiErrorMessage(response.data, "鱼排积分查询失败"),
+        );
+      }
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const message = this.getFishpiErrorMessage(
+          error.response?.data,
+          "鱼排积分查询失败",
+        );
+        throw new Error(message || error.message || "鱼排积分查询失败");
+      }
+      throw error;
+    }
+  }
+
   private async callFishpiDeduct(
     config: RechargeConfig,
     userName: string,
@@ -384,6 +438,19 @@ export class RechargeService {
     const point = Number(rawPoint);
     if (!Number.isFinite(point)) {
       throw new Error("鱼排积分查询结果缺少 userPoint");
+    }
+    return point;
+  }
+
+  private extractFishpiPoint(data: any): number {
+    const payload = data?.data ?? data;
+    const rawPoint =
+      typeof payload === "number"
+        ? payload
+        : payload?.userPoint ?? payload?.point ?? data?.userPoint ?? data?.point;
+    const point = Number(rawPoint);
+    if (!Number.isFinite(point)) {
+      throw new Error("鱼排积分查询结果异常");
     }
     return point;
   }

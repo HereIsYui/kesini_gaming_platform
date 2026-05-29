@@ -177,7 +177,7 @@ export class ProfileService {
     };
     return {
       uid: user.uid,
-      nickname: user.nickname || user.name || user.uid,
+      nickname: user.nickname || user.name || "玩家",
       avatar: user.avatar || "",
       cardCounts,
       totalCards: Object.values(cardCounts).reduce((sum, count) => sum + count, 0),

@@ -192,6 +192,21 @@ describe("FriendsService 好友系统", () => {
     expect((result!.user as any).point).toBeUndefined();
   });
 
+  it("可以通过玩家名发送好友申请", async () => {
+    const result = await service.sendRequest("u1", "name-u2");
+
+    expect(store.friends[0]).toMatchObject({
+      requester_uid: "u1",
+      receiver_uid: "u2",
+      relation_key: "u1::u2",
+      status: "pending",
+    });
+    expect(result).toMatchObject({
+      status: "pending",
+      user: { uid: "u2", nickname: "玩家u2" },
+    });
+  });
+
   it("不能重复申请、添加自己或添加不存在玩家", async () => {
     await service.sendRequest("u1", "u2");
 

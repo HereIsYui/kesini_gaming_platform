@@ -528,16 +528,24 @@ option {
   font-size: 12px;
 }
 
+.user-menu-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .user-menu-balance {
   display: flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  min-height: 54px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
   border: 1px solid rgba(150, 242, 255, 0.2);
   border-radius: calc(var(--radius) - 1px);
   background: rgba(84, 216, 255, 0.08);
-  padding: 0 12px;
+  padding: 8px 10px;
 }
 
 :root[data-theme="light"] .user-menu-balance {
@@ -551,8 +559,16 @@ option {
 }
 
 .user-menu-balance strong {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--primary-strong);
   font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-balance strong.muted {
+  color: var(--text-soft);
 }
 
 .user-menu-shortcuts {
@@ -1247,6 +1263,17 @@ h3 {
   padding: 16px;
 }
 
+:root[data-theme="light"] .point-card {
+  border-color: rgba(32, 116, 176, 0.16);
+  background:
+    radial-gradient(
+      circle at 82% 18%,
+      rgba(255, 196, 73, 0.18),
+      transparent 34%
+    ),
+    linear-gradient(135deg, rgba(52, 147, 222, 0.1), rgba(255, 255, 255, 0.94));
+}
+
 .point-card-head {
   display: flex;
   align-items: center;
@@ -1265,6 +1292,30 @@ h3 {
   font-size: clamp(32px, 5vw, 42px);
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+.point-card strong.muted {
+  color: var(--text-soft);
+  font-size: clamp(20px, 3vw, 28px);
+}
+
+.point-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.point-card-metrics div {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.point-card-metrics strong {
+  overflow: hidden;
+  font-size: clamp(24px, 4vw, 34px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sign-in-card {
