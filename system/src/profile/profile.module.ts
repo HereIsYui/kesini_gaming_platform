@@ -6,6 +6,7 @@ import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import { FormationModule } from "src/formation/formation.module";
+import { SocialActivityModule } from "src/social/social-activity.module";
 import { ProfileController } from "./profile.controller";
 import { ProfileService } from "./profile.service";
 
@@ -14,6 +15,7 @@ import { ProfileService } from "./profile.service";
     TypeOrmModule.forFeature([User, UserCard, CardItem, UserShowcaseCard]),
     AuthModule,
     FormationModule,
+    SocialActivityModule,
   ],
   controllers: [ProfileController],
   providers: [ProfileService],

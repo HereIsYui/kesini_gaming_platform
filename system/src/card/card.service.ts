@@ -25,6 +25,7 @@ import {
 } from "src/types/api";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
+import { SocialActivityService } from "src/social/social-activity.service";
 import { GachaConfigService } from "./gacha-config.service";
 import {
   DECOMPOSE_CONFIG_KEY,
@@ -129,6 +130,8 @@ export class CardService {
     private readonly pointLedgerService?: PointLedgerService,
     @Optional()
     private readonly achievementService?: AchievementService,
+    @Optional()
+    private readonly socialActivityService?: SocialActivityService,
   ) {}
 
   /**
@@ -868,6 +871,22 @@ export class CardService {
       await inventoryRepository.save(inventory);
       await userCardRepository.save(userCard);
       const after = this.createCultivationSnapshot(userCard, card, rarity);
+      await this.socialActivityService?.recordActivity(
+        {
+          actorUid: uid,
+          type: "card_upgraded",
+          title: "养成卡片",
+          summary: `${card.card_name} Lv.${after.level}`,
+          metadata: {
+            cardId: Number(userCard.card_id),
+            cardName: card.card_name,
+            rarity,
+            level: after.level,
+            power: after.power,
+          },
+        },
+        manager,
+      );
 
       return {
         uuid: userCard.card_uuid,

@@ -228,6 +228,25 @@ export interface FriendsOverviewResponse {
   };
 }
 
+export type SocialActivityType =
+  | "friend_added"
+  | "showcase_updated"
+  | "card_upgraded"
+  | "pve_cleared";
+
+export interface SocialActivityRecord {
+  id: number;
+  type: SocialActivityType;
+  title: string;
+  summary?: string;
+  createdAt: string;
+  user: FriendUser;
+}
+
+export interface SocialActivityFeedResponse {
+  list: SocialActivityRecord[];
+}
+
 export interface SendFriendRequestRequest {
   uid: string;
 }

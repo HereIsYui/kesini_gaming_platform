@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { Between, DataSource, EntityManager, In } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
@@ -8,6 +8,7 @@ import type { RedeemRewards } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
 import { FormationService } from "src/formation/formation.service";
 import { RewardService } from "src/reward/reward.service";
+import { SocialActivityService } from "src/social/social-activity.service";
 
 export interface PvePageQuery {
   page?: number;
@@ -20,6 +21,8 @@ export class PveService {
     private readonly dataSource: DataSource,
     private readonly formationService: FormationService,
     private readonly rewardService: RewardService,
+    @Optional()
+    private readonly socialActivityService?: SocialActivityService,
   ) {}
 
   async listStages(uid: string) {
@@ -146,6 +149,21 @@ export class PveService {
             enemyPower,
           },
         });
+        await this.socialActivityService?.recordActivity(
+          {
+            actorUid: uid,
+            type: "pve_cleared",
+            title: "通关关卡",
+            summary: stage.name,
+            metadata: {
+              stageId: stage.id,
+              stageName: stage.name,
+              formationPower,
+              enemyPower,
+            },
+          },
+          manager,
+        );
       }
       const rewardLookup = await this.buildRewardLookup(manager, [
         stage.rewards,

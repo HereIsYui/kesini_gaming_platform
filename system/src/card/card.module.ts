@@ -17,6 +17,7 @@ import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
+import { SocialActivityModule } from "src/social/social-activity.module";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
     AuthModule,
     PointLedgerModule,
     AchievementModule,
+    SocialActivityModule,
   ],
   controllers: [CardController],
   providers: [CardService, GachaConfigService],

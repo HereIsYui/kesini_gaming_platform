@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import {
   calculateCultivationPower,
@@ -9,6 +9,7 @@ import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import { FormationService } from "src/formation/formation.service";
+import { SocialActivityService } from "src/social/social-activity.service";
 import type { CardRarity } from "src/types/api";
 
 const SHOWCASE_LIMIT = 6;
@@ -19,6 +20,8 @@ export class ProfileService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly formationService: FormationService,
+    @Optional()
+    private readonly socialActivityService?: SocialActivityService,
   ) {}
 
   async getProfile(uid: string) {
@@ -70,6 +73,18 @@ export class ProfileService {
       if (records.length > 0) {
         await repository.save(records);
       }
+      await this.socialActivityService?.recordActivity(
+        {
+          actorUid: normalizedUid,
+          type: "showcase_updated",
+          title: normalizedCardUuids.length ? "更新展示墙" : "清空展示墙",
+          summary: normalizedCardUuids.length
+            ? `展示 ${normalizedCardUuids.length} 张`
+            : "展示已清空",
+          metadata: { count: normalizedCardUuids.length },
+        },
+        manager,
+      );
     });
 
     return this.getProfile(normalizedUid);

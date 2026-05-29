@@ -1,11 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import { User } from "src/entity/user.entity";
 import { UserFriend, UserFriendStatus } from "src/entity/userFriend.entity";
+import { SocialActivityService } from "src/social/social-activity.service";
 
 @Injectable()
 export class FriendsService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional()
+    private readonly socialActivityService?: SocialActivityService,
+  ) {}
 
   async getOverview(uid: string) {
     const normalizedUid = this.normalizeUid(uid);
@@ -186,6 +191,30 @@ export class FriendsService {
       relation.status = status;
       relation.responded_at = new Date();
       const saved = await repository.save(relation);
+      if (status === "accepted") {
+        await Promise.all([
+          this.socialActivityService?.recordActivity(
+            {
+              actorUid: relation.requester_uid,
+              type: "friend_added",
+              title: "添加好友",
+              summary: "结交新好友",
+              metadata: { friendUid: relation.receiver_uid },
+            },
+            manager,
+          ),
+          this.socialActivityService?.recordActivity(
+            {
+              actorUid: relation.receiver_uid,
+              type: "friend_added",
+              title: "添加好友",
+              summary: "结交新好友",
+              metadata: { friendUid: relation.requester_uid },
+            },
+            manager,
+          ),
+        ]);
+      }
       return this.toRelationRow(
         saved,
         normalizedUid,

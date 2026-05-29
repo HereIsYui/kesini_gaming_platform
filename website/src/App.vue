@@ -98,6 +98,8 @@ import type {
   SeasonPointRecord,
   SeasonShopBuyResponse,
   SeasonShopItem,
+  SocialActivityFeedResponse,
+  SocialActivityRecord,
   TradeConfig,
   TradeListing,
   TradePageResponse,
@@ -249,6 +251,8 @@ const profilePickerOpen = ref(false);
 const profileSelectedUuids = ref<string[]>([]);
 const friendsOverview = ref<FriendsOverviewResponse | null>(null);
 const friendsError = ref("");
+const friendFeed = ref<SocialActivityRecord[]>([]);
+const friendFeedError = ref("");
 const friendTargetUid = ref("");
 const friendActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
@@ -350,6 +354,7 @@ const busy = reactive({
   profileCandidates: false,
   profileSaving: false,
   friends: false,
+  friendFeed: false,
   cardsMore: false,
   leaderboard: false,
   points: false,
@@ -1053,7 +1058,7 @@ watch(activeSection, async (section) => {
     }
   }
   if (section === "friends" && isAuthed.value) {
-    await loadFriends();
+    await refreshFriendsSection();
   }
   if (section === "synthesize") {
     await loadUserCatalog();
@@ -1100,6 +1105,24 @@ function publicPlayerName(
   const value = String(name || "").trim();
   const rawUid = String(uid || "").trim();
   return value && value !== rawUid ? value : fallback;
+}
+
+function activityUserName(activity: SocialActivityRecord) {
+  return publicPlayerName(activity.user.nickname, activity.user.uid);
+}
+
+function activityInitial(activity: SocialActivityRecord) {
+  return activityUserName(activity).slice(0, 1).toUpperCase();
+}
+
+function shortActivityText(value?: string | null) {
+  const text = String(value || "").trim();
+  return text.length > 15 ? `${text.slice(0, 15)}…` : text;
+}
+
+function activityLine(activity: SocialActivityRecord) {
+  const summary = shortActivityText(activity.summary);
+  return summary ? `${activity.title} · ${summary}` : activity.title;
 }
 
 function getErrorMessage(error: unknown) {
@@ -1220,6 +1243,8 @@ function logout() {
   profileSelectedUuids.value = [];
   friendsOverview.value = null;
   friendsError.value = "";
+  friendFeed.value = [];
+  friendFeedError.value = "";
   friendTargetUid.value = "";
   friendActionBusy.value = "";
   formation.value = null;
@@ -1383,6 +1408,7 @@ async function loadPrivateData() {
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
+    activeSection.value === "friends" ? loadFriendFeed(false) : Promise.resolve(),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1702,6 +1728,34 @@ async function loadFriends(showError = activeSection.value === "friends") {
   }
 }
 
+async function loadFriendFeed(showError = activeSection.value === "friends") {
+  if (!isAuthed.value) {
+    friendFeed.value = [];
+    friendFeedError.value = "";
+    return;
+  }
+  busy.friendFeed = true;
+  friendFeedError.value = "";
+  try {
+    const data = await request<SocialActivityFeedResponse>(
+      "/friends/feed?limit=20",
+    );
+    friendFeed.value = data.list || [];
+  } catch (error) {
+    friendFeed.value = [];
+    friendFeedError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", friendFeedError.value);
+    }
+  } finally {
+    busy.friendFeed = false;
+  }
+}
+
+async function refreshFriendsSection() {
+  await Promise.all([loadFriends(), loadFriendFeed()]);
+}
+
 async function sendFriendRequest(uid: string) {
   const targetUid = String(uid || "").trim();
   if (!isAuthed.value) {
@@ -1720,7 +1774,7 @@ async function sendFriendRequest(uid: string) {
       body: JSON.stringify(payload),
     });
     notify("success", "已申请");
-    await loadFriends(false);
+    await Promise.all([loadFriends(false), loadFriendFeed(false)]);
     return true;
   } catch (error) {
     notify("error", getErrorMessage(error));
@@ -1747,7 +1801,7 @@ async function acceptFriendRequest(requestId: number) {
       },
     );
     notify("success", "已通过");
-    await loadFriends(false);
+    await Promise.all([loadFriends(false), loadFriendFeed(false)]);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -1765,7 +1819,7 @@ async function rejectFriendRequest(requestId: number) {
       },
     );
     notify("success", "已拒绝");
-    await loadFriends(false);
+    await Promise.all([loadFriends(false), loadFriendFeed(false)]);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -1780,7 +1834,7 @@ async function cancelFriendRequest(requestId: number) {
       method: "DELETE",
     });
     notify("success", "已取消");
-    await loadFriends(false);
+    await Promise.all([loadFriends(false), loadFriendFeed(false)]);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -1799,7 +1853,7 @@ async function removeFriend(uid: string) {
       method: "DELETE",
     });
     notify("success", "已删除");
-    await loadFriends(false);
+    await Promise.all([loadFriends(false), loadFriendFeed(false)]);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4283,10 +4337,13 @@ function leaderboardRankLabel(rank?: number) {
               v-if="isAuthed"
               class="secondary-action compact"
               type="button"
-              :disabled="busy.friends"
-              @click="loadFriends()"
+              :disabled="busy.friends || busy.friendFeed"
+              @click="refreshFriendsSection"
             >
-              <RefreshCw :size="16" :class="{ spin: busy.friends }" />
+              <RefreshCw
+                :size="16"
+                :class="{ spin: busy.friends || busy.friendFeed }"
+              />
               刷新
             </button>
           </div>
@@ -4304,7 +4361,11 @@ function leaderboardRankLabel(rank?: number) {
           <UsersRound :size="30" />
           <strong>好友加载失败</strong>
           <span>{{ friendsError }}</span>
-          <button class="secondary-action" type="button" @click="loadFriends()">
+          <button
+            class="secondary-action"
+            type="button"
+            @click="refreshFriendsSection"
+          >
             重试
           </button>
         </div>
@@ -4323,6 +4384,58 @@ function leaderboardRankLabel(rank?: number) {
               <strong>{{ friendsOverview?.counts.outgoing || 0 }}</strong>
             </article>
           </div>
+
+          <section class="friends-block friend-feed-block">
+            <div class="section-title-row">
+              <div>
+                <p class="eyebrow">动态</p>
+                <h3>好友动态</h3>
+              </div>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="busy.friendFeed"
+                @click="loadFriendFeed()"
+              >
+                <RefreshCw :size="15" :class="{ spin: busy.friendFeed }" />
+                刷新
+              </button>
+            </div>
+            <div v-if="busy.friendFeed && friendFeed.length === 0" class="empty-mini">
+              正在读取
+            </div>
+            <div v-else-if="friendFeedError" class="empty-mini">
+              动态加载失败
+            </div>
+            <div v-else-if="friendFeed.length === 0" class="empty-mini">
+              暂无动态
+            </div>
+            <div v-else class="friend-feed-list">
+              <RouterLink
+                v-for="activity in friendFeed"
+                :key="activity.id"
+                class="friend-feed-row"
+                :to="{
+                  name: 'publicProfile',
+                  params: { uid: activity.user.uid },
+                }"
+              >
+                <span class="friend-avatar">
+                  <img
+                    v-if="activity.user.avatar"
+                    :src="activity.user.avatar"
+                    :alt="activityUserName(activity)"
+                  />
+                  <span v-else>{{ activityInitial(activity) }}</span>
+                </span>
+                <div class="friend-info">
+                  <strong>{{ activityUserName(activity) }}</strong>
+                  <span>{{ activityLine(activity) }}</span>
+                </div>
+                <time>{{ formatDate(activity.createdAt) }}</time>
+              </RouterLink>
+            </div>
+          </section>
 
           <div class="friends-layout">
             <section class="friends-block">

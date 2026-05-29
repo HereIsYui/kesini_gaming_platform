@@ -3545,6 +3545,35 @@ h3 {
   grid-row: span 2;
 }
 
+.friend-feed-block {
+  gap: 12px;
+}
+
+.friend-feed-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.friend-feed-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: inherit;
+  background: rgba(255, 255, 255, 0.055);
+  padding: 10px;
+  text-decoration: none;
+}
+
+.friend-feed-row time {
+  color: var(--text-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .friend-list {
   display: grid;
   gap: 10px;
@@ -5997,8 +6026,20 @@ h3 {
     grid-row: auto;
   }
 
+  .friend-feed-list {
+    grid-template-columns: 1fr;
+  }
+
   .friend-row {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .friend-feed-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .friend-feed-row time {
+    grid-column: 2;
   }
 
   .friend-row-actions {
