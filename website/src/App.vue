@@ -68,6 +68,10 @@ import type {
   FriendsOverviewResponse,
   FormationOverview,
   GachaResult,
+  CreateGuildRequest,
+  GuildMember,
+  GuildOverviewResponse,
+  GuildSummary,
   InventoryItem,
   LaunchActivityClaimResponse,
   LaunchActivityCurrentResponse,
@@ -124,6 +128,7 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "profile", label: "主页", icon: UserRound },
   { key: "friends", label: "好友", icon: UsersRound },
+  { key: "guild", label: "公会", icon: UsersRound },
   { key: "bag", label: "背包", icon: Boxes },
   { key: "formation", label: "阵容", icon: Swords },
   { key: "pve", label: "关卡", icon: Trophy },
@@ -150,6 +155,7 @@ const primaryNavSectionKeys = [
   "synthesize",
   "season",
   "leaderboard",
+  "guild",
 ] as const satisfies readonly SectionKey[];
 
 const primaryNavItems = primaryNavSectionKeys
@@ -255,6 +261,11 @@ const friendFeed = ref<SocialActivityRecord[]>([]);
 const friendFeedError = ref("");
 const friendTargetUid = ref("");
 const friendActionBusy = ref("");
+const guildOverview = ref<GuildOverviewResponse | null>(null);
+const guildError = ref("");
+const guildName = ref("");
+const guildDescription = ref("");
+const guildActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -355,6 +366,7 @@ const busy = reactive({
   profileSaving: false,
   friends: false,
   friendFeed: false,
+  guild: false,
   cardsMore: false,
   leaderboard: false,
   points: false,
@@ -541,6 +553,14 @@ const profileFriendActionDisabled = computed(() => {
     isProfileFriendOutgoing.value
   );
 });
+const currentGuild = computed(() => guildOverview.value?.current?.guild || null);
+const guildMembers = computed<GuildMember[]>(
+  () => guildOverview.value?.current?.members || [],
+);
+const guildRows = computed<GuildSummary[]>(() => guildOverview.value?.guilds || []);
+const guildRoleLabel = computed(() =>
+  currentGuild.value?.role === "leader" ? "会长" : "成员",
+);
 
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
@@ -1060,6 +1080,9 @@ watch(activeSection, async (section) => {
   if (section === "friends" && isAuthed.value) {
     await refreshFriendsSection();
   }
+  if (section === "guild" && isAuthed.value) {
+    await loadGuild();
+  }
   if (section === "synthesize") {
     await loadUserCatalog();
   }
@@ -1247,6 +1270,11 @@ function logout() {
   friendFeedError.value = "";
   friendTargetUid.value = "";
   friendActionBusy.value = "";
+  guildOverview.value = null;
+  guildError.value = "";
+  guildName.value = "";
+  guildDescription.value = "";
+  guildActionBusy.value = "";
   formation.value = null;
   formationCandidates.value = [];
   formationPickerOpen.value = false;
@@ -1409,6 +1437,7 @@ async function loadPrivateData() {
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
     activeSection.value === "friends" ? loadFriendFeed(false) : Promise.resolve(),
+    loadGuild(false),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1871,6 +1900,102 @@ async function handleProfileFriendAction() {
     return;
   }
   await sendFriendRequest(uid);
+}
+
+function guildRoleName(role?: string | null) {
+  return role === "leader" ? "会长" : "成员";
+}
+
+function guildMemberName(member: GuildMember) {
+  return publicPlayerName(member.nickname, member.uid);
+}
+
+function guildMemberInitial(member: GuildMember) {
+  return guildMemberName(member).slice(0, 1).toUpperCase();
+}
+
+async function loadGuild(showError = activeSection.value === "guild") {
+  if (!isAuthed.value) {
+    guildOverview.value = null;
+    guildError.value = "";
+    return;
+  }
+  busy.guild = true;
+  guildError.value = "";
+  try {
+    guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
+  } catch (error) {
+    guildOverview.value = null;
+    guildError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", guildError.value);
+    }
+  } finally {
+    busy.guild = false;
+  }
+}
+
+async function createGuild() {
+  const name = guildName.value.trim();
+  const description = guildDescription.value.trim();
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (!name) {
+    notify("error", "请输入公会名");
+    return;
+  }
+  guildActionBusy.value = "create";
+  try {
+    const payload: CreateGuildRequest = { name, description };
+    guildOverview.value = await request<GuildOverviewResponse>("/guilds", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    guildName.value = "";
+    guildDescription.value = "";
+    notify("success", "已创建");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    guildActionBusy.value = "";
+  }
+}
+
+async function joinGuild(guildId: number) {
+  guildActionBusy.value = `join:${guildId}`;
+  try {
+    guildOverview.value = await request<GuildOverviewResponse>(
+      `/guilds/${guildId}/join`,
+      { method: "POST" },
+    );
+    notify("success", "已加入");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    guildActionBusy.value = "";
+  }
+}
+
+async function leaveGuild() {
+  if (!currentGuild.value) {
+    return;
+  }
+  if (!window.confirm("退出公会？")) {
+    return;
+  }
+  guildActionBusy.value = "leave";
+  try {
+    guildOverview.value = await request<GuildOverviewResponse>("/guilds/me", {
+      method: "DELETE",
+    });
+    notify("success", "已退出");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    guildActionBusy.value = "";
+  }
 }
 
 async function loadFormation() {
@@ -4653,6 +4778,189 @@ function leaderboardRankLabel(rank?: number) {
                       @click="cancelFriendRequest(requestItem.id)"
                     >
                       取消
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+        </template>
+      </section>
+
+      <section
+        v-if="activeSection === 'guild'"
+        class="panel guild-panel"
+        data-section="guild"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">公会</p>
+            <h2>公会</h2>
+          </div>
+          <div class="section-actions">
+            <button
+              v-if="isAuthed"
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.guild"
+              @click="loadGuild()"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.guild }" />
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>请先登录</strong>
+          <span>登录后查看</span>
+        </div>
+        <div v-else-if="busy.guild && !guildOverview" class="skeleton-grid">
+          <span v-for="item in 3" :key="item"></span>
+        </div>
+        <div v-else-if="guildError" class="empty-state">
+          <UsersRound :size="30" />
+          <strong>加载失败</strong>
+          <span>{{ guildError }}</span>
+          <button class="secondary-action" type="button" @click="loadGuild()">
+            重试
+          </button>
+        </div>
+        <template v-else>
+          <div class="guild-layout">
+            <section class="guild-block guild-current">
+              <div class="section-title-row">
+                <div>
+                  <p class="eyebrow">我的</p>
+                  <h3>{{ currentGuild?.name || "未加入" }}</h3>
+                </div>
+                <button
+                  v-if="currentGuild"
+                  class="danger-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === 'leave'"
+                  @click="leaveGuild"
+                >
+                  退出
+                </button>
+              </div>
+
+              <template v-if="currentGuild">
+                <div class="guild-hero">
+                  <div>
+                    <strong>{{ currentGuild.name }}</strong>
+                    <span>{{ currentGuild.description || "暂无简介" }}</span>
+                  </div>
+                  <small>{{ guildRoleLabel }}</small>
+                </div>
+                <div class="guild-stats">
+                  <article>
+                    <small>成员</small>
+                    <strong>{{ currentGuild.memberCount }}</strong>
+                  </article>
+                  <article>
+                    <small>身份</small>
+                    <strong>{{ guildRoleLabel }}</strong>
+                  </article>
+                </div>
+                <div class="section-title-row compact-title">
+                  <div>
+                    <p class="eyebrow">成员</p>
+                    <h3>成员</h3>
+                  </div>
+                </div>
+                <div class="guild-member-list">
+                  <article
+                    v-for="member in guildMembers"
+                    :key="member.uid"
+                    class="guild-member-row"
+                  >
+                    <span class="friend-avatar">
+                      <img
+                        v-if="member.avatar"
+                        :src="member.avatar"
+                        :alt="guildMemberName(member)"
+                      />
+                      <span v-else>{{ guildMemberInitial(member) }}</span>
+                    </span>
+                    <div class="friend-info">
+                      <strong>{{ guildMemberName(member) }}</strong>
+                      <span>{{ guildRoleName(member.role) }}</span>
+                    </div>
+                    <RouterLink
+                      class="secondary-action compact"
+                      :to="{
+                        name: 'publicProfile',
+                        params: { uid: member.uid },
+                      }"
+                    >
+                      主页
+                    </RouterLink>
+                  </article>
+                </div>
+              </template>
+
+              <form v-else class="guild-create-form" @submit.prevent="createGuild">
+                <div class="empty-mini">尚未加入</div>
+                <input
+                  v-model="guildName"
+                  maxlength="16"
+                  placeholder="公会名"
+                />
+                <input
+                  v-model="guildDescription"
+                  maxlength="60"
+                  placeholder="简介"
+                />
+                <button
+                  class="primary-action"
+                  type="submit"
+                  :disabled="busy.guild || guildActionBusy === 'create'"
+                >
+                  创建
+                </button>
+              </form>
+            </section>
+
+            <section class="guild-block">
+              <div class="section-title-row">
+                <div>
+                  <p class="eyebrow">列表</p>
+                  <h3>公会列表</h3>
+                </div>
+              </div>
+              <div v-if="guildRows.length === 0" class="empty-mini">
+                暂无公会
+              </div>
+              <div v-else class="guild-list">
+                <article
+                  v-for="guild in guildRows"
+                  :key="guild.id"
+                  class="guild-row"
+                >
+                  <div class="guild-row-main">
+                    <strong>{{ guild.name }}</strong>
+                    <span>{{ guild.description || "暂无简介" }}</span>
+                  </div>
+                  <div class="guild-row-meta">
+                    <span>{{ guild.memberCount }} 人</span>
+                    <button
+                      v-if="!currentGuild"
+                      class="primary-action compact"
+                      type="button"
+                      :disabled="guildActionBusy === `join:${guild.id}`"
+                      @click="joinGuild(guild.id)"
+                    >
+                      加入
+                    </button>
+                    <button
+                      v-else
+                      class="secondary-action compact"
+                      type="button"
+                      disabled
+                    >
+                      {{ guild.joined ? "当前" : "已入会" }}
                     </button>
                   </div>
                 </article>

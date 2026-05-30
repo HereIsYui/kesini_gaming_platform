@@ -251,6 +251,45 @@ export interface SendFriendRequestRequest {
   uid: string;
 }
 
+export type GuildMemberRole = "leader" | "member";
+
+export interface GuildSummary {
+  id: number;
+  name: string;
+  description?: string;
+  memberCount: number;
+  role?: GuildMemberRole | null;
+  joined?: boolean;
+  createdAt?: string | null;
+}
+
+export interface GuildMember {
+  uid: string;
+  nickname: string;
+  avatar: string;
+  role: GuildMemberRole;
+  joinedAt?: string;
+}
+
+export interface GuildCurrent {
+  guild: GuildSummary;
+  members: GuildMember[];
+}
+
+export interface GuildOverviewResponse {
+  current: GuildCurrent | null;
+  guilds: GuildSummary[];
+}
+
+export interface GuildListResponse {
+  list: GuildSummary[];
+}
+
+export interface CreateGuildRequest {
+  name: string;
+  description?: string;
+}
+
 export interface UserCatalogItem {
   key: string;
   card: CardItem;

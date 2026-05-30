@@ -3634,6 +3634,148 @@ h3 {
   gap: 8px;
 }
 
+.guild-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.guild-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+}
+
+.guild-block {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 14px;
+}
+
+.guild-hero {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(150, 242, 255, 0.2);
+  border-radius: var(--radius);
+  background: rgba(84, 216, 255, 0.08);
+  padding: 14px;
+}
+
+:root[data-theme="light"] .guild-hero {
+  border-color: rgba(11, 149, 208, 0.2);
+  background: rgba(11, 149, 208, 0.07);
+}
+
+.guild-hero div,
+.guild-row-main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.guild-hero strong,
+.guild-row-main strong {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guild-hero span,
+.guild-row-main span {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guild-hero small {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--primary-strong);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guild-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guild-stats article {
+  display: grid;
+  gap: 6px;
+  min-height: 72px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+}
+
+.guild-stats small {
+  color: var(--text-soft);
+}
+
+.guild-stats strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.compact-title {
+  margin-top: 4px;
+}
+
+.guild-create-form,
+.guild-list,
+.guild-member-list {
+  display: grid;
+  gap: 10px;
+}
+
+.guild-create-form input {
+  min-width: 0;
+}
+
+.guild-row,
+.guild-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 10px;
+}
+
+.guild-member-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.guild-row-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.guild-row-meta span {
+  color: var(--text-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 :root[data-theme="light"] .danger-action {
   color: #9f233d;
   background: rgba(217, 59, 90, 0.1);
@@ -6022,6 +6164,10 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .guild-layout {
+    grid-template-columns: 1fr;
+  }
+
   .friends-block:first-child {
     grid-row: auto;
   }
@@ -6032,6 +6178,24 @@ h3 {
 
   .friend-row {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .guild-row,
+  .guild-member-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .guild-row-main {
+    grid-column: 1 / -1;
+  }
+
+  .guild-row-meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .guild-member-row .secondary-action {
+    grid-column: 1 / -1;
   }
 
   .friend-feed-row {
@@ -6085,6 +6249,7 @@ h3 {
   .achievement-grid,
   .profile-candidate-list,
   .friends-layout,
+  .guild-layout,
   .formation-summary,
   .formation-slot-grid,
   .pve-summary,
@@ -6210,7 +6375,7 @@ h3 {
     bottom: 10px;
     left: 10px;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     overflow: visible;
     gap: 6px;
     border: 1px solid var(--border);
@@ -6278,7 +6443,10 @@ h3 {
   .friend-add-form .primary-action,
   .friend-row-actions .primary-action,
   .friend-row-actions .secondary-action,
-  .friend-row-actions .danger-action {
+  .friend-row-actions .danger-action,
+  .guild-row-meta .primary-action,
+  .guild-row-meta .secondary-action,
+  .guild-member-row .secondary-action {
     width: 100%;
   }
 

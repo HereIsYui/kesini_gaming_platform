@@ -39,6 +39,8 @@ import { UserSeasonProgress } from "./entity/userSeasonProgress.entity";
 import { UserShowcaseCard } from "./entity/userShowcaseCard.entity";
 import { UserFriend } from "./entity/userFriend.entity";
 import { UserSocialActivity } from "./entity/userSocialActivity.entity";
+import { Guild } from "./entity/guild.entity";
+import { GuildMember } from "./entity/guildMember.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -61,6 +63,7 @@ import { SeasonModule } from "./season/season.module";
 import { ProfileModule } from "./profile/profile.module";
 import { FriendsModule } from "./friends/friends.module";
 import { SocialActivityModule } from "./social/social-activity.module";
+import { GuildsModule } from "./guilds/guilds.module";
 
 @Module({
   imports: [
@@ -106,6 +109,8 @@ import { SocialActivityModule } from "./social/social-activity.module";
       UserShowcaseCard,
       UserFriend,
       UserSocialActivity,
+      Guild,
+      GuildMember,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -128,6 +133,7 @@ import { SocialActivityModule } from "./social/social-activity.module";
     ProfileModule,
     FriendsModule,
     SocialActivityModule,
+    GuildsModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],
