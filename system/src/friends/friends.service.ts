@@ -66,7 +66,10 @@ export class FriendsService {
 
     return this.dataSource.transaction(async (manager) => {
       await this.findUser(manager, requesterUid);
-      const receiver = await this.findUserByUidOrName(manager, targetValue);
+      const receiver = await this.findUserByPublicIdentifier(
+        manager,
+        targetValue,
+      );
       const receiverUid = receiver.uid;
       if (requesterUid === receiverUid) {
         throw new Error("不能添加自己");
@@ -148,12 +151,16 @@ export class FriendsService {
 
   async removeFriend(uid: string, targetUid: string) {
     const normalizedUid = this.normalizeUid(uid);
-    const normalizedTargetUid = this.normalizeUid(targetUid);
-    if (normalizedUid === normalizedTargetUid) {
-      throw new Error("好友不存在");
-    }
+    const targetValue = this.normalizeUid(targetUid);
 
     return this.dataSource.transaction(async (manager) => {
+      await this.findUser(manager, normalizedUid);
+      const target = await this.findUserByPublicIdentifier(manager, targetValue);
+      const normalizedTargetUid = target.uid;
+      if (normalizedUid === normalizedTargetUid) {
+        throw new Error("好友不存在");
+      }
+
       const repository = manager.getRepository(UserFriend);
       const relation = await repository.findOne({
         where: {
@@ -247,12 +254,12 @@ export class FriendsService {
     return user;
   }
 
-  private async findUserByUidOrName(
+  private async findUserByPublicIdentifier(
     manager: DataSource | EntityManager,
     value: string,
   ) {
     const user = await manager.getRepository(User).findOne({
-      where: [{ uid: value }, { name: value }],
+      where: [{ public_id: value }, { uid: value }, { name: value }],
     });
     if (!user) {
       throw new Error("玩家不存在");

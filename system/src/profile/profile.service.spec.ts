@@ -301,14 +301,14 @@ describe("ProfileService 玩家主页", () => {
   it("可用公开编号查询主页", async () => {
     const result = await service.getPublicProfile("pub-u1");
 
-    expect(result.user.uid).toBe("u1");
+    expect((result.user as any).uid).toBeUndefined();
     expect(result.user.publicId).toBe("pub-u1");
   });
 
   it("旧的主页地址仍然可用", async () => {
     const result = await service.getPublicProfile("u1");
 
-    expect(result.user.uid).toBe("u1");
+    expect((result.user as any).uid).toBeUndefined();
     expect(result.user.publicId).toBe("pub-u1");
   });
 

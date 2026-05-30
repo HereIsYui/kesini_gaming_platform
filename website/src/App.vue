@@ -442,18 +442,36 @@ const profileDisplayName = computed(() =>
     "玩家主页",
   ),
 );
+const profileOwnerUid = computed(() =>
+  String(playerProfile.value?.user.uid || "").trim(),
+);
+const profileOwnerPublicId = computed(() =>
+  publicProfileParam(playerProfile.value?.user),
+);
+const currentUserPublicId = computed(() => publicProfileParam(currentUser.value));
+const profileActionTarget = computed(
+  () => profileOwnerPublicId.value || profileOwnerUid.value,
+);
 const profileInitial = computed(() =>
   String(profileDisplayName.value || "?")
     .trim()
     .slice(0, 1)
     .toUpperCase(),
 );
-const profileCanEdit = computed(
-  () =>
-    Boolean(isAuthed.value) &&
-    Boolean(currentUser.value?.uid) &&
-    playerProfile.value?.user.uid === currentUser.value?.uid,
-);
+const profileCanEdit = computed(() => {
+  if (!isAuthed.value) {
+    return false;
+  }
+  const currentUid = String(currentUser.value?.uid || "").trim();
+  if (profileOwnerUid.value && currentUid) {
+    return profileOwnerUid.value === currentUid;
+  }
+  return Boolean(
+    profileOwnerPublicId.value &&
+      currentUserPublicId.value &&
+      profileOwnerPublicId.value === currentUserPublicId.value,
+  );
+});
 const profileShareUrl = computed(() => {
   const profileId = publicProfileParam(
     playerProfile.value?.user || currentUser.value,
@@ -513,14 +531,22 @@ const outgoingFriendRequests = computed(
   () => friendsOverview.value?.outgoing || [],
 );
 const profileFriendRelation = computed<FriendRelationRecord | null>(() => {
-  const uid = playerProfile.value?.user.uid;
-  if (!uid) {
+  const publicId = profileOwnerPublicId.value;
+  const uid = profileOwnerUid.value;
+  if (!publicId && !uid) {
     return null;
   }
+  const matchesProfile = (item: FriendRelationRecord) => {
+    const friendPublicId = publicProfileParam(item.user);
+    if (publicId && friendPublicId) {
+      return publicId === friendPublicId;
+    }
+    return Boolean(uid && item.user.uid === uid);
+  };
   return (
-    friendRows.value.find((item) => item.user.uid === uid) ||
-    incomingFriendRequests.value.find((item) => item.user.uid === uid) ||
-    outgoingFriendRequests.value.find((item) => item.user.uid === uid) ||
+    friendRows.value.find(matchesProfile) ||
+    incomingFriendRequests.value.find(matchesProfile) ||
+    outgoingFriendRequests.value.find(matchesProfile) ||
     null
   );
 });
@@ -538,8 +564,8 @@ const showProfileFriendAction = computed(
   () =>
     Boolean(isAuthed.value) &&
     Boolean(isPublicProfileRoute.value) &&
-    Boolean(playerProfile.value?.user.uid) &&
-    playerProfile.value?.user.uid !== currentUser.value?.uid,
+    Boolean(profileActionTarget.value) &&
+    !profileCanEdit.value,
 );
 const profileFriendActionLabel = computed(() => {
   const relation = profileFriendRelation.value;
@@ -1962,7 +1988,7 @@ async function removeFriend(uid: string) {
 }
 
 async function handleProfileFriendAction() {
-  const uid = playerProfile.value?.user.uid || "";
+  const target = profileActionTarget.value;
   const relation = profileFriendRelation.value;
   if (relation?.status === "pending") {
     if (incomingFriendRequests.value.some((item) => item.id === relation.id)) {
@@ -1970,7 +1996,7 @@ async function handleProfileFriendAction() {
     }
     return;
   }
-  await sendFriendRequest(uid);
+  await sendFriendRequest(target);
 }
 
 function guildRoleName(role?: string | null) {

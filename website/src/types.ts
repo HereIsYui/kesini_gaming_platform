@@ -188,7 +188,7 @@ export interface ShowcaseCard {
 
 export interface PlayerProfileResponse {
   user: {
-    uid: string;
+    uid?: string;
     publicId: string;
     nickname: string;
     avatar: string;

@@ -126,6 +126,7 @@ function createUser(uid: string): User {
   return {
     id: uid === "u1" ? 1 : uid === "u2" ? 2 : 3,
     uid,
+    public_id: `pub-${uid}`,
     name: `name-${uid}`,
     nickname: `玩家${uid}`,
     avatar: `https://example.com/${uid}.png`,
@@ -294,5 +295,31 @@ describe("FriendsService 好友系统", () => {
     expect(overview.friends[0].user.uid).toBe("u2");
     expect(overview.incoming[0].user.uid).toBe("u3");
     expect(overview.outgoing[0].user.uid).toBe("u3");
+  });
+
+  it("可用公开编号发送好友申请", async () => {
+    const result = await service.sendRequest("u1", "pub-u2");
+
+    expect(store.friends[0]).toMatchObject({
+      requester_uid: "u1",
+      receiver_uid: "u2",
+      relation_key: "u1::u2",
+      status: "pending",
+    });
+    expect(result).toMatchObject({
+      status: "pending",
+      user: { publicId: "pub-u2", nickname: "玩家u2" },
+    });
+  });
+
+  it("可用公开编号删除好友", async () => {
+    createRelation(store, "u1", "u2", "accepted");
+
+    const removed = await service.removeFriend("u1", "pub-u2");
+    const overview = await service.getOverview("u1");
+
+    expect(removed).toEqual({ uid: "u2" });
+    expect(store.friends[0].status).toBe("cancelled");
+    expect(overview.friends).toEqual([]);
   });
 });

@@ -31,7 +31,7 @@ export class ProfileService {
   async getProfile(uid: string) {
     const normalizedUid = this.normalizeUid(uid);
     const user = await this.findUser(this.dataSource, normalizedUid);
-    return this.getProfileForUser(user);
+    return this.getProfileForUser(user, { includeUid: true });
   }
 
   async getPublicProfile(profileId: string) {
@@ -40,10 +40,13 @@ export class ProfileService {
       this.dataSource,
       normalizedProfileId,
     );
-    return this.getProfileForUser(user);
+    return this.getProfileForUser(user, { includeUid: false });
   }
 
-  private async getProfileForUser(user: User) {
+  private async getProfileForUser(
+    user: User,
+    options: { includeUid: boolean },
+  ) {
     await ensureUserPublicId(this.dataSource.getRepository(User), user);
     const normalizedUid = user.uid;
     const [formation, showcase] = await Promise.all([
@@ -56,7 +59,7 @@ export class ProfileService {
     ]);
 
     return {
-      user: this.toPublicUser(user),
+      user: this.toPublicUser(user, options),
       formation: {
         slotCount: formation.slotCount || 3,
         filledCount: (formation.slots || []).filter((slot) => slot.card).length,
@@ -215,7 +218,7 @@ export class ProfileService {
       .filter((item) => item !== null);
   }
 
-  private toPublicUser(user: User) {
+  private toPublicUser(user: User, options: { includeUid: boolean }) {
     const cardCounts = {
       N: Number(user.card_count_n || 0),
       R: Number(user.card_count_r || 0),
@@ -223,8 +226,7 @@ export class ProfileService {
       SSR: Number(user.card_count_ssr || 0),
       UR: Number(user.card_count_ur || 0),
     };
-    return {
-      uid: user.uid,
+    const result: Record<string, unknown> = {
       publicId: getUserPublicId(user),
       nickname: user.nickname || user.name || "玩家",
       avatar: user.avatar || "",
@@ -232,6 +234,10 @@ export class ProfileService {
       totalCards: Object.values(cardCounts).reduce((sum, count) => sum + count, 0),
       createdAt: user.createdAt || null,
     };
+    if (options.includeUid) {
+      result.uid = user.uid;
+    }
+    return result;
   }
 
   private toShowcaseCard(
