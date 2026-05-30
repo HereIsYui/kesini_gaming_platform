@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   UseFilters,
   UseGuards,
   UseInterceptors,
@@ -29,6 +30,11 @@ class CreateGuildDto {
   @IsOptional()
   @IsString()
   description?: string;
+}
+
+class SendGuildMessageDto {
+  @IsString()
+  content: string;
 }
 
 @Controller("guilds")
@@ -68,6 +74,24 @@ export class GuildsController {
     }
   }
 
+  @Get("me/messages")
+  async getMessages(
+    @GetUser() user: UserInfo,
+    @Query("limit") limit?: string,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.guildsService.listMessages(user.uid, Number(limit)),
+        "获取消息成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取消息失败");
+    }
+  }
+
   @Post()
   async createGuild(
     @GetUser() user: UserInfo,
@@ -87,6 +111,24 @@ export class GuildsController {
       );
     } catch (error) {
       return ResponseDto.error(error.message || "创建失败");
+    }
+  }
+
+  @Post("me/messages")
+  async sendMessage(
+    @GetUser() user: UserInfo,
+    @Body() body: SendGuildMessageDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.guildsService.sendMessage(user.uid, body.content),
+        "已发送",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "发送失败");
     }
   }
 

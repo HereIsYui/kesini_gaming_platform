@@ -3609,6 +3609,11 @@ h3 {
   object-fit: cover;
 }
 
+.friend-avatar.small {
+  width: 34px;
+  font-size: 12px;
+}
+
 .friend-info {
   display: grid;
   gap: 4px;
@@ -3738,13 +3743,82 @@ h3 {
 
 .guild-create-form,
 .guild-list,
-.guild-member-list {
+.guild-member-list,
+.guild-message-list {
   display: grid;
   gap: 10px;
 }
 
-.guild-create-form input {
+.guild-create-form input,
+.guild-message-form input {
   min-width: 0;
+}
+
+.guild-chat {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px;
+}
+
+.guild-message-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.guild-message-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 10px;
+}
+
+.guild-message-body {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.guild-message-body header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guild-message-body strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guild-message-body time {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.guild-message-body p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.guild-message-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .guild-row,
@@ -6198,6 +6272,12 @@ h3 {
     grid-column: 1 / -1;
   }
 
+  .guild-message-body header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
   .friend-feed-row {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -6440,13 +6520,18 @@ h3 {
     flex-direction: column;
   }
 
+  .guild-message-form {
+    grid-template-columns: 1fr;
+  }
+
   .friend-add-form .primary-action,
   .friend-row-actions .primary-action,
   .friend-row-actions .secondary-action,
   .friend-row-actions .danger-action,
   .guild-row-meta .primary-action,
   .guild-row-meta .secondary-action,
-  .guild-member-row .secondary-action {
+  .guild-member-row .secondary-action,
+  .guild-message-form .primary-action {
     width: 100%;
   }
 

@@ -276,9 +276,20 @@ export interface GuildCurrent {
   members: GuildMember[];
 }
 
+export interface GuildMessage {
+  id: number;
+  content: string;
+  createdAt: string;
+  sender: FriendUser;
+}
+
 export interface GuildOverviewResponse {
   current: GuildCurrent | null;
   guilds: GuildSummary[];
+}
+
+export interface GuildMessagesResponse {
+  list: GuildMessage[];
 }
 
 export interface GuildListResponse {
@@ -288,6 +299,10 @@ export interface GuildListResponse {
 export interface CreateGuildRequest {
   name: string;
   description?: string;
+}
+
+export interface SendGuildMessageRequest {
+  content: string;
 }
 
 export interface UserCatalogItem {

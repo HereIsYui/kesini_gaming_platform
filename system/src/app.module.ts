@@ -41,6 +41,7 @@ import { UserFriend } from "./entity/userFriend.entity";
 import { UserSocialActivity } from "./entity/userSocialActivity.entity";
 import { Guild } from "./entity/guild.entity";
 import { GuildMember } from "./entity/guildMember.entity";
+import { GuildMessage } from "./entity/guildMessage.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -111,6 +112,7 @@ import { GuildsModule } from "./guilds/guilds.module";
       UserSocialActivity,
       Guild,
       GuildMember,
+      GuildMessage,
     ]),
     ConfigurationModule,
     SiteConfigModule,

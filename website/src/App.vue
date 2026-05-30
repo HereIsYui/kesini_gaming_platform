@@ -70,6 +70,8 @@ import type {
   GachaResult,
   CreateGuildRequest,
   GuildMember,
+  GuildMessage,
+  GuildMessagesResponse,
   GuildOverviewResponse,
   GuildSummary,
   InventoryItem,
@@ -89,6 +91,7 @@ import type {
   PlayerProfileResponse,
   SaveShowcaseRequest,
   SendFriendRequestRequest,
+  SendGuildMessageRequest,
   SiteConfig,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
@@ -263,6 +266,9 @@ const friendTargetUid = ref("");
 const friendActionBusy = ref("");
 const guildOverview = ref<GuildOverviewResponse | null>(null);
 const guildError = ref("");
+const guildMessages = ref<GuildMessage[]>([]);
+const guildMessageError = ref("");
+const guildMessageText = ref("");
 const guildName = ref("");
 const guildDescription = ref("");
 const guildActionBusy = ref("");
@@ -367,6 +373,8 @@ const busy = reactive({
   friends: false,
   friendFeed: false,
   guild: false,
+  guildMessages: false,
+  guildSending: false,
   cardsMore: false,
   leaderboard: false,
   points: false,
@@ -561,6 +569,7 @@ const guildRows = computed<GuildSummary[]>(() => guildOverview.value?.guilds || 
 const guildRoleLabel = computed(() =>
   currentGuild.value?.role === "leader" ? "会长" : "成员",
 );
+const guildMessageRows = computed(() => guildMessages.value);
 
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
@@ -1081,7 +1090,7 @@ watch(activeSection, async (section) => {
     await refreshFriendsSection();
   }
   if (section === "guild" && isAuthed.value) {
-    await loadGuild();
+    await refreshGuildSection();
   }
   if (section === "synthesize") {
     await loadUserCatalog();
@@ -1272,6 +1281,9 @@ function logout() {
   friendActionBusy.value = "";
   guildOverview.value = null;
   guildError.value = "";
+  guildMessages.value = [];
+  guildMessageError.value = "";
+  guildMessageText.value = "";
   guildName.value = "";
   guildDescription.value = "";
   guildActionBusy.value = "";
@@ -1437,7 +1449,7 @@ async function loadPrivateData() {
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
     activeSection.value === "friends" ? loadFriendFeed(false) : Promise.resolve(),
-    loadGuild(false),
+    activeSection.value === "guild" ? refreshGuildSection(false) : loadGuild(false),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1914,16 +1926,30 @@ function guildMemberInitial(member: GuildMember) {
   return guildMemberName(member).slice(0, 1).toUpperCase();
 }
 
+function guildMessageSenderName(message: GuildMessage) {
+  return publicPlayerName(message.sender.nickname, message.sender.uid);
+}
+
+function guildMessageInitial(message: GuildMessage) {
+  return guildMessageSenderName(message).slice(0, 1).toUpperCase();
+}
+
 async function loadGuild(showError = activeSection.value === "guild") {
   if (!isAuthed.value) {
     guildOverview.value = null;
     guildError.value = "";
+    guildMessages.value = [];
+    guildMessageError.value = "";
     return;
   }
   busy.guild = true;
   guildError.value = "";
   try {
     guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
+    if (!guildOverview.value.current) {
+      guildMessages.value = [];
+      guildMessageError.value = "";
+    }
   } catch (error) {
     guildOverview.value = null;
     guildError.value = getErrorMessage(error);
@@ -1932,6 +1958,37 @@ async function loadGuild(showError = activeSection.value === "guild") {
     }
   } finally {
     busy.guild = false;
+  }
+}
+
+async function loadGuildMessages(showError = activeSection.value === "guild") {
+  if (!isAuthed.value || !currentGuild.value) {
+    guildMessages.value = [];
+    guildMessageError.value = "";
+    return;
+  }
+  busy.guildMessages = true;
+  guildMessageError.value = "";
+  try {
+    const data = await request<GuildMessagesResponse>(
+      "/guilds/me/messages?limit=50",
+    );
+    guildMessages.value = data.list || [];
+  } catch (error) {
+    guildMessages.value = [];
+    guildMessageError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", guildMessageError.value);
+    }
+  } finally {
+    busy.guildMessages = false;
+  }
+}
+
+async function refreshGuildSection(showError = activeSection.value === "guild") {
+  await loadGuild(showError);
+  if (currentGuild.value) {
+    await loadGuildMessages(showError);
   }
 }
 
@@ -1956,6 +2013,7 @@ async function createGuild() {
     guildName.value = "";
     guildDescription.value = "";
     notify("success", "已创建");
+    await loadGuildMessages(false);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -1971,6 +2029,7 @@ async function joinGuild(guildId: number) {
       { method: "POST" },
     );
     notify("success", "已加入");
+    await loadGuildMessages(false);
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -1990,11 +2049,37 @@ async function leaveGuild() {
     guildOverview.value = await request<GuildOverviewResponse>("/guilds/me", {
       method: "DELETE",
     });
+    guildMessages.value = [];
+    guildMessageError.value = "";
+    guildMessageText.value = "";
     notify("success", "已退出");
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
     guildActionBusy.value = "";
+  }
+}
+
+async function sendGuildMessage() {
+  const content = guildMessageText.value.trim();
+  if (!content) {
+    notify("error", "请输入消息");
+    return;
+  }
+  busy.guildSending = true;
+  try {
+    const payload: SendGuildMessageRequest = { content };
+    const data = await request<GuildMessagesResponse>("/guilds/me/messages", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    guildMessages.value = data.list || [];
+    guildMessageText.value = "";
+    notify("success", "已发送");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.guildSending = false;
   }
 }
 
@@ -4864,6 +4949,78 @@ function leaderboardRankLabel(rank?: number) {
                     <strong>{{ guildRoleLabel }}</strong>
                   </article>
                 </div>
+                <section class="guild-chat">
+                  <div class="section-title-row">
+                    <div>
+                      <p class="eyebrow">频道</p>
+                      <h3>公会消息</h3>
+                    </div>
+                    <button
+                      class="secondary-action compact"
+                      type="button"
+                      :disabled="busy.guildMessages"
+                      @click="loadGuildMessages()"
+                    >
+                      <RefreshCw
+                        :size="15"
+                        :class="{ spin: busy.guildMessages }"
+                      />
+                      刷新
+                    </button>
+                  </div>
+                  <div
+                    v-if="busy.guildMessages && guildMessageRows.length === 0"
+                    class="empty-mini"
+                  >
+                    正在读取
+                  </div>
+                  <div v-else-if="guildMessageError" class="empty-mini">
+                    消息失败
+                  </div>
+                  <div v-else-if="guildMessageRows.length === 0" class="empty-mini">
+                    暂无消息
+                  </div>
+                  <div v-else class="guild-message-list">
+                    <article
+                      v-for="message in guildMessageRows"
+                      :key="message.id"
+                      class="guild-message-row"
+                    >
+                      <span class="friend-avatar small">
+                        <img
+                          v-if="message.sender.avatar"
+                          :src="message.sender.avatar"
+                          :alt="guildMessageSenderName(message)"
+                        />
+                        <span v-else>{{ guildMessageInitial(message) }}</span>
+                      </span>
+                      <div class="guild-message-body">
+                        <header>
+                          <strong>{{ guildMessageSenderName(message) }}</strong>
+                          <time>{{ formatDate(message.createdAt) }}</time>
+                        </header>
+                        <p>{{ message.content }}</p>
+                      </div>
+                    </article>
+                  </div>
+                  <form
+                    class="guild-message-form"
+                    @submit.prevent="sendGuildMessage"
+                  >
+                    <input
+                      v-model="guildMessageText"
+                      maxlength="120"
+                      placeholder="说点什么"
+                    />
+                    <button
+                      class="primary-action compact"
+                      type="submit"
+                      :disabled="busy.guildSending"
+                    >
+                      发送
+                    </button>
+                  </form>
+                </section>
                 <div class="section-title-row compact-title">
                   <div>
                     <p class="eyebrow">成员</p>

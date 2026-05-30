@@ -2,9 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import { Guild } from "src/entity/guild.entity";
 import { GuildMember } from "src/entity/guildMember.entity";
+import { GuildMessage } from "src/entity/guildMessage.entity";
 import { User } from "src/entity/user.entity";
 
 const GUILD_LIST_LIMIT = 30;
+const DEFAULT_MESSAGE_LIMIT = 50;
+const MAX_MESSAGE_LENGTH = 120;
 
 @Injectable()
 export class GuildsService {
@@ -49,6 +52,45 @@ export class GuildsService {
         ),
       ),
     };
+  }
+
+  async listMessages(uid: string, rawLimit = DEFAULT_MESSAGE_LIMIT) {
+    const normalizedUid = this.normalizeUid(uid);
+    const membership = await this.requireMembership(
+      this.dataSource,
+      normalizedUid,
+    );
+    const messages = await this.dataSource.getRepository(GuildMessage).find({
+      where: { guild_id: membership.guild_id },
+      order: { createdAt: "DESC", id: "DESC" } as any,
+      take: this.normalizeMessageLimit(rawLimit),
+    });
+
+    return {
+      list: await this.toMessageViews(
+        this.dataSource,
+        messages.reverse(),
+      ),
+    };
+  }
+
+  async sendMessage(uid: string, content: string) {
+    const normalizedUid = this.normalizeUid(uid);
+    const normalizedContent = this.normalizeMessageContent(content);
+
+    await this.dataSource.transaction(async (manager) => {
+      const membership = await this.requireMembership(manager, normalizedUid);
+      const repository = manager.getRepository(GuildMessage);
+      await repository.save(
+        repository.create({
+          guild_id: membership.guild_id,
+          sender_uid: normalizedUid,
+          content: normalizedContent,
+        }),
+      );
+    });
+
+    return this.listMessages(normalizedUid);
   }
 
   async createGuild(uid: string, name: string, description?: string) {
@@ -220,6 +262,36 @@ export class GuildsService {
     });
   }
 
+  private async toMessageViews(
+    manager: DataSource | EntityManager,
+    messages: GuildMessage[],
+  ) {
+    if (messages.length === 0) {
+      return [];
+    }
+
+    const users = await manager.getRepository(User).find({
+      where: {
+        uid: In([...new Set(messages.map((message) => message.sender_uid))]),
+      },
+    });
+    const userMap = new Map(users.map((user) => [user.uid, user]));
+
+    return messages.map((message) => {
+      const user = userMap.get(message.sender_uid);
+      return {
+        id: message.id,
+        content: message.content,
+        createdAt: message.createdAt,
+        sender: {
+          uid: message.sender_uid,
+          nickname: this.publicName(user, message.sender_uid),
+          avatar: user?.avatar || "",
+        },
+      };
+    });
+  }
+
   private async listGuildRows(manager: DataSource | EntityManager) {
     return manager.getRepository(Guild).find({
       order: { member_count: "DESC", updatedAt: "DESC", id: "ASC" } as any,
@@ -235,6 +307,17 @@ export class GuildsService {
     if (membership) {
       throw new Error("已加入公会");
     }
+  }
+
+  private async requireMembership(
+    manager: DataSource | EntityManager,
+    uid: string,
+  ) {
+    const membership = await this.findMembership(manager, uid);
+    if (!membership) {
+      throw new Error("尚未加入公会");
+    }
+    return membership;
   }
 
   private async findMembership(
@@ -297,6 +380,27 @@ export class GuildsService {
     return String(description || "")
       .trim()
       .slice(0, 60);
+  }
+
+  private normalizeMessageLimit(value: number) {
+    const limit = Number(value || DEFAULT_MESSAGE_LIMIT);
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return DEFAULT_MESSAGE_LIMIT;
+    }
+    return Math.min(100, limit);
+  }
+
+  private normalizeMessageContent(content: string) {
+    const value = String(content || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!value) {
+      throw new Error("请输入消息");
+    }
+    if (value.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`消息最多 ${MAX_MESSAGE_LENGTH} 字`);
+    }
+    return value;
   }
 
   private publicName(user: User | undefined, uid: string) {

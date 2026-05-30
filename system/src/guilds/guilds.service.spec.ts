@@ -1,6 +1,7 @@
 import { FindOperator } from "typeorm";
 import { Guild } from "src/entity/guild.entity";
 import { GuildMember } from "src/entity/guildMember.entity";
+import { GuildMessage } from "src/entity/guildMessage.entity";
 import { User } from "src/entity/user.entity";
 import { GuildsService } from "./guilds.service";
 
@@ -10,8 +11,10 @@ class GuildsTestStore {
   users: User[] = [];
   guilds: Guild[] = [];
   members: GuildMember[] = [];
+  messages: GuildMessage[] = [];
   nextGuildId = 1;
   nextMemberId = 1;
+  nextMessageId = 1;
 
   getRepository<T>(entity: EntityClass<T>) {
     if (entity === User) {
@@ -29,6 +32,14 @@ class GuildsTestStore {
         id: this.nextMemberId++,
         joinedAt: new Date(
           `2026-01-01T00:00:${String(this.nextMemberId).padStart(2, "0")}.000Z`,
+        ),
+      }));
+    }
+    if (entity === GuildMessage) {
+      return this.createArrayRepository(this.messages, "id", () => ({
+        id: this.nextMessageId++,
+        createdAt: new Date(
+          `2026-01-01T00:01:${String(this.nextMessageId).padStart(2, "0")}.000Z`,
         ),
       }));
     }
@@ -278,5 +289,50 @@ describe("GuildsService 公会系统", () => {
       "公会名格式错误",
     );
     await expect(service.joinGuild("u1", 404)).rejects.toThrow("公会不存在");
+  });
+
+  it("公会成员可以发送并读取消息", async () => {
+    await createGuild(service, "u1", "星海会");
+    await service.joinGuild("u2", 1);
+
+    const sent = await service.sendMessage("u1", "  大家好  ");
+    await service.sendMessage("u2", "一起抽卡");
+    const messages = await service.listMessages("u1");
+
+    expect(sent.list[0]).toMatchObject({
+      content: "大家好",
+      sender: {
+        uid: "u1",
+        nickname: "玩家u1",
+      },
+    });
+    expect(messages.list.map((message) => message.content)).toEqual([
+      "大家好",
+      "一起抽卡",
+    ]);
+    expect((messages.list[0].sender as any).point).toBeUndefined();
+  });
+
+  it("未加入公会不能发送或读取消息", async () => {
+    await createGuild(service, "u1", "星海会");
+
+    await expect(service.sendMessage("u2", "你好")).rejects.toThrow(
+      "尚未加入公会",
+    );
+    await expect(service.listMessages("u2")).rejects.toThrow("尚未加入公会");
+  });
+
+  it("校验消息内容并限制读取数量", async () => {
+    await createGuild(service, "u1", "星海会");
+    await expect(service.sendMessage("u1", "   ")).rejects.toThrow("请输入消息");
+    await expect(service.sendMessage("u1", "满".repeat(121))).rejects.toThrow(
+      "消息最多 120 字",
+    );
+
+    await service.sendMessage("u1", "第一条");
+    await service.sendMessage("u1", "第二条");
+
+    const messages = await service.listMessages("u1", 1);
+    expect(messages.list.map((message) => message.content)).toEqual(["第二条"]);
   });
 });
