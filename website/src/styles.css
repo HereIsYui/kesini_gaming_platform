@@ -3524,24 +3524,6 @@ h3 {
   gap: 16px;
 }
 
-.friends-actions {
-  align-items: stretch;
-}
-
-.friend-add-form {
-  display: flex;
-  gap: 8px;
-  min-width: min(320px, 100%);
-}
-
-.friend-add-form input {
-  min-width: 0;
-}
-
-.friend-add-form .primary-action {
-  flex: 0 0 auto;
-}
-
 .friends-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6559,15 +6541,10 @@ h3 {
     height: 52px;
   }
 
-  .friend-add-form {
-    flex-direction: column;
-  }
-
   .guild-message-form {
     grid-template-columns: 1fr;
   }
 
-  .friend-add-form .primary-action,
   .friend-row-actions .primary-action,
   .friend-row-actions .secondary-action,
   .friend-row-actions .danger-action,

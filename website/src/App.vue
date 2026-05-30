@@ -268,7 +268,6 @@ const friendsOverview = ref<FriendsOverviewResponse | null>(null);
 const friendsError = ref("");
 const friendFeed = ref<SocialActivityRecord[]>([]);
 const friendFeedError = ref("");
-const friendTargetUid = ref("");
 const friendActionBusy = ref("");
 const guildOverview = ref<GuildOverviewResponse | null>(null);
 const guildError = ref("");
@@ -1298,7 +1297,6 @@ function logout() {
   friendsError.value = "";
   friendFeed.value = [];
   friendFeedError.value = "";
-  friendTargetUid.value = "";
   friendActionBusy.value = "";
   guildOverview.value = null;
   guildError.value = "";
@@ -1834,7 +1832,7 @@ async function sendFriendRequest(uid: string) {
     return false;
   }
   if (!targetUid) {
-    notify("error", "请输入玩家名");
+    notify("error", "无法添加");
     return false;
   }
   friendActionBusy.value = `send:${targetUid}`;
@@ -1852,13 +1850,6 @@ async function sendFriendRequest(uid: string) {
     return false;
   } finally {
     friendActionBusy.value = "";
-  }
-}
-
-async function sendManualFriendRequest() {
-  const targetUid = friendTargetUid.value.trim();
-  if (await sendFriendRequest(targetUid)) {
-    friendTargetUid.value = "";
   }
 }
 
@@ -4581,21 +4572,6 @@ function leaderboardRankLabel(rank?: number) {
             <h2>好友列表</h2>
           </div>
           <div class="section-actions friends-actions">
-            <form
-              v-if="isAuthed"
-              class="friend-add-form"
-              @submit.prevent="sendManualFriendRequest"
-            >
-              <input v-model="friendTargetUid" placeholder="玩家名" />
-              <button
-                class="primary-action compact"
-                type="submit"
-                :disabled="busy.friends || friendActionBusy !== ''"
-              >
-                <UsersRound :size="16" />
-                添加
-              </button>
-            </form>
             <button
               v-if="isAuthed"
               class="secondary-action compact"
