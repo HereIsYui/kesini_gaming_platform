@@ -1024,7 +1024,7 @@ export class AdminController {
   async listPveStages(@Query() query: PageDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.listPveStages(query),
-      "获取PVE关卡成功",
+      "获取关卡成功",
     );
   }
 
@@ -1034,7 +1034,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.getPveStage(id),
-      "获取PVE关卡详情成功",
+      "获取关卡详情成功",
     );
   }
 
@@ -1042,7 +1042,7 @@ export class AdminController {
   async createPveStage(@Body() body: PveStageDto): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.createPveStage(body as any),
-      "创建PVE关卡成功",
+      "创建关卡成功",
     );
   }
 
@@ -1053,7 +1053,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.updatePveStage(id, body as any),
-      "更新PVE关卡成功",
+      "更新关卡成功",
     );
   }
 
@@ -1063,7 +1063,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.deletePveStage(id),
-      "删除PVE关卡成功",
+      "删除关卡成功",
     );
   }
 
@@ -1073,7 +1073,7 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.listPveRecords(query),
-      "获取PVE挑战记录成功",
+      "获取挑战记录成功",
     );
   }
 

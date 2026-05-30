@@ -423,8 +423,8 @@ export const exchangeUsageFields: FieldConfig[] = [
     identity: { uidKey: "uid", nameKey: "userName" },
   },
   { key: "count", label: "数量", readonly: true },
-  { key: "cost_snapshot", label: "消耗快照", readonly: true },
-  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "cost_snapshot", label: "消耗", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "兑换时间", readonly: true },
 ];
 
@@ -470,13 +470,13 @@ export const launchActivityClaimFields: FieldConfig[] = [
     minWidth: 180,
     identity: { uidKey: "uid", nameKey: "userName" },
   },
-  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "领取时间", readonly: true },
 ];
 
 export const achievementFields: FieldConfig[] = [
   { key: "id", label: "编号", readonly: true },
-  { key: "code", label: "成就编码" },
+  { key: "code", label: "成就编号" },
   { key: "name", label: "名称" },
   { key: "category", label: "分类", defaultValue: "常规" },
   {
@@ -523,9 +523,9 @@ export const seasonFields: FieldConfig[] = [
   { key: "id", label: "编号", readonly: true },
   {
     key: "season_key",
-    label: "赛季编码",
+    label: "赛季编号",
     placeholder: "例如：season-2026-s1",
-    helper: "只支持字母、数字、下划线和中划线，创建后建议不要频繁修改。",
+    helper: "字母、数字、下划线或中划线。",
   },
   { key: "name", label: "赛季名称", placeholder: "例如：星穹远征 S1" },
   { key: "enabled", label: "赛季状态", type: "boolean", defaultValue: true },
@@ -598,7 +598,7 @@ export const seasonPointRecordFields: FieldConfig[] = [
   { key: "point_after", label: "变动后", readonly: true },
   { key: "source_type", label: "来源", readonly: true },
   { key: "title", label: "标题", readonly: true },
-  { key: "metadata", label: "上下文", readonly: true, tableHidden: true },
+  { key: "metadata", label: "详情", readonly: true, tableHidden: true },
   { key: "createdAt", label: "时间", readonly: true },
 ];
 
@@ -615,7 +615,7 @@ export const seasonShopUsageFields: FieldConfig[] = [
   },
   { key: "count", label: "数量", readonly: true },
   { key: "cost_points", label: "消耗赛季积分", readonly: true },
-  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "兑换时间", readonly: true },
 ];
 
@@ -667,7 +667,7 @@ export const pveRecordFields: FieldConfig[] = [
   { key: "success", label: "结果", readonly: true },
   { key: "formation_power", label: "阵容战力", readonly: true },
   { key: "enemy_power", label: "敌方战力", readonly: true },
-  { key: "reward_snapshot", label: "奖励快照", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "挑战时间", readonly: true },
 ];
 
@@ -769,8 +769,8 @@ export const rechargeRecordFields: FieldConfig[] = [
   { key: "fishpi_cost", label: "扣除鱼排积分", readonly: true },
   { key: "point_before", label: "充值前", readonly: true },
   { key: "point_after", label: "充值后", readonly: true },
-  { key: "request_id", label: "请求号", readonly: true },
-  { key: "thirdPartyMsg", label: "鱼排响应", readonly: true },
+  { key: "request_id", label: "流水号", readonly: true },
+  { key: "thirdPartyMsg", label: "鱼排结果", readonly: true },
   { key: "failure_reason", label: "失败原因", readonly: true },
   { key: "createdAt", label: "充值时间", readonly: true },
 ];

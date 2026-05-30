@@ -126,7 +126,7 @@ export async function request<T>(
     if (contentType.includes("text/html") || raw.trimStart().startsWith("<")) {
       throw new Error("暂时无法连接");
     }
-    throw new Error("响应异常");
+    throw new Error("请求失败");
   }
   if (!response.ok || payload.code !== 0) {
     throw new Error(payload.msg || "请求失败");

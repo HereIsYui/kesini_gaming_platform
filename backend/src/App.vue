@@ -379,7 +379,7 @@
           creatable
           deletable
           detail-fetchable
-          search-placeholder="搜索成就名称或编码"
+          search-placeholder="搜索成就名称或编号"
         />
 
         <AdminTable
@@ -400,7 +400,7 @@
           creatable
           deletable
           detail-fetchable
-          search-placeholder="搜索赛季名称或编码"
+          search-placeholder="搜索赛季名称或编号"
         >
           <template #cell="{ field, row }">
             <el-tag
@@ -438,7 +438,7 @@
           creatable
           deletable
           detail-fetchable
-          search-placeholder="搜索兑换项或赛季编码"
+          search-placeholder="搜索兑换项或赛季编号"
         >
           <template #cell="{ field, row }">
             <el-tag
@@ -913,7 +913,7 @@ const pageDefinitions = computed(
       {
         key: "redeem-usages",
         label: "兑换记录",
-        description: "查看玩家兑换码领取记录和奖励快照。",
+        description: "查看玩家兑换码领取记录和奖励。",
         group: "运营工具",
         icon: Files,
       },
@@ -927,7 +927,7 @@ const pageDefinitions = computed(
       {
         key: "exchange-usages",
         label: "兑换商店记录",
-        description: "查看兑换商店领取记录、消耗和奖励快照。",
+        description: "查看兑换商店领取记录、消耗和奖励。",
         group: "运营工具",
         icon: Files,
       },
@@ -948,7 +948,7 @@ const pageDefinitions = computed(
       {
         key: "launch-activity-claims",
         label: "活动领取记录",
-        description: "查看玩家开服福利领取批次、时间和奖励快照。",
+        description: "查看玩家开服福利领取批次、时间和奖励。",
         group: "运营工具",
         icon: Files,
       },
@@ -990,7 +990,7 @@ const pageDefinitions = computed(
       {
         key: "season-shop-usages",
         label: "赛季兑换记录",
-        description: "查看赛季商店兑换数量和奖励快照。",
+        description: "查看赛季商店兑换数量和奖励。",
         group: "运营工具",
         icon: Files,
       },
@@ -1004,7 +1004,7 @@ const pageDefinitions = computed(
       {
         key: "pve-records",
         label: "挑战记录",
-        description: "查看玩家关卡挑战结果、阵容战力和奖励快照。",
+        description: "查看玩家关卡挑战结果、阵容战力和奖励。",
         group: "运营工具",
         icon: Files,
       },
@@ -1240,7 +1240,7 @@ function useManualToken() {
     return;
   }
   if (!manualToken.value.trim()) {
-    authError.value = "请先粘贴凭证";
+    authError.value = "请先粘贴口令";
     return;
   }
   setToken(manualToken.value.trim());

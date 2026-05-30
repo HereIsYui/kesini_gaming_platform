@@ -347,7 +347,7 @@ export class RechargeService {
       throw new Error("该充值请求已扣除鱼排积分，星穹币入账失败，请联系运营");
     }
     throw new Error(
-      record.failure_reason || "该充值请求已失败，请更换请求号后重试",
+      record.failure_reason || "该充值已失败，请更换流水号后重试",
     );
   }
 
@@ -362,10 +362,10 @@ export class RechargeService {
   private normalizeRequestId(value?: string): string {
     const requestId = String(value || randomUUID()).trim();
     if (!requestId) {
-      throw new Error("充值请求号不能为空");
+      throw new Error("充值流水号不能为空");
     }
     if (requestId.length > 80) {
-      throw new Error("充值请求号不能超过80个字符");
+      throw new Error("充值流水号不能超过80个字符");
     }
     return requestId;
   }

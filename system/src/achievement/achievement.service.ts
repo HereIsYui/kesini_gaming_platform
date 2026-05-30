@@ -311,7 +311,7 @@ export class AchievementService {
       where: { code: normalized.code },
     });
     if (duplicate && !duplicate.delete_flag) {
-      throw new Error("成就编码已存在");
+      throw new Error("成就编号已存在");
     }
     const saved = await repository.save(repository.create(normalized));
     return this.toAdminConfigView(saved);
@@ -329,7 +329,7 @@ export class AchievementService {
         where: { code: normalized.code },
       });
       if (duplicate && duplicate.id !== config.id && !duplicate.delete_flag) {
-        throw new Error("成就编码已存在");
+        throw new Error("成就编号已存在");
       }
     }
     Object.assign(config, normalized);
@@ -640,7 +640,7 @@ export class AchievementService {
     if (creating || input.code !== undefined) {
       const code = String(input.code || "").trim();
       if (!/^[a-zA-Z0-9_-]{2,64}$/.test(code)) {
-        throw new Error("成就编码需为 2-64 位字母、数字、下划线或横线");
+        throw new Error("成就编号需为 2-64 位字母、数字、下划线或横线");
       }
       result.code = code;
     }

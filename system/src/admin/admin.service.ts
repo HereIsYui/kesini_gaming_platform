@@ -1473,10 +1473,10 @@ export class AdminService {
     const stage = await this.mustFind(
       this.mustPveStageRepository(),
       id,
-      "PVE关卡不存在",
+      "关卡不存在",
     );
     if (stage.delete_flag) {
-      throw new Error("PVE关卡不存在");
+      throw new Error("关卡不存在");
     }
     return stage;
   }
@@ -1571,7 +1571,7 @@ export class AdminService {
       where: { season_key: normalized.season_key },
     });
     if (existing && existing.delete_flag !== true) {
-      throw new Error("赛季编码已存在");
+      throw new Error("赛季编号已存在");
     }
     if (existing && existing.delete_flag === true) {
       Object.assign(existing, normalized, { delete_flag: false });
@@ -1613,7 +1613,7 @@ export class AdminService {
         where: { season_key: normalized.season_key },
       });
       if (existing && existing.id !== id && existing.delete_flag !== true) {
-        throw new Error("赛季编码已存在");
+        throw new Error("赛季编号已存在");
       }
     }
     Object.assign(season, normalized);
@@ -2236,14 +2236,14 @@ export class AdminService {
 
   private mustPveStageRepository() {
     if (!this.pveStageRepository) {
-      throw new Error("PVE关卡仓库未初始化");
+      throw new Error("关卡数据未初始化");
     }
     return this.pveStageRepository;
   }
 
   private mustPveRecordRepository() {
     if (!this.pveRecordRepository) {
-      throw new Error("PVE挑战记录仓库未初始化");
+      throw new Error("挑战记录未初始化");
     }
     return this.pveRecordRepository;
   }
@@ -2892,11 +2892,11 @@ export class AdminService {
   private normalizeSeasonKey(value: unknown) {
     const key = String(value || "").trim();
     if (!key) {
-      throw new Error("赛季编码不能为空");
+      throw new Error("赛季编号不能为空");
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(key)) {
       throw new Error(
-        "赛季编码只能包含字母、数字、下划线和中划线，且不超过64位",
+        "赛季编号只能包含字母、数字、下划线和中划线，且不超过64位",
       );
     }
     return key;

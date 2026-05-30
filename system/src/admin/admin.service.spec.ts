@@ -958,7 +958,7 @@ describe("AdminService", () => {
     });
   });
 
-  it("创建赛季会校验赛季编码和时间范围", async () => {
+  it("创建赛季会校验赛季编号和时间范围", async () => {
     const seasonRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
@@ -987,7 +987,7 @@ describe("AdminService", () => {
         season_key: "bad key",
         name: "异常赛季",
       } as any),
-    ).rejects.toThrow("赛季编码只能包含");
+    ).rejects.toThrow("赛季编号只能包含");
     await expect(
       service.createSeason({
         season_key: "season-2026-s2",

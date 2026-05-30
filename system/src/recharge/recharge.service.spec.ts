@@ -530,7 +530,7 @@ describe("RechargeService", () => {
     );
   });
 
-  it("相同请求号成功记录重复提交会直接返回原结果", async () => {
+  it("相同流水号成功记录重复提交会直接返回原结果", async () => {
     const existing = {
       uid: "u1",
       request_id: "same",
