@@ -18,9 +18,9 @@
       </el-form>
 
       <template v-if="manualLoginEnabled">
-        <el-divider>临时入口</el-divider>
+        <el-divider>口令登录</el-divider>
         <el-form label-position="top" class="login-form">
-          <el-form-item label="临时凭证">
+          <el-form-item label="登录口令">
             <el-input v-model="manualToken" type="textarea" :rows="4" />
           </el-form-item>
           <el-button @click="useManualToken">进入</el-button>
@@ -74,7 +74,6 @@
         <div class="topbar-title">
           <p class="eyebrow">{{ activePage.group }}</p>
           <h1>{{ activePage.label }}</h1>
-          <span>{{ activePage.description }}</span>
         </div>
         <div class="top-actions">
           <el-dropdown
@@ -273,7 +272,7 @@
               <strong>{{
                 row.poolName || `卡池 #${row.pool_id || "-"}`
               }}</strong>
-              <span>ID {{ row.pool_id || "-" }}</span>
+              <span>编号 {{ row.pool_id || "-" }}</span>
             </div>
             <el-tag
               v-else-if="field.key === 'gacha_config_mode'"
@@ -474,7 +473,7 @@
 
         <AdminTable
           v-else-if="active === 'pve-stages'"
-          title="PVE 关卡"
+          title="关卡管理"
           endpoint="/admin/pve-stages"
           :fields="pveStageFields"
           :item-options="itemOptions"
@@ -500,7 +499,7 @@
 
         <AdminTable
           v-else-if="active === 'pve-records'"
-          title="PVE 挑战记录"
+          title="挑战记录"
           endpoint="/admin/pve-records"
           :fields="pveRecordFields"
           keyword-param="uid"
@@ -997,14 +996,14 @@ const pageDefinitions = computed(
       },
       {
         key: "pve-stages",
-        label: "PVE 关卡",
+        label: "关卡管理",
         description: "配置轻量关卡、战力门槛、每日次数和胜利奖励。",
         group: "运营工具",
         icon: MagicStick,
       },
       {
         key: "pve-records",
-        label: "PVE 记录",
+        label: "挑战记录",
         description: "查看玩家关卡挑战结果、阵容战力和奖励快照。",
         group: "运营工具",
         icon: Files,

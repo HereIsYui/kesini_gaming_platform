@@ -1330,7 +1330,7 @@ async function applyManualToken() {
   }
   const value = manualToken.value.trim();
   if (!value) {
-    notify("error", "请输入临时凭证");
+    notify("error", "请输入口令");
     return;
   }
   setToken(value);
@@ -4419,8 +4419,8 @@ function leaderboardRankLabel(rank?: number) {
               登录
             </button>
             <label v-if="manualLoginEnabled" class="token-box debug-token-box">
-              <span>临时凭证</span>
-              <textarea v-model="manualToken" placeholder="粘贴凭证"></textarea>
+              <span>登录口令</span>
+              <textarea v-model="manualToken" placeholder="粘贴口令"></textarea>
             </label>
             <button
               v-if="manualLoginEnabled"

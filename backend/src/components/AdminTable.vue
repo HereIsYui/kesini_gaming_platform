@@ -8,7 +8,7 @@
         </div>
         <div class="panel-actions">
           <el-button type="info" plain :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
-          <el-button type="info" plain :icon="Download" @click="exportCurrentPage">导出当前页</el-button>
+          <el-button type="info" plain :icon="Download" @click="exportCurrentPage">导出</el-button>
           <el-button v-if="creatable" type="primary" @click="openCreate">
             新增
           </el-button>

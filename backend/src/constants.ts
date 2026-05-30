@@ -158,7 +158,7 @@ export const achievementTargetOptions: Array<{
 ];
 
 export const poolFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "pool_name", label: "卡池名称", placeholder: "例如：鱼排人物" },
   {
     key: "card_desc",
@@ -187,7 +187,7 @@ export const poolFields: FieldConfig[] = [
 
 export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
   return [
-    { key: "id", label: "ID", readonly: true },
+    { key: "id", label: "编号", readonly: true },
     { key: "card_name", label: "卡片名称", placeholder: "例如：星辉少女" },
     {
       key: "card_image",
@@ -238,7 +238,7 @@ export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
 }
 
 export const dropFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "drop_name", label: "物品名称", placeholder: "例如：SSR碎片" },
   { key: "typeLabel", label: "物品类型", readonly: true },
   { key: "usageLabel", label: "用途说明", readonly: true },
@@ -272,7 +272,7 @@ export const dropFields: FieldConfig[] = [
 ];
 
 export const userFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "uid", label: "账号", readonly: true },
   { key: "name", label: "用户名" },
   { key: "nickname", label: "昵称" },
@@ -287,7 +287,7 @@ export const userFields: FieldConfig[] = [
 ];
 
 export const inventoryFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   {
     key: "user.uid",
     label: "玩家",
@@ -301,7 +301,7 @@ export const inventoryFields: FieldConfig[] = [
 ];
 
 export const pityFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "uid", label: "玩家", readonly: true, minWidth: 180 },
   { key: "poolName", label: "卡池", readonly: true, minWidth: 180 },
   { key: "gacha_config_mode", label: "配置来源", readonly: true },
@@ -351,7 +351,7 @@ export const siteConfigFields: FieldConfig[] = [
 ];
 
 export const historyFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   {
     key: "uid",
     label: "玩家",
@@ -365,7 +365,7 @@ export const historyFields: FieldConfig[] = [
 ];
 
 export const redeemCodeFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "code", label: "兑换码", placeholder: "留空可由后端生成" },
   { key: "name", label: "名称" },
   { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
@@ -384,7 +384,7 @@ export const redeemCodeFields: FieldConfig[] = [
 ];
 
 export const redeemUsageFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "code", label: "兑换码", readonly: true },
   {
     key: "uid",
@@ -398,7 +398,7 @@ export const redeemUsageFields: FieldConfig[] = [
 ];
 
 export const exchangeItemFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "name", label: "兑换项名称" },
   { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
   { key: "total_limit", label: "总库存", type: "number" },
@@ -413,7 +413,7 @@ export const exchangeItemFields: FieldConfig[] = [
 ];
 
 export const exchangeUsageFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "shop_item_name", label: "兑换项", readonly: true },
   {
     key: "uid",
@@ -439,7 +439,7 @@ export const launchActivityFields: FieldConfig[] = [
 ];
 
 export const announcementFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "title", label: "标题", placeholder: "例如：维护公告" },
   {
     key: "enabled",
@@ -460,7 +460,7 @@ export const announcementFields: FieldConfig[] = [
 ];
 
 export const launchActivityClaimFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "activity_key", label: "活动批次", readonly: true },
   { key: "activity_name", label: "活动名称", readonly: true },
   {
@@ -475,7 +475,7 @@ export const launchActivityClaimFields: FieldConfig[] = [
 ];
 
 export const achievementFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "code", label: "成就编码" },
   { key: "name", label: "名称" },
   { key: "category", label: "分类", defaultValue: "常规" },
@@ -503,7 +503,7 @@ export const achievementFields: FieldConfig[] = [
 ];
 
 export const userAchievementFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   {
     key: "uid",
     label: "玩家",
@@ -520,7 +520,7 @@ export const userAchievementFields: FieldConfig[] = [
 ];
 
 export const seasonFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   {
     key: "season_key",
     label: "赛季编码",
@@ -550,7 +550,7 @@ export function createSeasonShopItemFields(
   seasonOptions: SelectOption[],
 ): FieldConfig[] {
   return [
-    { key: "id", label: "ID", readonly: true },
+    { key: "id", label: "编号", readonly: true },
     {
       key: "season_key",
       label: "所属赛季",
@@ -584,7 +584,7 @@ export function createSeasonShopItemFields(
 }
 
 export const seasonPointRecordFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "season_key", label: "赛季", readonly: true },
   {
     key: "uid",
@@ -603,7 +603,7 @@ export const seasonPointRecordFields: FieldConfig[] = [
 ];
 
 export const seasonShopUsageFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "season_key", label: "赛季", readonly: true },
   { key: "shop_item_name", label: "兑换项", readonly: true },
   {
@@ -620,7 +620,7 @@ export const seasonShopUsageFields: FieldConfig[] = [
 ];
 
 export const pveStageFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "name", label: "关卡名称", placeholder: "例如：星港巡逻" },
   { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
   {
@@ -655,7 +655,7 @@ export const pveStageFields: FieldConfig[] = [
 ];
 
 export const pveRecordFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   {
     key: "uid",
     label: "玩家",
@@ -672,7 +672,7 @@ export const pveRecordFields: FieldConfig[] = [
 ];
 
 export const tradeListingFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "status", label: "状态", readonly: true },
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
@@ -698,8 +698,8 @@ export const tradeListingFields: FieldConfig[] = [
 ];
 
 export const tradeRecordFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
-  { key: "listing_id", label: "挂单ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
+  { key: "listing_id", label: "挂单编号", readonly: true },
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
   { key: "card_uuid", label: "卡片编号", readonly: true },
@@ -755,7 +755,7 @@ export const decomposeConfigFields: FieldConfig[] = [
 ];
 
 export const rechargeRecordFields: FieldConfig[] = [
-  { key: "id", label: "ID", readonly: true },
+  { key: "id", label: "编号", readonly: true },
   { key: "statusLabel", label: "状态", readonly: true },
   {
     key: "uid",
