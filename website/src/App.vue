@@ -2955,6 +2955,17 @@ function getPoolName(poolId?: number | null) {
   );
 }
 
+function drawHistoryDetailMeta(detail: DrawHistoryRecord["details"][number]) {
+  const poolName = getPoolName(detail.poolId);
+  if (poolName) {
+    return poolName;
+  }
+  if (detail.cardType !== undefined && detail.cardType !== null) {
+    return cardTypeLabel(detail.cardType);
+  }
+  return "抽卡记录";
+}
+
 function getPityForPool(poolId?: number | null) {
   const normalizedPoolId = Number(poolId || 0);
   if (!normalizedPoolId) {
@@ -8452,7 +8463,7 @@ function leaderboardRankLabel(rank?: number) {
                   >
                     <span class="rarity-badge">{{ detail.rarity }}</span>
                     <strong>{{ detail.cardName }}</strong>
-                    <small>{{ detail.cardUuid || "旧记录" }}</small>
+                    <small>{{ drawHistoryDetailMeta(detail) }}</small>
                     <div v-if="detail.isUp || detail.isPity" class="tag-row">
                       <span v-if="detail.isUp">UP</span>
                       <span v-if="detail.isPity">保底</span>
