@@ -716,6 +716,49 @@ option {
   padding: 28px clamp(16px, 4vw, 42px) 96px;
 }
 
+.announcement-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.announcement-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(255, 211, 106, 0.28);
+  border-radius: var(--radius);
+  color: var(--text);
+  background:
+    linear-gradient(135deg, rgba(255, 211, 106, 0.12), rgba(84, 216, 255, 0.06)),
+    rgba(255, 255, 255, 0.045);
+  padding: 12px 14px;
+}
+
+:root[data-theme="light"] .announcement-item {
+  border-color: rgba(179, 122, 19, 0.22);
+  background:
+    linear-gradient(135deg, rgba(255, 211, 106, 0.22), rgba(11, 149, 208, 0.06)),
+    rgba(255, 255, 255, 0.9);
+}
+
+.announcement-item strong,
+.announcement-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.announcement-item strong {
+  font-size: 14px;
+}
+
+.announcement-item span {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.72fr) minmax(320px, 0.78fr);

@@ -42,6 +42,7 @@ import { UserSocialActivity } from "./entity/userSocialActivity.entity";
 import { Guild } from "./entity/guild.entity";
 import { GuildMember } from "./entity/guildMember.entity";
 import { GuildMessage } from "./entity/guildMessage.entity";
+import { Announcement } from "./entity/announcement.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -65,6 +66,7 @@ import { ProfileModule } from "./profile/profile.module";
 import { FriendsModule } from "./friends/friends.module";
 import { SocialActivityModule } from "./social/social-activity.module";
 import { GuildsModule } from "./guilds/guilds.module";
+import { AnnouncementModule } from "./announcement/announcement.module";
 
 @Module({
   imports: [
@@ -113,6 +115,7 @@ import { GuildsModule } from "./guilds/guilds.module";
       Guild,
       GuildMember,
       GuildMessage,
+      Announcement,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -136,6 +139,7 @@ import { GuildsModule } from "./guilds/guilds.module";
     FriendsModule,
     SocialActivityModule,
     GuildsModule,
+    AnnouncementModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

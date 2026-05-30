@@ -5,9 +5,15 @@ import { ApisController } from './apis.controller';
 import { User } from 'src/entity/user.entity';
 import { AuthModule } from 'src/auth/auth.module';
 import { SiteConfigModule } from 'src/config/site-config.module';
+import { AnnouncementModule } from 'src/announcement/announcement.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), AuthModule, SiteConfigModule],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    AuthModule,
+    SiteConfigModule,
+    AnnouncementModule,
+  ],
   controllers: [ApisController],
   providers: [ApisService],
 })

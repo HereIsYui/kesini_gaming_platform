@@ -28,6 +28,16 @@ export interface SiteConfig {
   adminTitle: string;
 }
 
+export interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+}
+
+export interface AnnouncementListResponse {
+  list: Announcement[];
+}
+
 export type CardRarity = "N" | "R" | "SR" | "SSR" | "UR";
 
 export interface PoolInfo {

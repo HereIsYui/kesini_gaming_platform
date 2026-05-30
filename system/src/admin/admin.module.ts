@@ -5,6 +5,8 @@ import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "src/card/gacha-config.service";
 import { SiteConfigModule } from "src/config/site-config.module";
 import { ShopModule } from "src/shop/shop.module";
+import { AnnouncementModule } from "src/announcement/announcement.module";
+import { Announcement } from "src/entity/announcement.entity";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
@@ -64,11 +66,13 @@ import { AdminService } from "./admin.service";
       SystemConfig,
       PveStage,
       PveChallengeRecord,
+      Announcement,
     ]),
     AuthModule,
     AchievementModule,
     SiteConfigModule,
     ShopModule,
+    AnnouncementModule,
   ],
   controllers: [AdminController],
   providers: [AdminGuard, AdminService, GachaConfigService],

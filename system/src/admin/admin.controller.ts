@@ -39,6 +39,7 @@ import {
 } from "src/achievement/achievement.service";
 import type { AchievementTargetType } from "src/entity/achievementConfig.entity";
 import { ShopRecycleService } from "src/shop/shop-recycle.service";
+import { AnnouncementService } from "src/announcement/announcement.service";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
 
@@ -58,6 +59,36 @@ class PageDto {
   @IsOptional()
   @IsString()
   keyword?: string;
+}
+
+class AnnouncementDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  content?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sort_order?: number;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
 }
 
 class CardQueryDto extends PageDto {
@@ -894,6 +925,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly achievementService: AchievementService,
     private readonly shopRecycleService: ShopRecycleService,
+    private readonly announcementService: AnnouncementService,
   ) {}
 
   @Get("me")
@@ -1494,6 +1526,55 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listExchangeUsages(query),
       "获取兑换商店记录成功",
+    );
+  }
+
+  @Get("announcements")
+  async listAnnouncements(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.announcementService.listAdmin(query),
+      "获取公告成功",
+    );
+  }
+
+  @Get("announcements/:id")
+  async getAnnouncement(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.announcementService.getAdmin(id),
+      "获取公告成功",
+    );
+  }
+
+  @Post("announcements")
+  async createAnnouncement(
+    @Body() body: AnnouncementDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.announcementService.createAdmin(body as any),
+      "已创建",
+    );
+  }
+
+  @Patch("announcements/:id")
+  async updateAnnouncement(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: AnnouncementDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.announcementService.updateAdmin(id, body as any),
+      "已保存",
+    );
+  }
+
+  @Delete("announcements/:id")
+  async deleteAnnouncement(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.announcementService.deleteAdmin(id),
+      "已删除",
     );
   }
 

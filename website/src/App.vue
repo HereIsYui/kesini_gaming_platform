@@ -56,6 +56,7 @@ import type {
   AchievementListResponse,
   AchievementNotification,
   AchievementRecord,
+  AnnouncementListResponse,
   BulkDecomposeResponse,
   CardUpgradePreview,
   CardUpgradeResponse,
@@ -237,6 +238,7 @@ const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
   adminTitle: "Kesini 后台管理",
 });
+const announcements = ref<AnnouncementListResponse["list"]>([]);
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
@@ -1342,12 +1344,16 @@ function sortPools(list: PoolInfo[]) {
 async function loadPublicData() {
   busy.public = true;
   try {
-    const [list, recharge] = await Promise.all([
+    const [list, recharge, announcementData] = await Promise.all([
       request<PoolInfo[]>("/card/pools"),
       request<RechargeConfig>("/recharge/config").catch(() => null),
+      request<AnnouncementListResponse>("/announcements").catch(() => ({
+        list: [],
+      })),
     ]);
     pools.value = sortPools(list || []);
     rechargeConfig.value = recharge;
+    announcements.value = announcementData.list || [];
     if (!activePoolId.value && pools.value.length > 0) {
       activePoolId.value = pools.value[0].id;
     }
@@ -4022,6 +4028,17 @@ function leaderboardRankLabel(rank?: number) {
     </header>
 
     <main class="page">
+      <section v-if="announcements.length > 0" class="announcement-strip">
+        <article
+          v-for="item in announcements"
+          :key="item.id"
+          class="announcement-item"
+        >
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.content }}</span>
+        </article>
+      </section>
+
       <section
         v-if="activeSection === 'draw'"
         class="hero-grid"

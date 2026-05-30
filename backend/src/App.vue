@@ -329,6 +329,18 @@
           search-placeholder="按 UID 查询"
         />
 
+        <AdminTable
+          v-else-if="active === 'announcements'"
+          title="公告栏"
+          endpoint="/admin/announcements"
+          :fields="announcementFields"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索标题或内容"
+        />
+
         <ConfigPanel
           v-else-if="active === 'launch-activity-config'"
           title="开服活动"
@@ -673,6 +685,7 @@ import {
 } from "@element-plus/icons-vue";
 import {
   achievementFields,
+  announcementFields,
   createCardFields,
   createSeasonShopItemFields,
   decomposeConfigFields,
@@ -890,6 +903,13 @@ const pageDefinitions = computed(
         key: "exchange-usages",
         label: "兑换商店记录",
         description: "查看兑换商店领取记录、消耗和奖励快照。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "announcements",
+        label: "公告栏",
+        description: "维护玩家站展示公告。",
         group: "运营工具",
         icon: Files,
       },

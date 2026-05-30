@@ -13,6 +13,7 @@ export type PageKey =
   | "redeem-usages"
   | "exchange-shop"
   | "exchange-usages"
+  | "announcements"
   | "launch-activity-config"
   | "launch-activity-claims"
   | "achievements"
@@ -56,6 +57,7 @@ export const pageKeys: PageKey[] = [
   "redeem-usages",
   "exchange-shop",
   "exchange-usages",
+  "announcements",
   "launch-activity-config",
   "launch-activity-claims",
   "achievements",
@@ -422,6 +424,27 @@ export const launchActivityFields: FieldConfig[] = [
   { key: "ends_at", label: "结束时间", type: "datetime" },
   { key: "description", label: "活动说明", type: "textarea", fullWidth: true },
   { key: "rewards", label: "奖励", type: "rewards", fullWidth: true },
+];
+
+export const announcementFields: FieldConfig[] = [
+  { key: "id", label: "ID", readonly: true },
+  { key: "title", label: "标题", placeholder: "例如：维护公告" },
+  {
+    key: "enabled",
+    label: "状态",
+    type: "boolean",
+    defaultValue: true,
+  },
+  { key: "sort_order", label: "排序", type: "number", defaultValue: 0 },
+  { key: "starts_at", label: "开始时间", type: "datetime" },
+  { key: "ends_at", label: "结束时间", type: "datetime" },
+  {
+    key: "content",
+    label: "内容",
+    type: "textarea",
+    fullWidth: true,
+    placeholder: "填写公告内容",
+  },
 ];
 
 export const launchActivityClaimFields: FieldConfig[] = [
