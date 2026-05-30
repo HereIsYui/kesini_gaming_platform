@@ -134,7 +134,7 @@ describe("AnnouncementService 公告栏", () => {
     });
   });
 
-  it("公开列表只展示启用且在时间内的公告", async () => {
+  it("公开列表返回已开始公告并标记当前状态", async () => {
     await service.createAdmin({ title: "当前公告", content: "奖励已发" });
     await service.createAdmin({
       title: "未开始",
@@ -157,7 +157,18 @@ describe("AnnouncementService 公告栏", () => {
     );
 
     expect(result.list).toEqual([
-      { id: 1, title: "当前公告", content: "奖励已发" },
+      expect.objectContaining({
+        id: 3,
+        title: "已结束",
+        content: "活动结束",
+        active: false,
+      }),
+      expect.objectContaining({
+        id: 1,
+        title: "当前公告",
+        content: "奖励已发",
+        active: true,
+      }),
     ]);
   });
 

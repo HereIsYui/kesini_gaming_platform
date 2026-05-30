@@ -56,6 +56,7 @@ import type {
   AchievementListResponse,
   AchievementNotification,
   AchievementRecord,
+  Announcement,
   AnnouncementListResponse,
   BulkDecomposeResponse,
   CardUpgradePreview,
@@ -223,6 +224,8 @@ type CardIntroTarget = {
   extra?: string;
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
+const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
+const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
 const THEME_KEY = "kesini_website_theme";
 const BAG_PAGE_SIZE = 24;
 const CARD_DESC_DETAIL_THRESHOLD = 34;
@@ -243,6 +246,12 @@ const siteConfig = ref<SiteConfig>({
   adminTitle: "Kesini 运营台",
 });
 const announcements = ref<AnnouncementListResponse["list"]>([]);
+const announcementReadIds = ref<Set<number>>(getStoredNumberSet(ANNOUNCEMENT_READ_KEY));
+const announcementClosedIds = ref<Set<number>>(
+  getStoredNumberSet(ANNOUNCEMENT_CLOSED_KEY),
+);
+const announcementModalOpen = ref(false);
+const selectedAnnouncement = ref<Announcement | null>(null);
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
@@ -1082,6 +1091,44 @@ const resultModalSubtitle = computed(() => {
     ? `${lastResults.value.length} 次抽取完成，最高稀有度 ${best.rarity}`
     : `${lastResults.value.length} 次抽取完成`;
 });
+const activeAnnouncements = computed(() =>
+  announcements.value.filter((item) => item.active !== false),
+);
+const visibleAnnouncements = computed(() =>
+  activeAnnouncements.value
+    .filter((item) => !announcementClosedIds.value.has(item.id))
+    .slice(0, 2),
+);
+const unreadAnnouncementCount = computed(
+  () =>
+    announcements.value.filter((item) => !announcementReadIds.value.has(item.id))
+      .length,
+);
+
+function getStoredNumberSet(key: string) {
+  const raw = localStorage.getItem(key);
+  if (!raw) {
+    return new Set<number>();
+  }
+  try {
+    const value = JSON.parse(raw);
+    if (!Array.isArray(value)) {
+      return new Set<number>();
+    }
+    return new Set(
+      value
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    );
+  } catch {
+    localStorage.removeItem(key);
+    return new Set<number>();
+  }
+}
+
+function persistNumberSet(key: string, value: Set<number>) {
+  localStorage.setItem(key, JSON.stringify([...value]));
+}
 
 function getStoredThemeMode(): ThemeMode {
   const stored = localStorage.getItem(THEME_KEY);
@@ -1239,6 +1286,49 @@ function activityLine(activity: SocialActivityRecord) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
+}
+
+function announcementSummary(content: string) {
+  const text = String(content || "").trim();
+  return text.length > 36 ? `${text.slice(0, 36)}…` : text;
+}
+
+function isAnnouncementRead(item: Announcement) {
+  return announcementReadIds.value.has(item.id);
+}
+
+function markAnnouncementRead(item: Announcement) {
+  if (announcementReadIds.value.has(item.id)) {
+    return;
+  }
+  const next = new Set(announcementReadIds.value);
+  next.add(item.id);
+  announcementReadIds.value = next;
+  persistNumberSet(ANNOUNCEMENT_READ_KEY, next);
+}
+
+function closeAnnouncement(item: Announcement) {
+  markAnnouncementRead(item);
+  const next = new Set(announcementClosedIds.value);
+  next.add(item.id);
+  announcementClosedIds.value = next;
+  persistNumberSet(ANNOUNCEMENT_CLOSED_KEY, next);
+}
+
+function openAnnouncementList() {
+  selectedAnnouncement.value = null;
+  announcementModalOpen.value = true;
+}
+
+function openAnnouncementDetail(item: Announcement) {
+  selectedAnnouncement.value = item;
+  markAnnouncementRead(item);
+  announcementModalOpen.value = true;
+}
+
+function closeAnnouncementModal() {
+  announcementModalOpen.value = false;
+  selectedAnnouncement.value = null;
 }
 
 function getStoredDrawResults(): GachaResult[] {
@@ -4120,14 +4210,45 @@ function leaderboardRankLabel(rank?: number) {
     </header>
 
     <main class="page">
-      <section v-if="announcements.length > 0" class="announcement-strip">
+      <section
+        v-if="announcements.length > 0"
+        class="announcement-strip"
+        :class="{ compact: visibleAnnouncements.length === 0 }"
+      >
+        <div class="announcement-strip-head">
+          <div>
+            <p class="eyebrow">公告</p>
+            <strong>{{
+              unreadAnnouncementCount > 0
+                ? `${unreadAnnouncementCount} 条未读`
+                : "全部已读"
+            }}</strong>
+          </div>
+          <button
+            class="secondary-action compact"
+            type="button"
+            @click="openAnnouncementList"
+          >
+            全部
+          </button>
+        </div>
         <article
-          v-for="item in announcements"
+          v-for="item in visibleAnnouncements"
           :key="item.id"
           class="announcement-item"
+          :class="{ read: isAnnouncementRead(item) }"
+          @click="openAnnouncementDetail(item)"
         >
-          <strong>{{ item.title }}</strong>
-          <span>{{ item.content }}</span>
+          <div class="announcement-item-main">
+            <strong>{{ item.title }}</strong>
+            <span>{{ announcementSummary(item.content) }}</span>
+          </div>
+          <div class="announcement-item-actions">
+            <span v-if="!isAnnouncementRead(item)" class="unread-dot"></span>
+            <button type="button" @click.stop="closeAnnouncement(item)">
+              关闭
+            </button>
+          </div>
         </article>
       </section>
 
@@ -7431,6 +7552,112 @@ function leaderboardRankLabel(rank?: number) {
         </button>
       </article>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="announcementModalOpen"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeAnnouncementModal"
+      >
+        <section
+          class="announcement-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="公告"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">公告</p>
+              <h2>{{ selectedAnnouncement?.title || "公告" }}</h2>
+              <span v-if="selectedAnnouncement">
+                {{ selectedAnnouncement.active !== false ? "进行中" : "已归档" }}
+                · {{ formatDate(selectedAnnouncement.createdAt) }}
+              </span>
+              <span v-else>{{ announcements.length }} 条</span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              @click="closeAnnouncementModal"
+            >
+              关闭
+            </button>
+          </header>
+
+          <div class="announcement-modal-body">
+            <article
+              v-if="selectedAnnouncement"
+              class="announcement-detail-card"
+            >
+              <p>{{ selectedAnnouncement.content }}</p>
+              <dl>
+                <div>
+                  <dt>时间</dt>
+                  <dd>
+                    {{ formatDate(selectedAnnouncement.startsAt) }} 至
+                    {{ formatDate(selectedAnnouncement.endsAt) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>状态</dt>
+                  <dd>
+                    {{
+                      selectedAnnouncement.active !== false
+                        ? "进行中"
+                        : "已归档"
+                    }}
+                  </dd>
+                </div>
+              </dl>
+            </article>
+            <div v-else class="announcement-list">
+              <button
+                v-for="item in announcements"
+                :key="item.id"
+                class="announcement-list-item"
+                :class="{ read: isAnnouncementRead(item) }"
+                type="button"
+                @click="openAnnouncementDetail(item)"
+              >
+                <span class="announcement-status">{{
+                  item.active !== false ? "进行中" : "已归档"
+                }}</span>
+                <strong>{{ item.title }}</strong>
+                <span>{{ announcementSummary(item.content) }}</span>
+                <small>{{ isAnnouncementRead(item) ? "已读" : "未读" }}</small>
+              </button>
+            </div>
+          </div>
+
+          <footer class="result-modal-actions">
+            <button
+              v-if="selectedAnnouncement"
+              class="secondary-action"
+              type="button"
+              @click="selectedAnnouncement = null"
+            >
+              返回
+            </button>
+            <button
+              v-if="selectedAnnouncement"
+              class="secondary-action"
+              type="button"
+              @click="selectedAnnouncement && closeAnnouncement(selectedAnnouncement)"
+            >
+              隐藏
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              @click="closeAnnouncementModal"
+            >
+              关闭
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div

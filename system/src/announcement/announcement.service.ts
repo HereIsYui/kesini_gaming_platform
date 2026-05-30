@@ -20,12 +20,12 @@ export class AnnouncementService {
     const rows = await this.announcementRepository.find({
       where: { enabled: true, delete_flag: false },
       order: { sort_order: "ASC", id: "DESC" } as any,
-      take: 5,
     });
     return {
       list: rows
-        .filter((item) => this.isVisibleNow(item, now))
-        .map((item) => this.toPublicView(item)),
+        .filter((item) => this.hasStarted(item, now))
+        .slice(0, 20)
+        .map((item) => this.toPublicView(item, now)),
     };
   }
 
@@ -126,8 +126,8 @@ export class AnnouncementService {
     if (!text) {
       throw new Error("内容不能为空");
     }
-    if (text.length > 80) {
-      throw new Error("内容最多 80 字");
+    if (text.length > 160) {
+      throw new Error("内容最多 160 字");
     }
     return text;
   }
@@ -160,9 +160,17 @@ export class AnnouncementService {
     }
   }
 
-  private isVisibleNow(item: Announcement, now: Date) {
+  private hasStarted(item: Announcement, now: Date) {
     const current = now.getTime();
     if (item.starts_at && item.starts_at.getTime() > current) {
+      return false;
+    }
+    return true;
+  }
+
+  private isActiveNow(item: Announcement, now: Date) {
+    const current = now.getTime();
+    if (!this.hasStarted(item, now)) {
       return false;
     }
     if (item.ends_at && item.ends_at.getTime() < current) {
@@ -171,11 +179,15 @@ export class AnnouncementService {
     return true;
   }
 
-  private toPublicView(item: Announcement) {
+  private toPublicView(item: Announcement, now: Date) {
     return {
       id: item.id,
       title: item.title,
       content: item.content,
+      active: this.isActiveNow(item, now),
+      startsAt: item.starts_at?.toISOString() || null,
+      endsAt: item.ends_at?.toISOString() || null,
+      createdAt: item.createdAt?.toISOString() || null,
     };
   }
 

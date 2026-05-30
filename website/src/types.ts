@@ -34,6 +34,10 @@ export interface Announcement {
   id: number;
   title: string;
   content: string;
+  active?: boolean;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface AnnouncementListResponse {
