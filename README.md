@@ -96,7 +96,7 @@ PUBLIC_ENABLE_MANUAL_LOGIN=false
 
 API 地址读取优先级为：`dist/config.js` > 构建时环境变量 > 浏览器本地保存地址 > 本地开发默认地址。生产环境会忽略浏览器里旧的 `http://localhost:3000` 保存值，避免部署后被本机缓存覆盖。
 
-临时凭证入口只在本地开发默认显示。生产环境默认隐藏；确需临时启用时，在对应 `dist/config.js` 中设置 `ENABLE_MANUAL_LOGIN: true`，或构建前设置 `VITE_ENABLE_MANUAL_LOGIN=true`、`PUBLIC_ENABLE_MANUAL_LOGIN=true`。
+登录口令入口只在本地开发默认显示。生产环境默认隐藏；确需启用时，在对应 `dist/config.js` 中设置 `ENABLE_MANUAL_LOGIN: true`，或构建前设置 `VITE_ENABLE_MANUAL_LOGIN=true`、`PUBLIC_ENABLE_MANUAL_LOGIN=true`。
 
 ## 构建
 
@@ -274,7 +274,7 @@ export FILE_ROOT=/data/kesini/public
 - `curl https://web.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
 - `curl https://admin.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
 - 玩家前端发起的 API 请求访问的是 `https://api.example.com`
-- 生产环境玩家前端和运营台不显示“临时凭证”
+- 生产环境玩家前端和运营台不显示“登录口令”
 - OAuth 登录跳转到 FishPi 时，URL 中的 `openid.return_to` 是当前前端 HTTPS 域名
 - OAuth 回调后前端能调用 `POST /apis/login` 完成登录
 - 重复提交同一个 OAuth 回调会返回 `登录已失效`
@@ -304,7 +304,7 @@ export FILE_ROOT=/data/kesini/public
 
 - [x] P0 第一阶段：卡片收藏锁定、保底进度展示、抽卡历史详情
 - [x] P1 每日/每周任务、活跃度奖励
-- [x] P2 卡片养成、阵容编队、轻量 PVE 玩法
+- [x] P2 卡片养成、阵容编队、轻量关卡玩法
 - [x] P3 赛季系统、赛季商店、活动排行
 - [x] P4 第一阶段：玩家主页、卡片展示墙
 - [x] P5 第一阶段：好友申请与好友列表
@@ -313,13 +313,13 @@ export FILE_ROOT=/data/kesini/public
 - [x] P5 第四阶段：公会聊天
 - [x] P6 第一阶段：公告栏
 
-## 卡片养成、阵容编队与 PVE
+## 卡片养成、阵容编队与关卡挑战
 
 P2 已完成第一步：玩家背包卡片支持养成等级、累计投入经验与战力展示。养成消耗该卡片对应碎片，每次提升 1 级；不同稀有度有不同等级上限、碎片消耗和战力成长。锁定、挂售和已达到等级上限的卡片不能继续养成。
 
 P2 已完成第二步：玩家端新增阵容编队，可在 3 个固定位置上阵已拥有卡片并汇总总战力。接口为 `GET /formation` 和 `PUT /formation`；同一张卡不能重复上阵，挂售中的卡片不能上阵，锁定卡允许上阵。
 
-P2 已完成第三步：玩家端新增轻量 PVE 关卡，使用当前阵容总战力挑战运营台配置的关卡。接口为 `GET /pve/stages`、`POST /pve/stages/:id/challenge` 和 `GET /pve/records`；挑战胜利自动发放关卡奖励并写入星穹币流水，失败记录挑战结果但不发奖励。运营台可在“PVE 关卡”配置敌方战力、推荐战力、每日次数、开放时间和胜利奖励，并在“PVE 记录”审计玩家挑战结果。
+P2 已完成第三步：玩家端新增轻量关卡挑战，使用当前阵容总战力挑战运营台配置的关卡。接口为 `GET /pve/stages`、`POST /pve/stages/:id/challenge` 和 `GET /pve/records`；挑战胜利自动发放关卡奖励并写入星穹币流水，失败记录挑战结果但不发奖励。运营台可在“关卡管理”配置敌方战力、推荐战力、每日次数、开放时间和胜利奖励，并在“挑战记录”审计玩家挑战结果。
 
 ## 赛季系统
 
