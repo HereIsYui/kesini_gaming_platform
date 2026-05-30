@@ -261,13 +261,13 @@ export const dropFields: FieldConfig[] = [
 
 export const userFields: FieldConfig[] = [
   { key: "id", label: "ID", readonly: true },
-  { key: "uid", label: "UID", readonly: true },
+  { key: "uid", label: "账号", readonly: true },
   { key: "name", label: "用户名" },
   { key: "nickname", label: "昵称" },
   { key: "point", label: "星穹币", type: "number" },
   {
     key: "is_admin",
-    label: "管理员",
+    label: "管理",
     type: "boolean",
     options: booleanOptions,
     defaultValue: false,
@@ -332,9 +332,9 @@ export const siteConfigFields: FieldConfig[] = [
   },
   {
     key: "adminTitle",
-    label: "后台标题",
-    placeholder: "例如：Kesini 后台管理",
-    helper: "用于后台浏览器标题、登录页标题和侧栏品牌标题。",
+    label: "运营台标题",
+    placeholder: "例如：Kesini 运营台",
+    helper: "用于运营台标题和品牌标题。",
   },
 ];
 
@@ -664,7 +664,7 @@ export const tradeListingFields: FieldConfig[] = [
   { key: "status", label: "状态", readonly: true },
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
-  { key: "card_uuid", label: "卡片UUID", readonly: true },
+  { key: "card_uuid", label: "卡片编号", readonly: true },
   {
     key: "seller_uid",
     label: "卖家",
@@ -690,7 +690,7 @@ export const tradeRecordFields: FieldConfig[] = [
   { key: "listing_id", label: "挂单ID", readonly: true },
   { key: "cardName", label: "卡片", readonly: true },
   { key: "card_level", label: "稀有度", readonly: true },
-  { key: "card_uuid", label: "卡片UUID", readonly: true },
+  { key: "card_uuid", label: "卡片编号", readonly: true },
   {
     key: "seller_uid",
     label: "卖家",

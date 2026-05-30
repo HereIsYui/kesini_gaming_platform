@@ -236,7 +236,7 @@ const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
 const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
-  adminTitle: "Kesini 后台管理",
+  adminTitle: "Kesini 运营台",
 });
 const announcements = ref<AnnouncementListResponse["list"]>([]);
 const pools = ref<PoolInfo[]>([]);
@@ -420,13 +420,12 @@ const isPublicProfileRoute = computed(() => route.name === "publicProfile");
 const profileRouteUid = computed(() =>
   isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
 );
-const profileDisplayName = computed(
-  () =>
-    publicPlayerName(
-      playerProfile.value?.user.nickname,
-      playerProfile.value?.user.uid,
-      "玩家主页",
-    ),
+const profileDisplayName = computed(() =>
+  publicPlayerName(
+    playerProfile.value?.user.nickname,
+    playerProfile.value?.user.uid,
+    "玩家主页",
+  ),
 );
 const profileInitial = computed(() =>
   String(profileDisplayName.value || "?")
@@ -444,16 +443,14 @@ const profileShareUrl = computed(() => {
   const uid = playerProfile.value?.user.uid || currentUser.value?.uid || "";
   return uid ? `${window.location.origin}/u/${encodeURIComponent(uid)}` : "";
 });
-const playerDisplayName = computed(
-  () => {
-    const uid = currentUser.value?.uid;
-    return publicPlayerName(
-      currentUser.value?.nickname,
-      uid,
-      publicPlayerName(currentUser.value?.name, uid, "已登录玩家"),
-    );
-  },
-);
+const playerDisplayName = computed(() => {
+  const uid = currentUser.value?.uid;
+  return publicPlayerName(
+    currentUser.value?.nickname,
+    uid,
+    publicPlayerName(currentUser.value?.name, uid, "已登录玩家"),
+  );
+});
 const playerInitial = computed(() =>
   String(playerDisplayName.value || "?")
     .trim()
@@ -563,11 +560,15 @@ const profileFriendActionDisabled = computed(() => {
     isProfileFriendOutgoing.value
   );
 });
-const currentGuild = computed(() => guildOverview.value?.current?.guild || null);
+const currentGuild = computed(
+  () => guildOverview.value?.current?.guild || null,
+);
 const guildMembers = computed<GuildMember[]>(
   () => guildOverview.value?.current?.members || [],
 );
-const guildRows = computed<GuildSummary[]>(() => guildOverview.value?.guilds || []);
+const guildRows = computed<GuildSummary[]>(
+  () => guildOverview.value?.guilds || [],
+);
 const guildRoleLabel = computed(() =>
   currentGuild.value?.role === "leader" ? "会长" : "成员",
 );
@@ -1015,14 +1016,14 @@ const resultSummary = computed(() => {
 });
 const drawPhaseText = computed(() => {
   if (drawPhase.value === "charging") {
-    return "星轨正在充能，信号汇聚中";
+    return "星轨充能中";
   }
   if (drawPhase.value === "burst") {
-    return "星门已开启，结果解析中";
+    return "星门已开启";
   }
   return bestResult.value
     ? `${bestResult.value.rarity} 级信号已锁定`
-    : "选择卡池并登录后开始抽取";
+    : "选择卡池后抽取";
 });
 const resultModalTitle = computed(() =>
   lastResults.value.length > 1 ? "十连回响" : "星轨回应",
@@ -1371,12 +1372,12 @@ async function loadSiteConfig() {
     const data = await request<SiteConfig>("/apis/site-config");
     siteConfig.value = {
       websiteTitle: data.websiteTitle || "Kesini 抽卡站",
-      adminTitle: data.adminTitle || "Kesini 后台管理",
+      adminTitle: data.adminTitle || "Kesini 运营台",
     };
   } catch {
     siteConfig.value = {
       websiteTitle: "Kesini 抽卡站",
-      adminTitle: "Kesini 后台管理",
+      adminTitle: "Kesini 运营台",
     };
   }
   document.title = siteConfig.value.websiteTitle;
@@ -1454,8 +1455,12 @@ async function loadPrivateData() {
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
-    activeSection.value === "friends" ? loadFriendFeed(false) : Promise.resolve(),
-    activeSection.value === "guild" ? refreshGuildSection(false) : loadGuild(false),
+    activeSection.value === "friends"
+      ? loadFriendFeed(false)
+      : Promise.resolve(),
+    activeSection.value === "guild"
+      ? refreshGuildSection(false)
+      : loadGuild(false),
     loadFormation(),
     loadPveStages(),
     loadPveRecords(),
@@ -1492,8 +1497,9 @@ async function loadFishpiPoint(showError = false) {
   busy.fishpiPoint = true;
   fishpiPointError.value = "";
   try {
-    fishpiPoint.value =
-      await request<FishpiPointResponse>("/recharge/fishpi-point");
+    fishpiPoint.value = await request<FishpiPointResponse>(
+      "/recharge/fishpi-point",
+    );
   } catch (error) {
     fishpiPoint.value = null;
     fishpiPointError.value = getErrorMessage(error);
@@ -1525,7 +1531,7 @@ async function loadDrawHistory(page = drawHistoryPage.value) {
 
 async function openDrawHistory() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再查看抽卡历史");
+    notify("error", "请先登录");
     return;
   }
   drawHistoryOpen.value = true;
@@ -1991,7 +1997,9 @@ async function loadGuildMessages(showError = activeSection.value === "guild") {
   }
 }
 
-async function refreshGuildSection(showError = activeSection.value === "guild") {
+async function refreshGuildSection(
+  showError = activeSection.value === "guild",
+) {
   await loadGuild(showError);
   if (currentGuild.value) {
     await loadGuildMessages(showError);
@@ -2130,7 +2138,7 @@ async function loadFormationCandidates() {
 
 async function openFormationPicker(position: number) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再配置阵容");
+    notify("error", "请先登录");
     return;
   }
   formationEditingPosition.value = position;
@@ -2163,7 +2171,7 @@ function isFormationCandidateSelected(card: UserCardsResponse["list"][number]) {
 
 async function saveFormationSlot(position: number, cardUuid: string | null) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再配置阵容");
+    notify("error", "请先登录");
     return;
   }
   const slots = formationSlots.value.map((slot) => ({
@@ -2232,7 +2240,7 @@ async function refreshPve() {
 
 async function challengePveStage(stage: PveStage) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再挑战关卡");
+    notify("error", "请先登录");
     return;
   }
   if (!stage.canChallenge) {
@@ -2604,7 +2612,7 @@ function changePointPage(delta: number) {
 
 function openRechargeModal() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再充值");
+    notify("error", "请先登录");
     return;
   }
   if (!rechargeConfig.value?.enabled) {
@@ -2612,7 +2620,7 @@ function openRechargeModal() {
     return;
   }
   if (!rechargeConfig.value.hasGoldFingerKey) {
-    notify("error", "后台尚未配置充值密钥");
+    notify("error", "充值暂不可用");
     return;
   }
   rechargeAmount.value = Math.max(
@@ -2633,7 +2641,7 @@ function closeRechargeModal() {
 
 function openLaunchActivityModal() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再领取开服福利");
+    notify("error", "请先登录");
     return;
   }
   if (!hasLaunchActivityReward.value) {
@@ -2656,7 +2664,7 @@ function closeLaunchActivityModal() {
 
 async function claimLaunchActivity() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再领取开服福利");
+    notify("error", "请先登录");
     return;
   }
   busy.launchActivity = true;
@@ -2781,7 +2789,7 @@ async function claimActivityReward(milestone: TaskActivityMilestone) {
 
 async function submitRecharge() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再充值");
+    notify("error", "请先登录");
     return;
   }
   const config = rechargeConfig.value;
@@ -2826,7 +2834,7 @@ async function submitRecharge() {
 
 async function performDraw(mode: "once" | "ten") {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再抽卡");
+    notify("error", "请先登录");
     return;
   }
 
@@ -3013,12 +3021,12 @@ function cardLockAction(card: UserCardsResponse["list"][number]) {
 
 async function toggleCardLock(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再操作卡片");
+    notify("error", "请先登录");
     return;
   }
   const action = cardLockAction(card);
   if (!action.uuid) {
-    notify("info", "当前没有可切换锁定状态的卡片");
+    notify("info", "暂不可切换");
     return;
   }
   busy.assets = true;
@@ -3117,7 +3125,7 @@ async function loadBulkDecomposePreview() {
 
 async function bulkDecomposeCards() {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再分解卡片");
+    notify("error", "请先登录");
     return;
   }
   const selectedRarities = [...bulkDecomposeSelectedRarities.value];
@@ -3181,7 +3189,7 @@ async function bulkDecomposeCards() {
 
 function openTradeListingModal(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再挂售卡片");
+    notify("error", "请先登录");
     return;
   }
   if (Number(card.sellableCount ?? (card.canSell ? 1 : 0)) <= 0) {
@@ -3250,7 +3258,7 @@ function cardUpgradeUuid(card: UserCardsResponse["list"][number]) {
 
 async function openUpgradeModal(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再养成卡片");
+    notify("error", "请先登录");
     return;
   }
   const uuid = cardUpgradeUuid(card);
@@ -3418,7 +3426,7 @@ async function cancelTradeListing(listing: TradeListing) {
 
 async function buyTradeListing(listing: TradeListing) {
   if (listing.isMine) {
-    notify("info", "不能购买自己的挂单");
+    notify("info", "这是你的挂单");
     return;
   }
   if (
@@ -3485,7 +3493,7 @@ async function claimExchange(item: ExchangeShopItem) {
 
 async function buySeasonShopItem(item: SeasonShopItem) {
   if (!isAuthed.value) {
-    notify("error", "请先登录后再兑换赛季奖励");
+    notify("error", "请先登录");
     return;
   }
   const count = Math.max(
@@ -3539,7 +3547,7 @@ function seasonPointSourceLabel(sourceType: string) {
   const labels: Record<string, string> = {
     task_activity: "任务活跃",
     shop_spend: "赛季商店",
-    admin_adjust: "后台调整",
+    admin_adjust: "运营调整",
   };
   return labels[sourceType] || sourceType;
 }
@@ -4002,7 +4010,7 @@ function leaderboardRankLabel(rank?: number) {
                 </span>
                 <div>
                   <strong>登录</strong>
-                  <small>同步资产数据</small>
+                  <small>同步资产</small>
                 </div>
               </div>
               <div class="guest-login-actions">
@@ -4048,7 +4056,7 @@ function leaderboardRankLabel(rank?: number) {
           <div class="panel-heading">
             <div>
               <p class="eyebrow">当前卡池</p>
-              <h1>{{ selectedPool?.pool_name || "等待卡池同步" }}</h1>
+              <h1>{{ selectedPool?.pool_name || "等待同步" }}</h1>
             </div>
             <div class="pool-heading-actions">
               <span class="type-pill">{{
@@ -4067,9 +4075,7 @@ function leaderboardRankLabel(rank?: number) {
           </div>
 
           <p class="pool-desc">
-            {{
-              selectedPool?.card_desc || "选择喜欢的卡池，准备开启本次抽取。"
-            }}
+            {{ selectedPool?.card_desc || "选择卡池抽取" }}
           </p>
 
           <div class="pool-strip" aria-label="卡池列表">
@@ -4198,7 +4204,7 @@ function leaderboardRankLabel(rank?: number) {
             <div>
               <p class="eyebrow">玩家身份</p>
               <h2>登录后同步资产</h2>
-              <span>登录后可抽卡、交易、查看背包和排行榜。</span>
+              <span>抽卡、交易、收藏</span>
             </div>
           </div>
 
@@ -4628,7 +4634,10 @@ function leaderboardRankLabel(rank?: number) {
                 刷新
               </button>
             </div>
-            <div v-if="busy.friendFeed && friendFeed.length === 0" class="empty-mini">
+            <div
+              v-if="busy.friendFeed && friendFeed.length === 0"
+              class="empty-mini"
+            >
               正在读取
             </div>
             <div v-else-if="friendFeedError" class="empty-mini">
@@ -4685,7 +4694,9 @@ function leaderboardRankLabel(rank?: number) {
                     <img
                       v-if="friend.user.avatar"
                       :src="friend.user.avatar"
-                      :alt="publicPlayerName(friend.user.nickname, friend.user.uid)"
+                      :alt="
+                        publicPlayerName(friend.user.nickname, friend.user.uid)
+                      "
                     />
                     <span v-else>
                       {{
@@ -4994,7 +5005,10 @@ function leaderboardRankLabel(rank?: number) {
                   <div v-else-if="guildMessageError" class="empty-mini">
                     消息失败
                   </div>
-                  <div v-else-if="guildMessageRows.length === 0" class="empty-mini">
+                  <div
+                    v-else-if="guildMessageRows.length === 0"
+                    class="empty-mini"
+                  >
                     暂无消息
                   </div>
                   <div v-else class="guild-message-list">
@@ -5075,7 +5089,11 @@ function leaderboardRankLabel(rank?: number) {
                 </div>
               </template>
 
-              <form v-else class="guild-create-form" @submit.prevent="createGuild">
+              <form
+                v-else
+                class="guild-create-form"
+                @submit.prevent="createGuild"
+              >
                 <div class="empty-mini">尚未加入</div>
                 <input
                   v-model="guildName"
@@ -5279,7 +5297,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-if="!isAuthed" class="empty-state">
             <UserRound :size="30" />
             <strong>登录后查看背包</strong>
-            <span>你的卡片、背包和抽卡统计会在登录后加载。</span>
+            <span>登录后同步收藏</span>
           </div>
           <div v-else-if="busy.assets" class="skeleton-grid">
             <span v-for="item in 6" :key="item"></span>
@@ -5287,7 +5305,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-else-if="!userCards?.list.length" class="empty-state">
             <Package :size="30" />
             <strong>暂无卡片</strong>
-            <span>去抽卡区试试手气，或调整筛选条件。</span>
+            <span>抽卡后加入背包</span>
           </div>
           <div v-else class="owned-grid">
             <article
@@ -5451,10 +5469,8 @@ function leaderboardRankLabel(rank?: number) {
                   <button
                     class="card-icon-action"
                     type="button"
-                    :title="cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'"
-                    :aria-label="
-                      cardUpgradeUuid(card) ? '养成' : '已满级或不可养成'
-                    "
+                    :title="cardUpgradeUuid(card) ? '养成' : '不可养成'"
+                    :aria-label="cardUpgradeUuid(card) ? '养成' : '不可养成'"
                     :disabled="!cardUpgradeUuid(card) || busy.upgrade"
                     @click.stop="openUpgradeModal(card)"
                   >
@@ -5656,7 +5672,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <UserRound :size="30" />
           <strong>登录后挑战关卡</strong>
-          <span>先配置阵容，再用总战力挑战开放中的关卡。</span>
+          <span>配置阵容后挑战</span>
         </div>
         <div v-else-if="busy.pve && !pveOverview" class="skeleton-grid">
           <span v-for="item in 4" :key="item"></span>
@@ -5989,7 +6005,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <Coins :size="30" />
           <strong>登录后查看星穹币流水</strong>
-          <span>抽卡、充值、交易和活动奖励都会在这里记录。</span>
+          <span>收支记录在这里</span>
         </div>
         <div v-else class="points-content">
           <div class="points-overview">
@@ -6051,7 +6067,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-else-if="pointLedgerRows.length === 0" class="empty-state">
             <Coins :size="30" />
             <strong>暂无星穹币流水</strong>
-            <span>新的星穹币收入和支出会从现在开始记录。</span>
+            <span>暂无收支记录</span>
           </div>
           <div v-else class="point-ledger-list">
             <article
@@ -6248,7 +6264,7 @@ function leaderboardRankLabel(rank?: number) {
             <div v-else-if="tradeListings.length === 0" class="empty-state">
               <Store :size="30" />
               <strong>暂无在售卡片</strong>
-              <span>可以从背包选择卡片挂售，市场不会展示卖家身份。</span>
+              <span>背包卡片可挂售</span>
             </div>
             <div v-else class="trade-grid">
               <article
@@ -6326,7 +6342,7 @@ function leaderboardRankLabel(rank?: number) {
                     "
                     @click="buyTradeListing(listing)"
                   >
-                    {{ listing.isMine ? "自己的挂单" : "购买" }}
+                    {{ listing.isMine ? "我的挂单" : "购买" }}
                   </button>
                 </div>
               </article>
@@ -6356,7 +6372,7 @@ function leaderboardRankLabel(rank?: number) {
             <div v-if="myTradeListings.length === 0" class="empty-state">
               <Store :size="30" />
               <strong>暂无我的挂售</strong>
-              <span>从背包卡片点击“挂售”即可上架。</span>
+              <span>背包卡片可上架</span>
             </div>
             <div v-else class="trade-list">
               <article v-for="listing in myTradeListings" :key="listing.id">
@@ -6401,7 +6417,7 @@ function leaderboardRankLabel(rank?: number) {
             <div v-if="tradeRecords.length === 0" class="empty-state">
               <History :size="30" />
               <strong>暂无成交记录</strong>
-              <span>买入或卖出卡片后会在这里看到记录，对方身份保持匿名。</span>
+              <span>成交后保留记录</span>
             </div>
             <div v-else class="trade-list">
               <article v-for="record in tradeRecords" :key="record.id">
@@ -6469,7 +6485,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <Trophy :size="30" />
           <strong>登录后查看排行榜</strong>
-          <span>排行榜按当前收藏统计，分解后的卡片不会计入排名。</span>
+          <span>按当前收藏排名</span>
         </div>
         <div
           v-else-if="busy.leaderboard && !leaderboard"
@@ -6574,7 +6590,9 @@ function leaderboardRankLabel(rank?: number) {
                   leaderboardInitial(entry)
                 }}</span>
                 <div>
-                  <strong>{{ publicPlayerName(entry.nickname, entry.uid) }}</strong>
+                  <strong>{{
+                    publicPlayerName(entry.nickname, entry.uid)
+                  }}</strong>
                   <span>{{ activeLeaderboardTab.label }}</span>
                 </div>
                 <em>{{ formatLeaderboardValue(entry.value) }}</em>
@@ -6614,7 +6632,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <ListChecks :size="30" />
           <strong>登录后查看任务</strong>
-          <span>每日目标和周常奖励会出现在这里。</span>
+          <span>日常周常在这里</span>
         </div>
         <div
           v-else-if="busy.tasks && !tasksOverview"
@@ -6786,7 +6804,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <CalendarDays :size="30" />
           <strong>登录后查看赛季</strong>
-          <span>完成任务会积累赛季积分，可用于兑换赛季奖励。</span>
+          <span>任务可得赛季积分</span>
         </div>
         <div
           v-else-if="busy.season && !seasonOverview"
@@ -6873,7 +6891,9 @@ function leaderboardRankLabel(rank?: number) {
                   {{ leaderboardInitial(entry) }}
                 </span>
                 <div>
-                  <strong>{{ publicPlayerName(entry.nickname, entry.uid) }}</strong>
+                  <strong>{{
+                    publicPlayerName(entry.nickname, entry.uid)
+                  }}</strong>
                   <span>赛季积分</span>
                 </div>
                 <em>{{ entry.value }} 积分</em>
@@ -7015,7 +7035,7 @@ function leaderboardRankLabel(rank?: number) {
         <div v-if="!isAuthed" class="empty-state">
           <ShieldCheck :size="30" />
           <strong>登录后查看成就</strong>
-          <span>抽卡、收藏、交易和兑换记录会汇聚成你的成就进度。</span>
+          <span>记录会累计进度</span>
         </div>
         <div
           v-else-if="busy.achievements && achievements.length === 0"
@@ -7205,7 +7225,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-if="!isAuthed" class="empty-state">
             <Store :size="30" />
             <strong>登录后查看商店</strong>
-            <span>兑换商店会根据你的背包数量显示可兑换状态。</span>
+            <span>消耗物品换奖励</span>
           </div>
           <div
             v-else-if="busy.shop && exchangeItems.length === 0"
@@ -7216,7 +7236,7 @@ function leaderboardRankLabel(rank?: number) {
           <div v-else-if="exchangeItems.length === 0" class="empty-state">
             <Store :size="30" />
             <strong>暂无可见兑换项</strong>
-            <span>后台启用兑换项后会出现在这里。</span>
+            <span>暂无兑换项</span>
           </div>
           <div v-else class="shop-grid">
             <article
@@ -7466,7 +7486,7 @@ function leaderboardRankLabel(rank?: number) {
                 <div v-else class="empty-state compact">
                   <ShieldCheck :size="26" />
                   <strong>登录后查看个人保底进度</strong>
-                  <span>抽取后这里会记录当前卡池的保底进度。</span>
+                  <span>抽取后记录进度</span>
                 </div>
               </section>
 
@@ -7577,14 +7597,12 @@ function leaderboardRankLabel(rank?: number) {
           </header>
           <div class="trade-listing-body launch-activity-body">
             <p class="launch-activity-desc">
-              {{
-                launchActivityInfo.description || "登录后可领取一次开服福利。"
-              }}
+              {{ launchActivityInfo.description || "登录可领一次" }}
             </p>
             <div class="launch-reward-card">
               <span>本次奖励</span>
               <strong>{{ formatRewards(launchActivityInfo.rewards) }}</strong>
-              <small>领取后会立即刷新星穹币和背包库存。</small>
+              <small>领取后刷新资产</small>
             </div>
             <div class="launch-reward-grid">
               <article

@@ -789,7 +789,9 @@ export class CardService {
     if (!card) {
       throw new Error("卡片不存在");
     }
-    const [activeListing] = await this.findActiveListingsByCardUuids([cardUuid]);
+    const [activeListing] = await this.findActiveListingsByCardUuids([
+      cardUuid,
+    ]);
     const user = await this.userRepository.findOne({ where: { uid } });
     if (!user) {
       throw new Error("用户不存在");
@@ -1395,9 +1397,7 @@ export class CardService {
       activeListings,
       selectedRarities,
     );
-    const candidates = this.collectDecomposeCandidates(
-      candidateGroups,
-    );
+    const candidates = this.collectDecomposeCandidates(candidateGroups);
     const selectedSet = new Set(selectedRarities);
     const activeListingSet = new Set(
       activeListings.map((listing) => listing.card_uuid),
@@ -1662,7 +1662,7 @@ export class CardService {
       config.rarityProbabilities ||
       this.gachaConfigService.getDefaultConfig().rarityProbabilities!;
     if (!this.gachaConfigService.validateProbabilities(probabilities)) {
-      throw new Error("抽取概率配置无效，请联系管理员");
+      throw new Error("卡池配置异常，请联系运营");
     }
     return probabilities;
   }
@@ -2492,10 +2492,7 @@ export class CardService {
     };
   }
 
-  private async getDecomposeRule(
-    manager: EntityManager,
-    rarity: CardRarity,
-  ) {
+  private async getDecomposeRule(manager: EntityManager, rarity: CardRarity) {
     const fallback = this.getDecomposeFragmentRange(rarity);
     const fallbackRule = { drops: [{ itemId: 0, ...fallback }] };
     if (!isDecomposeConfigRarity(rarity)) {

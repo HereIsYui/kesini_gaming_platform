@@ -1,7 +1,7 @@
 <template>
   <div class="identity-cell">
     <strong>{{ displayName }}</strong>
-    <span>UID {{ uidValue || "-" }}</span>
+    <span>账号 {{ uidValue || "-" }}</span>
   </div>
 </template>
 
@@ -20,6 +20,8 @@ const displayName = computed(() => {
   if (name) {
     return name;
   }
-  return props.fallback || (uidValue.value ? `用户 ${uidValue.value}` : "未知用户");
+  return (
+    props.fallback || (uidValue.value ? `用户 ${uidValue.value}` : "未知用户")
+  );
 });
 </script>

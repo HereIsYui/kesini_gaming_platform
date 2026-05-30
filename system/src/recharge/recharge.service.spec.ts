@@ -153,7 +153,7 @@ describe("RechargeService", () => {
       createEnabledConfig({ enabled: true, gold_finger_key: "" }),
     );
     await expect(service.recharge("u1", 10, "r2")).rejects.toThrow(
-      "后台未配置鱼排金手指密钥",
+      "充值暂不可用",
     );
   });
 

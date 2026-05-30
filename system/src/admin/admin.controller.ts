@@ -932,7 +932,7 @@ export class AdminController {
   async me(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.adminService.getMe(user.uid),
-      "获取管理员信息成功",
+      "获取权限信息成功",
     );
   }
 

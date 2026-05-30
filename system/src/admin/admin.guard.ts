@@ -29,7 +29,7 @@ export class AdminGuard implements CanActivate {
     }
 
     if (user.is_admin !== true) {
-      throw new ForbiddenException("缺少后台管理权限");
+      throw new ForbiddenException("缺少运营权限");
     }
 
     request.adminUser = user;

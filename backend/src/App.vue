@@ -6,23 +6,23 @@
       </div>
       <p class="eyebrow">{{ siteConfig.websiteTitle }}</p>
       <h1>{{ siteConfig.adminTitle }}</h1>
-      <p class="login-copy">使用 OpenID 或已有 JWT 登录后台。</p>
+      <p class="login-copy">登录运营台。</p>
 
       <el-form label-position="top" class="login-form">
-        <el-form-item label="API 地址">
+        <el-form-item label="服务地址">
           <el-input v-model="apiBaseInput" />
         </el-form-item>
         <el-button type="primary" :loading="loginLoading" @click="startLogin">
-          使用 OpenID 登录
+          登录
         </el-button>
       </el-form>
 
-      <el-divider>本地调试 Token</el-divider>
+      <el-divider>临时入口</el-divider>
       <el-form label-position="top" class="login-form">
-        <el-form-item label="粘贴已有 JWT">
+        <el-form-item label="临时凭证">
           <el-input v-model="manualToken" type="textarea" :rows="4" />
         </el-form-item>
-        <el-button @click="useManualToken">使用 Token 进入</el-button>
+        <el-button @click="useManualToken">进入</el-button>
       </el-form>
 
       <el-alert v-if="authError" :title="authError" type="error" show-icon />
@@ -35,8 +35,8 @@
         <el-icon><Lock /></el-icon>
       </div>
       <p class="eyebrow">权限校验</p>
-      <h1>正在验证后台权限</h1>
-      <p>正在确认当前账号是否具备后台管理权限。</p>
+      <h1>正在验证权限</h1>
+      <p>正在确认账号权限。</p>
     </section>
   </main>
 
@@ -92,7 +92,7 @@
               </span>
               <div class="login-status-text">
                 <strong>{{ getOpenidDisplayName(admin.user) }}</strong>
-                <span>已登录 · UID {{ admin.user.uid }}</span>
+                <span>已登录</span>
               </div>
               <el-icon class="login-status-arrow"><ArrowDown /></el-icon>
             </button>
@@ -105,7 +105,7 @@
                   command="toggle-theme"
                   :icon="theme === 'light' ? Moon : Sunny"
                 >
-                  {{ theme === "light" ? "切换为暗色模式" : "切换为亮色模式" }}
+                  {{ theme === "light" ? "暗色" : "亮色" }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -220,7 +220,7 @@
           :fields="userFields"
           editable
           detail-fetchable
-          search-placeholder="搜索 UID、用户名或昵称"
+          search-placeholder="搜索账号或昵称"
         />
 
         <AdminTable
@@ -230,7 +230,7 @@
           :fields="historyFields"
           keyword-param="uid"
           enable-rarity-filter
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -240,7 +240,7 @@
           :fields="inventoryFields"
           editable
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -251,12 +251,12 @@
           :pool-filter-options="adminOptions?.pools || []"
           editable
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         >
           <template #cell="{ field, row }">
             <div v-if="field.key === 'uid'" class="identity-cell">
               <strong>{{ row.userName || "未知用户" }}</strong>
-              <span>UID {{ row.uid || "-" }}</span>
+              <span>账号 {{ row.uid || "-" }}</span>
             </div>
             <div v-else-if="field.key === 'poolName'" class="identity-cell">
               <strong>{{
@@ -304,7 +304,7 @@
           endpoint="/admin/redeem-usages"
           :fields="redeemUsageFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -326,7 +326,7 @@
           endpoint="/admin/exchange-usages"
           :fields="exchangeUsageFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -356,7 +356,7 @@
           endpoint="/admin/launch-activity-claims"
           :fields="launchActivityClaimFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -378,7 +378,7 @@
           endpoint="/admin/user-achievements"
           :fields="userAchievementFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -449,7 +449,7 @@
           endpoint="/admin/season-point-records"
           :fields="seasonPointRecordFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -458,7 +458,7 @@
           endpoint="/admin/season-shop-usages"
           :fields="seasonShopUsageFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <AdminTable
@@ -493,7 +493,7 @@
           endpoint="/admin/pve-records"
           :fields="pveRecordFields"
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         >
           <template #cell="{ field, row }">
             <el-tag
@@ -540,7 +540,7 @@
           :fields="tradeListingFields"
           detail-fetchable
           keyword-param="uid"
-          search-placeholder="按 UID 或卡片搜索"
+          search-placeholder="按账号或卡片搜索"
         />
 
         <AdminTable
@@ -550,7 +550,7 @@
           :fields="tradeRecordFields"
           detail-fetchable
           keyword-param="uid"
-          search-placeholder="按 UID 或卡片搜索"
+          search-placeholder="按账号或卡片搜索"
         />
 
         <ConfigPanel
@@ -568,7 +568,7 @@
           :fields="rechargeRecordFields"
           detail-fetchable
           keyword-param="uid"
-          search-placeholder="按 UID 查询"
+          search-placeholder="按账号查询"
         />
 
         <GachaConfigPage
@@ -579,7 +579,7 @@
         <ConfigPanel
           v-else-if="active === 'site-config'"
           title="站点配置"
-          description="配置玩家站和后台管理台的浏览器标题与页面品牌标题。"
+          description="配置页面标题和品牌标题。"
           endpoint="/admin/config/site"
           :fields="siteConfigFields"
           @saved="loadSiteConfig"
@@ -768,7 +768,7 @@ const manualToken = ref("");
 const loginLoading = ref(false);
 const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
-  adminTitle: "Kesini 后台管理",
+  adminTitle: "Kesini 运营台",
 });
 const theme = ref<Theme>(
   (localStorage.getItem("kesini_theme") as Theme) || "light",
@@ -853,14 +853,14 @@ const pageDefinitions = computed(
       {
         key: "users",
         label: "用户管理",
-        description: "查看用户资料、星穹币和管理员状态。",
+        description: "查看用户资料、星穹币和权限状态。",
         group: "玩家资产",
         icon: User,
       },
       {
         key: "histories",
         label: "抽卡历史",
-        description: "按 UID 和稀有度追踪玩家抽卡记录。",
+        description: "追踪玩家抽卡记录。",
         group: "玩家资产",
         icon: Files,
       },
@@ -1042,7 +1042,7 @@ const pageDefinitions = computed(
       {
         key: "site-config",
         label: "站点配置",
-        description: "配置玩家站和后台管理台的页面标题与品牌标题。",
+        description: "配置页面标题和品牌标题。",
         group: "系统配置",
         icon: Setting,
       },
@@ -1112,7 +1112,7 @@ async function loadAdmin() {
   try {
     const data = await request<AdminMeResponse>("/admin/me");
     if (data.user?.is_admin !== true) {
-      throw new Error("当前账号没有后台管理权限");
+      throw new Error("当前账号没有运营权限");
     }
     admin.value = data;
     adminOptions.value = await request<AdminOptions>("/admin/options");
@@ -1125,7 +1125,7 @@ async function loadAdmin() {
     admin.value = null;
     adminOptions.value = null;
     authError.value =
-      err instanceof Error ? err.message : "当前账号没有后台管理权限";
+      err instanceof Error ? err.message : "当前账号没有运营权限";
   }
 }
 
@@ -1146,12 +1146,12 @@ async function loadSiteConfig() {
     const data = await request<SiteConfig>("/apis/site-config");
     siteConfig.value = {
       websiteTitle: data.websiteTitle || "Kesini 抽卡站",
-      adminTitle: data.adminTitle || "Kesini 后台管理",
+      adminTitle: data.adminTitle || "Kesini 运营台",
     };
   } catch {
     siteConfig.value = {
       websiteTitle: "Kesini 抽卡站",
-      adminTitle: "Kesini 后台管理",
+      adminTitle: "Kesini 运营台",
     };
   }
 }
@@ -1176,7 +1176,7 @@ async function handleOpenidCallback() {
       },
     );
     if (data.user?.is_admin !== true) {
-      throw new Error("当前账号没有后台管理权限");
+      throw new Error("当前账号没有运营权限");
     }
     setToken(data.token);
     token.value = data.token;
@@ -1211,7 +1211,7 @@ async function startLogin() {
 
 function useManualToken() {
   if (!manualToken.value.trim()) {
-    authError.value = "请先粘贴 JWT";
+    authError.value = "请先粘贴凭证";
     return;
   }
   setToken(manualToken.value.trim());
@@ -1241,9 +1241,9 @@ function handleUserCommand(command: string | number | object) {
 
 function getOpenidDisplayName(user: AdminMeResponse["user"]) {
   if (!user) {
-    return "后台账号";
+    return "运营账号";
   }
-  return String(user.nickname || user.name || user.uid || "后台账号");
+  return String(user.nickname || user.name || user.uid || "运营账号");
 }
 
 function getOpenidAvatar(user: AdminMeResponse["user"]) {
@@ -1448,7 +1448,7 @@ watch(active, (next) => {
 watch(
   () => siteConfig.value.adminTitle,
   (title) => {
-    document.title = title || "Kesini 后台管理";
+    document.title = title || "Kesini 运营台";
   },
   { immediate: true },
 );
@@ -1468,11 +1468,11 @@ const SidebarBrand = defineComponent({
         h("div", { class: "brand" }, [
           h("div", { class: "brand-mark" }, [h(MagicStick)]),
           h("div", [
-            h("strong", siteConfig.value.adminTitle || "Kesini 后台管理"),
+            h("strong", siteConfig.value.adminTitle || "Kesini 运营台"),
             h("span", "运营控制台"),
           ]),
         ]),
-        h("span", { class: "sidebar-pill" }, "Admin"),
+        h("span", { class: "sidebar-pill" }, "管理"),
       ]);
   },
 });
@@ -1535,7 +1535,7 @@ const DashboardPage = defineComponent({
                                   "strong",
                                   String(item.userName || "未知用户"),
                                 ),
-                                h("span", `UID ${String(item.uid || "-")}`),
+                                h("span", `账号 ${String(item.uid || "-")}`),
                               ]),
                               h("div", { class: "activity-detail" }, [
                                 h("strong", `${String(item.count || 0)} 抽`),

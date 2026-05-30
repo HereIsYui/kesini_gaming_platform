@@ -157,7 +157,7 @@ export class RechargeService {
           this.sanitizeThirdPartyResponse(thirdPartyResponse),
         failure_reason: this.getErrorMessage(error),
       });
-      throw new Error("鱼排积分已扣除，但星穹币入账失败，请联系管理员处理");
+      throw new Error("鱼排积分已扣除，星穹币入账失败，请联系运营");
     }
   }
 
@@ -323,7 +323,7 @@ export class RechargeService {
       throw new Error("充值功能暂未开启");
     }
     if (!String(config.gold_finger_key || "").trim()) {
-      throw new Error("后台未配置鱼排金手指密钥");
+      throw new Error("充值暂不可用");
     }
     if (amount < Number(config.min_amount || 1)) {
       throw new Error(`充值金额不能小于${config.min_amount}`);
@@ -332,7 +332,7 @@ export class RechargeService {
       throw new Error(`充值金额不能大于${config.max_amount}`);
     }
     if (!Number.isFinite(this.getRechargeRatio(config))) {
-      throw new Error("后台充值比例配置无效");
+      throw new Error("充值暂不可用");
     }
   }
 
@@ -344,9 +344,7 @@ export class RechargeService {
       throw new Error("该充值请求正在处理中，请稍后查看星穹币余额");
     }
     if (record.status === "local_failed") {
-      throw new Error(
-        "该充值请求已扣除鱼排积分但星穹币入账失败，请联系管理员处理",
-      );
+      throw new Error("该充值请求已扣除鱼排积分，星穹币入账失败，请联系运营");
     }
     throw new Error(
       record.failure_reason || "该充值请求已失败，请更换请求号后重试",
@@ -401,7 +399,10 @@ export class RechargeService {
     const rawPoint =
       typeof payload === "number"
         ? payload
-        : payload?.userPoint ?? payload?.point ?? data?.userPoint ?? data?.point;
+        : (payload?.userPoint ??
+          payload?.point ??
+          data?.userPoint ??
+          data?.point);
     const point = Number(rawPoint);
     if (!Number.isFinite(point)) {
       throw new Error("鱼排积分查询结果异常");

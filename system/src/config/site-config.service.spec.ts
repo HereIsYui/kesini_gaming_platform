@@ -1,15 +1,13 @@
-import {
-  DEFAULT_SITE_CONFIG,
-  SiteConfigService,
-} from "./site-config.service";
+import { DEFAULT_SITE_CONFIG, SiteConfigService } from "./site-config.service";
 
 function createRepository(initialRows: Array<Record<string, any>> = []) {
   const rows = [...initialRows];
   return {
     rows,
     find: jest.fn(async () => rows),
-    findOne: jest.fn(async ({ where }: { where: { key: string } }) =>
-      rows.find((row) => row.key === where.key) || null,
+    findOne: jest.fn(
+      async ({ where }: { where: { key: string } }) =>
+        rows.find((row) => row.key === where.key) || null,
     ),
     create: jest.fn((value) => value),
     save: jest.fn(async (row) => {
@@ -39,11 +37,11 @@ describe("SiteConfigService", () => {
     await expect(
       service.updateSiteConfig({
         websiteTitle: "  鱼排人物抽卡站  ",
-        adminTitle: "  运营后台  ",
+        adminTitle: "  运营台  ",
       }),
     ).resolves.toEqual({
       websiteTitle: "鱼排人物抽卡站",
-      adminTitle: "运营后台",
+      adminTitle: "运营台",
     });
     expect(repository.save).toHaveBeenCalledTimes(2);
   });

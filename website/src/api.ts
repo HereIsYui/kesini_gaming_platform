@@ -124,9 +124,9 @@ export async function request<T>(
   } catch {
     const contentType = response.headers.get("Content-Type") || "";
     if (contentType.includes("text/html") || raw.trimStart().startsWith("<")) {
-      throw new Error("当前前端未连接到业务接口，请联系管理员检查发布配置");
+      throw new Error("暂时无法连接");
     }
-    throw new Error("接口返回格式异常，请稍后再试");
+    throw new Error("响应异常");
   }
   if (!response.ok || payload.code !== 0) {
     throw new Error(payload.msg || "请求失败");

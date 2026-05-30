@@ -10,12 +10,12 @@ export interface SiteConfigView {
 
 export const DEFAULT_SITE_CONFIG: SiteConfigView = {
   websiteTitle: "Kesini 抽卡站",
-  adminTitle: "Kesini 后台管理",
+  adminTitle: "Kesini 运营台",
 };
 
 const SITE_CONFIG_META: Record<keyof SiteConfigView, string> = {
   websiteTitle: "玩家站页面标题和品牌标题",
-  adminTitle: "后台管理页面标题和品牌标题",
+  adminTitle: "运营台页面标题和品牌标题",
 };
 
 @Injectable()
@@ -42,7 +42,9 @@ export class SiteConfigService {
     };
   }
 
-  async updateSiteConfig(input: Partial<SiteConfigView>): Promise<SiteConfigView> {
+  async updateSiteConfig(
+    input: Partial<SiteConfigView>,
+  ): Promise<SiteConfigView> {
     const next: SiteConfigView = {
       websiteTitle: this.normalizeTitle(
         input.websiteTitle,
@@ -72,7 +74,11 @@ export class SiteConfigService {
     return title;
   }
 
-  private async saveValue(key: keyof SiteConfigView, value: string, description: string) {
+  private async saveValue(
+    key: keyof SiteConfigView,
+    value: string,
+    description: string,
+  ) {
     let row = await this.systemConfigRepository.findOne({ where: { key } });
     if (!row) {
       row = this.systemConfigRepository.create({ key, value, description });
