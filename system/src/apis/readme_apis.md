@@ -1,6 +1,7 @@
 ﻿# APIs 模块接口文档
 
 ## 概述
+
 登录认证相关接口，使用 OpenID 协议进行第三方登录。
 
 所有接口已统一使用 `ResponseDto<T>` 格式返回。
@@ -11,9 +12,9 @@
 
 ```typescript
 {
-  code: number;    // 0: 成功, -1: 失败
-  msg: string;     // 提示消息
-  data: T | null;  // 响应数据
+  code: number; // 0: 成功, -1: 失败
+  msg: string; // 提示消息
+  data: T | null; // 响应数据
 }
 ```
 
@@ -26,21 +27,24 @@
 **接口：** `GET /apis/login-url`
 
 **请求参数（Query）：**
+
 ```typescript
 {
-  returnTo: string;  // 登录成功后的回调地址
-  realm: string;     // 信任域（必须是 returnTo 的前缀）
+  returnTo: string; // 登录成功后的回调地址
+  realm: string; // 信任域（必须是 returnTo 的前缀）
 }
 ```
 
 前端应使用当前浏览器域名生成 `returnTo` 和 `realm`，不要把后端 API 地址作为 OAuth 回跳地址。
 
 **请求示例：**
+
 ```bash
 curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/callback&realm=https://web.example.com"
 ```
 
 **成功响应：**
+
 ```json
 {
   "code": 0,
@@ -52,6 +56,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 ```
 
 **失败响应（缺少参数）：**
+
 ```json
 {
   "code": -1,
@@ -61,6 +66,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 ```
 
 **失败响应（realm 验证失败）：**
+
 ```json
 {
   "code": -1,
@@ -70,6 +76,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 ```
 
 **生产环境 HTTPS 校验失败：**
+
 ```json
 {
   "code": -1,
@@ -85,6 +92,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 **接口：** `POST /apis/login`
 
 **请求参数（Body）：**
+
 ```typescript
 {
   "openid.ns": string;
@@ -101,6 +109,7 @@ curl "https://api.example.com/apis/login-url?returnTo=https://web.example.com/ca
 ```
 
 **请求示例：**
+
 ```bash
 curl -X POST http://localhost:3000/apis/login \
   -H "Content-Type: application/json" \
@@ -119,6 +128,7 @@ curl -X POST http://localhost:3000/apis/login \
 ```
 
 **成功响应：**
+
 ```json
 {
   "code": 0,
@@ -136,6 +146,7 @@ curl -X POST http://localhost:3000/apis/login \
 ```
 
 **失败响应（缺少字段）：**
+
 ```json
 {
   "code": -1,
@@ -145,6 +156,7 @@ curl -X POST http://localhost:3000/apis/login \
 ```
 
 **失败响应（签名验证失败）：**
+
 ```json
 {
   "code": -1,
@@ -153,11 +165,22 @@ curl -X POST http://localhost:3000/apis/login \
 }
 ```
 
-**失败响应（nonce 过期）：**
+**失败响应（登录失效）：**
+
 ```json
 {
   "code": -1,
-  "msg": "nonce 已过期",
+  "msg": "登录已失效",
+  "data": null
+}
+```
+
+**失败响应（重复登录）：**
+
+```json
+{
+  "code": -1,
+  "msg": "登录已失效",
   "data": null
 }
 ```
@@ -184,7 +207,7 @@ curl -X POST http://localhost:3000/apis/login \
 6. 前端发送回调数据到后端验证
    POST /apis/login
    ↓
-7. 后端验证签名并获取用户信息
+7. 后端验证 nonce、签名并记录 nonce
    返回: { code: 0, data: { user, token } }
    ↓
 8. 登录成功，保存用户信息
@@ -195,14 +218,16 @@ curl -X POST http://localhost:3000/apis/login \
 ## 错误处理
 
 所有接口都会返回统一格式：
+
 - **成功**：`code: 0`，`data` 包含实际数据
 - **失败**：`code: -1`，`msg` 包含错误描述，`data: null`
 
 常见错误：
+
 - 缺少必要参数
 - realm 验证失败
 - 签名验证失败
-- nonce 过期
+- 登录已失效
 - 网络请求失败
 
 ---
@@ -210,7 +235,7 @@ curl -X POST http://localhost:3000/apis/login \
 ## 安全注意事项
 
 1. **Realm 验证**：realm 必须是 return_to 的前缀，防止开放重定向攻击
-2. **Nonce 验证**：5分钟有效期，防止重放攻击
+2. **Nonce 验证**：5分钟有效期，签名通过后只允许使用一次
 3. **签名验证**：通过第三方 OP 验证签名的真实性
 4. **HTTPS**：生产环境必须使用 HTTPS
 
@@ -221,14 +246,14 @@ curl -X POST http://localhost:3000/apis/login \
 ```typescript
 // 1. 获取登录链接
 async function getLoginUrl() {
-  const apiBase = 'https://api.example.com';
+  const apiBase = "https://api.example.com";
   const oauthOrigin = window.location.origin;
   const returnTo = new URL(window.location.pathname, oauthOrigin).toString();
   const response = await fetch(
-    `${apiBase}/apis/login-url?returnTo=${encodeURIComponent(returnTo)}&realm=${encodeURIComponent(oauthOrigin)}`
+    `${apiBase}/apis/login-url?returnTo=${encodeURIComponent(returnTo)}&realm=${encodeURIComponent(oauthOrigin)}`,
   );
   const result = await response.json();
-  
+
   if (result.code === 0) {
     // 跳转到登录页面
     window.location.href = result.data.url;
@@ -245,25 +270,25 @@ async function handleCallback() {
   params.forEach((value, key) => {
     callbackData[key] = value;
   });
-  
+
   // 发送到后端验证
-  const response = await fetch('/apis/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(callbackData)
+  const response = await fetch("/apis/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(callbackData),
   });
-  
+
   const result = await response.json();
-  
+
   if (result.code === 0) {
     // 登录成功
-    console.log('用户信息:', result.data);
-    localStorage.setItem('userId', result.data.userId);
-    localStorage.setItem('userName', result.data.userName);
+    console.log("用户信息:", result.data);
+    localStorage.setItem("userId", result.data.userId);
+    localStorage.setItem("userName", result.data.userName);
     // 跳转到主页
-    window.location.href = '/';
+    window.location.href = "/";
   } else {
-    console.error('登录失败:', result.msg);
+    console.error("登录失败:", result.msg);
   }
 }
 ```
@@ -273,10 +298,10 @@ async function handleCallback() {
 ## 测试建议
 
 使用 Postman/Apifox 测试时：
+
 1. 先调用 `/apis/login-url` 获取登录链接
 2. 在浏览器中打开该链接完成登录
 3. 从回调 URL 中复制所有 `openid.*` 参数
 4. 使用这些参数调用 `/apis/login` 接口
 
 完整的登录测试需要真实的第三方 OpenID 服务支持。
-

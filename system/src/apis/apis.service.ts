@@ -1,16 +1,21 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import axios from "axios";
+import { OpenIdNonce } from "src/entity/openIdNonce.entity";
 import { User } from "src/entity/user.entity";
 import { LoginData } from "src/types/api";
-import { Repository } from "typeorm";
+import { LessThan, Repository } from "typeorm";
 import { JwtUtilsService } from "src/utils/jwt";
 import { SiteConfigService } from "src/config/site-config.service";
+
+const NONCE_VALID_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class ApisService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
+    @InjectRepository(OpenIdNonce)
+    private readonly openIdNonceRepository: Repository<OpenIdNonce>,
     private readonly jwtUtilsService: JwtUtilsService,
     private readonly siteConfigService: SiteConfigService,
   ) {}
@@ -83,7 +88,8 @@ export class ApisService {
     }
 
     // 验证 nonce 时间戳（5分钟有效期）
-    await this.validateNonce(callbackData["openid.response_nonce"]);
+    const nonce = callbackData["openid.response_nonce"];
+    const nonceExpiresAt = this.validateNonce(nonce);
 
     // 验证签名
     const isValid = await this.verifySignature(callbackData);
@@ -91,6 +97,8 @@ export class ApisService {
     if (!isValid) {
       throw new Error("签名验证失败");
     }
+
+    await this.markNonceUsed(nonce, nonceExpiresAt);
 
     // 从 claimed_id 或 identity 中提取用户ID
     const userId = this.extractUserId(callbackData["openid.claimed_id"]);
@@ -204,10 +212,10 @@ export class ApisService {
     }
   }
 
-  private validateLoginUrlParams(params: {
+  private validateLoginUrlParams(params: { returnTo: string; realm: string }): {
     returnTo: string;
     realm: string;
-  }): { returnTo: string; realm: string } {
+  } {
     const returnToUrl = this.parseHttpUrl(params.returnTo, "returnTo");
     const realmUrl = this.parseHttpUrl(params.realm, "realm");
     const normalizedReturnTo = returnToUrl.toString();
@@ -256,24 +264,67 @@ export class ApisService {
   /**
    * 验证 nonce（5分钟有效期）
    */
-  private async validateNonce(nonce: string): Promise<void> {
+  private validateNonce(nonce: string): Date {
     // nonce 格式通常为：时间戳 + 随机字符串
     const match = nonce.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)/);
 
     if (!match) {
-      throw new Error("无效的 nonce 格式");
+      throw new Error("登录信息无效");
     }
 
     const timestamp = new Date(match[1]).getTime();
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000; // 5分钟（毫秒）
-
-    if (now - timestamp > fiveMinutes) {
-      throw new Error("nonce 已过期");
+    if (!Number.isFinite(timestamp)) {
+      throw new Error("登录信息无效");
     }
 
-    // TODO: 可在此处添加 nonce 重复使用检查
-    // 可以将使用过的 nonce 存储在缓存中，防止重放攻击
+    const now = Date.now();
+    const expiresAt = new Date(timestamp + NONCE_VALID_MS);
+
+    if (now > expiresAt.getTime()) {
+      throw new Error("登录已失效");
+    }
+
+    return expiresAt;
+  }
+
+  private async markNonceUsed(nonce: string, expiresAt: Date): Promise<void> {
+    await this.openIdNonceRepository.delete({
+      expires_at: LessThan(new Date()),
+    });
+
+    try {
+      await this.openIdNonceRepository.insert({
+        nonce,
+        expires_at: expiresAt,
+      });
+    } catch (error) {
+      if (this.isDuplicateNonceError(error)) {
+        throw new Error("登录已失效");
+      }
+      throw error;
+    }
+  }
+
+  private isDuplicateNonceError(error: unknown): boolean {
+    const value = error as {
+      code?: string;
+      errno?: number;
+      message?: string;
+      driverError?: {
+        code?: string;
+        errno?: number;
+        message?: string;
+      };
+    };
+    const driverError = value?.driverError || {};
+    const message = `${value?.message || ""} ${driverError.message || ""}`;
+    return (
+      value?.code === "ER_DUP_ENTRY" ||
+      value?.errno === 1062 ||
+      driverError.code === "ER_DUP_ENTRY" ||
+      driverError.errno === 1062 ||
+      /duplicate|unique/i.test(message)
+    );
   }
 
   /**

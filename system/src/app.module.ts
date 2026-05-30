@@ -43,6 +43,7 @@ import { Guild } from "./entity/guild.entity";
 import { GuildMember } from "./entity/guildMember.entity";
 import { GuildMessage } from "./entity/guildMessage.entity";
 import { Announcement } from "./entity/announcement.entity";
+import { OpenIdNonce } from "./entity/openIdNonce.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -116,6 +117,7 @@ import { AnnouncementModule } from "./announcement/announcement.module";
       GuildMember,
       GuildMessage,
       Announcement,
+      OpenIdNonce,
     ]),
     ConfigurationModule,
     SiteConfigModule,

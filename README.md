@@ -18,6 +18,7 @@
   - 后台管理台：`backend/dist/config.js`
 - OAuth 回跳地址不需要配置环境变量。前端会直接读取当前浏览器域名生成 `returnTo` 和 `realm`。
 - 生产环境 OAuth 回跳地址必须是 HTTPS；不要把后端 API 域名当作 OAuth 回跳域名。
+- OpenID 回调 nonce 5 分钟内只能使用一次，避免同一登录回调被重复提交。
 
 ## 本地开发
 
@@ -268,6 +269,7 @@ export FILE_ROOT=/data/kesini/public
 - 玩家前端发起的 API 请求访问的是 `https://api.example.com`
 - OAuth 登录跳转到 FishPi 时，URL 中的 `openid.return_to` 是当前前端 HTTPS 域名
 - OAuth 回调后前端能调用 `POST /apis/login` 完成登录
+- 重复提交同一个 OAuth 回调会返回 `登录已失效`
 - 玩家主页能访问 `https://web.example.com/u/<uid>`
 - 登录玩家能保存 1-6 张展示卡片
 - 登录玩家能进入“好友”，处理收到和发出的好友申请
@@ -376,6 +378,16 @@ CREATE TABLE user_formation_slot (
   PRIMARY KEY (id),
   UNIQUE KEY IDX_user_formation_uid_position (uid, position),
   UNIQUE KEY IDX_user_formation_uid_card (uid, card_uuid)
+);
+
+CREATE TABLE open_id_nonce (
+  id int NOT NULL AUTO_INCREMENT,
+  nonce varchar(255) NOT NULL,
+  expires_at datetime NOT NULL,
+  createdAt datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY IDX_open_id_nonce_nonce (nonce),
+  KEY IDX_open_id_nonce_expires_at (expires_at)
 );
 
 CREATE TABLE daily_sign_in_record (
