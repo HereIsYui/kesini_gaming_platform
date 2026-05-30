@@ -232,6 +232,10 @@ const themeMode = ref<ThemeMode>(getStoredThemeMode());
 const userMenuOpen = ref(false);
 const userMenuHoverPaused = ref(false);
 const manualToken = ref("");
+const manualLoginEnabled =
+  import.meta.env.DEV ||
+  isEnabledFlag(import.meta.env.VITE_ENABLE_MANUAL_LOGIN) ||
+  isEnabledFlag(window.__KESINI_CONFIG__?.ENABLE_MANUAL_LOGIN);
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
 const siteConfig = ref<SiteConfig>({
@@ -403,6 +407,16 @@ const busy = reactive({
   launchActivity: false,
   signIn: false,
 });
+
+function isEnabledFlag(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return false;
+  }
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
 
 let feedbackTimer: number | undefined;
 const achievementToastTimers = new Map<number, number>();
@@ -1247,6 +1261,10 @@ async function loginWithOpenId() {
 }
 
 async function applyManualToken() {
+  if (!manualLoginEnabled) {
+    notify("error", "暂不可用");
+    return;
+  }
   const value = manualToken.value.trim();
   if (!value) {
     notify("error", "请输入临时凭证");
@@ -4334,11 +4352,12 @@ function leaderboardRankLabel(rank?: number) {
               <LogIn v-else :size="18" />
               登录
             </button>
-            <label class="token-box debug-token-box">
+            <label v-if="manualLoginEnabled" class="token-box debug-token-box">
               <span>临时凭证</span>
               <textarea v-model="manualToken" placeholder="粘贴凭证"></textarea>
             </label>
             <button
+              v-if="manualLoginEnabled"
               class="secondary-action wide"
               type="button"
               @click="applyManualToken"

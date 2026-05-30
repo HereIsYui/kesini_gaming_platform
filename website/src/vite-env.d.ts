@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE?: string;
+  readonly VITE_ENABLE_MANUAL_LOGIN?: string;
 }
 
 interface ImportMeta {
@@ -11,5 +12,6 @@ interface ImportMeta {
 interface Window {
   __KESINI_CONFIG__?: {
     API_BASE?: string;
+    ENABLE_MANUAL_LOGIN?: boolean | string;
   };
 }

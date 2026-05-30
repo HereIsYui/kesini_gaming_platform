@@ -17,13 +17,15 @@
         </el-button>
       </el-form>
 
-      <el-divider>临时入口</el-divider>
-      <el-form label-position="top" class="login-form">
-        <el-form-item label="临时凭证">
-          <el-input v-model="manualToken" type="textarea" :rows="4" />
-        </el-form-item>
-        <el-button @click="useManualToken">进入</el-button>
-      </el-form>
+      <template v-if="manualLoginEnabled">
+        <el-divider>临时入口</el-divider>
+        <el-form label-position="top" class="login-form">
+          <el-form-item label="临时凭证">
+            <el-input v-model="manualToken" type="textarea" :rows="4" />
+          </el-form-item>
+          <el-button @click="useManualToken">进入</el-button>
+        </el-form>
+      </template>
 
       <el-alert v-if="authError" :title="authError" type="error" show-icon />
     </el-card>
@@ -765,6 +767,10 @@ const adminOptions = ref<AdminOptions | null>(null);
 const authError = ref("");
 const apiBaseInput = ref(getApiBase());
 const manualToken = ref("");
+const manualLoginEnabled =
+  import.meta.env.DEV ||
+  isEnabledFlag(import.meta.env.PUBLIC_ENABLE_MANUAL_LOGIN) ||
+  isEnabledFlag(window.__KESINI_CONFIG__?.ENABLE_MANUAL_LOGIN);
 const loginLoading = ref(false);
 const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
@@ -792,6 +798,16 @@ const cardMediaUploading = ref(false);
 const cardMediaRow = ref<Record<string, any> | null>(null);
 const cardMediaValue = ref("");
 const cardMediaReload = ref<(() => void) | null>(null);
+
+function isEnabledFlag(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return false;
+  }
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
 
 const itemOptions = computed<SelectOption[]>(
   () => adminOptions.value?.dropItems || [],
@@ -1210,6 +1226,10 @@ async function startLogin() {
 }
 
 function useManualToken() {
+  if (!manualLoginEnabled) {
+    authError.value = "暂不可用";
+    return;
+  }
   if (!manualToken.value.trim()) {
     authError.value = "请先粘贴凭证";
     return;

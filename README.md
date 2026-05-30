@@ -74,6 +74,7 @@ REDIS_PASSWORD=
 ```js
 window.__KESINI_CONFIG__ = {
   API_BASE: "https://api.example.com",
+  ENABLE_MANUAL_LOGIN: false,
 };
 ```
 
@@ -87,11 +88,15 @@ window.__KESINI_CONFIG__ = {
 ```bash
 VITE_API_BASE=https://api.example.com
 PUBLIC_API_BASE=https://api.example.com
+VITE_ENABLE_MANUAL_LOGIN=false
+PUBLIC_ENABLE_MANUAL_LOGIN=false
 ```
 
 这些前端环境变量是构建时变量。部署后再执行 `export VITE_API_BASE=...` 或 `export PUBLIC_API_BASE=...` 不会改变已经打包出的静态文件；如果要部署后直接生效，请改 `dist/config.js`。
 
 API 地址读取优先级为：`dist/config.js` > 构建时环境变量 > 浏览器本地保存地址 > 本地开发默认地址。生产环境会忽略浏览器里旧的 `http://localhost:3000` 保存值，避免部署后被本机缓存覆盖。
+
+临时凭证入口只在本地开发默认显示。生产环境默认隐藏；确需临时启用时，在对应 `dist/config.js` 中设置 `ENABLE_MANUAL_LOGIN: true`，或构建前设置 `VITE_ENABLE_MANUAL_LOGIN=true`、`PUBLIC_ENABLE_MANUAL_LOGIN=true`。
 
 ## 构建
 
@@ -235,12 +240,14 @@ nginx -s reload
 cat > /var/www/kesini/website/dist/config.js <<'EOF'
 window.__KESINI_CONFIG__ = {
   API_BASE: "https://api.example.com",
+  ENABLE_MANUAL_LOGIN: false,
 };
 EOF
 
 cat > /var/www/kesini/backend/dist/config.js <<'EOF'
 window.__KESINI_CONFIG__ = {
   API_BASE: "https://api.example.com",
+  ENABLE_MANUAL_LOGIN: false,
 };
 EOF
 ```
@@ -267,6 +274,7 @@ export FILE_ROOT=/data/kesini/public
 - `curl https://web.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
 - `curl https://admin.example.com/config.js` 能看到 `API_BASE: "https://api.example.com"`
 - 玩家前端发起的 API 请求访问的是 `https://api.example.com`
+- 生产环境玩家前端和运营台不显示“临时凭证”
 - OAuth 登录跳转到 FishPi 时，URL 中的 `openid.return_to` 是当前前端 HTTPS 域名
 - OAuth 回调后前端能调用 `POST /apis/login` 完成登录
 - 重复提交同一个 OAuth 回调会返回 `登录已失效`
