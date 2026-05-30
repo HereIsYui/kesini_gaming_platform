@@ -36,11 +36,11 @@ PORT=3000                   # 应用端口
 ```bash
 JWT_SECRET=your-secret-key   # JWT密钥（生产环境必须配置）
 JWT_EXPIRES_IN=7d           # JWT过期时间
-ADMIN_UIDS=123456,789012    # 保留配置，不作为后台管理权限放行依据
+ADMIN_UIDS=123456,789012    # 保留配置，不作为运营权限放行依据
 FILE_ROOT=/data/kesini/public # 上传素材持久化目录
 ```
 
-后台管理权限以用户表 `is_admin=true` 为准。
+运营权限以用户表 `is_admin=true` 为准。
 
 ### MySQL数据库配置
 
@@ -68,7 +68,7 @@ REDIS_PASSWORD=            # Redis密码（可选）
 
 ### 交易配置
 
-玩家卡片交易配置保存在数据库 `trade_config` 表中，可在后台“交易管理”页面维护。
+玩家卡片交易配置保存在数据库 `trade_config` 表中，可在运营台“交易管理”页面维护。
 
 - `enabled`：是否开启交易市场
 - `fee_rate`：手续费率，`0.05` 表示 5%
@@ -80,8 +80,8 @@ REDIS_PASSWORD=            # Redis密码（可选）
 
 抽卡配置采用“全局默认 + 卡池单独配置”：
 
-- `gacha_pool_config.pool_id = 0`：后台“默认抽卡配置”保存的一套全局默认。
-- `gacha_pool_config.pool_id > 0`：后台“卡池管理”中保存的单个卡池覆盖配置。
+- `gacha_pool_config.pool_id = 0`：运营台“默认抽卡配置”保存的一套全局默认。
+- `gacha_pool_config.pool_id > 0`：运营台“卡池管理”中保存的单个卡池覆盖配置。
 - 单池配置启用时优先使用；未启用或不存在时继承全局默认；全局默认不存在或未启用时使用下面的代码/环境兜底。
 
 概率配置使用 JSON 格式，概率总和应该等于 1.0（100%）。
@@ -100,7 +100,7 @@ STANDARD_POOL_PITY_CONFIG={"enabled":true,"softPity":{"count":10,"guaranteedRari
 
 ### UP 与价格
 
-UP 配置、单抽价格和十连价格通过后台保存到 `gacha_pool_config`。默认兜底价格为单抽 `10`、十连 `100`。
+UP 配置、单抽价格和十连价格通过运营台保存到 `gacha_pool_config`。默认兜底价格为单抽 `10`、十连 `100`。
 
 ## 卡池配置说明
 
@@ -136,7 +136,7 @@ const fallbackDefault = this.gachaConfigService.getDefaultConfig();
 // 根据卡池ID获取最终生效配置：单池配置 > 全局默认 > 代码/环境兜底
 const poolConfig = this.gachaConfigService.getConfigByPoolId(poolId);
 
-// 获取后台“默认抽卡配置”页使用的全局默认配置
+// 获取运营台“默认抽卡配置”页使用的全局默认配置
 const allConfigs = this.gachaConfigService.getAllPoolConfigs();
 ```
 
