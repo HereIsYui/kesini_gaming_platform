@@ -430,8 +430,10 @@ const activeSection = computed<SectionKey>(() => {
     : "draw";
 });
 const isPublicProfileRoute = computed(() => route.name === "publicProfile");
-const profileRouteUid = computed(() =>
-  isPublicProfileRoute.value ? String(route.params.uid || "").trim() : "",
+const profileRouteId = computed(() =>
+  isPublicProfileRoute.value
+    ? String(route.params.publicId || route.params.uid || "").trim()
+    : "",
 );
 const profileDisplayName = computed(() =>
   publicPlayerName(
@@ -453,8 +455,12 @@ const profileCanEdit = computed(
     playerProfile.value?.user.uid === currentUser.value?.uid,
 );
 const profileShareUrl = computed(() => {
-  const uid = playerProfile.value?.user.uid || currentUser.value?.uid || "";
-  return uid ? `${window.location.origin}/u/${encodeURIComponent(uid)}` : "";
+  const profileId = publicProfileParam(
+    playerProfile.value?.user || currentUser.value,
+  );
+  return profileId
+    ? `${window.location.origin}/u/${encodeURIComponent(profileId)}`
+    : "";
 });
 const playerDisplayName = computed(() => {
   const uid = currentUser.value?.uid;
@@ -1126,7 +1132,11 @@ watch(activeSection, async (section) => {
 });
 
 watch(
-  () => [route.name, String(route.params.uid || ""), token.value],
+  () => [
+    route.name,
+    String(route.params.publicId || route.params.uid || ""),
+    token.value,
+  ],
   async () => {
     if (activeSection.value === "profile") {
       await loadPlayerProfile();
@@ -1153,6 +1163,34 @@ function publicPlayerName(
   const value = String(name || "").trim();
   const rawUid = String(uid || "").trim();
   return value && value !== rawUid ? value : fallback;
+}
+
+function publicProfileParam(
+  user?:
+    | {
+        publicId?: string | null;
+        public_id?: string | null;
+        uid?: string | null;
+      }
+    | null,
+) {
+  const publicId = String(user?.publicId || user?.public_id || "").trim();
+  return publicId || String(user?.uid || "").trim();
+}
+
+function publicProfileRoute(
+  user?:
+    | {
+        publicId?: string | null;
+        public_id?: string | null;
+        uid?: string | null;
+      }
+    | null,
+) {
+  return {
+    name: "publicProfile",
+    params: { publicId: publicProfileParam(user) },
+  };
 }
 
 function activityUserName(activity: SocialActivityRecord) {
@@ -1648,7 +1686,7 @@ async function loadUserCards(options: { append?: boolean } = {}) {
 }
 
 async function loadPlayerProfile() {
-  if (isPublicProfileRoute.value && !profileRouteUid.value) {
+  if (isPublicProfileRoute.value && !profileRouteId.value) {
     playerProfile.value = null;
     return;
   }
@@ -1661,7 +1699,7 @@ async function loadPlayerProfile() {
   try {
     playerProfile.value = await request<PlayerProfileResponse>(
       isPublicProfileRoute.value
-        ? `/profile/${encodeURIComponent(profileRouteUid.value)}`
+        ? `/profile/${encodeURIComponent(profileRouteId.value)}`
         : "/profile/me",
     );
   } catch (error) {
@@ -4657,10 +4695,7 @@ function leaderboardRankLabel(rank?: number) {
                 v-for="activity in friendFeed"
                 :key="activity.id"
                 class="friend-feed-row"
-                :to="{
-                  name: 'publicProfile',
-                  params: { uid: activity.user.uid },
-                }"
+                :to="publicProfileRoute(activity.user)"
               >
                 <span class="friend-avatar">
                   <img
@@ -4721,10 +4756,7 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="friend-row-actions">
                     <RouterLink
                       class="secondary-action compact"
-                      :to="{
-                        name: 'publicProfile',
-                        params: { uid: friend.user.uid },
-                      }"
+                      :to="publicProfileRoute(friend.user)"
                     >
                       查看
                     </RouterLink>
@@ -4796,10 +4828,7 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="friend-row-actions">
                     <RouterLink
                       class="secondary-action compact"
-                      :to="{
-                        name: 'publicProfile',
-                        params: { uid: requestItem.user.uid },
-                      }"
+                      :to="publicProfileRoute(requestItem.user)"
                     >
                       查看
                     </RouterLink>
@@ -4881,10 +4910,7 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="friend-row-actions">
                     <RouterLink
                       class="secondary-action compact"
-                      :to="{
-                        name: 'publicProfile',
-                        params: { uid: requestItem.user.uid },
-                      }"
+                      :to="publicProfileRoute(requestItem.user)"
                     >
                       查看
                     </RouterLink>
@@ -5084,10 +5110,7 @@ function leaderboardRankLabel(rank?: number) {
                     </div>
                     <RouterLink
                       class="secondary-action compact"
-                      :to="{
-                        name: 'publicProfile',
-                        params: { uid: member.uid },
-                      }"
+                      :to="publicProfileRoute(member)"
                     >
                       主页
                     </RouterLink>
@@ -6553,10 +6576,7 @@ function leaderboardRankLabel(rank?: number) {
                 :key="`podium-${activeLeaderboardMetric}-${entry.uid}`"
                 class="podium-card"
                 :class="`rank-${entry.rank}`"
-                :to="{
-                  name: 'publicProfile',
-                  params: { uid: entry.uid },
-                }"
+                :to="publicProfileRoute(entry)"
               >
                 <span class="rank-badge">{{
                   leaderboardRankLabel(entry.rank)
@@ -6581,10 +6601,7 @@ function leaderboardRankLabel(rank?: number) {
                 :key="`${activeLeaderboardMetric}-${entry.uid}`"
                 class="leaderboard-row"
                 :class="{ mine: entry.uid === activeLeaderboardBoard?.me?.uid }"
-                :to="{
-                  name: 'publicProfile',
-                  params: { uid: entry.uid },
-                }"
+                :to="publicProfileRoute(entry)"
               >
                 <b>{{ leaderboardRankLabel(entry.rank) }}</b>
                 <img
@@ -6882,10 +6899,7 @@ function leaderboardRankLabel(rank?: number) {
                 :key="entry.uid"
                 class="season-rank-row"
                 :class="{ mine: entry.uid === currentUser?.uid }"
-                :to="{
-                  name: 'publicProfile',
-                  params: { uid: entry.uid },
-                }"
+                :to="publicProfileRoute(entry)"
               >
                 <b>{{ leaderboardRankLabel(entry.rank) }}</b>
                 <img

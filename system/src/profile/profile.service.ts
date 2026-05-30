@@ -11,6 +11,10 @@ import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import { FormationService } from "src/formation/formation.service";
 import { SocialActivityService } from "src/social/social-activity.service";
 import type { CardRarity } from "src/types/api";
+import {
+  ensureUserPublicId,
+  getUserPublicId,
+} from "src/utils/user-public-id";
 
 const SHOWCASE_LIMIT = 6;
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
@@ -27,6 +31,21 @@ export class ProfileService {
   async getProfile(uid: string) {
     const normalizedUid = this.normalizeUid(uid);
     const user = await this.findUser(this.dataSource, normalizedUid);
+    return this.getProfileForUser(user);
+  }
+
+  async getPublicProfile(profileId: string) {
+    const normalizedProfileId = this.normalizeUid(profileId);
+    const user = await this.findUserByPublicIdOrUid(
+      this.dataSource,
+      normalizedProfileId,
+    );
+    return this.getProfileForUser(user);
+  }
+
+  private async getProfileForUser(user: User) {
+    await ensureUserPublicId(this.dataSource.getRepository(User), user);
+    const normalizedUid = user.uid;
     const [formation, showcase] = await Promise.all([
       this.formationService.getFormation(normalizedUid).catch(() => ({
         slotCount: 3,
@@ -122,6 +141,20 @@ export class ProfileService {
     return user;
   }
 
+  private async findUserByPublicIdOrUid(
+    manager: DataSource | EntityManager,
+    profileId: string,
+  ) {
+    const repository = manager.getRepository(User);
+    const user =
+      (await repository.findOne({ where: { public_id: profileId } })) ||
+      (await repository.findOne({ where: { uid: profileId } }));
+    if (!user) {
+      throw new Error("玩家不存在");
+    }
+    return user;
+  }
+
   private async assertCardsBelongToUser(
     manager: EntityManager,
     uid: string,
@@ -192,6 +225,7 @@ export class ProfileService {
     };
     return {
       uid: user.uid,
+      publicId: getUserPublicId(user),
       nickname: user.nickname || user.name || "玩家",
       avatar: user.avatar || "",
       cardCounts,

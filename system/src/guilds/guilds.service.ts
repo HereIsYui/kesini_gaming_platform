@@ -4,6 +4,10 @@ import { Guild } from "src/entity/guild.entity";
 import { GuildMember } from "src/entity/guildMember.entity";
 import { GuildMessage } from "src/entity/guildMessage.entity";
 import { User } from "src/entity/user.entity";
+import {
+  ensureUsersPublicIds,
+  getUserPublicId,
+} from "src/utils/user-public-id";
 
 const GUILD_LIST_LIMIT = 30;
 const DEFAULT_MESSAGE_LIMIT = 50;
@@ -245,15 +249,18 @@ export class GuildsService {
       return [];
     }
 
-    const users = await manager.getRepository(User).find({
+    const userRepository = manager.getRepository(User);
+    const users = await userRepository.find({
       where: { uid: In([...new Set(members.map((member) => member.uid))]) },
     });
+    await ensureUsersPublicIds(userRepository, users);
     const userMap = new Map(users.map((user) => [user.uid, user]));
 
     return members.map((member) => {
       const user = userMap.get(member.uid);
       return {
         uid: member.uid,
+        publicId: user ? getUserPublicId(user) : member.uid,
         nickname: this.publicName(user, member.uid),
         avatar: user?.avatar || "",
         role: member.role,
@@ -270,11 +277,13 @@ export class GuildsService {
       return [];
     }
 
-    const users = await manager.getRepository(User).find({
+    const userRepository = manager.getRepository(User);
+    const users = await userRepository.find({
       where: {
         uid: In([...new Set(messages.map((message) => message.sender_uid))]),
       },
     });
+    await ensureUsersPublicIds(userRepository, users);
     const userMap = new Map(users.map((user) => [user.uid, user]));
 
     return messages.map((message) => {
@@ -285,6 +294,7 @@ export class GuildsService {
         createdAt: message.createdAt,
         sender: {
           uid: message.sender_uid,
+          publicId: user ? getUserPublicId(user) : message.sender_uid,
           nickname: this.publicName(user, message.sender_uid),
           avatar: user?.avatar || "",
         },

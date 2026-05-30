@@ -26,6 +26,12 @@ import {
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
 import { SocialActivityService } from "src/social/social-activity.service";
+import {
+  assignUserPublicId,
+  ensureUserPublicId,
+  ensureUsersPublicIds,
+  getUserPublicId,
+} from "src/utils/user-public-id";
 import { GachaConfigService } from "./gacha-config.service";
 import {
   DECOMPOSE_CONFIG_KEY,
@@ -362,6 +368,7 @@ export class CardService {
       this.cardRepository.find(),
       this.userCardRepository.find({ where: { delete_flag: false } }),
     ]);
+    await ensureUsersPublicIds(this.userRepository, users);
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const userMap = new Map(users.map((user) => [user.uid, user]));
     const metricsByUid = new Map<string, LeaderboardMetrics>();
@@ -1957,9 +1964,11 @@ export class CardService {
         card_count_ur: 0,
         is_admin: false,
       });
+      await assignUserPublicId(userRepository, user);
       return userRepository.save(user);
     }
 
+    await ensureUserPublicId(userRepository, user);
     this.normalizeUserStats(user);
     return user;
   }
@@ -2407,6 +2416,7 @@ export class CardService {
     return {
       rank: 0,
       uid,
+      publicId: user ? getUserPublicId(user) : uid,
       nickname: user?.nickname || user?.name || "玩家",
       avatar: user?.avatar || "",
       value,

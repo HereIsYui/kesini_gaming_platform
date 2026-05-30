@@ -7,6 +7,7 @@ import { LoginData } from "src/types/api";
 import { LessThan, Repository } from "typeorm";
 import { JwtUtilsService } from "src/utils/jwt";
 import { SiteConfigService } from "src/config/site-config.service";
+import { assignUserPublicId } from "src/utils/user-public-id";
 
 const NONCE_VALID_MS = 5 * 60 * 1000;
 
@@ -111,6 +112,7 @@ export class ApisService {
     if (!user) {
       const newUser = new User();
       newUser.uid = userId;
+      await assignUserPublicId(this.userRepository, newUser);
       newUser.name = userInfo.userName;
       newUser.nickname = userInfo.userNickname;
       newUser.avatar = userInfo.userAvatarURL;
@@ -127,6 +129,7 @@ export class ApisService {
       user.avatar = userInfo.userAvatarURL;
       user.name = userInfo.userName;
       user.nickname = userInfo.userNickname;
+      await assignUserPublicId(this.userRepository, user);
       await this.userRepository.save(user);
     }
 

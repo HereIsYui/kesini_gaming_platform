@@ -6,6 +6,8 @@ export interface ApiResponse<T> {
 
 export interface UserProfile {
   uid?: string;
+  publicId?: string;
+  public_id?: string | null;
   name?: string;
   nickname?: string;
   avatar?: string;
@@ -187,6 +189,7 @@ export interface ShowcaseCard {
 export interface PlayerProfileResponse {
   user: {
     uid: string;
+    publicId: string;
     nickname: string;
     avatar: string;
     cardCounts: Record<CardRarity, number>;
@@ -213,6 +216,7 @@ export type FriendRequestStatus =
 
 export interface FriendUser {
   uid: string;
+  publicId?: string;
   nickname: string;
   avatar: string;
   createdAt?: string | null;
@@ -275,6 +279,7 @@ export interface GuildSummary {
 
 export interface GuildMember {
   uid: string;
+  publicId?: string;
   nickname: string;
   avatar: string;
   role: GuildMemberRole;
@@ -856,6 +861,7 @@ export type LeaderboardMetric =
 export interface LeaderboardEntry {
   rank: number;
   uid: string;
+  publicId?: string;
   nickname: string;
   avatar: string;
   value: number;

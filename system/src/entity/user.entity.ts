@@ -9,12 +9,16 @@ import {
 
 @Entity()
 @Index("IDX_user_uid", ["uid"], { unique: true })
+@Index("IDX_user_public_id", ["public_id"], { unique: true })
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
   uid: string;
+
+  @Column({ length: 32, nullable: true })
+  public_id: string | null;
 
   @Column()
   name: string;

@@ -74,6 +74,18 @@ class ProfileTestStore {
       findOne: async (options?: any) =>
         items.find((item) => this.matchesWhere(item, options?.where || {})) ||
         null,
+      save: async (records: T | T[]) => {
+        const list = Array.isArray(records) ? records : [records];
+        list.forEach((record) => {
+          const index = items.findIndex((item) => item.id === record.id);
+          if (index >= 0) {
+            items[index] = record;
+          } else {
+            items.push(record);
+          }
+        });
+        return records;
+      },
     };
   }
 
@@ -95,6 +107,7 @@ function createUser(uid = "u1"): User {
   return {
     id: uid === "u1" ? 1 : 2,
     uid,
+    public_id: `pub-${uid}`,
     name: `name-${uid}`,
     nickname: `玩家${uid}`,
     avatar: `https://example.com/${uid}.png`,
@@ -186,6 +199,7 @@ describe("ProfileService 玩家主页", () => {
 
     expect(result.user).toEqual({
       uid: "u1",
+      publicId: "pub-u1",
       nickname: "玩家u1",
       avatar: "https://example.com/u1.png",
       cardCounts: { N: 1, R: 2, SR: 3, SSR: 4, UR: 5 },
@@ -282,5 +296,28 @@ describe("ProfileService 玩家主页", () => {
     const result = await service.getProfile("u1");
 
     expect(result.showcase.map((card) => card.uuid)).toEqual(["card-a"]);
+  });
+
+  it("可用公开编号查询主页", async () => {
+    const result = await service.getPublicProfile("pub-u1");
+
+    expect(result.user.uid).toBe("u1");
+    expect(result.user.publicId).toBe("pub-u1");
+  });
+
+  it("旧的主页地址仍然可用", async () => {
+    const result = await service.getPublicProfile("u1");
+
+    expect(result.user.uid).toBe("u1");
+    expect(result.user.publicId).toBe("pub-u1");
+  });
+
+  it("老玩家查询时会补公开编号", async () => {
+    store.users[0].public_id = null;
+
+    const result = await service.getProfile("u1");
+
+    expect(result.user.publicId).toMatch(/^[0-9a-f]{16}$/);
+    expect(store.users[0].public_id).toBe(result.user.publicId);
   });
 });

@@ -3,6 +3,10 @@ import { DataSource, EntityManager, In } from "typeorm";
 import { User } from "src/entity/user.entity";
 import { UserFriend, UserFriendStatus } from "src/entity/userFriend.entity";
 import { SocialActivityService } from "src/social/social-activity.service";
+import {
+  ensureUsersPublicIds,
+  getUserPublicId,
+} from "src/utils/user-public-id";
 
 @Injectable()
 export class FriendsService {
@@ -275,9 +279,11 @@ export class FriendsService {
     if (relatedUids.length === 0) {
       return new Map<string, User>();
     }
-    const users = await manager.getRepository(User).find({
+    const userRepository = manager.getRepository(User);
+    const users = await userRepository.find({
       where: { uid: In(relatedUids) },
     });
+    await ensureUsersPublicIds(userRepository, users);
     return new Map(users.map((user) => [user.uid, user]));
   }
 
@@ -317,6 +323,7 @@ export class FriendsService {
   private toPublicUser(user: User) {
     return {
       uid: user.uid,
+      publicId: getUserPublicId(user),
       nickname: user.nickname || user.name || "玩家",
       avatar: user.avatar || "",
       createdAt: user.createdAt || null,

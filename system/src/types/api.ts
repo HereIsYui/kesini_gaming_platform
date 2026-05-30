@@ -106,6 +106,7 @@ export interface PityProgressView {
 export interface LeaderboardEntry {
   rank: number;
   uid: string;
+  publicId?: string;
   nickname: string;
   avatar: string;
   value: number;

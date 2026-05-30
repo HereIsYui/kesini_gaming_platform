@@ -68,11 +68,11 @@ export class ProfileController {
     }
   }
 
-  @Get(":uid")
-  async getPublicProfile(@Param("uid") uid: string): Promise<ResponseDto<any>> {
+  @Get(":id")
+  async getPublicProfile(@Param("id") id: string): Promise<ResponseDto<any>> {
     try {
       return ResponseDto.success(
-        await this.profileService.getProfile(uid),
+        await this.profileService.getPublicProfile(id),
         "获取主页成功",
       );
     } catch (error) {

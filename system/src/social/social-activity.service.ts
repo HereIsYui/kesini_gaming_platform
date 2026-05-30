@@ -3,6 +3,10 @@ import { DataSource, EntityManager, In } from "typeorm";
 import { User } from "src/entity/user.entity";
 import { UserFriend } from "src/entity/userFriend.entity";
 import {
+  ensureUsersPublicIds,
+  getUserPublicId,
+} from "src/utils/user-public-id";
+import {
   UserSocialActivity,
   UserSocialActivityType,
 } from "src/entity/userSocialActivity.entity";
@@ -65,9 +69,11 @@ export class SocialActivityService {
       return { list: [] };
     }
 
-    const users = await this.dataSource.getRepository(User).find({
+    const userRepository = this.dataSource.getRepository(User);
+    const users = await userRepository.find({
       where: { uid: In([...new Set(activities.map((item) => item.actor_uid))]) },
     });
+    await ensureUsersPublicIds(userRepository, users);
     const userMap = new Map(users.map((user) => [user.uid, user]));
 
     return {
@@ -106,6 +112,7 @@ export class SocialActivityService {
       createdAt: activity.createdAt,
       user: {
         uid: activity.actor_uid,
+        publicId: user ? getUserPublicId(user) : activity.actor_uid,
         nickname: this.publicName(user, activity.actor_uid),
         avatar: user?.avatar || "",
       },

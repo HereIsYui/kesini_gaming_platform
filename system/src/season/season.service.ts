@@ -13,6 +13,10 @@ import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserSeasonProgress } from "src/entity/userSeasonProgress.entity";
 import { RewardService } from "src/reward/reward.service";
+import {
+  ensureUsersPublicIds,
+  getUserPublicId,
+} from "src/utils/user-public-id";
 
 export interface SeasonPointContext {
   sourceType: SeasonPointSourceType;
@@ -88,11 +92,11 @@ export class SeasonService {
           .filter(Boolean),
       ),
     ];
+    const userRepository = this.dataSource.getRepository(User);
     const users = uids.length
-      ? await this.dataSource
-          .getRepository(User)
-          .find({ where: { uid: In(uids) } })
+      ? await userRepository.find({ where: { uid: In(uids) } })
       : [];
+    await ensureUsersPublicIds(userRepository, users);
     const userMap = new Map(users.map((user) => [user.uid, user]));
     const entries = progresses
       .map((progress) =>
@@ -630,6 +634,7 @@ export class SeasonService {
     return {
       rank: 0,
       uid,
+      publicId: user ? getUserPublicId(user) : uid,
       nickname: user?.nickname || user?.name || "玩家",
       avatar: user?.avatar || "",
       value,
