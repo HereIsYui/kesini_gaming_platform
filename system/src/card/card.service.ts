@@ -200,7 +200,7 @@ export class CardService {
 
       const probabilities = this.getProbabilities(serverConfig);
       const cards = await cardRepository.find({
-        where: { pool: effectivePoolId },
+        where: { pool: effectivePoolId, enabled: true },
       });
       const cardsByRarity = this.groupCardsByRarity(cards);
       this.assertPoolCanDraw(cardsByRarity, probabilities, effectivePoolId);
@@ -487,7 +487,7 @@ export class CardService {
       throw new Error("卡池不存在或已下线");
     }
     return this.cardRepository.find({
-      where: { pool: effectivePoolId },
+      where: { pool: effectivePoolId, enabled: true },
     });
   }
 
@@ -509,7 +509,7 @@ export class CardService {
     }
 
     const cards = await this.cardRepository.find({
-      where: { pool: effectivePoolId },
+      where: { pool: effectivePoolId, enabled: true },
       order: { id: "ASC" },
     });
     if (cards.length === 0) {
@@ -2344,6 +2344,9 @@ export class CardService {
   ): Map<number, Set<string>> {
     const requiredVersionsByPool = new Map<number, Set<string>>();
     cards.forEach((card) => {
+      if (card.enabled === false) {
+        return;
+      }
       const levels = this.parseCardLevels(card.card_level);
       if (levels.length === 0) {
         return;

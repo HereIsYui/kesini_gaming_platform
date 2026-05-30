@@ -989,6 +989,7 @@ describe("CardService 玩家图鉴", () => {
           card_type: 0,
           pool: 2,
           drop_item: "",
+          enabled: true,
         },
         {
           id: 2,
@@ -999,6 +1000,7 @@ describe("CardService 玩家图鉴", () => {
           card_type: 0,
           pool: 2,
           drop_item: "",
+          enabled: true,
         },
       ]
     ) as CardItem[];
@@ -1010,7 +1012,18 @@ describe("CardService 玩家图鉴", () => {
       default_fragment: true,
     } as DropItem;
     const cardRepository = createRepository({
-      find: jest.fn().mockResolvedValue(cards),
+      find: jest.fn(async (options?: any) => {
+        const where = options?.where || {};
+        return cards.filter((card) => {
+          const poolMatched = where.pool === undefined || card.pool === where.pool;
+          const enabledMatched =
+            where.enabled === undefined ||
+            (where.enabled === true
+              ? card.enabled !== false
+              : card.enabled === where.enabled);
+          return poolMatched && enabledMatched;
+        });
+      }),
     });
     const poolRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({ id: 2, enabled: true }),
@@ -1103,7 +1116,46 @@ describe("CardService 玩家图鉴", () => {
 
     expect(cardRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { pool: 2 },
+        where: { pool: 2, enabled: true },
+      }),
+    );
+  });
+
+  it("图鉴不展示下架卡片", async () => {
+    const { service } = createCatalogService({
+      cards: [
+        {
+          id: 1,
+          card_name: "上架卡",
+          card_level: "N",
+          card_desc: "描述",
+          card_image: "",
+          card_type: 0,
+          pool: 2,
+          drop_item: "",
+          enabled: true,
+        },
+        {
+          id: 2,
+          card_name: "下架卡",
+          card_level: "UR",
+          card_desc: "描述",
+          card_image: "",
+          card_type: 0,
+          pool: 2,
+          drop_item: "",
+          enabled: false,
+        },
+      ],
+    });
+
+    const result = await service.getUserCatalog("u1", 2);
+
+    expect(result.total).toBe(1);
+    expect(result.list[0]).toEqual(
+      expect.objectContaining({
+        key: "1:N",
+        card: expect.objectContaining({ card_name: "上架卡" }),
       }),
     );
   });
@@ -2003,6 +2055,17 @@ describe("CardService 抽卡星穹币扣除", () => {
     drawCosts = { once: 10, ten: 100 },
     pointLedgerService?: any,
     pool: Partial<PoolInfo> = {},
+    cards: Partial<CardItem>[] = [
+      {
+        id: 1,
+        card_name: "测试卡",
+        card_level: "N",
+        card_desc: "测试",
+        card_type: 0,
+        pool: 1,
+        enabled: true,
+      },
+    ],
   ) {
     const poolRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
@@ -2015,16 +2078,18 @@ describe("CardService 抽卡星穹币扣除", () => {
       }),
     });
     const cardRepository = createRepository({
-      find: jest.fn().mockResolvedValue([
-        {
-          id: 1,
-          card_name: "测试卡",
-          card_level: "N",
-          card_desc: "测试",
-          card_type: 0,
-          pool: 1,
-        },
-      ]),
+      find: jest.fn(async (options?: any) => {
+        const where = options?.where || {};
+        return cards.filter((card) => {
+          const poolMatched = where.pool === undefined || card.pool === where.pool;
+          const enabledMatched =
+            where.enabled === undefined ||
+            (where.enabled === true
+              ? card.enabled !== false
+              : card.enabled === where.enabled);
+          return poolMatched && enabledMatched;
+        });
+      }),
     });
     const userRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
@@ -2088,6 +2153,7 @@ describe("CardService 抽卡星穹币扣除", () => {
     return {
       service,
       dataSource,
+      cardRepository,
       userRepository,
       userCardRepository,
       historyRepository,
@@ -2185,6 +2251,44 @@ describe("CardService 抽卡星穹币扣除", () => {
 
     await expect(service.drawOnce("u1", 1)).rejects.toThrow("已下线");
     expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("抽卡只使用上架卡片", async () => {
+    const { service, cardRepository, userCardRepository } = createDrawService(
+      { point: 10 },
+      { once: 10, ten: 100 },
+      undefined,
+      {},
+      [
+        {
+          id: 1,
+          card_name: "下架卡",
+          card_level: "N",
+          card_desc: "测试",
+          card_type: 0,
+          pool: 1,
+          enabled: false,
+        },
+        {
+          id: 2,
+          card_name: "上架卡",
+          card_level: "N",
+          card_desc: "测试",
+          card_type: 0,
+          pool: 1,
+          enabled: true,
+        },
+      ],
+    );
+
+    await service.drawOnce("u1", 1);
+
+    expect(cardRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { pool: 1, enabled: true } }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ card_id: "2" })]),
+    );
   });
 
   it("非 1 抽或 10 抽会在开启事务前拒绝", async () => {

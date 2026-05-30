@@ -66,6 +66,7 @@ export interface CardItem {
   card_image?: string;
   card_type: number;
   pool: number;
+  enabled?: boolean;
   createdAt?: string;
 }
 

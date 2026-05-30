@@ -200,6 +200,15 @@
             >
               卡面
             </el-button>
+            <el-button
+              size="small"
+              :type="row.enabled !== false ? 'info' : 'success'"
+              plain
+              :loading="togglingCardId === Number(row.id)"
+              @click="toggleCardEnabled(row, row.enabled === false, reload)"
+            >
+              {{ row.enabled !== false ? "下架" : "上架" }}
+            </el-button>
           </template>
         </AdminTable>
 
@@ -784,6 +793,7 @@ const dashboardData = ref<DashboardData | null>(null);
 const dashboardLoading = ref(false);
 const dashboardError = ref("");
 const togglingPoolId = ref<number | null>(null);
+const togglingCardId = ref<number | null>(null);
 const loadingPoolId = ref<number | null>(null);
 const poolGachaVisible = ref(false);
 const editingPoolGacha = ref<{
@@ -1293,6 +1303,27 @@ async function togglePoolEnabled(
     ElMessage.error(err instanceof Error ? err.message : "切换卡池状态失败");
   } finally {
     togglingPoolId.value = null;
+  }
+}
+
+async function toggleCardEnabled(
+  row: Record<string, any>,
+  enabled: boolean,
+  reload: () => void,
+) {
+  const cardId = Number(row.id);
+  togglingCardId.value = cardId;
+  try {
+    await request(`/admin/cards/${cardId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+    ElMessage.success(enabled ? "卡片已上架" : "卡片已下架");
+    reload();
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "切换卡片状态失败");
+  } finally {
+    togglingCardId.value = null;
   }
 }
 

@@ -298,6 +298,7 @@ describe("AdminService", () => {
         card_name: "多稀有度卡",
         card_level: "N,R,SSR",
         card_image: "/file/card-images/demo.webp",
+        enabled: true,
       }),
     );
   });
@@ -422,6 +423,41 @@ describe("AdminService", () => {
     expect(cardRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         card_level: "SR,UR",
+      }),
+    );
+  });
+
+  it("创建和更新卡片会保存上下架状态", async () => {
+    const card = {
+      id: 10,
+      card_name: "测试卡",
+      card_level: "N",
+      enabled: true,
+    };
+    const cardRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(card),
+    });
+    const service = createService({ card: cardRepository });
+
+    await service.createCard({
+      card_name: "下架卡",
+      card_level: "N",
+      enabled: false,
+    } as any);
+    await service.updateCard(10, { enabled: false } as any);
+
+    expect(cardRepository.save).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        card_name: "下架卡",
+        enabled: false,
+      }),
+    );
+    expect(cardRepository.save).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: 10,
+        enabled: false,
       }),
     );
   });

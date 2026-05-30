@@ -38,6 +38,9 @@ export class CardItem {
   @Column()
   pool: number;
 
+  @Column({ default: true })
+  enabled: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }

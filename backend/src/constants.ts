@@ -113,6 +113,11 @@ export const enabledOptions: SelectOption[] = [
   { label: "停用", value: false },
 ];
 
+export const cardPublishOptions: SelectOption[] = [
+  { label: "上架", value: true },
+  { label: "下架", value: false },
+];
+
 export const poolTypeOptions: SelectOption[] = [
   { label: "常驻卡池", value: 0 },
   { label: "活动卡池", value: 1 },
@@ -201,6 +206,13 @@ export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
       helper: "可多选，保存时会按 N/R/SR/SSR/UR 顺序写入。",
     },
     { key: "pool", label: "所属卡池", type: "select", options: poolOptions },
+    {
+      key: "enabled",
+      label: "状态",
+      type: "select",
+      options: cardPublishOptions,
+      defaultValue: true,
+    },
     {
       key: "card_type",
       label: "类型",

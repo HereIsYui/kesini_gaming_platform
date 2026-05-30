@@ -690,6 +690,10 @@ class CardDto {
   @Type(() => Number)
   @IsInt()
   pool?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 class DropItemDto {

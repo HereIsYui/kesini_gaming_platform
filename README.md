@@ -280,6 +280,7 @@ export FILE_ROOT=/data/kesini/public
 - 重复提交同一个 OAuth 回调会返回 `登录已失效`
 - 玩家主页能访问 `https://web.example.com/u/<publicId>`
 - 登录玩家能保存 1-6 张展示卡片
+- 运营台能单独上架/下架卡片，下架卡片不再进入当期抽卡和卡池详情
 - 登录玩家能进入“好友”，处理收到和发出的好友申请
 - 登录玩家能进入“公会”，创建、加入和退出公会
 - 公会成员能发送和刷新公会消息
@@ -295,6 +296,7 @@ export FILE_ROOT=/data/kesini/public
 - 运营台“默认抽卡配置”只维护一套默认概率、UP、保底和单抽/十连价格。
 - 运营台“卡池管理”中的“抽卡配置”按钮用于维护某个卡池的单独配置。
 - 运营台“卡池管理”可以快速上线/下线卡池；下线后玩家端不展示，也不能继续抽取。
+- 运营台“卡片管理”可以单独上架/下架卡片；下架后不进入当期抽卡、卡池详情和图鉴，玩家已拥有卡片不受影响。
 - 未启用单独配置的卡池会继承全局默认。
 - 数据库仍使用 `gacha_pool_config` 表：`pool_id=0` 表示全局默认，`pool_id>0` 表示单个卡池覆盖。
 
@@ -377,6 +379,7 @@ SELECT COUNT(*) AS empty_public_id FROM `user` WHERE public_id IS NULL OR public
 SELECT public_id, COUNT(*) AS repeat_count FROM `user` GROUP BY public_id HAVING repeat_count > 1;
 CREATE UNIQUE INDEX IDX_user_public_id ON `user` (public_id);
 ALTER TABLE card_item ADD COLUMN card_image varchar(500) NOT NULL DEFAULT '';
+ALTER TABLE card_item ADD COLUMN enabled tinyint NOT NULL DEFAULT 1;
 ALTER TABLE user_card ADD COLUMN locked tinyint NOT NULL DEFAULT 0;
 ALTER TABLE user_card ADD COLUMN cultivation_level int NOT NULL DEFAULT 1;
 ALTER TABLE user_card ADD COLUMN cultivation_exp int NOT NULL DEFAULT 0;

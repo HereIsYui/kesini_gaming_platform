@@ -493,6 +493,7 @@ export class AdminService {
       card_image: this.normalizeOptionalString(body.card_image),
       card_type: Number(body.card_type || 0),
       pool: Number(body.pool || 1),
+      enabled: body.enabled !== false,
     });
     return this.cardRepository.save(card);
   }
@@ -527,6 +528,9 @@ export class AdminService {
     }
     if (body.pool !== undefined) {
       updates.pool = this.normalizeIntegerInput(body.pool, "所属卡池无效", 1);
+    }
+    if (body.enabled !== undefined && body.enabled !== null) {
+      updates.enabled = body.enabled === true;
     }
     Object.assign(card, updates);
     return this.cardRepository.save(card);
