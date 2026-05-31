@@ -32,7 +32,7 @@ import {
   UsersRound,
   WandSparkles,
 } from "@lucide/vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import {
@@ -490,6 +490,7 @@ const callbackBusy = ref(false);
 const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
+let pageScrollSnapshot: { body: string; html: string } | null = null;
 
 const busy = reactive({
   public: false,
@@ -756,6 +757,24 @@ const guildRoleLabel = computed(() =>
   currentGuild.value?.role === "leader" ? "会长" : "成员",
 );
 const guildMessageRows = computed(() => guildMessages.value);
+const modalOverlayOpen = computed(() =>
+  Boolean(
+    confirmDialogTarget.value ||
+      shareTextTarget.value ||
+      cardIntroTarget.value ||
+      recycleTarget.value ||
+      upgradeTarget.value ||
+      listingTarget.value ||
+      formationPickerOpen.value ||
+      profilePickerOpen.value ||
+      resultModalOpen.value ||
+      rechargeModalOpen.value ||
+      launchActivityModalOpen.value ||
+      drawHistoryOpen.value ||
+      poolDetailOpen.value ||
+      announcementModalOpen.value,
+  ),
+);
 
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
@@ -1337,7 +1356,98 @@ function resetPlayerPreferences() {
   notify("success", "设置已恢复");
 }
 
+function setPageScrollLocked(locked: boolean) {
+  if (locked) {
+    if (pageScrollSnapshot) {
+      return;
+    }
+    pageScrollSnapshot = {
+      body: document.body.style.overflow,
+      html: document.documentElement.style.overflow,
+    };
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return;
+  }
+  if (!pageScrollSnapshot) {
+    return;
+  }
+  document.body.style.overflow = pageScrollSnapshot.body;
+  document.documentElement.style.overflow = pageScrollSnapshot.html;
+  pageScrollSnapshot = null;
+}
+
+function closeTopOverlay() {
+  if (confirmDialogTarget.value) {
+    settleConfirmDialog(false);
+    return true;
+  }
+  if (shareTextTarget.value) {
+    closeShareText();
+    return true;
+  }
+  if (cardIntroTarget.value) {
+    closeCardIntro();
+    return true;
+  }
+  if (recycleTarget.value) {
+    closeRecycleModal();
+    return true;
+  }
+  if (upgradeTarget.value) {
+    closeUpgradeModal();
+    return true;
+  }
+  if (listingTarget.value) {
+    closeTradeListingModal();
+    return true;
+  }
+  if (formationPickerOpen.value) {
+    closeFormationPicker();
+    return true;
+  }
+  if (profilePickerOpen.value) {
+    closeProfilePicker();
+    return true;
+  }
+  if (resultModalOpen.value) {
+    closeResultModal();
+    return true;
+  }
+  if (rechargeModalOpen.value) {
+    closeRechargeModal();
+    return true;
+  }
+  if (launchActivityModalOpen.value) {
+    closeLaunchActivityModal();
+    return true;
+  }
+  if (drawHistoryOpen.value) {
+    closeDrawHistory();
+    return true;
+  }
+  if (poolDetailOpen.value) {
+    closePoolDetail();
+    return true;
+  }
+  if (announcementModalOpen.value) {
+    closeAnnouncementModal();
+    return true;
+  }
+  return false;
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if (event.key !== "Escape") {
+    return;
+  }
+  if (closeTopOverlay()) {
+    event.preventDefault();
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("keydown", handleGlobalKeydown);
   await handleOpenIdCallback();
   await loadSiteConfig();
   await loadPublicData();
@@ -1347,6 +1457,11 @@ onMounted(async () => {
   if (activeSection.value === "profile") {
     await loadPlayerProfile();
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleGlobalKeydown);
+  setPageScrollLocked(false);
 });
 
 watch(
@@ -1366,6 +1481,10 @@ watch(
   },
   { immediate: true, deep: true },
 );
+
+watch(modalOverlayOpen, (open) => {
+  setPageScrollLocked(open);
+});
 
 watch(activePoolId, async (poolId) => {
   if (poolId && (!poolFilter.value || activeSection.value === "bag")) {
