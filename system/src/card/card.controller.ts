@@ -376,6 +376,7 @@ export class CardController {
    * @param poolId 卡池ID筛选 (可选)
    * @param page 页码 (从1开始，默认1)
    * @param pageSize 每页数量 (默认10，最大100)
+   * @param newOnly 仅返回最近获得的卡片
    */
   @Get("user/cards")
   @UseGuards(JwtAuthGuard)
@@ -386,6 +387,7 @@ export class CardController {
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
     @Query("grouped") grouped?: string,
+    @Query("newOnly") newOnly?: string,
   ): Promise<ResponseDto<any>> {
     if (!user || !user.uid) {
       return ResponseDto.error("用户身份验证失败");
@@ -399,6 +401,7 @@ export class CardController {
         this.parseOptionalInt(page, "page", 1) || 1,
         this.parseOptionalInt(pageSize, "pageSize", 1, 100) || 10,
         grouped === "true",
+        newOnly === "true",
       );
       return ResponseDto.success(result, "获取用户卡片列表成功");
     } catch (error) {

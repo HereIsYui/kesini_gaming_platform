@@ -363,6 +363,7 @@ const shopRecycleConfig = ref<ShopRecycleConfig>({
 const lastResults = ref<GachaResult[]>(getStoredDrawResults());
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
+const bagNewOnly = ref(false);
 const synthesisRarityFilter = ref<CardRarity | "">("");
 const bulkDecomposeRarities = reactive<Record<CardRarity, boolean>>({
   N: true,
@@ -1882,6 +1883,7 @@ async function loadUserCards(options: { append?: boolean } = {}) {
   }
   const requestedRarity = rarityFilter.value;
   const requestedPoolId = poolFilter.value;
+  const requestedNewOnly = bagNewOnly.value;
   const page = append ? cardPage.value + 1 : 1;
   if (append) {
     busy.cardsMore = true;
@@ -1894,13 +1896,15 @@ async function loadUserCards(options: { append?: boolean } = {}) {
         rarity: requestedRarity,
         poolId: requestedPoolId,
         grouped: true,
+        newOnly: requestedNewOnly ? true : "",
         page,
         pageSize: BAG_PAGE_SIZE,
       })}`,
     );
     if (
       requestedRarity !== rarityFilter.value ||
-      requestedPoolId !== poolFilter.value
+      requestedPoolId !== poolFilter.value ||
+      requestedNewOnly !== bagNewOnly.value
     ) {
       return;
     }
@@ -2649,6 +2653,11 @@ function resetUserCards() {
   userCards.value = null;
   activeBagActionKey.value = "";
   void loadUserCards();
+}
+
+function toggleBagNewOnly() {
+  bagNewOnly.value = !bagNewOnly.value;
+  resetUserCards();
 }
 
 function loadMoreUserCards() {
@@ -5842,6 +5851,16 @@ function leaderboardRankLabel(rank?: number) {
                   {{ pool.pool_name }}
                 </option>
               </select>
+              <button
+                class="secondary-action compact filter-toggle"
+                :class="{ active: bagNewOnly }"
+                type="button"
+                :aria-pressed="bagNewOnly"
+                @click="toggleBagNewOnly"
+              >
+                <Sparkles :size="15" />
+                新卡
+              </button>
               <div
                 class="bulk-decompose-control"
                 @mouseenter="loadBulkDecomposePreview"
@@ -5957,8 +5976,10 @@ function leaderboardRankLabel(rank?: number) {
           </div>
           <div v-else-if="!userCards?.list.length" class="empty-state">
             <Package :size="30" />
-            <strong>暂无卡片</strong>
-            <span>抽卡后加入背包</span>
+            <strong>{{ bagNewOnly ? "暂无新卡" : "暂无卡片" }}</strong>
+            <span>{{
+              bagNewOnly ? "最近获得会显示" : "抽卡后加入背包"
+            }}</span>
           </div>
           <div v-else class="owned-grid">
             <article

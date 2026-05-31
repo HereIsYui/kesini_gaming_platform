@@ -1779,6 +1779,26 @@ h3 {
   width: 150px;
 }
 
+.filter-row .filter-toggle {
+  min-width: 72px;
+}
+
+.filter-row .filter-toggle.active,
+.filter-row .filter-toggle[aria-pressed="true"] {
+  border-color: rgba(150, 242, 255, 0.62);
+  color: #03101a;
+  background: linear-gradient(135deg, #96f2ff, #84ffd1);
+  box-shadow: 0 10px 24px rgba(84, 216, 255, 0.2);
+}
+
+:root[data-theme="light"] .filter-row .filter-toggle.active,
+:root[data-theme="light"] .filter-row .filter-toggle[aria-pressed="true"] {
+  border-color: rgba(11, 149, 208, 0.34);
+  color: #06304b;
+  background: linear-gradient(135deg, #d8f7ff, #d9fbe9);
+  box-shadow: 0 8px 18px rgba(11, 149, 208, 0.14);
+}
+
 .bulk-decompose-control {
   position: relative;
   z-index: 6;

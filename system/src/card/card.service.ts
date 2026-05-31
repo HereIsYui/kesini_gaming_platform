@@ -1,7 +1,14 @@
 import { randomInt } from "crypto";
 import { Injectable, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, EntityManager, In, IsNull, Repository } from "typeorm";
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  MoreThanOrEqual,
+  Repository,
+} from "typeorm";
 import { v4 as uuidv4 } from "uuid";
 import { CardItem } from "src/entity/card.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -49,6 +56,7 @@ import {
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
 const DEFAULT_DRAW_POOL_ID = 1;
+const NEW_CARD_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -603,6 +611,7 @@ export class CardService {
     page: number = 1,
     pageSize: number = 10,
     grouped: boolean = false,
+    newOnly: boolean = false,
   ): Promise<{
     list: any[];
     dropItems: any[];
@@ -634,6 +643,11 @@ export class CardService {
       uid,
       delete_flag: false,
     };
+    if (newOnly) {
+      baseWhere.createdAt = MoreThanOrEqual(
+        new Date(Date.now() - NEW_CARD_WINDOW_MS),
+      );
+    }
 
     const whereConditions = await this.buildUserCardWhereConditions(
       baseWhere,

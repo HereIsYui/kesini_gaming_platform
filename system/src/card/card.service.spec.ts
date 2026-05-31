@@ -313,6 +313,15 @@ describe("CardService 背包筛选", () => {
     if (operator.type === "isNull") {
       return actual === null || actual === undefined;
     }
+    if (operator.type === "moreThanOrEqual") {
+      const actualTime =
+        actual instanceof Date ? actual.getTime() : new Date(actual).getTime();
+      const expectedTime =
+        operator.value instanceof Date
+          ? operator.value.getTime()
+          : new Date(operator.value).getTime();
+      return actualTime >= expectedTime;
+    }
     return actual === expected;
   }
 
@@ -643,6 +652,36 @@ describe("CardService 背包筛选", () => {
         }),
       ]),
     );
+  });
+
+  it("新卡筛选只返回最近 48 小时内获得的卡片", async () => {
+    const nowSpy = jest
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date("2026-01-04T00:00:00.000Z").getTime());
+    const { service } = createListService();
+
+    try {
+      const result = await service.getUserCards(
+        "u1",
+        undefined,
+        1,
+        1,
+        20,
+        true,
+        true,
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.list).toEqual([
+        expect.objectContaining({
+          cardId: 1,
+          cardLevel: "SSR",
+          count: 1,
+        }),
+      ]);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("堆叠背包必须指定卡池", async () => {
