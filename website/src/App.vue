@@ -246,6 +246,8 @@ const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   motionMode: "full",
   achievementNotices: true,
 };
+const NEW_CARD_WINDOW_MS = 48 * 60 * 60 * 1000;
+const NEW_CARD_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BAG_PAGE_SIZE = 24;
 const CARD_DESC_DETAIL_THRESHOLD = 34;
 
@@ -4054,6 +4056,25 @@ function formatDate(value?: string | null) {
   });
 }
 
+function isNewCard(card?: {
+  obtainedAt?: string | null;
+  latestObtainedAt?: string | null;
+}) {
+  return isRecentCardTime(card?.latestObtainedAt || card?.obtainedAt);
+}
+
+function isRecentCardTime(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) {
+    return false;
+  }
+  const age = Date.now() - time;
+  return age >= -NEW_CARD_FUTURE_TOLERANCE_MS && age <= NEW_CARD_WINDOW_MS;
+}
+
 function formatRewards(rewards?: {
   points?: number;
   items?: Array<{ itemName?: string; itemId: number; num: number }>;
@@ -4894,9 +4915,18 @@ function leaderboardRankLabel(rank?: number) {
                     <div class="card-sigil"></div>
                     <div class="result-card-top">
                       <span class="rarity-badge">{{ card.cardLevel }}</span>
-                      <span class="card-type-pill">
-                        {{ cardTypeLabel(card.cardType) }}
-                      </span>
+                      <div class="card-top-right">
+                        <span
+                          v-if="isNewCard(card)"
+                          class="new-card-badge"
+                          aria-label="新获得"
+                        >
+                          NEW
+                        </span>
+                        <span class="card-type-pill">
+                          {{ cardTypeLabel(card.cardType) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div class="card-content">
@@ -5893,6 +5923,13 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="result-card-top">
                     <span class="rarity-badge">{{ card.cardLevel }}</span>
                     <div class="owned-card-top-right">
+                      <span
+                        v-if="isNewCard(card)"
+                        class="new-card-badge"
+                        aria-label="新获得"
+                      >
+                        NEW
+                      </span>
                       <span class="card-type-pill">{{
                         cardTypeLabel(card.cardType)
                       }}</span>
@@ -6138,6 +6175,13 @@ function leaderboardRankLabel(rank?: number) {
                     @error="hideBrokenCardMedia"
                   />
                   <span class="rarity-badge">{{ slot.card.cardLevel }}</span>
+                  <span
+                    v-if="isNewCard(slot.card)"
+                    class="new-card-badge"
+                    aria-label="新获得"
+                  >
+                    NEW
+                  </span>
                 </div>
                 <div class="formation-card-body">
                   <h3>{{ slot.card.cardName }}</h3>
@@ -8445,6 +8489,13 @@ function leaderboardRankLabel(rank?: number) {
                     @error="hideBrokenCardMedia"
                   />
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
+                  <span
+                    v-if="isNewCard(card)"
+                    class="new-card-badge"
+                    aria-label="新获得"
+                  >
+                    NEW
+                  </span>
                 </div>
                 <div class="profile-candidate-body">
                   <strong>{{ card.cardName }}</strong>
@@ -8579,6 +8630,13 @@ function leaderboardRankLabel(rank?: number) {
                     @error="hideBrokenCardMedia"
                   />
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
+                  <span
+                    v-if="isNewCard(card)"
+                    class="new-card-badge"
+                    aria-label="新获得"
+                  >
+                    NEW
+                  </span>
                 </div>
                 <div class="formation-candidate-body">
                   <strong>{{ card.cardName }}</strong>
@@ -9185,9 +9243,14 @@ function leaderboardRankLabel(rank?: number) {
                   <div class="card-sigil"></div>
                   <div class="result-card-top">
                     <span class="rarity-badge">{{ card.rarity }}</span>
-                    <span class="card-type-pill">{{
-                      cardTypeLabel(card.cardType)
-                    }}</span>
+                    <div class="card-top-right">
+                      <span class="new-card-badge" aria-label="新获得">
+                        NEW
+                      </span>
+                      <span class="card-type-pill">{{
+                        cardTypeLabel(card.cardType)
+                      }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="card-content">

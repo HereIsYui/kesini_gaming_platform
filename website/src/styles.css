@@ -2022,11 +2022,29 @@ h3 {
   gap: 8px;
 }
 
+.card-top-right,
 .owned-card-top-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+}
+
+.new-card-badge {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 999px;
+  color: #06101d;
+  background: linear-gradient(135deg, #fff3a4, #61e5a2);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .card-stack-count {
@@ -4277,6 +4295,15 @@ h3 {
   position: absolute;
   top: 8px;
   left: 8px;
+}
+
+.formation-card-media .new-card-badge,
+.formation-candidate-media .new-card-badge,
+.profile-candidate-media .new-card-badge {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
 }
 
 .formation-card-body {
