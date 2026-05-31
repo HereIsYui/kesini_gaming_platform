@@ -33,6 +33,7 @@ import {
   WandSparkles,
 } from "@lucide/vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import {
   clearToken,
@@ -236,6 +237,29 @@ type CardDetailRow = {
   label: string;
   value: string;
 };
+type CardDetailActionKey =
+  | "lock"
+  | "upgrade"
+  | "trade"
+  | "recycle"
+  | "share"
+  | "buy"
+  | "synthesize";
+type CardDetailAction = {
+  key: CardDetailActionKey;
+  label: string;
+  icon: Component;
+  variant?: "primary" | "secondary";
+  disabled?: boolean;
+  payload?: unknown;
+};
+type CardSharePayload = {
+  cardName: string;
+  cardDesc?: string | null;
+  cardLevel?: string;
+  rarity?: string;
+  poolId?: number;
+};
 type CardIntroTarget = {
   name: string;
   desc: string;
@@ -244,6 +268,7 @@ type CardIntroTarget = {
   extra?: string;
   cardImage?: string | null;
   rows: CardDetailRow[];
+  actions: CardDetailAction[];
 };
 type CardDetailInput = {
   name: string;
@@ -265,6 +290,7 @@ type CardDetailInput = {
   source?: string;
   statuses?: string[];
   rows?: CardDetailRow[];
+  actions?: CardDetailAction[];
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
@@ -417,7 +443,6 @@ const upgradeTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const upgradePreview = ref<CardUpgradePreview | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
-const activeBagActionKey = ref("");
 const listingPrice = ref("");
 const recycleCount = ref(1);
 const redeemCode = ref("");
@@ -2679,7 +2704,6 @@ function changePveRecordPage(delta: number) {
 function resetUserCards() {
   cardPage.value = 1;
   userCards.value = null;
-  activeBagActionKey.value = "";
   void loadUserCards();
 }
 
@@ -3324,6 +3348,110 @@ function uniqueCardDetailRows(rows: CardDetailRow[]) {
   });
 }
 
+function cardDetailActionClass(action: CardDetailAction) {
+  return action.variant === "primary" ? "primary-action" : "secondary-action";
+}
+
+function cardSharePayload(card: {
+  cardName: string;
+  cardDesc?: string | null;
+  cardLevel?: string | number | null;
+  rarity?: string | number | null;
+  poolId?: number | string | null;
+}): CardSharePayload {
+  const poolId = Number(card.poolId || 0);
+  return {
+    cardName: card.cardName,
+    cardDesc: card.cardDesc,
+    cardLevel: compactCardDetailValue(card.cardLevel),
+    rarity: compactCardDetailValue(card.rarity),
+    poolId: Number.isFinite(poolId) && poolId > 0 ? poolId : undefined,
+  };
+}
+
+function shareCardDetailAction(payload: CardSharePayload): CardDetailAction {
+  return {
+    key: "share",
+    label: "分享",
+    icon: Share2,
+    payload,
+  };
+}
+
+function bagCardDetailActions(
+  card: UserCardsResponse["list"][number],
+): CardDetailAction[] {
+  const actions: CardDetailAction[] = [];
+  const lockAction = cardLockAction(card);
+  if (lockAction.uuid) {
+    actions.push({
+      key: "lock",
+      label: lockAction.label,
+      icon: lockAction.locked ? Lock : Unlock,
+      disabled: busy.assets,
+      payload: card,
+    });
+  }
+  if (cardUpgradeUuid(card)) {
+    actions.push({
+      key: "upgrade",
+      label: "养成",
+      icon: WandSparkles,
+      disabled: busy.upgrade,
+      payload: card,
+    });
+  }
+  if (card.canSell && Number(card.sellableCount || 0) > 0) {
+    actions.push({
+      key: "trade",
+      label: "挂售",
+      icon: Store,
+      payload: card,
+    });
+  }
+  if (shopRecycleConfig.value.enabled && Number(card.sellableCount || 0) > 1) {
+    actions.push({
+      key: "recycle",
+      label: "回收",
+      icon: Recycle,
+      payload: card,
+    });
+  }
+  actions.push(shareCardDetailAction(cardSharePayload(card)));
+  return actions;
+}
+
+function tradeListingDetailActions(listing: TradeListing): CardDetailAction[] {
+  const actions: CardDetailAction[] = [];
+  if (!listing.isMine && listing.status === "active" && tradeConfig.value.enabled) {
+    actions.push({
+      key: "buy",
+      label: "购买",
+      icon: Store,
+      variant: "primary",
+      disabled: busy.trade,
+      payload: listing,
+    });
+  }
+  return actions;
+}
+
+function catalogCardDetailActions(item: CatalogCard): CardDetailAction[] {
+  if (item.collected || item.rarity === "UR" || !item.canSynthesize) {
+    return [];
+  }
+  return [
+    {
+      key: "synthesize",
+      label: "合成",
+      icon: Package,
+      variant: "primary",
+      disabled: busy.catalog,
+      payload: item,
+    },
+  ];
+}
+
 function openCardIntro(target: CardDetailInput) {
   const rarity = compactCardDetailValue(target.rarity);
   const type = compactCardDetailValue(target.type);
@@ -3376,6 +3504,7 @@ function openCardIntro(target: CardDetailInput) {
     extra: poolName,
     cardImage: target.cardImage,
     rows,
+    actions: target.actions || [],
   };
 }
 
@@ -3396,6 +3525,7 @@ function openShowcaseCardDetail(card: ShowcaseCard) {
     power: card.power,
     locked: card.locked,
     source: "展示墙",
+    actions: [shareCardDetailAction(cardSharePayload(card))],
   });
 }
 
@@ -3417,6 +3547,7 @@ function openBagCardDetail(card: UserCardsResponse["list"][number]) {
     count: card.count,
     price: card.tradePrice,
     source: "背包",
+    actions: bagCardDetailActions(card),
   });
 }
 
@@ -3434,6 +3565,7 @@ function openFormationCardDetail(card: FormationCard) {
     power: card.power,
     locked: card.locked,
     source: "阵容",
+    actions: [shareCardDetailAction(cardSharePayload(card))],
   });
 }
 
@@ -3450,6 +3582,7 @@ function openTradeListingDetail(listing: TradeListing) {
     listed: true,
     price: listing.price,
     source: "交易",
+    actions: tradeListingDetailActions(listing),
   });
 }
 
@@ -3464,6 +3597,7 @@ function openCatalogCardDetail(item: CatalogCard) {
     source: "图鉴",
     count: item.ownedCount,
     statuses: [item.collected ? "已收集" : "未收集"],
+    actions: catalogCardDetailActions(item),
     rows:
       !item.collected && item.rarity !== "UR"
         ? [
@@ -3491,7 +3625,51 @@ function openDrawResultDetail(card: GachaResult) {
       card.isPity ? "保底" : "",
       "新获得",
     ].filter(Boolean),
+    actions: [
+      shareCardDetailAction(
+        cardSharePayload({
+          cardName: card.cardName,
+          cardDesc: card.cardDesc,
+          rarity: card.rarity,
+          poolId: card.poolId,
+        }),
+      ),
+    ],
   });
+}
+
+async function handleCardDetailAction(action: CardDetailAction) {
+  if (action.disabled) {
+    return;
+  }
+  closeCardIntro();
+  if (action.key === "lock") {
+    await toggleCardLock(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "upgrade") {
+    await openUpgradeModal(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "trade") {
+    openTradeListingModal(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "recycle") {
+    openRecycleModal(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "share") {
+    await shareCard(action.payload as CardSharePayload);
+    return;
+  }
+  if (action.key === "buy") {
+    await buyTradeListing(action.payload as TradeListing);
+    return;
+  }
+  if (action.key === "synthesize") {
+    await synthesizeCard(action.payload as CatalogCard);
+  }
 }
 
 function cardMediaUrl(value?: string | null) {
@@ -3559,13 +3737,7 @@ function pityRuleLabel(
   return `${rule.count} 抽内必得 ${rule.guaranteedRarity}，当前还差 ${rule.remaining} 抽`;
 }
 
-function buildCardShareText(card: {
-  cardName: string;
-  cardDesc?: string | null;
-  cardLevel?: string;
-  rarity?: string;
-  poolId?: number;
-}) {
+function buildCardShareText(card: CardSharePayload) {
   const rarity = String(card.cardLevel || card.rarity || "").trim();
   const poolName = getPoolName(card.poolId);
   const lines = [
@@ -3580,13 +3752,7 @@ function buildCardShareText(card: {
   return lines.join("\n");
 }
 
-async function shareCard(card: {
-  cardName: string;
-  cardDesc?: string | null;
-  cardLevel?: string;
-  rarity?: string;
-  poolId?: number;
-}) {
+async function shareCard(card: CardSharePayload) {
   const text = buildCardShareText(card);
   try {
     await navigator.clipboard.writeText(text);
@@ -3598,15 +3764,6 @@ async function shareCard(card: {
 
 function closeShareText() {
   shareTextTarget.value = "";
-}
-
-function bagActionKey(card: UserCardsResponse["list"][number]) {
-  return `${card.cardId || card.id || card.cardName}-${card.cardLevel}-${card.poolId}`;
-}
-
-function openBagCardActions(card: UserCardsResponse["list"][number]) {
-  activeBagActionKey.value = bagActionKey(card);
-  markNewCardSeen(card);
 }
 
 function cardLockAction(card: UserCardsResponse["list"][number]) {
@@ -6212,21 +6369,19 @@ function leaderboardRankLabel(rank?: number) {
             <article
               v-for="(card, index) in userCards.list"
               :key="`${card.cardId || card.id}-${card.cardLevel}`"
-              class="result-card owned-card"
+              class="result-card owned-card clickable-card-area"
               :class="[
                 rarityClass(card.cardLevel),
                 {
                   'is-stacked': Number(card.count || 1) > 1,
-                  'actions-open': activeBagActionKey === bagActionKey(card),
                 },
               ]"
               :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
-              role="group"
+              role="button"
               tabindex="0"
-              @click="openBagCardActions(card)"
-              @focusin="openBagCardActions(card)"
-              @keydown.enter.prevent="openBagCardActions(card)"
-              @keydown.space.prevent="openBagCardActions(card)"
+              @click="openBagCardDetail(card)"
+              @keydown.enter.prevent="openBagCardDetail(card)"
+              @keydown.space.prevent="openBagCardDetail(card)"
             >
               <div class="card-face">
                 <div
@@ -6294,104 +6449,6 @@ function leaderboardRankLabel(rank?: number) {
                       已锁定 {{ card.lockedCount || 1 }}
                     </span>
                   </div>
-                </div>
-                <div class="card-action-overlay" aria-label="卡片操作">
-                  <span class="card-action-stock">
-                    可售 {{ card.sellableCount || 0 }}
-                    <b v-if="card.lockedCount">锁定 {{ card.lockedCount }}</b>
-                  </span>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    title="详情"
-                    aria-label="详情"
-                    @click.stop="openBagCardDetail(card)"
-                  >
-                    <Package :size="16" />
-                  </button>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    :title="cardLockAction(card).label"
-                    :aria-label="cardLockAction(card).label"
-                    :disabled="!cardLockAction(card).uuid || busy.assets"
-                    @click.stop="toggleCardLock(card)"
-                  >
-                    <Unlock
-                      v-if="Number(card.lockedCount || 0) > 0 || card.locked"
-                      :size="16"
-                    />
-                    <Lock v-else :size="16" />
-                  </button>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    :title="
-                      card.canSell && Number(card.sellableCount || 0) > 0
-                        ? '挂售'
-                        : '无可售'
-                    "
-                    :aria-label="
-                      card.canSell && Number(card.sellableCount || 0) > 0
-                        ? '挂售'
-                        : '无可售'
-                    "
-                    :disabled="
-                      !card.canSell || Number(card.sellableCount || 0) <= 0
-                    "
-                    @click.stop="openTradeListingModal(card)"
-                  >
-                    <Store :size="16" />
-                  </button>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    :title="
-                      shopRecycleConfig.enabled &&
-                      Number(card.sellableCount || 0) > 1
-                        ? '回收'
-                        : '无可收'
-                    "
-                    :aria-label="
-                      shopRecycleConfig.enabled &&
-                      Number(card.sellableCount || 0) > 1
-                        ? '回收'
-                        : '无可收'
-                    "
-                    :disabled="
-                      !shopRecycleConfig.enabled ||
-                      Number(card.sellableCount || 0) <= 1
-                    "
-                    @click.stop="openRecycleModal(card)"
-                  >
-                    <Recycle :size="16" />
-                  </button>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    :title="cardUpgradeUuid(card) ? '养成' : '不可养成'"
-                    :aria-label="cardUpgradeUuid(card) ? '养成' : '不可养成'"
-                    :disabled="!cardUpgradeUuid(card) || busy.upgrade"
-                    @click.stop="openUpgradeModal(card)"
-                  >
-                    <WandSparkles :size="16" />
-                  </button>
-                  <button
-                    class="card-icon-action"
-                    type="button"
-                    title="分享"
-                    aria-label="分享"
-                    @click.stop="
-                      shareCard({
-                        cardName: card.cardName,
-                        cardDesc: card.cardDesc,
-                        cardLevel: String(card.cardLevel),
-                        poolId: card.poolId,
-                      })
-                    "
-                  >
-                    <Share2 :size="16" />
-                  </button>
                 </div>
               </div>
             </article>
@@ -9402,6 +9459,22 @@ function leaderboardRankLabel(rank?: number) {
               </dl>
             </div>
           </div>
+          <footer
+            v-if="cardIntroTarget.actions.length"
+            class="result-modal-actions card-detail-actions"
+          >
+            <button
+              v-for="action in cardIntroTarget.actions"
+              :key="action.key"
+              :class="cardDetailActionClass(action)"
+              type="button"
+              :disabled="action.disabled"
+              @click="handleCardDetailAction(action)"
+            >
+              <component :is="action.icon" :size="16" />
+              {{ action.label }}
+            </button>
+          </footer>
         </section>
       </div>
     </Teleport>
