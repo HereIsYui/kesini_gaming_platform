@@ -14,6 +14,7 @@ export type PageKey =
   | "exchange-shop"
   | "exchange-usages"
   | "announcements"
+  | "player-messages"
   | "launch-activity-config"
   | "launch-activity-claims"
   | "achievements"
@@ -58,6 +59,7 @@ export const pageKeys: PageKey[] = [
   "exchange-shop",
   "exchange-usages",
   "announcements",
+  "player-messages",
   "launch-activity-config",
   "launch-activity-claims",
   "achievements",
@@ -457,6 +459,40 @@ export const announcementFields: FieldConfig[] = [
     fullWidth: true,
     placeholder: "填写公告内容",
   },
+];
+
+export const playerMessageFields: FieldConfig[] = [
+  { key: "id", label: "编号", readonly: true },
+  { key: "title", label: "标题", placeholder: "例如：奖励提醒" },
+  {
+    key: "target_uid",
+    label: "收件玩家",
+    placeholder: "留空为全员",
+    helper: "可填写公开编号",
+    detailHidden: true,
+    identity: { uidKey: "target_uid", nameKey: "targetName", fallback: "全体玩家" },
+  },
+  {
+    key: "targetName",
+    label: "收件玩家",
+    readonly: true,
+    tableHidden: true,
+    formHidden: true,
+  },
+  {
+    key: "enabled",
+    label: "状态",
+    type: "boolean",
+    defaultValue: true,
+  },
+  {
+    key: "content",
+    label: "内容",
+    type: "textarea",
+    fullWidth: true,
+    placeholder: "填写消息内容",
+  },
+  { key: "createdAt", label: "创建时间", readonly: true },
 ];
 
 export const launchActivityClaimFields: FieldConfig[] = [

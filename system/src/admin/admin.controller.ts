@@ -40,6 +40,7 @@ import {
 import type { AchievementTargetType } from "src/entity/achievementConfig.entity";
 import { ShopRecycleService } from "src/shop/shop-recycle.service";
 import { AnnouncementService } from "src/announcement/announcement.service";
+import { PlayerMessageService } from "src/player-message/player-message.service";
 import { AdminGuard } from "./admin.guard";
 import { AdminService } from "./admin.service";
 
@@ -89,6 +90,27 @@ class AnnouncementDto {
   @IsOptional()
   @IsDateString()
   ends_at?: string;
+}
+
+class PlayerMessageDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  target_uid?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 class CardQueryDto extends PageDto {
@@ -930,6 +952,7 @@ export class AdminController {
     private readonly achievementService: AchievementService,
     private readonly shopRecycleService: ShopRecycleService,
     private readonly announcementService: AnnouncementService,
+    private readonly playerMessageService: PlayerMessageService,
   ) {}
 
   @Get("me")
@@ -1578,6 +1601,55 @@ export class AdminController {
   ): Promise<ResponseDto<any>> {
     return ResponseDto.success(
       await this.announcementService.deleteAdmin(id),
+      "已删除",
+    );
+  }
+
+  @Get("player-messages")
+  async listPlayerMessages(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.listAdmin(query),
+      "获取消息成功",
+    );
+  }
+
+  @Get("player-messages/:id")
+  async getPlayerMessage(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.getAdmin(id),
+      "获取消息成功",
+    );
+  }
+
+  @Post("player-messages")
+  async createPlayerMessage(
+    @Body() body: PlayerMessageDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.createAdmin(body as any),
+      "已创建",
+    );
+  }
+
+  @Patch("player-messages/:id")
+  async updatePlayerMessage(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: PlayerMessageDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.updateAdmin(id, body as any),
+      "已保存",
+    );
+  }
+
+  @Delete("player-messages/:id")
+  async deletePlayerMessage(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.deleteAdmin(id),
       "已删除",
     );
   }

@@ -15,6 +15,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/u/:publicId", name: "publicProfile", component: PageShell },
   { path: "/friends", name: "friends", component: PageShell },
   { path: "/guild", name: "guild", component: PageShell },
+  { path: "/messages", name: "messages", component: PageShell },
   { path: "/result", redirect: "/draw" },
   { path: "/bag", name: "bag", component: PageShell },
   { path: "/formation", name: "formation", component: PageShell },

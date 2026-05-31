@@ -43,6 +43,8 @@ import { Guild } from "./entity/guild.entity";
 import { GuildMember } from "./entity/guildMember.entity";
 import { GuildMessage } from "./entity/guildMessage.entity";
 import { Announcement } from "./entity/announcement.entity";
+import { PlayerMessage } from "./entity/playerMessage.entity";
+import { PlayerMessageRead } from "./entity/playerMessageRead.entity";
 import { OpenIdNonce } from "./entity/openIdNonce.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
@@ -68,6 +70,7 @@ import { FriendsModule } from "./friends/friends.module";
 import { SocialActivityModule } from "./social/social-activity.module";
 import { GuildsModule } from "./guilds/guilds.module";
 import { AnnouncementModule } from "./announcement/announcement.module";
+import { PlayerMessageModule } from "./player-message/player-message.module";
 
 @Module({
   imports: [
@@ -117,6 +120,8 @@ import { AnnouncementModule } from "./announcement/announcement.module";
       GuildMember,
       GuildMessage,
       Announcement,
+      PlayerMessage,
+      PlayerMessageRead,
       OpenIdNonce,
     ]),
     ConfigurationModule,
@@ -142,6 +147,7 @@ import { AnnouncementModule } from "./announcement/announcement.module";
     SocialActivityModule,
     GuildsModule,
     AnnouncementModule,
+    PlayerMessageModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

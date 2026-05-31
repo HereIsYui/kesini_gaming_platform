@@ -351,6 +351,18 @@
           search-placeholder="搜索标题或内容"
         />
 
+        <AdminTable
+          v-else-if="active === 'player-messages'"
+          title="玩家消息"
+          endpoint="/admin/player-messages"
+          :fields="playerMessageFields"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索消息"
+        />
+
         <ConfigPanel
           v-else-if="active === 'launch-activity-config'"
           title="开服活动"
@@ -710,6 +722,7 @@ import {
   navGroups,
   pageKeys,
   pityFields,
+  playerMessageFields,
   poolFields,
   pveRecordFields,
   pveStageFields,
@@ -935,6 +948,13 @@ const pageDefinitions = computed(
         key: "announcements",
         label: "公告栏",
         description: "维护玩家站展示公告。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "player-messages",
+        label: "玩家消息",
+        description: "发送玩家可查看的站内消息。",
         group: "运营工具",
         icon: Files,
       },

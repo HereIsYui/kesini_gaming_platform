@@ -44,6 +44,19 @@ export interface AnnouncementListResponse {
   list: Announcement[];
 }
 
+export interface PlayerMessage {
+  id: number;
+  title: string;
+  content: string;
+  read: boolean;
+  createdAt?: string | null;
+}
+
+export interface PlayerMessagesResponse {
+  list: PlayerMessage[];
+  unread: number;
+}
+
 export type CardRarity = "N" | "R" | "SR" | "SSR" | "UR";
 
 export interface PoolInfo {

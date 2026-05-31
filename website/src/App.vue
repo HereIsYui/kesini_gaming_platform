@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   LogIn,
   LogOut,
+  Mail,
   Moon,
   Package,
   Recycle,
@@ -90,6 +91,8 @@ import type {
   PveOverview,
   PveRecordsResponse,
   PveStage,
+  PlayerMessage,
+  PlayerMessagesResponse,
   PlayerProfileResponse,
   SaveShowcaseRequest,
   SendFriendRequestRequest,
@@ -132,6 +135,7 @@ const rarityRank: Record<string, number> = {
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "profile", label: "主页", icon: UserRound },
+  { key: "messages", label: "消息", icon: Mail },
   { key: "friends", label: "好友", icon: UsersRound },
   { key: "guild", label: "公会", icon: UsersRound },
   { key: "bag", label: "背包", icon: Boxes },
@@ -169,6 +173,7 @@ const primaryNavItems = primaryNavSectionKeys
 
 const accountMenuSectionKeys = [
   "profile",
+  "messages",
   "friends",
   "bag",
   "formation",
@@ -278,6 +283,8 @@ const friendsError = ref("");
 const friendFeed = ref<SocialActivityRecord[]>([]);
 const friendFeedError = ref("");
 const friendActionBusy = ref("");
+const playerMessages = ref<PlayerMessage[]>([]);
+const playerMessagesError = ref("");
 const guildOverview = ref<GuildOverviewResponse | null>(null);
 const guildError = ref("");
 const guildMessages = ref<GuildMessage[]>([]);
@@ -386,6 +393,7 @@ const busy = reactive({
   profileSaving: false,
   friends: false,
   friendFeed: false,
+  messages: false,
   guild: false,
   guildMessages: false,
   guildSending: false,
@@ -614,6 +622,9 @@ const profileFriendActionDisabled = computed(() => {
     isProfileFriendOutgoing.value
   );
 });
+const unreadMessageCount = computed(
+  () => playerMessages.value.filter((item) => !item.read).length,
+);
 const currentGuild = computed(
   () => guildOverview.value?.current?.guild || null,
 );
@@ -1184,6 +1195,9 @@ watch(activeSection, async (section) => {
   if (section === "friends" && isAuthed.value) {
     await refreshFriendsSection();
   }
+  if (section === "messages" && isAuthed.value) {
+    await loadMessages();
+  }
   if (section === "guild" && isAuthed.value) {
     await refreshGuildSection();
   }
@@ -1452,6 +1466,8 @@ function logout() {
   friendFeed.value = [];
   friendFeedError.value = "";
   friendActionBusy.value = "";
+  playerMessages.value = [];
+  playerMessagesError.value = "";
   guildOverview.value = null;
   guildError.value = "";
   guildMessages.value = [];
@@ -1625,6 +1641,7 @@ async function loadPrivateData() {
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
+    loadMessages(false),
     activeSection.value === "friends"
       ? loadFriendFeed(false)
       : Promise.resolve(),
@@ -2087,6 +2104,42 @@ async function handleProfileFriendAction() {
     return;
   }
   await sendFriendRequest(target);
+}
+
+async function loadMessages(showError = activeSection.value === "messages") {
+  if (!isAuthed.value) {
+    playerMessages.value = [];
+    playerMessagesError.value = "";
+    return;
+  }
+  busy.messages = true;
+  playerMessagesError.value = "";
+  try {
+    const data = await request<PlayerMessagesResponse>("/messages");
+    playerMessages.value = data.list || [];
+  } catch (error) {
+    playerMessages.value = [];
+    playerMessagesError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", playerMessagesError.value);
+    }
+  } finally {
+    busy.messages = false;
+  }
+}
+
+async function markMessageRead(message: PlayerMessage) {
+  if (message.read) {
+    return;
+  }
+  try {
+    await request(`/messages/${message.id}/read`, { method: "POST" });
+    playerMessages.value = playerMessages.value.map((item) =>
+      item.id === message.id ? { ...item, read: true } : item,
+    );
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  }
 }
 
 function guildRoleName(role?: string | null) {
@@ -4165,6 +4218,12 @@ function leaderboardRankLabel(rank?: number) {
                 >
                   <component :is="item.icon" :size="16" />
                   {{ item.label }}
+                  <span
+                    v-if="item.key === 'messages' && unreadMessageCount > 0"
+                    class="user-menu-badge"
+                  >
+                    {{ unreadMessageCount }}
+                  </span>
                 </RouterLink>
               </nav>
               <button
@@ -5077,6 +5136,84 @@ function leaderboardRankLabel(rank?: number) {
             </section>
           </div>
         </template>
+      </section>
+
+      <section
+        v-if="activeSection === 'messages'"
+        class="panel messages-panel"
+        data-section="messages"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">消息</p>
+            <h2>消息中心</h2>
+          </div>
+          <div class="section-actions">
+            <span v-if="isAuthed" class="type-pill">
+              {{ unreadMessageCount > 0 ? `${unreadMessageCount} 未读` : "已读" }}
+            </span>
+            <button
+              v-if="isAuthed"
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.messages"
+              @click="loadMessages()"
+            >
+              <RefreshCw :size="16" :class="{ spin: busy.messages }" />
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!isAuthed" class="empty-state">
+          <UserRound :size="30" />
+          <strong>请先登录</strong>
+          <span>登录后查看</span>
+        </div>
+        <div v-else-if="busy.messages && playerMessages.length === 0" class="skeleton-grid">
+          <span v-for="item in 3" :key="item"></span>
+        </div>
+        <div v-else-if="playerMessagesError" class="empty-state">
+          <Mail :size="30" />
+          <strong>消息加载失败</strong>
+          <span>{{ playerMessagesError }}</span>
+          <button class="secondary-action" type="button" @click="loadMessages()">
+            重试
+          </button>
+        </div>
+        <div v-else-if="playerMessages.length === 0" class="empty-state">
+          <Mail :size="30" />
+          <strong>暂无消息</strong>
+          <span>稍后再看</span>
+        </div>
+        <div v-else class="message-list">
+          <article
+            v-for="message in playerMessages"
+            :key="message.id"
+            class="message-card"
+            :class="{ unread: !message.read }"
+          >
+            <div class="message-card-head">
+              <div>
+                <span class="message-status">{{
+                  message.read ? "已读" : "未读"
+                }}</span>
+                <h3>{{ message.title }}</h3>
+              </div>
+              <time>{{ formatDate(message.createdAt) }}</time>
+            </div>
+            <p>{{ message.content }}</p>
+            <div v-if="!message.read" class="message-actions">
+              <button
+                class="primary-action compact"
+                type="button"
+                @click="markMessageRead(message)"
+              >
+                标已读
+              </button>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section

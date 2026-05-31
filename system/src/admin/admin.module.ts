@@ -7,6 +7,7 @@ import { SiteConfigModule } from "src/config/site-config.module";
 import { ShopModule } from "src/shop/shop.module";
 import { AnnouncementModule } from "src/announcement/announcement.module";
 import { Announcement } from "src/entity/announcement.entity";
+import { PlayerMessageModule } from "src/player-message/player-message.module";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { ExchangeShopItem } from "src/entity/exchangeShopItem.entity";
@@ -73,6 +74,7 @@ import { AdminService } from "./admin.service";
     SiteConfigModule,
     ShopModule,
     AnnouncementModule,
+    PlayerMessageModule,
   ],
   controllers: [AdminController],
   providers: [AdminGuard, AdminService, GachaConfigService],
