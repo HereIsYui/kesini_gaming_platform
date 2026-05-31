@@ -18,6 +18,7 @@ import {
   Package,
   Recycle,
   RefreshCw,
+  Settings,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -137,6 +138,7 @@ const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
   { key: "profile", label: "主页", icon: UserRound },
   { key: "messages", label: "消息", icon: Mail },
+  { key: "settings", label: "设置", icon: Settings },
   { key: "friends", label: "好友", icon: UsersRound },
   { key: "guild", label: "公会", icon: UsersRound },
   { key: "bag", label: "背包", icon: Boxes },
@@ -175,6 +177,7 @@ const primaryNavItems = primaryNavSectionKeys
 const accountMenuSectionKeys = [
   "profile",
   "messages",
+  "settings",
   "friends",
   "bag",
   "formation",
@@ -214,6 +217,11 @@ const leaderboardTabs: Array<{
 type FeedbackType = "success" | "error" | "info";
 type DrawPhase = "idle" | "charging" | "burst";
 type ThemeMode = "dark" | "light";
+type MotionMode = "full" | "reduced";
+type PlayerPreferences = {
+  motionMode: MotionMode;
+  achievementNotices: boolean;
+};
 type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
@@ -233,11 +241,17 @@ const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
 const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
 const THEME_KEY = "kesini_website_theme";
+const PLAYER_PREFS_KEY = "kesini_player_preferences";
+const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
+  motionMode: "full",
+  achievementNotices: true,
+};
 const BAG_PAGE_SIZE = 24;
 const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
+const playerPrefs = ref<PlayerPreferences>(getStoredPlayerPreferences());
 const userMenuOpen = ref(false);
 const userMenuHoverPaused = ref(false);
 const manualToken = ref("");
@@ -440,6 +454,15 @@ let feedbackTimer: number | undefined;
 const achievementToastTimers = new Map<number, number>();
 
 const isAuthed = computed(() => Boolean(token.value));
+const achievementNoticesEnabled = computed(
+  () => playerPrefs.value.achievementNotices,
+);
+const motionModeLabel = computed(() =>
+  playerPrefs.value.motionMode === "reduced" ? "减少" : "完整",
+);
+const achievementNoticeLabel = computed(() =>
+  achievementNoticesEnabled.value ? "开启" : "关闭",
+);
 const activeSection = computed<SectionKey>(() => {
   if (route.name === "publicProfile") {
     return "profile";
@@ -1149,8 +1172,51 @@ function getStoredThemeMode(): ThemeMode {
   return stored === "light" ? "light" : "dark";
 }
 
+function getStoredPlayerPreferences(): PlayerPreferences {
+  const raw = localStorage.getItem(PLAYER_PREFS_KEY);
+  if (!raw) {
+    return { ...DEFAULT_PLAYER_PREFS };
+  }
+  try {
+    const value = JSON.parse(raw) as Partial<PlayerPreferences>;
+    return {
+      motionMode:
+        value.motionMode === "reduced" || value.motionMode === "full"
+          ? value.motionMode
+          : DEFAULT_PLAYER_PREFS.motionMode,
+      achievementNotices:
+        typeof value.achievementNotices === "boolean"
+          ? value.achievementNotices
+          : DEFAULT_PLAYER_PREFS.achievementNotices,
+    };
+  } catch {
+    localStorage.removeItem(PLAYER_PREFS_KEY);
+    return { ...DEFAULT_PLAYER_PREFS };
+  }
+}
+
 function toggleThemeMode() {
   themeMode.value = themeMode.value === "dark" ? "light" : "dark";
+}
+
+function setThemeMode(mode: ThemeMode) {
+  themeMode.value = mode;
+}
+
+function setMotionMode(mode: MotionMode) {
+  playerPrefs.value = { ...playerPrefs.value, motionMode: mode };
+}
+
+function setAchievementNotices(enabled: boolean) {
+  playerPrefs.value = { ...playerPrefs.value, achievementNotices: enabled };
+  if (!enabled) {
+    clearAchievementToasts();
+  }
+}
+
+function resetPlayerPreferences() {
+  playerPrefs.value = { ...DEFAULT_PLAYER_PREFS };
+  notify("success", "设置已恢复");
 }
 
 onMounted(async () => {
@@ -1172,6 +1238,15 @@ watch(
     localStorage.setItem(THEME_KEY, mode);
   },
   { immediate: true },
+);
+
+watch(
+  playerPrefs,
+  (prefs) => {
+    document.documentElement.dataset.motion = prefs.motionMode;
+    localStorage.setItem(PLAYER_PREFS_KEY, JSON.stringify(prefs));
+  },
+  { immediate: true, deep: true },
 );
 
 watch(activePoolId, async (poolId) => {
@@ -1501,10 +1576,7 @@ function logout() {
   leaderboardError.value = "";
   pointRecords.value = null;
   achievements.value = [];
-  achievementToasts.value = [];
-  achievementToastQueue.value = [];
-  achievementToastTimers.forEach((timer) => window.clearTimeout(timer));
-  achievementToastTimers.clear();
+  clearAchievementToasts();
   pointRecordPage.value = 1;
   exchangeItems.value = [];
   Object.keys(seasonShopCounts).forEach((key) => {
@@ -2660,7 +2732,9 @@ async function loadAchievementNotifications() {
     if (!notices.length) {
       return;
     }
-    enqueueAchievementNotifications(notices);
+    if (achievementNoticesEnabled.value) {
+      enqueueAchievementNotifications(notices);
+    }
     await request("/achievement/notifications/ack", {
       method: "POST",
       body: JSON.stringify({
@@ -2700,6 +2774,13 @@ function flushAchievementToastQueue() {
     }, 6000);
     achievementToastTimers.set(notice.achievementId, timer);
   }
+}
+
+function clearAchievementToasts() {
+  achievementToasts.value = [];
+  achievementToastQueue.value = [];
+  achievementToastTimers.forEach((timer) => window.clearTimeout(timer));
+  achievementToastTimers.clear();
 }
 
 function dismissAchievementToast(achievementId: number) {
@@ -5256,6 +5337,106 @@ function leaderboardRankLabel(rank?: number) {
                 @click="markMessageRead(message)"
               >
                 标已读
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section
+        v-if="activeSection === 'settings'"
+        class="panel settings-panel"
+        data-section="settings"
+      >
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">设置</p>
+            <h2>偏好</h2>
+          </div>
+          <button
+            class="secondary-action compact"
+            type="button"
+            @click="resetPlayerPreferences"
+          >
+            恢复
+          </button>
+        </div>
+
+        <div class="settings-grid">
+          <article class="settings-card">
+            <header>
+              <Settings :size="18" />
+              <div>
+                <strong>主题</strong>
+                <span>下次保留</span>
+              </div>
+            </header>
+            <div class="settings-segment">
+              <button
+                type="button"
+                :class="{ active: themeMode === 'dark' }"
+                @click="setThemeMode('dark')"
+              >
+                暗色
+              </button>
+              <button
+                type="button"
+                :class="{ active: themeMode === 'light' }"
+                @click="setThemeMode('light')"
+              >
+                白色
+              </button>
+            </div>
+          </article>
+
+          <article class="settings-card">
+            <header>
+              <Sparkles :size="18" />
+              <div>
+                <strong>动效</strong>
+                <span>当前 {{ motionModeLabel }}</span>
+              </div>
+            </header>
+            <div class="settings-segment">
+              <button
+                type="button"
+                :class="{ active: playerPrefs.motionMode === 'full' }"
+                @click="setMotionMode('full')"
+              >
+                完整
+              </button>
+              <button
+                type="button"
+                :class="{ active: playerPrefs.motionMode === 'reduced' }"
+                @click="setMotionMode('reduced')"
+              >
+                减少
+              </button>
+            </div>
+          </article>
+
+          <article class="settings-card">
+            <header>
+              <Trophy :size="18" />
+              <div>
+                <strong>成就提醒</strong>
+                <span>当前 {{ achievementNoticeLabel }}</span>
+              </div>
+            </header>
+            <div class="settings-segment">
+              <button
+                type="button"
+                :class="{ active: achievementNoticesEnabled }"
+                @click="setAchievementNotices(true)"
+              >
+                开启
+              </button>
+              <button
+                type="button"
+                :class="{ active: !achievementNoticesEnabled }"
+                @click="setAchievementNotices(false)"
+              >
+                关闭
               </button>
             </div>
           </article>

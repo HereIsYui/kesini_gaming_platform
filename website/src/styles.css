@@ -3725,6 +3725,97 @@ h3 {
   justify-content: flex-end;
 }
 
+.settings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 14px;
+}
+
+:root[data-theme="light"] .settings-card {
+  background: rgba(21, 31, 48, 0.035);
+}
+
+.settings-card header {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-card header > svg {
+  flex: 0 0 auto;
+  color: var(--primary-strong);
+}
+
+.settings-card header div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-card strong,
+.settings-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-card strong {
+  color: var(--text);
+}
+
+.settings-card span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.settings-segment {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.045);
+  padding: 5px;
+}
+
+:root[data-theme="light"] .settings-segment {
+  background: rgba(21, 31, 48, 0.035);
+}
+
+.settings-segment button {
+  min-height: 34px;
+  border: 0;
+  border-radius: calc(var(--radius) - 4px);
+  color: var(--text-muted);
+  background: transparent;
+  padding: 0 8px;
+  font-weight: 800;
+}
+
+.settings-segment button.active {
+  color: var(--text);
+  background: rgba(150, 242, 255, 0.16);
+}
+
+:root[data-theme="light"] .settings-segment button.active {
+  background: rgba(11, 149, 208, 0.12);
+}
+
 .friends-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6340,6 +6431,19 @@ h3 {
   }
 }
 
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+
+:root[data-motion="reduced"] .starfield {
+  display: none;
+}
+
 @media (max-width: 1120px) {
   .topbar {
     grid-template-columns: 1fr auto;
@@ -6402,6 +6506,7 @@ h3 {
   .profile-panel,
   .friends-panel,
   .messages-panel,
+  .settings-panel,
   .trade-panel,
   .redeem-panel,
   .shop-panel,
@@ -6693,6 +6798,7 @@ h3 {
   .achievement-summary,
   .achievement-grid,
   .profile-candidate-list,
+  .settings-grid,
   .friends-layout,
   .guild-layout,
   .formation-summary,
