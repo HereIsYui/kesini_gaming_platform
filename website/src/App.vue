@@ -292,6 +292,16 @@ type CardDetailInput = {
   rows?: CardDetailRow[];
   actions?: CardDetailAction[];
 };
+type ConfirmDialogVariant = "primary" | "danger";
+type ConfirmDialogTarget = {
+  title: string;
+  message?: string;
+  details?: string[];
+  confirmText?: string;
+  cancelText?: string;
+  variant?: ConfirmDialogVariant;
+  icon?: Component;
+};
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
 const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
@@ -443,6 +453,7 @@ const upgradeTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const upgradePreview = ref<CardUpgradePreview | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
+const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
 const listingPrice = ref("");
 const recycleCount = ref(1);
 const redeemCode = ref("");
@@ -455,6 +466,7 @@ const achievementToastQueue = ref<AchievementNotification[]>([]);
 const callbackBusy = ref(false);
 const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
+let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
 
 const busy = reactive({
   public: false,
@@ -2456,7 +2468,14 @@ async function leaveGuild() {
   if (!currentGuild.value) {
     return;
   }
-  if (!window.confirm("退出公会？")) {
+  const confirmed = await askConfirm({
+    title: "退出公会",
+    message: "成员身份将移除",
+    confirmText: "退出",
+    variant: "danger",
+    icon: LogOut,
+  });
+  if (!confirmed) {
     return;
   }
   guildActionBusy.value = "leave";
@@ -3512,6 +3531,32 @@ function closeCardIntro() {
   cardIntroTarget.value = null;
 }
 
+function askConfirm(target: ConfirmDialogTarget) {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(false);
+  }
+  confirmDialogTarget.value = {
+    confirmText: "确认",
+    cancelText: "取消",
+    variant: "primary",
+    ...target,
+  };
+  return new Promise<boolean>((resolve) => {
+    confirmDialogResolve = resolve;
+  });
+}
+
+function settleConfirmDialog(confirmed: boolean) {
+  const resolve = confirmDialogResolve;
+  confirmDialogResolve = null;
+  confirmDialogTarget.value = null;
+  resolve?.(confirmed);
+}
+
+function confirmDialogActionClass(target: ConfirmDialogTarget) {
+  return target.variant === "danger" ? "danger-action" : "primary-action";
+}
+
 function openShowcaseCardDetail(card: ShowcaseCard) {
   openCardIntro({
     name: card.cardName,
@@ -3834,7 +3879,14 @@ async function synthesizeCard(item: CatalogCard) {
     notify("error", "碎片不足");
     return;
   }
-  if (!window.confirm(`合成 ${item.rarity} ${item.card.card_name}？`)) {
+  const confirmed = await askConfirm({
+    title: "合成卡片",
+    message: item.card.card_name,
+    details: [`${item.rarity} 卡片`],
+    confirmText: "合成",
+    icon: Package,
+  });
+  if (!confirmed) {
     return;
   }
   busy.catalog = true;
@@ -3905,21 +3957,25 @@ async function bulkDecomposeCards() {
     .join("、");
   const skippedText =
     preview.skippedListed > 0
-      ? `；${preview.skippedListed} 张挂售中卡片会跳过`
+      ? `${preview.skippedListed} 张挂售中跳过`
       : "";
   const lockedText =
     Number(preview.skippedLocked || 0) > 0
-      ? `；${preview.skippedLocked} 张锁定卡片会跳过`
+      ? `${preview.skippedLocked} 张锁定跳过`
       : "";
   const reservedText =
     Number(preview.reservedCount || 0) > 0
-      ? `；保留 ${preview.reservedCount} 张`
+      ? `保留 ${preview.reservedCount} 张`
       : "";
-  if (
-    !window.confirm(
-      `确认分解 ${preview.total} 张卡片（${detail}）${skippedText}${lockedText}${reservedText}？`,
-    )
-  ) {
+  const confirmed = await askConfirm({
+    title: "批量分解",
+    message: `${preview.total} 张卡片`,
+    details: [detail, skippedText, lockedText, reservedText].filter(Boolean),
+    confirmText: "分解",
+    variant: "danger",
+    icon: Recycle,
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -4168,7 +4224,14 @@ async function createTradeListing() {
 }
 
 async function cancelTradeListing(listing: TradeListing) {
-  if (!window.confirm(`确认取消「${listing.cardName}」的挂售吗？`)) {
+  const confirmed = await askConfirm({
+    title: "取消挂售",
+    message: listing.cardName,
+    confirmText: "撤销",
+    variant: "danger",
+    icon: Store,
+  });
+  if (!confirmed) {
     return;
   }
   busy.trade = true;
@@ -4188,11 +4251,14 @@ async function buyTradeListing(listing: TradeListing) {
     notify("info", "这是你的挂单");
     return;
   }
-  if (
-    !window.confirm(
-      `确认花费 ${listing.price} 星穹币购买「${listing.cardName}」${listing.cardLevel} 吗？`,
-    )
-  ) {
+  const confirmed = await askConfirm({
+    title: "购买卡片",
+    message: `${listing.price} 星穹币`,
+    details: [`${listing.cardName} ${listing.cardLevel}`],
+    confirmText: "购买",
+    icon: Store,
+  });
+  if (!confirmed) {
     return;
   }
   busy.trade = true;
@@ -8358,6 +8424,59 @@ function leaderboardRankLabel(rank?: number) {
         </button>
       </article>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="confirmDialogTarget"
+        class="result-modal-backdrop confirm-modal-backdrop"
+        role="presentation"
+        @click.self="settleConfirmDialog(false)"
+      >
+        <section
+          class="confirm-modal"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="confirmDialogTarget.title"
+        >
+          <div class="confirm-modal-icon">
+            <component
+              :is="confirmDialogTarget.icon || ShieldCheck"
+              :size="22"
+            />
+          </div>
+          <div class="confirm-modal-body">
+            <h2>{{ confirmDialogTarget.title }}</h2>
+            <p v-if="confirmDialogTarget.message">
+              {{ confirmDialogTarget.message }}
+            </p>
+            <ul v-if="confirmDialogTarget.details?.length">
+              <li
+                v-for="detail in confirmDialogTarget.details"
+                :key="detail"
+              >
+                {{ detail }}
+              </li>
+            </ul>
+          </div>
+          <footer class="result-modal-actions confirm-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              @click="settleConfirmDialog(false)"
+            >
+              {{ confirmDialogTarget.cancelText }}
+            </button>
+            <button
+              :class="confirmDialogActionClass(confirmDialogTarget)"
+              type="button"
+              @click="settleConfirmDialog(true)"
+            >
+              {{ confirmDialogTarget.confirmText }}
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div
