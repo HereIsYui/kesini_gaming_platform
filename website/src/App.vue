@@ -302,6 +302,29 @@ type ConfirmDialogTarget = {
   variant?: ConfirmDialogVariant;
   icon?: Component;
 };
+type LoadUserCardsOptions = {
+  append?: boolean;
+  preserveLoaded?: boolean;
+  silent?: boolean;
+};
+type SilentLoadOptions = {
+  silent?: boolean;
+};
+type CardStateRefreshOptions = {
+  stats?: boolean;
+  fishpiPoint?: boolean;
+  pointRecords?: boolean;
+  userCards?: boolean;
+  preserveLoadedCards?: boolean;
+  profile?: boolean;
+  catalog?: boolean;
+  formation?: boolean;
+  bulkPreview?: boolean;
+  tradeListings?: boolean;
+  myTradeListings?: boolean;
+  tradeRecords?: boolean;
+  achievements?: boolean;
+};
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
 const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
@@ -1754,13 +1777,15 @@ async function loadPoolCards() {
   }
 }
 
-async function loadUserCatalog() {
+async function loadUserCatalog(options: SilentLoadOptions = {}) {
   catalogError.value = "";
   if (!activePoolId.value || !isAuthed.value) {
     catalogItems.value = null;
     return;
   }
-  busy.catalog = true;
+  if (!options.silent) {
+    busy.catalog = true;
+  }
   try {
     catalogItems.value = await request<UserCatalogResponse>(
       `/card/user/catalog${toQuery({ poolId: activePoolId.value })}`,
@@ -1769,7 +1794,9 @@ async function loadUserCatalog() {
     catalogItems.value = null;
     catalogError.value = getErrorMessage(error);
   } finally {
-    busy.catalog = false;
+    if (!options.silent) {
+      busy.catalog = false;
+    }
   }
 }
 
@@ -1843,7 +1870,9 @@ async function loadPrivateData() {
 }
 
 async function loadStats() {
-  stats.value = await request<UserGachaStats>("/card/stats");
+  const data = await request<UserGachaStats>("/card/stats");
+  stats.value = data;
+  syncCurrentUserPoint(data.point);
 }
 
 async function loadFishpiPoint(showError = false) {
@@ -1925,12 +1954,14 @@ function ensureBagPoolFilter() {
   }
 }
 
-async function loadUserCards(options: { append?: boolean } = {}) {
+async function loadUserCards(options: LoadUserCardsOptions = {}) {
   if (!isAuthed.value) {
     return;
   }
   ensureBagPoolFilter();
   const append = options.append === true;
+  const preserveLoaded = !append && options.preserveLoaded === true;
+  const silent = !append && options.silent === true;
   if (append && (busy.assets || busy.cardsMore || !bagHasMore.value)) {
     return;
   }
@@ -1949,10 +1980,14 @@ async function loadUserCards(options: { append?: boolean } = {}) {
   const requestedRarity = rarityFilter.value;
   const requestedPoolId = poolFilter.value;
   const requestedNewOnly = bagNewOnly.value;
+  const requestedPages = Math.max(1, cardPage.value || 1);
   const page = append ? cardPage.value + 1 : 1;
+  const pageSize = preserveLoaded
+    ? Math.max(BAG_PAGE_SIZE, requestedPages * BAG_PAGE_SIZE)
+    : BAG_PAGE_SIZE;
   if (append) {
     busy.cardsMore = true;
-  } else {
+  } else if (!silent) {
     busy.assets = true;
   }
   try {
@@ -1963,7 +1998,7 @@ async function loadUserCards(options: { append?: boolean } = {}) {
         grouped: true,
         newOnly: requestedNewOnly ? true : "",
         page,
-        pageSize: BAG_PAGE_SIZE,
+        pageSize,
       })}`,
     );
     if (
@@ -1979,20 +2014,32 @@ async function loadUserCards(options: { append?: boolean } = {}) {
         list: [...userCards.value.list, ...data.list],
         dropItems: data.dropItems,
       };
+    } else if (preserveLoaded) {
+      const restoredTotalPages = Math.max(
+        1,
+        Math.ceil(Number(data.total || 0) / BAG_PAGE_SIZE),
+      );
+      const restoredPage = Math.min(requestedPages, restoredTotalPages);
+      userCards.value = {
+        ...data,
+        page: restoredPage,
+        pageSize: BAG_PAGE_SIZE,
+        totalPages: restoredTotalPages,
+      };
     } else {
       userCards.value = data;
     }
-    cardPage.value = data.page || page;
+    cardPage.value = userCards.value?.page || data.page || page;
   } finally {
     if (append) {
       busy.cardsMore = false;
-    } else {
+    } else if (!silent) {
       busy.assets = false;
     }
   }
 }
 
-async function loadPlayerProfile() {
+async function loadPlayerProfile(options: SilentLoadOptions = {}) {
   if (isPublicProfileRoute.value && !profileRouteId.value) {
     playerProfile.value = null;
     return;
@@ -2002,7 +2049,9 @@ async function loadPlayerProfile() {
     return;
   }
 
-  busy.profile = true;
+  if (!options.silent) {
+    busy.profile = true;
+  }
   try {
     playerProfile.value = await request<PlayerProfileResponse>(
       isPublicProfileRoute.value
@@ -2015,7 +2064,9 @@ async function loadPlayerProfile() {
       notify("error", getErrorMessage(error));
     }
   } finally {
-    busy.profile = false;
+    if (!options.silent) {
+      busy.profile = false;
+    }
   }
 }
 
@@ -2517,11 +2568,13 @@ async function sendGuildMessage() {
   }
 }
 
-async function loadFormation() {
+async function loadFormation(options: SilentLoadOptions = {}) {
   if (!isAuthed.value) {
     return;
   }
-  busy.formation = true;
+  if (!options.silent) {
+    busy.formation = true;
+  }
   try {
     formation.value = await request<FormationOverview>("/formation");
   } catch (error) {
@@ -2529,7 +2582,9 @@ async function loadFormation() {
       notify("error", getErrorMessage(error));
     }
   } finally {
-    busy.formation = false;
+    if (!options.silent) {
+      busy.formation = false;
+    }
   }
 }
 
@@ -2932,6 +2987,7 @@ async function loadPointRecords() {
     pointRecordTotalPages.value = data.totalPages || 1;
     if (stats.value && typeof data.currentPoint === "number") {
       stats.value.point = data.currentPoint;
+      syncCurrentUserPoint(data.currentPoint);
     }
   } catch (error) {
     if (activeSection.value === "points") {
@@ -2974,11 +3030,13 @@ async function loadTradeData() {
   ]);
 }
 
-async function loadTradeListings() {
+async function loadTradeListings(options: SilentLoadOptions = {}) {
   if (!isAuthed.value) {
     return;
   }
-  busy.trade = true;
+  if (!options.silent) {
+    busy.trade = true;
+  }
   try {
     const data = await request<TradePageResponse<TradeListing>>(
       `/trade/listings${toQuery({
@@ -2997,7 +3055,9 @@ async function loadTradeListings() {
       tradeConfig.value = data.config;
     }
   } finally {
-    busy.trade = false;
+    if (!options.silent) {
+      busy.trade = false;
+    }
   }
 }
 
@@ -3027,6 +3087,85 @@ async function loadTradeRecords() {
   );
   tradeRecords.value = data.list || [];
   tradeRecordTotalPages.value = data.totalPages || 1;
+}
+
+function syncCurrentUserPoint(point?: number | null) {
+  if (!currentUser.value || typeof point !== "number") {
+    return;
+  }
+  currentUser.value = { ...currentUser.value, point };
+  setStoredUser(currentUser.value);
+}
+
+function isSameUserCardGroup(
+  source: UserCardsResponse["list"][number],
+  target: UserCardsResponse["list"][number],
+) {
+  return (
+    Number(source.cardId || 0) === Number(target.cardId || 0) &&
+    String(source.cardLevel || "") === String(target.cardLevel || "") &&
+    Number(source.poolId || 0) === Number(target.poolId || 0)
+  );
+}
+
+function findUserCardGroup(card: UserCardsResponse["list"][number]) {
+  return (
+    userCards.value?.list.find((item) => isSameUserCardGroup(item, card)) ||
+    null
+  );
+}
+
+function shouldRefreshOwnProfile() {
+  return Boolean(playerProfile.value) && !isPublicProfileRoute.value;
+}
+
+async function refreshCardState(options: CardStateRefreshOptions) {
+  if (!isAuthed.value) {
+    return;
+  }
+  const jobs: Promise<unknown>[] = [];
+  if (options.stats) {
+    jobs.push(loadStats());
+  }
+  if (options.fishpiPoint) {
+    jobs.push(loadFishpiPoint());
+  }
+  if (options.pointRecords && pointRecords.value) {
+    jobs.push(loadPointRecords());
+  }
+  if (options.userCards) {
+    jobs.push(
+      loadUserCards({
+        preserveLoaded: options.preserveLoadedCards !== false,
+        silent: true,
+      }),
+    );
+  }
+  if (options.profile && shouldRefreshOwnProfile()) {
+    jobs.push(loadPlayerProfile({ silent: true }));
+  }
+  if (options.catalog) {
+    jobs.push(loadUserCatalog({ silent: true }));
+  }
+  if (options.formation) {
+    jobs.push(loadFormation({ silent: true }));
+  }
+  if (options.bulkPreview) {
+    jobs.push(loadBulkDecomposePreview());
+  }
+  if (options.tradeListings) {
+    jobs.push(loadTradeListings({ silent: true }));
+  }
+  if (options.myTradeListings) {
+    jobs.push(loadMyTradeListings());
+  }
+  if (options.tradeRecords) {
+    jobs.push(loadTradeRecords());
+  }
+  if (options.achievements) {
+    jobs.push(loadAchievements(), loadAchievementNotifications());
+  }
+  await Promise.allSettled(jobs);
 }
 
 async function refreshAll() {
@@ -3687,11 +3826,20 @@ async function handleCardDetailAction(action: CardDetailAction) {
   if (action.disabled) {
     return;
   }
-  closeCardIntro();
   if (action.key === "lock") {
-    await toggleCardLock(action.payload as UserCardsResponse["list"][number]);
+    const updatedCard = await toggleCardLock(
+      action.payload as UserCardsResponse["list"][number],
+    );
+    if (updatedCard) {
+      openBagCardDetail(updatedCard);
+    }
     return;
   }
+  if (action.key === "share") {
+    await shareCard(action.payload as CardSharePayload);
+    return;
+  }
+  closeCardIntro();
   if (action.key === "upgrade") {
     await openUpgradeModal(action.payload as UserCardsResponse["list"][number]);
     return;
@@ -3702,10 +3850,6 @@ async function handleCardDetailAction(action: CardDetailAction) {
   }
   if (action.key === "recycle") {
     openRecycleModal(action.payload as UserCardsResponse["list"][number]);
-    return;
-  }
-  if (action.key === "share") {
-    await shareCard(action.payload as CardSharePayload);
     return;
   }
   if (action.key === "buy") {
@@ -3826,12 +3970,12 @@ function cardLockAction(card: UserCardsResponse["list"][number]) {
 async function toggleCardLock(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
     notify("error", "请先登录");
-    return;
+    return null;
   }
   const action = cardLockAction(card);
   if (!action.uuid) {
     notify("info", "暂不可切换");
-    return;
+    return null;
   }
   busy.assets = true;
   try {
@@ -3840,10 +3984,16 @@ async function toggleCardLock(card: UserCardsResponse["list"][number]) {
       body: JSON.stringify({ locked: action.locked }),
     });
     notify("success", action.locked ? "卡片已锁定" : "卡片已解锁");
-    await loadUserCards();
-    await loadBulkDecomposePreview();
+    await refreshCardState({
+      userCards: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+    });
+    return findUserCardGroup(card);
   } catch (error) {
     notify("error", getErrorMessage(error));
+    return null;
   } finally {
     busy.assets = false;
   }
@@ -3896,7 +4046,15 @@ async function synthesizeCard(item: CatalogCard) {
       body: JSON.stringify({ card_id: item.card.id, rarity: item.rarity }),
     });
     notify("success", "合成成功");
-    await loadPrivateData();
+    await refreshCardState({
+      stats: true,
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      achievements: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -3992,8 +4150,16 @@ async function bulkDecomposeCards() {
         data.fragments,
       )}`,
     );
-    await loadPrivateData();
-    await loadBulkDecomposePreview();
+    await refreshCardState({
+      stats: true,
+      pointRecords: true,
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      achievements: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4126,7 +4292,17 @@ async function upgradeCard() {
       "success",
       `养成成功：Lv.${data.before.level} → Lv.${data.after.level}，战力 +${data.after.power - data.before.power}`,
     );
-    await loadPrivateData();
+    await refreshCardState({
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      achievements: true,
+    });
+    if (upgradeTarget.value) {
+      upgradeTarget.value = findUserCardGroup(upgradeTarget.value);
+    }
     try {
       upgradePreview.value = await request<CardUpgradePreview>(
         `/card/user/cards/${uuid}/upgrade-preview`,
@@ -4176,12 +4352,18 @@ async function recycleCards() {
     if (stats.value) {
       stats.value.point = data.pointAfter;
     }
-    if (currentUser.value) {
-      currentUser.value.point = data.pointAfter;
-      setStoredUser(currentUser.value);
-    }
+    syncCurrentUserPoint(data.pointAfter);
     closeRecycleModal();
-    await loadPrivateData();
+    await refreshCardState({
+      stats: true,
+      pointRecords: true,
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      achievements: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4215,7 +4397,15 @@ async function createTradeListing() {
     });
     notify("success", "挂售成功，卡片已锁定在交易市场");
     closeTradeListingModal();
-    await loadPrivateData();
+    await refreshCardState({
+      userCards: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      tradeListings: true,
+      myTradeListings: true,
+      tradeRecords: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4238,7 +4428,15 @@ async function cancelTradeListing(listing: TradeListing) {
   try {
     await request(`/trade/listings/${listing.id}`, { method: "DELETE" });
     notify("success", "挂单已取消");
-    await loadPrivateData();
+    await refreshCardState({
+      userCards: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      tradeListings: true,
+      myTradeListings: true,
+      tradeRecords: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4265,7 +4463,19 @@ async function buyTradeListing(listing: TradeListing) {
   try {
     await request(`/trade/listings/${listing.id}/buy`, { method: "POST" });
     notify("success", "购买成功，卡片已进入背包");
-    await loadPrivateData();
+    await refreshCardState({
+      stats: true,
+      pointRecords: true,
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      tradeListings: true,
+      myTradeListings: true,
+      tradeRecords: true,
+      achievements: true,
+    });
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -5328,7 +5538,7 @@ function leaderboardRankLabel(rank?: number) {
               class="secondary-action compact"
               type="button"
               :disabled="busy.profile"
-              @click="loadPlayerProfile"
+              @click="loadPlayerProfile()"
             >
               <RefreshCw :size="16" :class="{ spin: busy.profile }" />
               刷新
@@ -6551,7 +6761,7 @@ function leaderboardRankLabel(rank?: number) {
               class="secondary-action compact"
               type="button"
               :disabled="busy.formation"
-              @click="loadFormation"
+              @click="loadFormation()"
             >
               <RefreshCw :size="16" :class="{ spin: busy.formation }" />
               刷新
