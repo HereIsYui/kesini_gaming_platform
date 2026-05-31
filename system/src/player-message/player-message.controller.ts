@@ -44,4 +44,15 @@ export class PlayerMessageController {
       "已读",
     );
   }
+
+  @Post(":id/claim")
+  async claimReward(
+    @GetUser() user: UserInfo,
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.playerMessageService.claimReward(user.uid, id),
+      "已领取",
+    );
+  }
 }

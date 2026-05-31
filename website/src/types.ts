@@ -49,12 +49,20 @@ export interface PlayerMessage {
   title: string;
   content: string;
   read: boolean;
+  claimed: boolean;
+  hasReward: boolean;
+  rewards?: RedeemRewards | null;
   createdAt?: string | null;
 }
 
 export interface PlayerMessagesResponse {
   list: PlayerMessage[];
   unread: number;
+}
+
+export interface ClaimMessageRewardResponse {
+  claimed: boolean;
+  rewards: RedeemRewards;
 }
 
 export type CardRarity = "N" | "R" | "SR" | "SSR" | "UR";
@@ -846,7 +854,8 @@ export type PointLedgerSourceType =
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle"
-  | "season_shop";
+  | "season_shop"
+  | "player_message";
 
 export interface PointLedgerRecord {
   id: number;

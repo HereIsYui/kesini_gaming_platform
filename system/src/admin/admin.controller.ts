@@ -109,6 +109,14 @@ class PlayerMessageDto {
   target_uid?: string;
 
   @IsOptional()
+  @IsObject()
+  rewards?: {
+    points?: number;
+    items?: Array<{ itemId?: number; num?: number }>;
+    cards?: Array<{ cardId?: number; rarity?: string; num?: number }>;
+  } | null;
+
+  @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 }

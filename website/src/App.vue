@@ -46,6 +46,7 @@ import {
 import type {
   CardItem,
   CardRarity,
+  ClaimMessageRewardResponse,
   DailySignInClaimResponse,
   DailySignInStatus,
   TaskActivityMilestone,
@@ -285,6 +286,7 @@ const friendFeedError = ref("");
 const friendActionBusy = ref("");
 const playerMessages = ref<PlayerMessage[]>([]);
 const playerMessagesError = ref("");
+const messageClaimBusy = ref<number | null>(null);
 const guildOverview = ref<GuildOverviewResponse | null>(null);
 const guildError = ref("");
 const guildMessages = ref<GuildMessage[]>([]);
@@ -962,6 +964,7 @@ const pointSourceOptions = [
   { value: "trade_sell", label: "交易出售" },
   { value: "shop_recycle", label: "商店回收" },
   { value: "season_shop", label: "赛季商店" },
+  { value: "player_message", label: "消息奖励" },
 ] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bagHasMore = computed(
@@ -1468,6 +1471,7 @@ function logout() {
   friendActionBusy.value = "";
   playerMessages.value = [];
   playerMessagesError.value = "";
+  messageClaimBusy.value = null;
   guildOverview.value = null;
   guildError.value = "";
   guildMessages.value = [];
@@ -2139,6 +2143,28 @@ async function markMessageRead(message: PlayerMessage) {
     );
   } catch (error) {
     notify("error", getErrorMessage(error));
+  }
+}
+
+async function claimMessageReward(message: PlayerMessage) {
+  if (!message.hasReward || message.claimed || messageClaimBusy.value) {
+    return;
+  }
+  messageClaimBusy.value = message.id;
+  try {
+    const data = await request<ClaimMessageRewardResponse>(
+      `/messages/${message.id}/claim`,
+      { method: "POST" },
+    );
+    playerMessages.value = playerMessages.value.map((item) =>
+      item.id === message.id ? { ...item, read: true, claimed: true } : item,
+    );
+    await Promise.allSettled([loadStats(), loadUserCards()]);
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    messageClaimBusy.value = null;
   }
 }
 
@@ -3820,6 +3846,8 @@ function pointMetadataSummary(record: PointLedgerRecord) {
       return `赛季商店 ${String(meta("shopItemName") || meta("shopItemId") || "-")} · ${String(
         meta("count") || 1,
       )} 次`;
+    case "player_message":
+      return String(meta("title") || record.title || "消息奖励");
     default:
       return record.title;
   }
@@ -5203,9 +5231,27 @@ function leaderboardRankLabel(rank?: number) {
               <time>{{ formatDate(message.createdAt) }}</time>
             </div>
             <p>{{ message.content }}</p>
-            <div v-if="!message.read" class="message-actions">
+            <div v-if="message.hasReward" class="message-reward">
+              <span>奖励</span>
+              <strong>{{ formatRewards(message.rewards || undefined) }}</strong>
+              <em>{{ message.claimed ? "已领取" : "待领取" }}</em>
+            </div>
+            <div
+              v-if="!message.read || (message.hasReward && !message.claimed)"
+              class="message-actions"
+            >
               <button
+                v-if="message.hasReward && !message.claimed"
                 class="primary-action compact"
+                type="button"
+                :disabled="messageClaimBusy === message.id"
+                @click="claimMessageReward(message)"
+              >
+                {{ messageClaimBusy === message.id ? "领取中" : "领取" }}
+              </button>
+              <button
+                v-if="!message.read && !message.hasReward"
+                class="secondary-action compact"
                 type="button"
                 @click="markMessageRead(message)"
               >

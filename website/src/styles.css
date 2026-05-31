@@ -3667,6 +3667,35 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.message-reward {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid rgba(84, 216, 255, 0.2);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(84, 216, 255, 0.08);
+  padding: 10px 12px;
+}
+
+:root[data-theme="light"] .message-reward {
+  border-color: rgba(11, 149, 208, 0.18);
+  background: rgba(11, 149, 208, 0.07);
+}
+
+.message-reward span,
+.message-reward em {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.message-reward strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .message-card time {
   flex: 0 0 auto;
   color: var(--text-soft);

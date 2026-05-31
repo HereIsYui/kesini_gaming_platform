@@ -35,6 +35,7 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   trade_sell: "交易出售",
   shop_recycle: "商店回收",
   season_shop: "赛季商店",
+  player_message: "消息奖励",
 };
 
 const ALLOWED_SOURCE_TYPES = Object.keys(SOURCE_LABELS);

@@ -113,6 +113,7 @@ function createMessage(value: Partial<PlayerMessage>, id: number) {
     title: "",
     content: "",
     target_uid: "",
+    rewards: null,
     enabled: true,
     delete_flag: false,
     createdAt: new Date(`2026-01-${String(id).padStart(2, "0")}T00:00:00.000Z`),
@@ -126,6 +127,8 @@ function createRead(value: Partial<PlayerMessageRead>, id: number) {
     id,
     uid: "",
     message_id: 0,
+    claimed_at: null,
+    reward_snapshot: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     ...value,
   } as PlayerMessageRead;
@@ -155,6 +158,13 @@ describe("PlayerMessageService 玩家消息", () => {
   let messages: ArrayRepository<PlayerMessage>;
   let reads: ArrayRepository<PlayerMessageRead>;
   let users: ArrayRepository<User>;
+  let dataSource: { getRepository: jest.Mock; transaction: jest.Mock };
+  let rewardService: {
+    normalizeRewards: jest.Mock;
+    assertRewardItemsAvailable: jest.Mock;
+    assertRewardCardsAvailable: jest.Mock;
+    grantRewards: jest.Mock;
+  };
   let service: PlayerMessageService;
 
   beforeEach(() => {
@@ -165,12 +175,40 @@ describe("PlayerMessageService 玩家消息", () => {
       createUser({ uid: "u1", public_id: "p1", nickname: "玩家一" }, 1),
       createUser({ uid: "u2", public_id: "p2", nickname: "玩家二" }, 2),
     );
+    dataSource = {
+      getRepository: jest.fn((entity) => getRepository(entity)),
+      transaction: jest.fn((handler) =>
+        handler({ getRepository: (entity: unknown) => getRepository(entity) }),
+      ),
+    };
+    rewardService = {
+      normalizeRewards: jest.fn((rewards) => rewards),
+      assertRewardItemsAvailable: jest.fn(),
+      assertRewardCardsAvailable: jest.fn(),
+      grantRewards: jest.fn(),
+    };
     service = new PlayerMessageService(
       messages as any,
       reads as any,
       users as any,
+      dataSource as any,
+      rewardService as any,
     );
   });
+
+  function getRepository(entity: unknown) {
+    const name = (entity as { name?: string })?.name;
+    if (name === "PlayerMessage") {
+      return messages;
+    }
+    if (name === "PlayerMessageRead") {
+      return reads;
+    }
+    if (name === "User") {
+      return users;
+    }
+    return new ArrayRepository<any>((value, id) => ({ id, ...value }));
+  }
 
   it("返回全员和本人消息并统计未读", async () => {
     await service.createAdmin({ title: "全员消息", content: "奖励已发" });
@@ -191,6 +229,72 @@ describe("PlayerMessageService 玩家消息", () => {
     expect(result.unread).toBe(1);
     expect(result.list.map((item) => item.title)).toEqual(["给一号", "全员消息"]);
     expect(result.list[1].read).toBe(true);
+  });
+
+  it("领取消息奖励后标记已领取并发放奖励", async () => {
+    const message = await service.createAdmin({
+      title: "奖励消息",
+      content: "奖励已发",
+      rewards: { points: 30, items: [] },
+    });
+
+    const result = await service.claimReward("u1", message.id);
+    const overview = await service.listMine("u1");
+
+    expect(result).toEqual({
+      claimed: true,
+      rewards: { points: 30, items: [] },
+    });
+    expect(reads.rows[0]).toMatchObject({
+      uid: "u1",
+      message_id: message.id,
+      reward_snapshot: { points: 30, items: [] },
+    });
+    expect(reads.rows[0].claimed_at).toBeInstanceOf(Date);
+    expect(rewardService.grantRewards).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      { points: 30, items: [] },
+      expect.objectContaining({
+        sourceType: "player_message",
+        sourceId: message.id,
+      }),
+    );
+    expect(overview.list[0]).toEqual(
+      expect.objectContaining({
+        read: true,
+        claimed: true,
+        hasReward: true,
+      }),
+    );
+  });
+
+  it("消息奖励只能领取一次", async () => {
+    const message = await service.createAdmin({
+      title: "奖励消息",
+      content: "奖励已发",
+      rewards: { points: 30, items: [] },
+    });
+
+    await service.claimReward("u1", message.id);
+
+    await expect(service.claimReward("u1", message.id)).rejects.toThrow(
+      "奖励已领取",
+    );
+  });
+
+  it("无奖励消息不能领取", async () => {
+    const message = await service.createAdmin({
+      title: "普通消息",
+      content: "只读消息",
+    });
+    rewardService.normalizeRewards.mockImplementationOnce(() => {
+      throw new Error("消息没有奖励");
+    });
+
+    await expect(service.claimReward("u1", message.id)).rejects.toThrow(
+      "没有可领取奖励",
+    );
   });
 
   it("不能读取其他玩家定向消息", async () => {

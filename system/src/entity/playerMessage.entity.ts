@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
+import { RedeemRewards } from "./redeemCode.entity";
 
 @Entity()
 @Index("IDX_player_message_visible", ["enabled", "delete_flag", "id"])
@@ -22,6 +23,9 @@ export class PlayerMessage {
 
   @Column({ type: "varchar", length: 255, default: "" })
   target_uid: string;
+
+  @Column({ type: "json", nullable: true })
+  rewards?: RedeemRewards | null;
 
   @Column({ default: true })
   enabled: boolean;

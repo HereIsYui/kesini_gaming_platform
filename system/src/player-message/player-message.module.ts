@@ -6,11 +6,13 @@ import { PlayerMessageRead } from "src/entity/playerMessageRead.entity";
 import { User } from "src/entity/user.entity";
 import { PlayerMessageController } from "./player-message.controller";
 import { PlayerMessageService } from "./player-message.service";
+import { RewardModule } from "src/reward/reward.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PlayerMessage, PlayerMessageRead, User]),
     AuthModule,
+    RewardModule,
   ],
   controllers: [PlayerMessageController],
   providers: [PlayerMessageService],

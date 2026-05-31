@@ -492,6 +492,13 @@ export const playerMessageFields: FieldConfig[] = [
     fullWidth: true,
     placeholder: "填写消息内容",
   },
+  {
+    key: "rewards",
+    label: "奖励",
+    type: "rewards",
+    fullWidth: true,
+    allowCardRewards: true,
+  },
   { key: "createdAt", label: "创建时间", readonly: true },
 ];
 
