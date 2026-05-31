@@ -71,6 +71,7 @@ import type {
   FishpiPointResponse,
   FriendRelationRecord,
   FriendsOverviewResponse,
+  FormationCard,
   FormationOverview,
   GachaResult,
   CreateGuildRequest,
@@ -112,6 +113,7 @@ import type {
   SeasonPointRecord,
   SeasonShopBuyResponse,
   SeasonShopItem,
+  ShowcaseCard,
   SocialActivityFeedResponse,
   SocialActivityRecord,
   TradeConfig,
@@ -230,12 +232,39 @@ type PoolCatalogCard = {
   card: CardItem;
   rarities: CardRarity[];
 };
+type CardDetailRow = {
+  label: string;
+  value: string;
+};
 type CardIntroTarget = {
   name: string;
-  desc?: string | null;
+  desc: string;
   rarity?: string;
   type?: string;
   extra?: string;
+  cardImage?: string | null;
+  rows: CardDetailRow[];
+};
+type CardDetailInput = {
+  name: string;
+  desc?: string | null;
+  rarity?: string | number | null;
+  type?: string | null;
+  extra?: string | null;
+  cardImage?: string | null;
+  poolId?: number | string | null;
+  poolName?: string | null;
+  obtainedAt?: string | null;
+  latestObtainedAt?: string | null;
+  cultivationLevel?: number | null;
+  power?: number | null;
+  locked?: boolean;
+  listed?: boolean;
+  count?: number | null;
+  price?: number | null;
+  source?: string;
+  statuses?: string[];
+  rows?: CardDetailRow[];
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
@@ -250,7 +279,6 @@ const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
 const NEW_CARD_WINDOW_MS = 48 * 60 * 60 * 1000;
 const NEW_CARD_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BAG_PAGE_SIZE = 24;
-const CARD_DESC_DETAIL_THRESHOLD = 34;
 
 const route = useRoute();
 const themeMode = ref<ThemeMode>(getStoredThemeMode());
@@ -3257,19 +3285,213 @@ function shortCardIntro(desc?: string | null) {
   return text.length > 15 ? `${text.slice(0, 15)}…` : text;
 }
 
-function hasCardIntroDetail(desc?: string | null) {
-  return cardIntroText(desc).length > CARD_DESC_DETAIL_THRESHOLD;
+function compactCardDetailValue(value?: string | number | null) {
+  return String(value ?? "").trim();
 }
 
-function openCardIntro(target: CardIntroTarget) {
+function formatCardDetailDate(value?: string | null) {
+  const raw = compactCardDetailValue(value);
+  if (!raw) {
+    return "";
+  }
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString("zh-CN", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function uniqueCardDetailRows(rows: CardDetailRow[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const label = compactCardDetailValue(row.label);
+    const value = compactCardDetailValue(row.value);
+    if (!label || !value) {
+      return false;
+    }
+    const key = `${label}:${value}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function openCardIntro(target: CardDetailInput) {
+  const rarity = compactCardDetailValue(target.rarity);
+  const type = compactCardDetailValue(target.type);
+  const poolName = compactCardDetailValue(
+    target.poolName || target.extra || getPoolName(Number(target.poolId || 0)),
+  );
+  const obtainedAt = formatCardDetailDate(
+    target.latestObtainedAt || target.obtainedAt || "",
+  );
+  const statuses = [...(target.statuses || [])];
+  if (target.locked) {
+    statuses.push("已锁定");
+  }
+  if (target.listed) {
+    statuses.push("挂售中");
+  }
+  const rows = uniqueCardDetailRows([
+    { label: "等级", value: rarity },
+    { label: "类型", value: type },
+    { label: "卡池", value: poolName },
+    { label: "获得", value: obtainedAt },
+    {
+      label: "养成",
+      value: target.cultivationLevel ? `Lv.${target.cultivationLevel}` : "",
+    },
+    {
+      label: "战力",
+      value:
+        target.power !== undefined && target.power !== null
+          ? String(target.power)
+          : "",
+    },
+    {
+      label: "数量",
+      value:
+        target.count !== undefined && target.count !== null
+          ? `x${target.count}`
+          : "",
+    },
+    { label: "状态", value: statuses.filter(Boolean).join(" · ") },
+    { label: "价格", value: target.price ? `${target.price} 星穹币` : "" },
+    { label: "来源", value: target.source || "" },
+    ...(target.rows || []),
+  ]);
   cardIntroTarget.value = {
-    ...target,
+    name: target.name,
     desc: cardIntroText(target.desc),
+    rarity,
+    type,
+    extra: poolName,
+    cardImage: target.cardImage,
+    rows,
   };
 }
 
 function closeCardIntro() {
   cardIntroTarget.value = null;
+}
+
+function openShowcaseCardDetail(card: ShowcaseCard) {
+  openCardIntro({
+    name: card.cardName,
+    desc: card.cardDesc,
+    cardImage: card.cardImage,
+    rarity: card.cardLevel,
+    type: cardTypeLabel(card.cardType),
+    poolId: card.poolId,
+    obtainedAt: card.obtainedAt,
+    cultivationLevel: card.cultivationLevel,
+    power: card.power,
+    locked: card.locked,
+    source: "展示墙",
+  });
+}
+
+function openBagCardDetail(card: UserCardsResponse["list"][number]) {
+  markNewCardSeen(card);
+  openCardIntro({
+    name: card.cardName,
+    desc: card.cardDesc,
+    cardImage: card.cardImage,
+    rarity: card.cardLevel,
+    type: cardTypeLabel(card.cardType),
+    poolId: card.poolId,
+    obtainedAt: card.obtainedAt,
+    latestObtainedAt: card.latestObtainedAt,
+    cultivationLevel: card.cultivationLevel,
+    power: card.power,
+    locked: Boolean(card.locked || Number(card.lockedCount || 0) > 0),
+    listed: Number(card.listedCount || 0) > 0 || card.isListed === true,
+    count: card.count,
+    price: card.tradePrice,
+    source: "背包",
+  });
+}
+
+function openFormationCardDetail(card: FormationCard) {
+  markNewCardSeen(card);
+  openCardIntro({
+    name: card.cardName,
+    desc: card.cardDesc,
+    cardImage: card.cardImage,
+    rarity: card.cardLevel,
+    type: cardTypeLabel(card.cardType),
+    poolId: card.poolId,
+    obtainedAt: card.obtainedAt,
+    cultivationLevel: card.cultivationLevel,
+    power: card.power,
+    locked: card.locked,
+    source: "阵容",
+  });
+}
+
+function openTradeListingDetail(listing: TradeListing) {
+  openCardIntro({
+    name: listing.cardName,
+    desc: listing.cardDesc,
+    cardImage: listing.cardImage,
+    rarity: listing.cardLevel,
+    type: cardTypeLabel(listing.cardType),
+    poolId: listing.poolId,
+    poolName: listing.poolName,
+    obtainedAt: listing.createdAt,
+    listed: true,
+    price: listing.price,
+    source: "交易",
+  });
+}
+
+function openCatalogCardDetail(item: CatalogCard) {
+  openCardIntro({
+    name: item.card.card_name,
+    desc: item.card.card_desc,
+    cardImage: item.card.card_image,
+    rarity: item.rarity,
+    type: cardTypeLabel(item.card.card_type),
+    poolId: item.card.pool,
+    source: "图鉴",
+    count: item.ownedCount,
+    statuses: [item.collected ? "已收集" : "未收集"],
+    rows:
+      !item.collected && item.rarity !== "UR"
+        ? [
+            {
+              label: "碎片",
+              value: `${item.fragmentCount}/${item.requiredFragments}`,
+            },
+          ]
+        : [],
+  });
+}
+
+function openDrawResultDetail(card: GachaResult) {
+  markNewCardSeen(card);
+  openCardIntro({
+    name: card.cardName,
+    desc: card.cardDesc,
+    cardImage: card.cardImage,
+    rarity: card.rarity,
+    type: cardTypeLabel(card.cardType),
+    poolId: card.poolId,
+    source: "抽卡",
+    statuses: [
+      card.isUp ? "UP" : "",
+      card.isPity ? "保底" : "",
+      "新获得",
+    ].filter(Boolean),
+  });
 }
 
 function cardMediaUrl(value?: string | null) {
@@ -4979,8 +5201,13 @@ function leaderboardRankLabel(rank?: number) {
               <article
                 v-for="card in profileShowcase"
                 :key="card.uuid"
-                class="result-card showcase-card"
+                class="result-card showcase-card clickable-card-area"
                 :class="rarityClass(card.cardLevel)"
+                role="button"
+                tabindex="0"
+                @click="openShowcaseCardDetail(card)"
+                @keydown.enter.prevent="openShowcaseCardDetail(card)"
+                @keydown.space.prevent="openShowcaseCardDetail(card)"
               >
                 <div class="card-face">
                   <div
@@ -6074,19 +6301,11 @@ function leaderboardRankLabel(rank?: number) {
                     <b v-if="card.lockedCount">锁定 {{ card.lockedCount }}</b>
                   </span>
                   <button
-                    v-if="hasCardIntroDetail(card.cardDesc)"
                     class="card-icon-action"
                     type="button"
                     title="详情"
                     aria-label="详情"
-                    @click.stop="
-                      openCardIntro({
-                        name: card.cardName,
-                        desc: card.cardDesc,
-                        rarity: String(card.cardLevel),
-                        type: cardTypeLabel(card.cardType),
-                      })
-                    "
+                    @click.stop="openBagCardDetail(card)"
                   >
                     <Package :size="16" />
                   </button>
@@ -6258,8 +6477,13 @@ function leaderboardRankLabel(rank?: number) {
               </header>
               <template v-if="slot.card">
                 <div
-                  class="formation-card-media"
+                  class="formation-card-media clickable-card-area"
                   :class="{ 'has-media': hasCardMedia(slot.card.cardImage) }"
+                  role="button"
+                  tabindex="0"
+                  @click="openFormationCardDetail(slot.card)"
+                  @keydown.enter.prevent="openFormationCardDetail(slot.card)"
+                  @keydown.space.prevent="openFormationCardDetail(slot.card)"
                 >
                   <video
                     v-if="isCardVideo(slot.card.cardImage)"
@@ -6287,7 +6511,14 @@ function leaderboardRankLabel(rank?: number) {
                     NEW
                   </span>
                 </div>
-                <div class="formation-card-body">
+                <div
+                  class="formation-card-body clickable-card-area"
+                  role="button"
+                  tabindex="0"
+                  @click="openFormationCardDetail(slot.card)"
+                  @keydown.enter.prevent="openFormationCardDetail(slot.card)"
+                  @keydown.space.prevent="openFormationCardDetail(slot.card)"
+                >
                   <h3>{{ slot.card.cardName }}</h3>
                   <p>{{ cardIntroText(slot.card.cardDesc) }}</p>
                   <div class="tag-row">
@@ -6607,7 +6838,14 @@ function leaderboardRankLabel(rank?: number) {
             ]"
             :style="{ '--delay': `${Math.min(index * 24, 260)}ms` }"
           >
-            <div class="card-face">
+            <div
+              class="card-face clickable-card-area"
+              role="button"
+              tabindex="0"
+              @click="openCatalogCardDetail(item)"
+              @keydown.enter.prevent="openCatalogCardDetail(item)"
+              @keydown.space.prevent="openCatalogCardDetail(item)"
+            >
               <div
                 class="card-media-frame"
                 :class="{ 'has-media': hasCardMedia(item.card.card_image) }"
@@ -6652,7 +6890,7 @@ function leaderboardRankLabel(rank?: number) {
               class="secondary-action"
               type="button"
               :disabled="busy.catalog || !item.canSynthesize"
-              @click="synthesizeCard(item)"
+              @click.stop="synthesizeCard(item)"
             >
               {{
                 item.canSynthesize
@@ -6961,7 +7199,14 @@ function leaderboardRankLabel(rank?: number) {
                 class="trade-card"
                 :class="rarityClass(listing.cardLevel)"
               >
-                <div class="trade-card-art">
+                <div
+                  class="trade-card-art clickable-card-area"
+                  role="button"
+                  tabindex="0"
+                  @click="openTradeListingDetail(listing)"
+                  @keydown.enter.prevent="openTradeListingDetail(listing)"
+                  @keydown.space.prevent="openTradeListingDetail(listing)"
+                >
                   <div
                     class="card-media-frame trade-media-frame"
                     :class="{ 'has-media': hasCardMedia(listing.cardImage) }"
@@ -6992,17 +7237,9 @@ function leaderboardRankLabel(rank?: number) {
                 <div class="trade-card-body">
                   <p>{{ cardIntroText(listing.cardDesc) }}</p>
                   <button
-                    v-if="hasCardIntroDetail(listing.cardDesc)"
                     class="tag-action intro-inline-action"
                     type="button"
-                    @click="
-                      openCardIntro({
-                        name: listing.cardName,
-                        desc: listing.cardDesc,
-                        rarity: listing.cardLevel,
-                        extra: listing.poolName || '未知卡池',
-                      })
-                    "
+                    @click="openTradeListingDetail(listing)"
                   >
                     详情
                   </button>
@@ -9096,11 +9333,11 @@ function leaderboardRankLabel(rank?: number) {
           class="trade-listing-modal card-intro-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="卡片介绍"
+          aria-label="卡片详情"
         >
           <header class="result-modal-head">
             <div>
-              <p class="eyebrow">卡片介绍</p>
+              <p class="eyebrow">卡片详情</p>
               <h2>{{ cardIntroTarget.name }}</h2>
               <span>
                 {{
@@ -9118,8 +9355,52 @@ function leaderboardRankLabel(rank?: number) {
               关闭
             </button>
           </header>
-          <div class="trade-listing-body card-intro-body">
-            <p>{{ cardIntroTarget.desc }}</p>
+          <div class="trade-listing-body card-intro-body card-detail-body">
+            <div
+              class="card-detail-preview"
+              :class="rarityClass(cardIntroTarget.rarity || '')"
+            >
+              <div
+                class="card-media-frame"
+                :class="{ 'has-media': hasCardMedia(cardIntroTarget.cardImage) }"
+              >
+                <video
+                  v-if="isCardVideo(cardIntroTarget.cardImage)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(cardIntroTarget.cardImage)"
+                  muted
+                  loop
+                  autoplay
+                  playsinline
+                  @error="hideBrokenCardMedia"
+                />
+                <img
+                  v-else-if="cardMediaUrl(cardIntroTarget.cardImage)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(cardIntroTarget.cardImage)"
+                  :alt="cardIntroTarget.name"
+                  @error="hideBrokenCardMedia"
+                />
+                <div class="card-sigil"></div>
+                <div class="result-card-top">
+                  <span v-if="cardIntroTarget.rarity" class="rarity-badge">
+                    {{ cardIntroTarget.rarity }}
+                  </span>
+                  <span v-if="cardIntroTarget.type" class="card-type-pill">
+                    {{ cardIntroTarget.type }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div class="card-detail-info">
+              <p>{{ cardIntroTarget.desc }}</p>
+              <dl v-if="cardIntroTarget.rows.length" class="card-detail-meta">
+                <div v-for="row in cardIntroTarget.rows" :key="row.label">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
         </section>
       </div>
@@ -9315,12 +9596,17 @@ function leaderboardRankLabel(rank?: number) {
             <article
               v-for="(card, index) in lastResults"
               :key="`${card.userCardUuid}-${index}`"
-              class="result-card draw-result-card"
+              class="result-card draw-result-card clickable-card-area"
               :class="[
                 rarityClass(card.rarity),
                 { featured: lastResults.length === 1 },
               ]"
               :style="{ '--delay': `${Math.min(index * 42, 420)}ms` }"
+              role="button"
+              tabindex="0"
+              @click="openDrawResultDetail(card)"
+              @keydown.enter.prevent="openDrawResultDetail(card)"
+              @keydown.space.prevent="openDrawResultDetail(card)"
             >
               <div class="card-face">
                 <div

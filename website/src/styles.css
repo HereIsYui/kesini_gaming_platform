@@ -3405,7 +3405,63 @@ h3 {
 }
 
 .card-intro-modal {
-  width: min(520px, 100%);
+  width: min(720px, 100%);
+}
+
+.clickable-card-area {
+  cursor: pointer;
+}
+
+.clickable-card-area:focus-visible {
+  outline: 2px solid rgba(150, 242, 255, 0.58);
+  outline-offset: 3px;
+}
+
+.card-detail-body {
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.card-detail-preview {
+  color: var(--primary-strong);
+}
+
+.card-detail-preview .card-media-frame {
+  border-radius: var(--radius);
+}
+
+.card-detail-info {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.card-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.card-detail-meta div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px;
+}
+
+.card-detail-meta dt {
+  margin-bottom: 5px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.card-detail-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .upgrade-modal {
@@ -6610,6 +6666,19 @@ h3 {
 
   .result-modal {
     max-height: calc(100dvh - 20px);
+  }
+
+  .card-detail-body {
+    grid-template-columns: 1fr;
+  }
+
+  .card-detail-preview {
+    width: min(240px, 100%);
+    justify-self: center;
+  }
+
+  .card-detail-meta {
+    grid-template-columns: 1fr;
   }
 
   .announcement-strip,
