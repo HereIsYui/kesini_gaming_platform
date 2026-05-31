@@ -242,6 +242,7 @@ const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
 const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
 const THEME_KEY = "kesini_website_theme";
 const PLAYER_PREFS_KEY = "kesini_player_preferences";
+const NEW_CARD_SEEN_KEY = "kesini_new_card_seen";
 const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   motionMode: "full",
   achievementNotices: true,
@@ -272,6 +273,7 @@ const announcementReadIds = ref<Set<number>>(getStoredNumberSet(ANNOUNCEMENT_REA
 const announcementClosedIds = ref<Set<number>>(
   getStoredNumberSet(ANNOUNCEMENT_CLOSED_KEY),
 );
+const newCardSeenKeys = ref<Set<string>>(getStoredStringSet(NEW_CARD_SEEN_KEY));
 const announcementModalOpen = ref(false);
 const selectedAnnouncement = ref<Announcement | null>(null);
 const pools = ref<PoolInfo[]>([]);
@@ -1169,6 +1171,31 @@ function persistNumberSet(key: string, value: Set<number>) {
   localStorage.setItem(key, JSON.stringify([...value]));
 }
 
+function getStoredStringSet(key: string) {
+  const raw = localStorage.getItem(key);
+  if (!raw) {
+    return new Set<string>();
+  }
+  try {
+    const value = JSON.parse(raw);
+    if (!Array.isArray(value)) {
+      return new Set<string>();
+    }
+    return new Set(
+      value
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    );
+  } catch {
+    localStorage.removeItem(key);
+    return new Set<string>();
+  }
+}
+
+function persistStringSet(key: string, value: Set<string>) {
+  localStorage.setItem(key, JSON.stringify([...value]));
+}
+
 function getStoredThemeMode(): ThemeMode {
   const stored = localStorage.getItem(THEME_KEY);
   return stored === "light" ? "light" : "dark";
@@ -1970,6 +1997,7 @@ function isProfileCandidateSelected(card: UserCardsResponse["list"][number]) {
 }
 
 function toggleProfileCandidate(card: UserCardsResponse["list"][number]) {
+  markNewCardSeen(card);
   const uuid = candidateUuid(card);
   if (!uuid) {
     return;
@@ -2490,6 +2518,9 @@ async function saveFormationSlot(position: number, cardUuid: string | null) {
     notify("error", "请先登录");
     return;
   }
+  const selectedCard = cardUuid
+    ? formationCandidates.value.find((card) => candidateUuid(card) === cardUuid)
+    : null;
   const slots = formationSlots.value.map((slot) => ({
     position: slot.position,
     cardUuid: slot.position === position ? cardUuid : slot.card?.uuid || null,
@@ -2501,6 +2532,9 @@ async function saveFormationSlot(position: number, cardUuid: string | null) {
       body: JSON.stringify({ slots }),
     });
     notify("success", cardUuid ? "卡片已上阵" : "阵容位置已清空");
+    if (selectedCard) {
+      markNewCardSeen(selectedCard);
+    }
     formationPickerOpen.value = false;
     formationEditingPosition.value = null;
     if (pveOverview.value) {
@@ -3341,6 +3375,7 @@ function bagActionKey(card: UserCardsResponse["list"][number]) {
 
 function openBagCardActions(card: UserCardsResponse["list"][number]) {
   activeBagActionKey.value = bagActionKey(card);
+  markNewCardSeen(card);
 }
 
 function cardLockAction(card: UserCardsResponse["list"][number]) {
@@ -4056,11 +4091,27 @@ function formatDate(value?: string | null) {
   });
 }
 
-function isNewCard(card?: {
+type NewCardMarkerTarget = {
+  uuid?: string | null;
+  userCardUuid?: string | null;
+  cardId?: number | string | null;
+  cardName?: string | null;
+  cardLevel?: string | null;
+  rarity?: string | null;
+  poolId?: number | string | null;
   obtainedAt?: string | null;
   latestObtainedAt?: string | null;
-}) {
-  return isRecentCardTime(card?.latestObtainedAt || card?.obtainedAt);
+};
+
+function isNewCard(
+  card?: NewCardMarkerTarget,
+  options: { ignoreSeen?: boolean } = {},
+) {
+  if (!isRecentCardTime(card?.latestObtainedAt || card?.obtainedAt)) {
+    return false;
+  }
+  const key = newCardSeenKey(card);
+  return Boolean(options.ignoreSeen || !key || !newCardSeenKeys.value.has(key));
 }
 
 function isRecentCardTime(value?: string | null) {
@@ -4073,6 +4124,38 @@ function isRecentCardTime(value?: string | null) {
   }
   const age = Date.now() - time;
   return age >= -NEW_CARD_FUTURE_TOLERANCE_MS && age <= NEW_CARD_WINDOW_MS;
+}
+
+function newCardSeenKey(card?: NewCardMarkerTarget) {
+  if (!card) {
+    return "";
+  }
+  const uuid = String(card.uuid || card.userCardUuid || "").trim();
+  if (uuid) {
+    return `uuid:${uuid}`;
+  }
+  const obtainedAt = String(card.latestObtainedAt || card.obtainedAt || "").trim();
+  if (!obtainedAt) {
+    return "";
+  }
+  return [
+    "group",
+    card.poolId || "",
+    card.cardId || card.cardName || "",
+    card.cardLevel || card.rarity || "",
+    obtainedAt,
+  ].join(":");
+}
+
+function markNewCardSeen(card?: NewCardMarkerTarget) {
+  const key = newCardSeenKey(card);
+  if (!key || newCardSeenKeys.value.has(key)) {
+    return;
+  }
+  const next = new Set(newCardSeenKeys.value);
+  next.add(key);
+  newCardSeenKeys.value = next;
+  persistStringSet(NEW_CARD_SEEN_KEY, next);
 }
 
 function formatRewards(rewards?: {
@@ -4917,7 +5000,7 @@ function leaderboardRankLabel(rank?: number) {
                       <span class="rarity-badge">{{ card.cardLevel }}</span>
                       <div class="card-top-right">
                         <span
-                          v-if="isNewCard(card)"
+                          v-if="isNewCard(card, { ignoreSeen: !profileCanEdit })"
                           class="new-card-badge"
                           aria-label="新获得"
                         >
