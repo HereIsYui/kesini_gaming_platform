@@ -52,6 +52,8 @@ export interface PlayerMessage {
   claimed: boolean;
   hasReward: boolean;
   rewards?: RedeemRewards | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
   createdAt?: string | null;
 }
 

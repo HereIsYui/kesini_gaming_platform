@@ -114,6 +114,8 @@ function createMessage(value: Partial<PlayerMessage>, id: number) {
     content: "",
     target_uid: "",
     rewards: null,
+    starts_at: null,
+    ends_at: null,
     enabled: true,
     delete_flag: false,
     createdAt: new Date(`2026-01-${String(id).padStart(2, "0")}T00:00:00.000Z`),
@@ -231,6 +233,37 @@ describe("PlayerMessageService 玩家消息", () => {
     expect(result.list[1].read).toBe(true);
   });
 
+  it("只返回有效期内消息", async () => {
+    const now = new Date("2026-02-01T12:00:00.000Z");
+    await service.createAdmin({
+      title: "当前消息",
+      content: "正在展示",
+      starts_at: new Date("2026-02-01T00:00:00.000Z"),
+      ends_at: new Date("2026-02-02T00:00:00.000Z"),
+    });
+    await service.createAdmin({
+      title: "未开始",
+      content: "稍后展示",
+      starts_at: new Date("2026-02-02T00:00:00.000Z"),
+    });
+    await service.createAdmin({
+      title: "已结束",
+      content: "不再展示",
+      ends_at: new Date("2026-02-01T00:00:00.000Z"),
+    });
+
+    const result = await service.listMine("u1", now);
+
+    expect(result.list.map((item) => item.title)).toEqual(["当前消息"]);
+    expect(result.unread).toBe(1);
+    expect(result.list[0]).toEqual(
+      expect.objectContaining({
+        startsAt: "2026-02-01T00:00:00.000Z",
+        endsAt: "2026-02-02T00:00:00.000Z",
+      }),
+    );
+  });
+
   it("领取消息奖励后标记已领取并发放奖励", async () => {
     const message = await service.createAdmin({
       title: "奖励消息",
@@ -297,6 +330,20 @@ describe("PlayerMessageService 玩家消息", () => {
     );
   });
 
+  it("过期消息不能领取奖励", async () => {
+    const message = await service.createAdmin({
+      title: "过期奖励",
+      content: "奖励结束",
+      ends_at: new Date("2026-01-31T00:00:00.000Z"),
+      rewards: { points: 30, items: [] },
+    });
+
+    await expect(
+      service.claimReward("u1", message.id, new Date("2026-02-01T00:00:00.000Z")),
+    ).rejects.toThrow("消息不存在");
+    expect(rewardService.grantRewards).not.toHaveBeenCalled();
+  });
+
   it("不能读取其他玩家定向消息", async () => {
     const message = await service.createAdmin({
       title: "定向消息",
@@ -319,6 +366,14 @@ describe("PlayerMessageService 玩家消息", () => {
     await expect(
       service.createAdmin({ title: "消息", content: "" }),
     ).rejects.toThrow("内容不能为空");
+    await expect(
+      service.createAdmin({
+        title: "消息",
+        content: "内容",
+        starts_at: new Date("2026-02-02T00:00:00.000Z"),
+        ends_at: new Date("2026-02-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow("结束时间需晚于开始时间");
   });
 
   it("删除后玩家和后台都不返回", async () => {

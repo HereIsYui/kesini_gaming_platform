@@ -117,6 +117,14 @@ class PlayerMessageDto {
   } | null;
 
   @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+
+  @IsOptional()
   @IsBoolean()
   enabled?: boolean;
 }

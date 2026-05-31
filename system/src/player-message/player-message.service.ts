@@ -28,7 +28,7 @@ export class PlayerMessageService {
     private readonly rewardService: RewardService,
   ) {}
 
-  async listMine(uid: string) {
+  async listMine(uid: string, now = new Date()) {
     const normalizedUid = this.normalizeUid(uid);
     const list = await this.messageRepository.find({
       where: [
@@ -36,22 +36,24 @@ export class PlayerMessageService {
         { target_uid: normalizedUid, enabled: true, delete_flag: false },
       ],
       order: { id: "DESC" } as any,
-      take: 50,
     });
+    const visibleList = list
+      .filter((item) => this.isActiveNow(item, now))
+      .slice(0, 50);
     const readMap = await this.getReadMap(
       normalizedUid,
-      list.map((item) => item.id),
+      visibleList.map((item) => item.id),
     );
-    const rows = list.map((item) => this.toPlayerView(item, readMap));
+    const rows = visibleList.map((item) => this.toPlayerView(item, readMap));
     return {
       list: rows,
       unread: rows.filter((item) => !item.read).length,
     };
   }
 
-  async markRead(uid: string, id: number) {
+  async markRead(uid: string, id: number, now = new Date()) {
     const normalizedUid = this.normalizeUid(uid);
-    const message = await this.getVisibleForUser(normalizedUid, id);
+    const message = await this.getVisibleForUser(normalizedUid, id, now);
     const existing = await this.readRepository.findOne({
       where: { uid: normalizedUid, message_id: message.id },
     });
@@ -66,7 +68,7 @@ export class PlayerMessageService {
     return { read: true };
   }
 
-  async claimReward(uid: string, id: number) {
+  async claimReward(uid: string, id: number, now = new Date()) {
     const normalizedUid = this.normalizeUid(uid);
     return this.dataSource.transaction(async (manager) => {
       const messageRepository = manager.getRepository(PlayerMessage);
@@ -77,7 +79,8 @@ export class PlayerMessageService {
         !message ||
         message.delete_flag === true ||
         message.enabled !== true ||
-        !this.canRead(normalizedUid, message)
+        !this.canRead(normalizedUid, message) ||
+        !this.isActiveNow(message, now)
       ) {
         throw new Error("消息不存在");
       }
@@ -165,6 +168,7 @@ export class PlayerMessageService {
       ...(await this.normalizeInput(input, true)),
       delete_flag: false,
     });
+    this.assertTimeRange(message.starts_at, message.ends_at);
     return this.decorateAdmin(await this.messageRepository.save(message));
   }
 
@@ -174,6 +178,7 @@ export class PlayerMessageService {
       throw new Error("消息不存在");
     }
     Object.assign(message, await this.normalizeInput(input, false, message));
+    this.assertTimeRange(message.starts_at, message.ends_at);
     return this.decorateAdmin(await this.messageRepository.save(message));
   }
 
@@ -188,13 +193,14 @@ export class PlayerMessageService {
     return { deleted: true };
   }
 
-  private async getVisibleForUser(uid: string, id: number) {
+  private async getVisibleForUser(uid: string, id: number, now: Date) {
     const message = await this.messageRepository.findOne({ where: { id } });
     if (
       !message ||
       message.delete_flag === true ||
       message.enabled !== true ||
-      !this.canRead(uid, message)
+      !this.canRead(uid, message) ||
+      !this.isActiveNow(message, now)
     ) {
       throw new Error("消息不存在");
     }
@@ -224,6 +230,12 @@ export class PlayerMessageService {
     }
     if (creating || input.rewards !== undefined) {
       next.rewards = await this.normalizeOptionalRewards(input.rewards);
+    }
+    if (creating || input.starts_at !== undefined) {
+      next.starts_at = this.parseOptionalDate(input.starts_at);
+    }
+    if (creating || input.ends_at !== undefined) {
+      next.ends_at = this.parseOptionalDate(input.ends_at);
     }
     if (creating || input.enabled !== undefined) {
       next.enabled =
@@ -311,6 +323,44 @@ export class PlayerMessageService {
     return text;
   }
 
+  private parseOptionalDate(value: unknown) {
+    if (value === undefined || value === null || value === "") {
+      return null;
+    }
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(date.getTime())) {
+      throw new Error("时间无效");
+    }
+    return date;
+  }
+
+  private assertTimeRange(start?: Date | null, end?: Date | null) {
+    if (start && end && start.getTime() > end.getTime()) {
+      throw new Error("结束时间需晚于开始时间");
+    }
+  }
+
+  private isActiveNow(item: PlayerMessage, now: Date) {
+    const current = now.getTime();
+    const start = this.getTimeValue(item.starts_at);
+    if (start !== null && start > current) {
+      return false;
+    }
+    const end = this.getTimeValue(item.ends_at);
+    if (end !== null && end < current) {
+      return false;
+    }
+    return true;
+  }
+
+  private getTimeValue(value?: Date | string | null) {
+    if (!value) {
+      return null;
+    }
+    const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
   private async resolveTargetUid(value: unknown) {
     const text = String(value || "").trim();
     if (!text) {
@@ -346,6 +396,8 @@ export class PlayerMessageService {
       claimed: Boolean(read?.claimed_at),
       hasReward: Boolean(rewards),
       rewards,
+      startsAt: item.starts_at?.toISOString?.() || item.starts_at || null,
+      endsAt: item.ends_at?.toISOString?.() || item.ends_at || null,
       createdAt: item.createdAt?.toISOString?.() || item.createdAt || null,
     };
   }

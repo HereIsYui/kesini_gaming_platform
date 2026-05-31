@@ -485,6 +485,8 @@ export const playerMessageFields: FieldConfig[] = [
     type: "boolean",
     defaultValue: true,
   },
+  { key: "starts_at", label: "开始时间", type: "datetime" },
+  { key: "ends_at", label: "结束时间", type: "datetime" },
   {
     key: "content",
     label: "内容",

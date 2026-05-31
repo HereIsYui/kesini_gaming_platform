@@ -27,6 +27,12 @@ export class PlayerMessage {
   @Column({ type: "json", nullable: true })
   rewards?: RedeemRewards | null;
 
+  @Column({ type: "datetime", nullable: true })
+  starts_at?: Date | null;
+
+  @Column({ type: "datetime", nullable: true })
+  ends_at?: Date | null;
+
   @Column({ default: true })
   enabled: boolean;
 
