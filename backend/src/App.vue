@@ -583,15 +583,22 @@
           :fields="rechargeConfigFields"
         />
 
-        <AdminTable
-          v-else-if="active === 'recharge-records'"
-          title="充值记录"
-          endpoint="/admin/recharge-records"
-          :fields="rechargeRecordFields"
-          detail-fetchable
-          keyword-param="uid"
-          search-placeholder="按账号查询"
-        />
+        <section v-else-if="active === 'recharge-records'" class="stack-page">
+          <RechargeStatsPanel
+            :stats="rechargeStats"
+            :loading="rechargeStatsLoading"
+            :error="rechargeStatsError"
+            @reload="loadRechargeStats"
+          />
+          <AdminTable
+            title="充值记录"
+            endpoint="/admin/recharge-records"
+            :fields="rechargeRecordFields"
+            detail-fetchable
+            keyword-param="uid"
+            search-placeholder="按账号查询"
+          />
+        </section>
 
         <GachaConfigPage
           v-else-if="active === 'gacha-config'"
@@ -759,6 +766,7 @@ import type {
   GachaConfigData,
   GachaPoolConfig,
   PoolGachaConfigDetail,
+  RechargeStatsResponse,
   SelectOption,
   SiteConfig,
 } from "./types";
@@ -778,6 +786,7 @@ import AdminTable from "./components/AdminTable.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import GachaConfigDialog from "./components/GachaConfigDialog.vue";
 import PityProgress from "./components/PityProgress.vue";
+import RechargeStatsPanel from "./components/RechargeStatsPanel.vue";
 
 type Theme = "light" | "dark";
 
@@ -804,6 +813,9 @@ const active = ref(readHashRoute().key);
 const dashboardData = ref<DashboardData | null>(null);
 const dashboardLoading = ref(false);
 const dashboardError = ref("");
+const rechargeStats = ref<RechargeStatsResponse | null>(null);
+const rechargeStatsLoading = ref(false);
+const rechargeStatsError = ref("");
 const togglingPoolId = ref<number | null>(null);
 const togglingCardId = ref<number | null>(null);
 const loadingPoolId = ref<number | null>(null);
@@ -1164,6 +1176,9 @@ async function loadAdmin() {
     if (active.value === "dashboard") {
       loadDashboard();
     }
+    if (active.value === "recharge-records") {
+      loadRechargeStats();
+    }
   } catch (err) {
     clearToken();
     token.value = "";
@@ -1183,6 +1198,20 @@ async function loadDashboard() {
     dashboardError.value = err instanceof Error ? err.message : "加载总览失败";
   } finally {
     dashboardLoading.value = false;
+  }
+}
+
+async function loadRechargeStats() {
+  rechargeStatsError.value = "";
+  rechargeStatsLoading.value = true;
+  try {
+    rechargeStats.value =
+      await request<RechargeStatsResponse>("/admin/recharge-stats");
+  } catch (err) {
+    rechargeStatsError.value =
+      err instanceof Error ? err.message : "加载统计失败";
+  } finally {
+    rechargeStatsLoading.value = false;
   }
 }
 
@@ -1276,6 +1305,7 @@ function logout() {
   token.value = "";
   admin.value = null;
   adminOptions.value = null;
+  rechargeStats.value = null;
 }
 
 function handleUserCommand(command: string | number | object) {
@@ -1513,6 +1543,9 @@ watch(
 watch(active, (next) => {
   if (next === "dashboard" && admin.value) {
     loadDashboard();
+  }
+  if (next === "recharge-records" && admin.value) {
+    loadRechargeStats();
   }
 });
 watch(

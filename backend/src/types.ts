@@ -249,6 +249,31 @@ export interface RechargeRecord {
   [key: string]: unknown;
 }
 
+export interface RechargeStatsMetric {
+  count: number;
+  amount: number;
+  fishpiCost: number;
+}
+
+export interface RechargeStatsResponse {
+  summary: {
+    total: RechargeStatsMetric;
+    today: RechargeStatsMetric;
+    last7Days: RechargeStatsMetric;
+    last30Days: RechargeStatsMetric;
+    pendingCount: number;
+    failedCount: number;
+    localFailedCount: number;
+  };
+  statusCounts: {
+    pending: number;
+    success: number;
+    failed: number;
+    local_failed: number;
+  };
+  daily: Array<RechargeStatsMetric & { date: string }>;
+}
+
 export type AchievementTargetType =
   | "total_draws"
   | "rarity_draws"

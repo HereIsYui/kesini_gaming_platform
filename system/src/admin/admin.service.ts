@@ -67,6 +67,12 @@ export interface PageQuery {
   keyword?: string;
 }
 
+interface RechargeStatsMetric {
+  count: number;
+  amount: number;
+  fishpiCost: number;
+}
+
 type UploadedCardMediaFile = {
   originalname?: string;
   mimetype?: string;
@@ -1389,6 +1395,50 @@ export class AdminService {
     return decorated;
   }
 
+  async getRechargeStats() {
+    const repository = this.mustRechargeRecordRepository();
+    const now = new Date();
+    const todayStart = this.getDayStart(now);
+    const weekStart = this.addDays(todayStart, -6);
+    const monthStart = this.addDays(todayStart, -29);
+
+    const [total, today, last7Days, last30Days, statusRows, recentRecords] =
+      await Promise.all([
+        this.getRechargeSuccessMetric(),
+        this.getRechargeSuccessMetric(todayStart),
+        this.getRechargeSuccessMetric(weekStart),
+        this.getRechargeSuccessMetric(monthStart),
+        repository
+          .createQueryBuilder("record")
+          .select("record.status", "status")
+          .addSelect("COUNT(record.id)", "count")
+          .groupBy("record.status")
+          .getRawMany(),
+        repository.find({
+          where: {
+            status: "success",
+            createdAt: Between(weekStart, now),
+          },
+          order: { createdAt: "ASC" } as FindOptionsOrder<RechargeRecord>,
+        }),
+      ]);
+    const statusCounts = this.normalizeRechargeStatusCounts(statusRows);
+
+    return {
+      summary: {
+        total,
+        today,
+        last7Days,
+        last30Days,
+        pendingCount: statusCounts.pending,
+        failedCount: statusCounts.failed,
+        localFailedCount: statusCounts.local_failed,
+      },
+      statusCounts,
+      daily: this.buildRechargeDailyStats(weekStart, recentRecords),
+    };
+  }
+
   async getLaunchActivityConfig() {
     const config = await this.ensureLaunchActivityConfig();
     return this.toLaunchActivityConfigView(config);
@@ -1890,6 +1940,91 @@ export class AdminService {
         record.third_party_response,
       ),
     };
+  }
+
+  private async getRechargeSuccessMetric(
+    start?: Date,
+  ): Promise<RechargeStatsMetric> {
+    const queryBuilder = this.mustRechargeRecordRepository()
+      .createQueryBuilder("record")
+      .select("COUNT(record.id)", "count")
+      .addSelect("COALESCE(SUM(record.amount), 0)", "amount")
+      .addSelect("COALESCE(SUM(record.fishpi_cost), 0)", "fishpiCost")
+      .where("record.status = :status", { status: "success" });
+    if (start) {
+      queryBuilder.andWhere("record.createdAt >= :start", { start });
+    }
+    return this.toRechargeMetric(await queryBuilder.getRawOne());
+  }
+
+  private normalizeRechargeStatusCounts(rows: Array<Record<string, unknown>>) {
+    const counts: Record<RechargeRecordStatus, number> = {
+      pending: 0,
+      success: 0,
+      failed: 0,
+      local_failed: 0,
+    };
+    rows.forEach((row) => {
+      const status = String(row.status || "") as RechargeRecordStatus;
+      if (RECHARGE_STATUSES.includes(status)) {
+        counts[status] = Number(row.count || 0);
+      }
+    });
+    return counts;
+  }
+
+  private buildRechargeDailyStats(start: Date, records: RechargeRecord[]) {
+    const dailyMap = new Map<string, RechargeStatsMetric>();
+    for (let index = 0; index < 7; index += 1) {
+      dailyMap.set(this.getDateKey(this.addDays(start, index)), {
+        count: 0,
+        amount: 0,
+        fishpiCost: 0,
+      });
+    }
+    records.forEach((record) => {
+      const key = this.getDateKey(new Date(record.createdAt));
+      const metric = dailyMap.get(key);
+      if (!metric) {
+        return;
+      }
+      metric.count += 1;
+      metric.amount += Number(record.amount || 0);
+      metric.fishpiCost += Number(record.fishpi_cost || 0);
+    });
+    return Array.from(dailyMap.entries()).map(([date, metric]) => ({
+      date,
+      ...metric,
+    }));
+  }
+
+  private toRechargeMetric(
+    raw?: Record<string, unknown> | null,
+  ): RechargeStatsMetric {
+    return {
+      count: Number(raw?.count || 0),
+      amount: Number(raw?.amount || 0),
+      fishpiCost: Number(raw?.fishpiCost || raw?.fishpi_cost || 0),
+    };
+  }
+
+  private getDayStart(date: Date) {
+    const next = new Date(date);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+
+  private addDays(date: Date, days: number) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+  }
+
+  private getDateKey(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
   private async ensureTradeConfig() {

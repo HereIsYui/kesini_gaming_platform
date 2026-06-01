@@ -1848,6 +1848,14 @@ export class AdminController {
     );
   }
 
+  @Get("recharge-stats")
+  async getRechargeStats(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getRechargeStats(),
+      "获取充值统计成功",
+    );
+  }
+
   @Get("config/gacha")
   async getGachaConfig(): Promise<ResponseDto<any>> {
     return ResponseDto.success(

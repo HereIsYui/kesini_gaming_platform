@@ -940,7 +940,9 @@ body {
 .dashboard-page,
 .dashboard-main,
 .side-stack,
-.activity-list {
+.activity-list,
+.stack-page,
+.recharge-stats-panel {
   display: grid;
   gap: 16px;
 }
@@ -974,6 +976,58 @@ body {
 
 .stat-card strong {
   font-size: 26px;
+}
+
+.recharge-stats-title {
+  margin-bottom: 2px;
+}
+
+.recharge-stat-grid {
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+}
+
+.recharge-stats-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(360px, 1.3fr);
+  gap: 16px;
+}
+
+.recharge-mini-panel {
+  min-width: 0;
+}
+
+.recharge-trend-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.recharge-trend-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 10px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.recharge-trend-row strong {
+  color: var(--admin-text);
+  text-align: right;
+}
+
+.recharge-trend-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--admin-bg);
+}
+
+.recharge-trend-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--el-color-primary), var(--el-color-success));
 }
 
 .plain-card {
@@ -1116,11 +1170,13 @@ body {
   }
 
   .dashboard-grid,
+  .recharge-stats-grid,
   .config-summary-grid {
     grid-template-columns: 1fr;
   }
 
-  .stat-grid {
+  .stat-grid,
+  .recharge-stat-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -1159,7 +1215,8 @@ body {
   .config-form,
   .probability-grid,
   .reward-row,
-  .stat-grid {
+  .stat-grid,
+  .recharge-stat-grid {
     grid-template-columns: 1fr;
   }
 

@@ -15,7 +15,11 @@ function createRepository(overrides: Record<string, any> = {}) {
     createQueryBuilder: jest.fn(() => ({
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
       getRawOne: jest.fn().mockResolvedValue({ total: 0 }),
+      getRawMany: jest.fn().mockResolvedValue([]),
     })),
     ...overrides,
   };
@@ -1303,6 +1307,78 @@ describe("AdminService", () => {
     await expect(
       service.updateRechargeConfig({ min_amount: null } as any),
     ).rejects.toThrow("最低充值金额必须为正整数");
+  });
+
+  it("充值统计会汇总金额状态和近7日", async () => {
+    const makeMetricBuilder = (raw: Record<string, string>) => ({
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawOne: jest.fn().mockResolvedValue(raw),
+    });
+    const statusBuilder = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { status: "success", count: "5" },
+        { status: "pending", count: "1" },
+        { status: "failed", count: "2" },
+        { status: "local_failed", count: "1" },
+      ]),
+    };
+    const rechargeRecordRepository = createRepository({
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValueOnce(
+          makeMetricBuilder({ count: "5", amount: "500", fishpiCost: "250" }),
+        )
+        .mockReturnValueOnce(
+          makeMetricBuilder({ count: "1", amount: "100", fishpiCost: "50" }),
+        )
+        .mockReturnValueOnce(
+          makeMetricBuilder({ count: "3", amount: "300", fishpiCost: "150" }),
+        )
+        .mockReturnValueOnce(
+          makeMetricBuilder({ count: "4", amount: "400", fishpiCost: "200" }),
+        )
+        .mockReturnValueOnce(statusBuilder),
+      find: jest.fn().mockResolvedValue([
+        {
+          status: "success",
+          amount: 30,
+          fishpi_cost: 15,
+          createdAt: new Date(),
+        },
+        {
+          status: "success",
+          amount: 50,
+          fishpi_cost: 25,
+          createdAt: new Date(),
+        },
+      ]),
+    });
+    const service = createService({ rechargeRecord: rechargeRecordRepository });
+
+    const result = await service.getRechargeStats();
+
+    expect(result.summary.total).toEqual({
+      count: 5,
+      amount: 500,
+      fishpiCost: 250,
+    });
+    expect(result.summary.last7Days.amount).toBe(300);
+    expect(result.statusCounts).toEqual({
+      pending: 1,
+      success: 5,
+      failed: 2,
+      local_failed: 1,
+    });
+    expect(result.daily).toHaveLength(7);
+    expect(
+      result.daily.some((item) => item.count === 2 && item.amount === 80),
+    ).toBe(true);
   });
 
   it("获取分解配置会返回默认规则", async () => {
