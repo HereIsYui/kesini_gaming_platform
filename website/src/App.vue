@@ -32,16 +32,7 @@ import {
   UsersRound,
   WandSparkles,
 } from "@lucide/vue";
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  provide,
-  reactive,
-  ref,
-  watch,
-} from "vue";
+import { computed, onMounted, provide, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AchievementToastStack from "./components/common/AchievementToastStack.vue";
@@ -155,6 +146,9 @@ import type {
   UserProfile,
 } from "./types";
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
+import { useFeedback } from "./composables/useFeedback";
+import { useModalStack } from "./composables/useModalStack";
+import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import {
   cardMediaUrl,
   hasCardMedia,
@@ -275,14 +269,6 @@ const leaderboardTabs: Array<{
   },
 ];
 
-type FeedbackType = "success" | "error" | "info";
-type DrawPhase = "idle" | "charging" | "burst";
-type ThemeMode = "dark" | "light";
-type MotionMode = "full" | "reduced";
-type PlayerPreferences = {
-  motionMode: MotionMode;
-  achievementNotices: boolean;
-};
 type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
@@ -291,6 +277,7 @@ type PoolCatalogCard = {
   card: CardItem;
   rarities: CardRarity[];
 };
+type DrawPhase = "idle" | "charging" | "burst";
 type CardDetailRow = {
   label: string;
   value: string;
@@ -386,26 +373,27 @@ type CardStateRefreshOptions = {
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
 const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
-const THEME_KEY = "kesini_website_theme";
-const PLAYER_PREFS_KEY = "kesini_player_preferences";
 const NEW_CARD_SEEN_KEY = "kesini_new_card_seen";
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
-  motionMode: "full",
-  achievementNotices: true,
-};
 const BAG_PAGE_SIZE = 24;
 
 const route = useRoute();
-const themeMode = ref<ThemeMode>(getStoredThemeMode());
-const playerPrefs = ref<PlayerPreferences>(getStoredPlayerPreferences());
+const feedbackState = useFeedback();
+const feedback = feedbackState.feedback;
+const notify = feedbackState.notify;
+const playerPreferences = usePlayerPreferences({
+  onAchievementNoticesDisabled: () => clearAchievementToasts(),
+  onReset: () => notify("success", "设置已恢复"),
+});
+const themeMode = playerPreferences.themeMode;
+const playerPrefs = playerPreferences.playerPrefs;
+const achievementNoticesEnabled = playerPreferences.achievementNoticesEnabled;
+const motionModeLabel = playerPreferences.motionModeLabel;
+const achievementNoticeLabel = playerPreferences.achievementNoticeLabel;
+const toggleThemeMode = playerPreferences.toggleThemeMode;
+const setThemeMode = playerPreferences.setThemeMode;
+const setMotionMode = playerPreferences.setMotionMode;
+const setAchievementNotices = playerPreferences.setAchievementNotices;
+const resetPlayerPreferences = playerPreferences.resetPlayerPreferences;
 const userMenuOpen = ref(false);
 const userMenuHoverPaused = ref(false);
 const manualToken = ref("");
@@ -547,15 +535,12 @@ const redeemCode = ref("");
 const rechargeModalOpen = ref(false);
 const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
-const feedback = ref<{ type: FeedbackType; text: string } | null>(null);
 const achievementToasts = ref<AchievementNotification[]>([]);
 const achievementToastQueue = ref<AchievementNotification[]>([]);
 const callbackBusy = ref(false);
 const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
-let pageScrollSnapshot: { body: string; html: string } | null = null;
-let modalReturnFocusTarget: HTMLElement | null = null;
 
 const busy = reactive({
   public: false,
@@ -609,19 +594,9 @@ function isEnabledFlag(value: unknown): boolean {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-let feedbackTimer: number | undefined;
 const achievementToastTimers = new Map<number, number>();
 
 const isAuthed = computed(() => Boolean(token.value));
-const achievementNoticesEnabled = computed(
-  () => playerPrefs.value.achievementNotices,
-);
-const motionModeLabel = computed(() =>
-  playerPrefs.value.motionMode === "reduced" ? "减少" : "完整",
-);
-const achievementNoticeLabel = computed(() =>
-  achievementNoticesEnabled.value ? "开启" : "关闭",
-);
 const activeSection = computed<SectionKey>(() => {
   if (route.name === "publicProfile") {
     return "profile";
@@ -822,24 +797,6 @@ const guildRoleLabel = computed(() =>
   currentGuild.value?.role === "leader" ? "会长" : "成员",
 );
 const guildMessageRows = computed(() => guildMessages.value);
-const modalOverlayOpen = computed(() =>
-  Boolean(
-    confirmDialogTarget.value ||
-      shareTextTarget.value ||
-      cardIntroTarget.value ||
-      recycleTarget.value ||
-      upgradeTarget.value ||
-      listingTarget.value ||
-      formationPickerOpen.value ||
-      profilePickerOpen.value ||
-      resultModalOpen.value ||
-      rechargeModalOpen.value ||
-      launchActivityModalOpen.value ||
-      drawHistoryOpen.value ||
-      poolDetailOpen.value ||
-      announcementModalOpen.value,
-  ),
-);
 const modalFocusKey = computed(() => {
   if (confirmDialogTarget.value) {
     return "confirm";
@@ -1364,181 +1321,6 @@ const unreadAnnouncementCount = computed(
       .length,
 );
 
-function getStoredThemeMode(): ThemeMode {
-  const stored = localStorage.getItem(THEME_KEY);
-  return stored === "light" ? "light" : "dark";
-}
-
-function getStoredPlayerPreferences(): PlayerPreferences {
-  const raw = localStorage.getItem(PLAYER_PREFS_KEY);
-  if (!raw) {
-    return { ...DEFAULT_PLAYER_PREFS };
-  }
-  try {
-    const value = JSON.parse(raw) as Partial<PlayerPreferences>;
-    return {
-      motionMode:
-        value.motionMode === "reduced" || value.motionMode === "full"
-          ? value.motionMode
-          : DEFAULT_PLAYER_PREFS.motionMode,
-      achievementNotices:
-        typeof value.achievementNotices === "boolean"
-          ? value.achievementNotices
-          : DEFAULT_PLAYER_PREFS.achievementNotices,
-    };
-  } catch {
-    localStorage.removeItem(PLAYER_PREFS_KEY);
-    return { ...DEFAULT_PLAYER_PREFS };
-  }
-}
-
-function toggleThemeMode() {
-  themeMode.value = themeMode.value === "dark" ? "light" : "dark";
-}
-
-function setThemeMode(mode: ThemeMode) {
-  themeMode.value = mode;
-}
-
-function setMotionMode(mode: MotionMode) {
-  playerPrefs.value = { ...playerPrefs.value, motionMode: mode };
-}
-
-function setAchievementNotices(enabled: boolean) {
-  playerPrefs.value = { ...playerPrefs.value, achievementNotices: enabled };
-  if (!enabled) {
-    clearAchievementToasts();
-  }
-}
-
-function resetPlayerPreferences() {
-  playerPrefs.value = { ...DEFAULT_PLAYER_PREFS };
-  notify("success", "设置已恢复");
-}
-
-function setPageScrollLocked(locked: boolean) {
-  if (locked) {
-    if (pageScrollSnapshot) {
-      return;
-    }
-    pageScrollSnapshot = {
-      body: document.body.style.overflow,
-      html: document.documentElement.style.overflow,
-    };
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return;
-  }
-  if (!pageScrollSnapshot) {
-    return;
-  }
-  document.body.style.overflow = pageScrollSnapshot.body;
-  document.documentElement.style.overflow = pageScrollSnapshot.html;
-  pageScrollSnapshot = null;
-}
-
-function getTopModalElement() {
-  const selectorByKey: Record<string, string> = {
-    confirm: ".confirm-modal",
-    share: ".share-text-modal",
-    card: ".card-intro-modal",
-    recycle: ".recycle-modal",
-    upgrade: ".upgrade-modal",
-    listing: ".trade-create-modal",
-    formation: ".formation-picker-modal",
-    profile: ".profile-picker-modal",
-    result: ".draw-result-modal",
-    recharge: ".recharge-modal",
-    launch: ".launch-activity-modal",
-    history: ".draw-history-modal",
-    pool: ".pool-detail-modal",
-    announcement: ".announcement-modal",
-  };
-  const selector = selectorByKey[modalFocusKey.value];
-  return selector
-    ? (document.querySelector(selector) as HTMLElement | null)
-    : null;
-}
-
-function isFocusableElement(element: Element): element is HTMLElement {
-  if (!(element instanceof HTMLElement)) {
-    return false;
-  }
-  if (element.getAttribute("aria-hidden") === "true") {
-    return false;
-  }
-  return element.getClientRects().length > 0;
-}
-
-function getModalFocusableElements(container: HTMLElement) {
-  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
-    isFocusableElement,
-  );
-}
-
-function rememberModalReturnFocus(container: HTMLElement) {
-  const activeElement = document.activeElement;
-  if (
-    !modalReturnFocusTarget &&
-    activeElement instanceof HTMLElement &&
-    !container.contains(activeElement)
-  ) {
-    modalReturnFocusTarget = activeElement;
-  }
-}
-
-function focusTopModal() {
-  const modal = getTopModalElement();
-  if (!modal) {
-    return;
-  }
-  rememberModalReturnFocus(modal);
-  const focusable = getModalFocusableElements(modal);
-  const target = focusable[0] || modal;
-  if (!modal.hasAttribute("tabindex")) {
-    modal.tabIndex = -1;
-  }
-  target.focus({ preventScroll: true });
-}
-
-function restoreModalReturnFocus() {
-  const target = modalReturnFocusTarget;
-  modalReturnFocusTarget = null;
-  if (!target || !document.contains(target)) {
-    return;
-  }
-  target.focus({ preventScroll: true });
-}
-
-function trapModalFocus(event: KeyboardEvent) {
-  const modal = getTopModalElement();
-  if (!modal) {
-    return;
-  }
-  const focusable = getModalFocusableElements(modal);
-  if (focusable.length === 0) {
-    event.preventDefault();
-    modal.focus({ preventScroll: true });
-    return;
-  }
-  const activeElement = document.activeElement;
-  const activeIndex =
-    activeElement instanceof HTMLElement
-      ? focusable.indexOf(activeElement)
-      : -1;
-  if (event.shiftKey) {
-    if (activeIndex <= 0) {
-      event.preventDefault();
-      focusable[focusable.length - 1].focus({ preventScroll: true });
-    }
-    return;
-  }
-  if (activeIndex === -1 || activeIndex >= focusable.length - 1) {
-    event.preventDefault();
-    focusable[0].focus({ preventScroll: true });
-  }
-}
-
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1599,21 +1381,13 @@ function closeTopOverlay() {
   return false;
 }
 
-function handleGlobalKeydown(event: KeyboardEvent) {
-  if (event.key === "Tab" && modalFocusKey.value) {
-    trapModalFocus(event);
-    return;
-  }
-  if (event.key !== "Escape") {
-    return;
-  }
-  if (closeTopOverlay()) {
-    event.preventDefault();
-  }
-}
+const modalStack = useModalStack({
+  modalFocusKey,
+  closeTopOverlay,
+});
+const modalOverlayOpen = modalStack.modalOverlayOpen;
 
 onMounted(async () => {
-  window.addEventListener("keydown", handleGlobalKeydown);
   await handleOpenIdCallback();
   await loadSiteConfig();
   await loadPublicData();
@@ -1623,42 +1397,6 @@ onMounted(async () => {
   if (activeSection.value === "profile") {
     await loadPlayerProfile();
   }
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("keydown", handleGlobalKeydown);
-  setPageScrollLocked(false);
-});
-
-watch(
-  themeMode,
-  (mode) => {
-    document.documentElement.dataset.theme = mode;
-    localStorage.setItem(THEME_KEY, mode);
-  },
-  { immediate: true },
-);
-
-watch(
-  playerPrefs,
-  (prefs) => {
-    document.documentElement.dataset.motion = prefs.motionMode;
-    localStorage.setItem(PLAYER_PREFS_KEY, JSON.stringify(prefs));
-  },
-  { immediate: true, deep: true },
-);
-
-watch(modalOverlayOpen, (open) => {
-  setPageScrollLocked(open);
-});
-
-watch(modalFocusKey, async (key) => {
-  if (!key) {
-    restoreModalReturnFocus();
-    return;
-  }
-  await nextTick();
-  focusTopModal();
 });
 
 watch(activePoolId, async (poolId) => {
@@ -1723,14 +1461,6 @@ watch(
     }
   },
 );
-
-function notify(type: FeedbackType, text: string) {
-  feedback.value = { type, text };
-  window.clearTimeout(feedbackTimer);
-  feedbackTimer = window.setTimeout(() => {
-    feedback.value = null;
-  }, 4200);
-}
 
 function publicPlayerName(
   name?: string | null,
@@ -5127,15 +4857,23 @@ const appContext = {
   DRAW_RESULTS_KEY,
   ANNOUNCEMENT_READ_KEY,
   ANNOUNCEMENT_CLOSED_KEY,
-  THEME_KEY,
-  PLAYER_PREFS_KEY,
   NEW_CARD_SEEN_KEY,
-  FOCUSABLE_SELECTOR,
-  DEFAULT_PLAYER_PREFS,
   BAG_PAGE_SIZE,
   route,
+  feedbackState,
+  feedback,
+  notify,
+  playerPreferences,
   themeMode,
   playerPrefs,
+  achievementNoticesEnabled,
+  motionModeLabel,
+  achievementNoticeLabel,
+  toggleThemeMode,
+  setThemeMode,
+  setMotionMode,
+  setAchievementNotices,
+  resetPlayerPreferences,
   userMenuOpen,
   userMenuHoverPaused,
   manualToken,
@@ -5251,23 +4989,16 @@ const appContext = {
   rechargeModalOpen,
   rechargeAmount,
   exchangeCounts,
-  feedback,
   achievementToasts,
   achievementToastQueue,
   callbackBusy,
   resultModalOpen,
   drawPhase,
   confirmDialogResolve,
-  pageScrollSnapshot,
-  modalReturnFocusTarget,
   busy,
   isEnabledFlag,
-  feedbackTimer,
   achievementToastTimers,
   isAuthed,
-  achievementNoticesEnabled,
-  motionModeLabel,
-  achievementNoticeLabel,
   activeSection,
   isPublicProfileRoute,
   profileRouteId,
@@ -5303,7 +5034,6 @@ const appContext = {
   guildRows,
   guildRoleLabel,
   guildMessageRows,
-  modalOverlayOpen,
   modalFocusKey,
   toggleUserMenu,
   closeUserMenu,
@@ -5393,24 +5123,9 @@ const appContext = {
   activeAnnouncements,
   visibleAnnouncements,
   unreadAnnouncementCount,
-  getStoredThemeMode,
-  getStoredPlayerPreferences,
-  toggleThemeMode,
-  setThemeMode,
-  setMotionMode,
-  setAchievementNotices,
-  resetPlayerPreferences,
-  setPageScrollLocked,
-  getTopModalElement,
-  isFocusableElement,
-  getModalFocusableElements,
-  rememberModalReturnFocus,
-  focusTopModal,
-  restoreModalReturnFocus,
-  trapModalFocus,
   closeTopOverlay,
-  handleGlobalKeydown,
-  notify,
+  modalStack,
+  modalOverlayOpen,
   publicPlayerName,
   publicProfileParam,
   publicProfileRoute,
