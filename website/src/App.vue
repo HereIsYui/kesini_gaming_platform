@@ -37,15 +37,17 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  provide,
   reactive,
   ref,
   watch,
 } from "vue";
 import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import AchievementToastStack from "./components/common/AchievementToastStack.vue";
+import FeedbackToast from "./components/common/FeedbackToast.vue";
 import {
   clearToken,
-  getApiBase,
   getStoredUser,
   getToken,
   request,
@@ -135,15 +137,46 @@ import type {
   UserGachaStats,
   UserProfile,
 } from "./types";
-
-const rarityOrder: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
-const rarityRank: Record<string, number> = {
-  N: 1,
-  R: 2,
-  SR: 3,
-  SSR: 4,
-  UR: 5,
-};
+import { APP_CONTEXT_KEY } from "./composables/useAppContext";
+import {
+  cardMediaUrl,
+  hasCardMedia,
+  hideBrokenCardMedia,
+  isCardVideo,
+} from "./utils/cardMedia";
+import {
+  cardTypeLabel,
+  formatCosts,
+  formatDate,
+  formatFragmentSummary,
+  formatPercent,
+  formatRewards,
+  itemTypeLabel,
+  poolTypeLabel,
+  tradeRoleLabel,
+  tradeStatusLabel,
+} from "./utils/format";
+import {
+  isRecentCardTime,
+  newCardSeenKey,
+  type NewCardMarkerTarget,
+} from "./utils/newCard";
+import {
+  normalizeRarity,
+  parseCardRarities,
+  rarityClass,
+  rarityOrder,
+  rarityRank,
+  requiredFragmentsForRarity,
+  strongestRarityClass,
+  synthesisCostLabel,
+} from "./utils/rarity";
+import {
+  getStoredNumberSet,
+  getStoredStringSet,
+  persistNumberSet,
+  persistStringSet,
+} from "./utils/storage";
 
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
@@ -351,8 +384,6 @@ const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   motionMode: "full",
   achievementNotices: true,
 };
-const NEW_CARD_WINDOW_MS = 48 * 60 * 60 * 1000;
-const NEW_CARD_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BAG_PAGE_SIZE = 24;
 
 const route = useRoute();
@@ -1315,56 +1346,6 @@ const unreadAnnouncementCount = computed(
     announcements.value.filter((item) => !announcementReadIds.value.has(item.id))
       .length,
 );
-
-function getStoredNumberSet(key: string) {
-  const raw = localStorage.getItem(key);
-  if (!raw) {
-    return new Set<number>();
-  }
-  try {
-    const value = JSON.parse(raw);
-    if (!Array.isArray(value)) {
-      return new Set<number>();
-    }
-    return new Set(
-      value
-        .map((item) => Number(item))
-        .filter((item) => Number.isInteger(item) && item > 0),
-    );
-  } catch {
-    localStorage.removeItem(key);
-    return new Set<number>();
-  }
-}
-
-function persistNumberSet(key: string, value: Set<number>) {
-  localStorage.setItem(key, JSON.stringify([...value]));
-}
-
-function getStoredStringSet(key: string) {
-  const raw = localStorage.getItem(key);
-  if (!raw) {
-    return new Set<string>();
-  }
-  try {
-    const value = JSON.parse(raw);
-    if (!Array.isArray(value)) {
-      return new Set<string>();
-    }
-    return new Set(
-      value
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    );
-  } catch {
-    localStorage.removeItem(key);
-    return new Set<string>();
-  }
-}
-
-function persistStringSet(key: string, value: Set<string>) {
-  localStorage.setItem(key, JSON.stringify([...value]));
-}
 
 function getStoredThemeMode(): ThemeMode {
   const stored = localStorage.getItem(THEME_KEY);
@@ -4157,33 +4138,6 @@ async function handleCardDetailAction(action: CardDetailAction) {
   }
 }
 
-function cardMediaUrl(value?: string | null) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
-  }
-  if (/^(https?:|data:|blob:)/i.test(raw)) {
-    return raw;
-  }
-  return `${getApiBase()}${raw.startsWith("/") ? raw : `/${raw}`}`;
-}
-
-function isCardVideo(value?: string | null) {
-  return /\.(mp4|webm)(?:[?#]|$)/i.test(String(value || "").trim());
-}
-
-function hasCardMedia(value?: string | null) {
-  return Boolean(cardMediaUrl(value));
-}
-
-function hideBrokenCardMedia(event: Event) {
-  const media = event.target as HTMLImageElement | HTMLVideoElement | null;
-  if (media) {
-    media.hidden = true;
-    media.closest(".card-media-frame")?.classList.remove("has-media");
-  }
-}
-
 function getPoolName(poolId?: number | null) {
   return (
     pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || ""
@@ -4964,105 +4918,6 @@ function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
   }
 }
 
-function normalizeRarity(value?: string): CardRarity {
-  return rarityOrder.includes(value as CardRarity)
-    ? (value as CardRarity)
-    : "N";
-}
-
-function rarityClass(value?: string) {
-  return `rarity-${normalizeRarity(value).toLowerCase()}`;
-}
-
-function parseCardRarities(levels?: string): CardRarity[] {
-  return String(levels || "N")
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item): item is CardRarity =>
-      rarityOrder.includes(item as CardRarity),
-    );
-}
-
-function strongestRarityClass(rarities: CardRarity[] = []) {
-  const strongest = [...rarities].sort(
-    (a, b) => (rarityRank[b] || 0) - (rarityRank[a] || 0),
-  )[0];
-  return rarityClass(strongest);
-}
-
-function synthesisCostLabel(rarity?: string) {
-  const normalized = normalizeRarity(rarity);
-  const cost = requiredFragmentsForRarity(normalized);
-  return normalized === "UR" ? "UR 不可合成" : `${cost} 碎片`;
-}
-
-function requiredFragmentsForRarity(rarity?: string) {
-  const normalized = normalizeRarity(rarity);
-  const costs: Record<string, number> = {
-    N: 80,
-    R: 160,
-    SR: 320,
-    SSR: 1000,
-    UR: 0,
-  };
-  return costs[normalized] || 0;
-}
-
-function poolTypeLabel(type?: number) {
-  return ["常驻", "活动", "限定"][Number(type || 0)] || "卡池";
-}
-
-function cardTypeLabel(type?: number) {
-  return ["普通", "限定", "纪念", "活动", "隐藏"][Number(type || 0)] || "卡片";
-}
-
-function itemTypeLabel(type?: number) {
-  return (
-    ["卡片碎片", "虚拟星穹币", "普通道具", "其他"][Number(type || 0)] || "物品"
-  );
-}
-
-function tradeStatusLabel(status?: string) {
-  const labels: Record<string, string> = {
-    active: "交易中",
-    sold: "已成交",
-    cancelled: "已取消",
-  };
-  return labels[String(status || "")] || "未知";
-}
-
-function tradeRoleLabel(role?: string) {
-  return role === "seller" ? "卖出" : "买入";
-}
-
-function formatPercent(value?: number) {
-  return `${(Number(value || 0) * 100).toFixed(2)}%`;
-}
-
-function formatDate(value?: string | null) {
-  if (!value) {
-    return "不限";
-  }
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-type NewCardMarkerTarget = {
-  uuid?: string | null;
-  userCardUuid?: string | null;
-  cardId?: number | string | null;
-  cardName?: string | null;
-  cardLevel?: string | null;
-  rarity?: string | null;
-  poolId?: number | string | null;
-  obtainedAt?: string | null;
-  latestObtainedAt?: string | null;
-};
-
 function isNewCard(
   card?: NewCardMarkerTarget,
   options: { ignoreSeen?: boolean } = {},
@@ -5074,39 +4929,6 @@ function isNewCard(
   return Boolean(options.ignoreSeen || !key || !newCardSeenKeys.value.has(key));
 }
 
-function isRecentCardTime(value?: string | null) {
-  if (!value) {
-    return false;
-  }
-  const time = new Date(value).getTime();
-  if (Number.isNaN(time)) {
-    return false;
-  }
-  const age = Date.now() - time;
-  return age >= -NEW_CARD_FUTURE_TOLERANCE_MS && age <= NEW_CARD_WINDOW_MS;
-}
-
-function newCardSeenKey(card?: NewCardMarkerTarget) {
-  if (!card) {
-    return "";
-  }
-  const uuid = String(card.uuid || card.userCardUuid || "").trim();
-  if (uuid) {
-    return `uuid:${uuid}`;
-  }
-  const obtainedAt = String(card.latestObtainedAt || card.obtainedAt || "").trim();
-  if (!obtainedAt) {
-    return "";
-  }
-  return [
-    "group",
-    card.poolId || "",
-    card.cardId || card.cardName || "",
-    card.cardLevel || card.rarity || "",
-    obtainedAt,
-  ].join(":");
-}
-
 function markNewCardSeen(card?: NewCardMarkerTarget) {
   const key = newCardSeenKey(card);
   if (!key || newCardSeenKeys.value.has(key)) {
@@ -5116,34 +4938,6 @@ function markNewCardSeen(card?: NewCardMarkerTarget) {
   next.add(key);
   newCardSeenKeys.value = next;
   persistStringSet(NEW_CARD_SEEN_KEY, next);
-}
-
-function formatRewards(rewards?: {
-  points?: number;
-  items?: Array<{ itemName?: string; itemId: number; num: number }>;
-  cards?: Array<{
-    cardName?: string;
-    cardId: number;
-    rarity: string;
-    num: number;
-  }>;
-}) {
-  if (!rewards) {
-    return "无奖励";
-  }
-  const parts = [];
-  if (Number(rewards.points || 0) > 0) {
-    parts.push(`${rewards.points} 星穹币`);
-  }
-  rewards.items?.forEach((item) => {
-    parts.push(`${item.itemName || `物品 ${item.itemId}`} x${item.num}`);
-  });
-  rewards.cards?.forEach((card) => {
-    parts.push(
-      `${card.cardName || `卡片 ${card.cardId}`} ${card.rarity} x${card.num}`,
-    );
-  });
-  return parts.length > 0 ? parts.join("，") : "无奖励";
 }
 
 function pvePowerPercent(stage: PveStage) {
@@ -5234,28 +5028,6 @@ function achievementScopeLabel(achievement: AchievementRecord) {
   return parts.length > 0 ? parts.join(" · ") : achievement.targetLabel;
 }
 
-function formatFragmentSummary(
-  fragments?: Array<{ itemName?: string; itemId: number; count: number }>,
-) {
-  if (!fragments || fragments.length === 0) {
-    return "无碎片";
-  }
-  return fragments
-    .map((item) => `${item.itemName || `物品 ${item.itemId}`} x${item.count}`)
-    .join("，");
-}
-
-function formatCosts(
-  costs?: Array<{ itemName?: string; itemId: number; num: number }>,
-) {
-  if (!costs || costs.length === 0) {
-    return "无消耗";
-  }
-  return costs
-    .map((item) => `${item.itemName || `物品 ${item.itemId}`} x${item.num}`)
-    .join("，");
-}
-
 function leaderboardInitial(entry: LeaderboardEntry) {
   return publicPlayerName(entry.nickname, entry.uid).slice(0, 1).toUpperCase();
 }
@@ -5267,6 +5039,533 @@ function formatLeaderboardValue(value?: number) {
 function leaderboardRankLabel(rank?: number) {
   return rank ? `#${rank}` : "未上榜";
 }
+const appContext = {
+  Boxes,
+  CalendarCheck,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Gift,
+  History,
+  ListChecks,
+  Lock,
+  LoaderCircle,
+  LogIn,
+  LogOut,
+  Mail,
+  Moon,
+  Package,
+  Recycle,
+  RefreshCw,
+  Settings,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+  Store,
+  Sun,
+  Swords,
+  Ticket,
+  Trophy,
+  Unlock,
+  UserRound,
+  UsersRound,
+  WandSparkles,
+  RouterLink,
+  sectionItems,
+  sectionItemMap,
+  primaryNavSectionKeys,
+  primaryNavItems,
+  accountMenuSectionKeys,
+  accountMenuItems,
+  leaderboardTabs,
+  DRAW_RESULTS_KEY,
+  ANNOUNCEMENT_READ_KEY,
+  ANNOUNCEMENT_CLOSED_KEY,
+  THEME_KEY,
+  PLAYER_PREFS_KEY,
+  NEW_CARD_SEEN_KEY,
+  FOCUSABLE_SELECTOR,
+  DEFAULT_PLAYER_PREFS,
+  BAG_PAGE_SIZE,
+  route,
+  themeMode,
+  playerPrefs,
+  userMenuOpen,
+  userMenuHoverPaused,
+  manualToken,
+  manualLoginEnabled,
+  token,
+  currentUser,
+  siteConfig,
+  announcements,
+  announcementReadIds,
+  announcementClosedIds,
+  newCardSeenKeys,
+  announcementModalOpen,
+  selectedAnnouncement,
+  pools,
+  activePoolId,
+  poolCards,
+  catalogItems,
+  catalogError,
+  poolDetailOpen,
+  poolDetailLoading,
+  poolDetailError,
+  poolDetailPool,
+  poolDetailCards,
+  stats,
+  fishpiPoint,
+  fishpiPointError,
+  drawHistory,
+  drawHistoryOpen,
+  drawHistoryPage,
+  userCards,
+  playerProfile,
+  profileCandidates,
+  profilePickerOpen,
+  profileSelectedUuids,
+  friendsOverview,
+  friendsError,
+  friendFeed,
+  friendFeedError,
+  friendActionBusy,
+  playerMessages,
+  playerMessagesError,
+  messageClaimBusy,
+  guildOverview,
+  guildError,
+  guildMessages,
+  guildMessageError,
+  guildMessageText,
+  guildName,
+  guildDescription,
+  guildActionBusy,
+  formation,
+  formationCandidates,
+  formationPickerOpen,
+  formationEditingPosition,
+  pveOverview,
+  pveRecords,
+  pveRecordPage,
+  pveRecordTotalPages,
+  rechargeConfig,
+  launchActivity,
+  dailySignIn,
+  tasksOverview,
+  taskScope,
+  seasonOverview,
+  launchActivityModalOpen,
+  launchActivityDismissedKey,
+  leaderboard,
+  leaderboardError,
+  activeLeaderboardMetric,
+  pointRecords,
+  achievements,
+  achievementStatusFilter,
+  achievementCategoryFilter,
+  achievementKeyword,
+  pointRecordPage,
+  pointRecordTypeFilter,
+  pointRecordSourceFilter,
+  pointRecordTotalPages,
+  exchangeItems,
+  seasonShopCounts,
+  tradeListings,
+  myTradeListings,
+  tradeRecords,
+  tradeConfig,
+  shopRecycleConfig,
+  lastResults,
+  rarityFilter,
+  poolFilter,
+  bagNewOnly,
+  synthesisRarityFilter,
+  bulkDecomposeRarities,
+  bulkDecomposePreview,
+  cardPage,
+  tradePage,
+  myTradePage,
+  tradeRecordPage,
+  tradeTab,
+  tradeRarityFilter,
+  tradePoolFilter,
+  tradeSort,
+  tradeMinPrice,
+  tradeMaxPrice,
+  listingTarget,
+  recycleTarget,
+  upgradeTarget,
+  upgradePreview,
+  cardIntroTarget,
+  shareTextTarget,
+  confirmDialogTarget,
+  listingPrice,
+  recycleCount,
+  redeemCode,
+  rechargeModalOpen,
+  rechargeAmount,
+  exchangeCounts,
+  feedback,
+  achievementToasts,
+  achievementToastQueue,
+  callbackBusy,
+  resultModalOpen,
+  drawPhase,
+  confirmDialogResolve,
+  pageScrollSnapshot,
+  modalReturnFocusTarget,
+  busy,
+  isEnabledFlag,
+  feedbackTimer,
+  achievementToastTimers,
+  isAuthed,
+  achievementNoticesEnabled,
+  motionModeLabel,
+  achievementNoticeLabel,
+  activeSection,
+  isPublicProfileRoute,
+  profileRouteId,
+  profileDisplayName,
+  profileOwnerUid,
+  profileOwnerPublicId,
+  currentUserPublicId,
+  profileActionTarget,
+  profileInitial,
+  profileCanEdit,
+  profileShareUrl,
+  playerDisplayName,
+  playerInitial,
+  playerStatusLabel,
+  fishpiPointLabel,
+  profileCardCountRows,
+  profileShowcase,
+  profileFormation,
+  profileSelectedSet,
+  friendRows,
+  incomingFriendRequests,
+  outgoingFriendRequests,
+  profileFriendRelation,
+  isProfileFriendIncoming,
+  isProfileFriendOutgoing,
+  showProfileFriendAction,
+  profileFriendActionLabel,
+  profileFriendStatusLabel,
+  profileFriendActionDisabled,
+  unreadMessageCount,
+  currentGuild,
+  guildMembers,
+  guildRows,
+  guildRoleLabel,
+  guildMessageRows,
+  modalOverlayOpen,
+  modalFocusKey,
+  toggleUserMenu,
+  closeUserMenu,
+  resetUserMenuHover,
+  launchActivityInfo,
+  hasLaunchActivityReward,
+  dailySignInWeek,
+  dailySignInCycleDay,
+  dailySignInRewardPoints,
+  activeTaskOverview,
+  activeTaskList,
+  activeTaskMilestones,
+  taskCompletedCount,
+  taskClaimedCount,
+  taskActivityPercent,
+  activeSeason,
+  seasonPoints,
+  seasonShopItems,
+  seasonPointRecords,
+  seasonLeaderboard,
+  seasonLeaderboardRows,
+  seasonRankText,
+  selectedPool,
+  selectedDrawCosts,
+  selectedPoolPity,
+  selectedHardPity,
+  selectedPityPercent,
+  selectedPityText,
+  poolDetailPity,
+  poolDetailProbabilityRows,
+  poolDetailCatalogCards,
+  rechargeRangeLabel,
+  rechargeRatioLabel,
+  rechargeLocalAmount,
+  inventoryItems,
+  localCatalogCards,
+  catalogCards,
+  filteredSynthesisCards,
+  synthesisAvailableCount,
+  catalogCollectedCount,
+  activeLeaderboardTab,
+  activeLeaderboardBoard,
+  podiumEntries,
+  leaderboardRows,
+  pointLedgerRows,
+  achievementCategories,
+  filteredAchievements,
+  achievementGroups,
+  achievementVisibleCount,
+  achievementUnlockedCount,
+  achievementProgressingCount,
+  achievementCompletionPercent,
+  pointIncomeTotal,
+  pointExpenseTotal,
+  pointNetTotal,
+  pointSourceOptions,
+  totalPages,
+  bagHasMore,
+  bagLoadedCount,
+  bulkDecomposeSelectedRarities,
+  bulkDecomposeSelectedLabel,
+  bulkDecomposePreviewTotal,
+  bulkDecomposeReservedCount,
+  drawHistoryRows,
+  drawHistoryTotalPages,
+  tradeTotalPages,
+  myTradeTotalPages,
+  tradeRecordTotalPages,
+  listingFeePreview,
+  recycleAvailableCount,
+  recycleUnitPrice,
+  recycleTotalPoints,
+  upgradePowerGain,
+  formationSlots,
+  formationFilledCount,
+  formationCurrentUuids,
+  formationEditingSlot,
+  pveStages,
+  pveFormation,
+  pveRecentRecords,
+  pveClearedCount,
+  bestResult,
+  resultSummary,
+  drawPhaseText,
+  resultModalTitle,
+  resultModalSubtitle,
+  activeAnnouncements,
+  visibleAnnouncements,
+  unreadAnnouncementCount,
+  getStoredThemeMode,
+  getStoredPlayerPreferences,
+  toggleThemeMode,
+  setThemeMode,
+  setMotionMode,
+  setAchievementNotices,
+  resetPlayerPreferences,
+  setPageScrollLocked,
+  getTopModalElement,
+  isFocusableElement,
+  getModalFocusableElements,
+  rememberModalReturnFocus,
+  focusTopModal,
+  restoreModalReturnFocus,
+  trapModalFocus,
+  closeTopOverlay,
+  handleGlobalKeydown,
+  notify,
+  publicPlayerName,
+  publicProfileParam,
+  publicProfileRoute,
+  activityUserName,
+  activityInitial,
+  shortActivityText,
+  activityLine,
+  getErrorMessage,
+  announcementSummary,
+  isAnnouncementRead,
+  markAnnouncementRead,
+  closeAnnouncement,
+  openAnnouncementList,
+  openAnnouncementDetail,
+  closeAnnouncementModal,
+  getStoredDrawResults,
+  setStoredDrawResults,
+  delay,
+  createRechargeRequestId,
+  handleOpenIdCallback,
+  loginWithOpenId,
+  applyManualToken,
+  logout,
+  poolSortOrder,
+  sortPools,
+  loadPublicData,
+  loadSiteConfig,
+  loadPoolCards,
+  loadUserCatalog,
+  openPoolDetail,
+  closePoolDetail,
+  loadPrivateData,
+  loadStats,
+  loadFishpiPoint,
+  loadDrawHistory,
+  openDrawHistory,
+  closeDrawHistory,
+  changeDrawHistoryPage,
+  ensureBagPoolFilter,
+  loadUserCards,
+  loadPlayerProfile,
+  loadProfileCandidates,
+  openProfilePicker,
+  closeProfilePicker,
+  isProfileCandidateSelected,
+  toggleProfileCandidate,
+  saveProfileShowcase,
+  copyProfileLink,
+  loadFriends,
+  loadFriendFeed,
+  refreshFriendsSection,
+  sendFriendRequest,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  cancelFriendRequest,
+  removeFriend,
+  handleProfileFriendAction,
+  loadMessages,
+  markMessageRead,
+  claimMessageReward,
+  guildRoleName,
+  guildMemberName,
+  guildMemberInitial,
+  guildMessageSenderName,
+  guildMessageInitial,
+  loadGuild,
+  loadGuildMessages,
+  refreshGuildSection,
+  createGuild,
+  joinGuild,
+  leaveGuild,
+  sendGuildMessage,
+  loadFormation,
+  loadFormationCandidates,
+  openFormationPicker,
+  closeFormationPicker,
+  candidateUuid,
+  isFormationCandidateSelected,
+  saveFormationSlot,
+  loadPveStages,
+  loadPveRecords,
+  refreshPve,
+  challengePveStage,
+  changePveRecordPage,
+  resetUserCards,
+  toggleBagNewOnly,
+  loadMoreUserCards,
+  loadLaunchActivity,
+  loadDailySignIn,
+  loadTasks,
+  loadSeasonOverview,
+  loadLeaderboard,
+  loadAchievements,
+  loadAchievementNotifications,
+  enqueueAchievementNotifications,
+  flushAchievementToastQueue,
+  clearAchievementToasts,
+  dismissAchievementToast,
+  loadPointRecords,
+  loadExchangeItems,
+  loadShopRecycleConfig,
+  loadTradeData,
+  loadTradeListings,
+  loadMyTradeListings,
+  loadTradeRecords,
+  syncCurrentUserPoint,
+  isSameUserCardGroup,
+  findUserCardGroup,
+  shouldRefreshOwnProfile,
+  refreshCardState,
+  refreshAll,
+  changePointPage,
+  openRechargeModal,
+  closeRechargeModal,
+  openLaunchActivityModal,
+  closeLaunchActivityModal,
+  claimLaunchActivity,
+  claimDailySignIn,
+  claimTaskReward,
+  claimActivityReward,
+  submitRecharge,
+  performDraw,
+  openLastResults,
+  closeResultModal,
+  cardIntroText,
+  shortCardIntro,
+  compactCardDetailValue,
+  formatCardDetailDate,
+  uniqueCardDetailRows,
+  cardDetailActionClass,
+  cardSharePayload,
+  shareCardDetailAction,
+  bagCardDetailActions,
+  tradeListingDetailActions,
+  catalogCardDetailActions,
+  openCardIntro,
+  closeCardIntro,
+  askConfirm,
+  settleConfirmDialog,
+  confirmDialogActionClass,
+  openShowcaseCardDetail,
+  openBagCardDetail,
+  openFormationCardDetail,
+  openTradeListingDetail,
+  openCatalogCardDetail,
+  openDrawResultDetail,
+  handleCardDetailAction,
+  getPoolName,
+  drawHistoryDetailMeta,
+  getPityForPool,
+  pityRuleLabel,
+  buildCardShareText,
+  shareCard,
+  closeShareText,
+  cardLockAction,
+  toggleCardLock,
+  copyShareText,
+  synthesizeCard,
+  toggleBulkDecomposeRarity,
+  loadBulkDecomposePreview,
+  bulkDecomposeCards,
+  openTradeListingModal,
+  closeTradeListingModal,
+  getRecyclePrice,
+  openRecycleModal,
+  closeRecycleModal,
+  cardUpgradeUuid,
+  openUpgradeModal,
+  closeUpgradeModal,
+  upgradeCard,
+  recycleCards,
+  createTradeListing,
+  cancelTradeListing,
+  buyTradeListing,
+  claimRedeemCode,
+  claimExchange,
+  buySeasonShopItem,
+  pointChangeClass,
+  formatPointChange,
+  seasonPointSourceLabel,
+  pointMetadataSummary,
+  changeTradePage,
+  isNewCard,
+  markNewCardSeen,
+  pvePowerPercent,
+  pveStageLevelLabel,
+  achievementProgressPercent,
+  achievementProgressText,
+  taskProgressPercent,
+  taskProgressText,
+  taskPeriodText,
+  resetAchievementFilters,
+  achievementScopeLabel,
+  leaderboardInitial,
+  formatLeaderboardValue,
+  leaderboardRankLabel,
+};
+
+provide(APP_CONTEXT_KEY, appContext);
+
 </script>
 
 <template>
@@ -8897,39 +9196,11 @@ function leaderboardRankLabel(rank?: number) {
       </RouterLink>
     </nav>
 
-    <div v-if="feedback" class="toast" :class="feedback.type" role="status">
-      {{ feedback.text }}
-    </div>
-
-    <div
-      v-if="achievementToasts.length"
-      class="achievement-toast-stack"
-      aria-live="polite"
-    >
-      <article
-        v-for="notice in achievementToasts"
-        :key="notice.achievementId"
-        class="achievement-toast"
-        role="status"
-      >
-        <div class="achievement-toast-icon">
-          <Trophy :size="18" />
-        </div>
-        <div class="achievement-toast-body">
-          <span>成就达成</span>
-          <strong>{{ notice.name }}</strong>
-          <p>{{ notice.description || "奖励已发放到账户。" }}</p>
-          <small>{{ formatRewards(notice.rewards) }}</small>
-        </div>
-        <button
-          type="button"
-          aria-label="关闭成就通知"
-          @click="dismissAchievementToast(notice.achievementId)"
-        >
-          ×
-        </button>
-      </article>
-    </div>
+    <FeedbackToast :feedback="feedback" />
+    <AchievementToastStack
+      :notices="achievementToasts"
+      @dismiss="dismissAchievementToast"
+    />
 
     <Teleport to="body">
       <div
