@@ -55,12 +55,8 @@ import SeasonPage from "./pages/SeasonPage.vue";
 import AchievementsPage from "./pages/AchievementsPage.vue";
 import RedeemPage from "./pages/RedeemPage.vue";
 import {
-  clearToken,
-  getStoredUser,
-  getToken,
   request,
   setStoredUser,
-  setToken,
   toQuery,
 } from "./api";
 import type {
@@ -118,8 +114,6 @@ import type {
   SendGuildMessageRequest,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
-  LoginResponse,
-  LoginUrlResponse,
   RechargePointsResponse,
   RedeemClaimResponse,
   SeasonOverview,
@@ -136,10 +130,10 @@ import type {
   UserCatalogItem,
   UserCardsResponse,
   UserGachaStats,
-  UserProfile,
 } from "./types";
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
 import { useAnnouncements } from "./composables/useAnnouncements";
+import { useAuthSession } from "./composables/useAuthSession";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
@@ -381,15 +375,29 @@ const setThemeMode = playerPreferences.setThemeMode;
 const setMotionMode = playerPreferences.setMotionMode;
 const setAchievementNotices = playerPreferences.setAchievementNotices;
 const resetPlayerPreferences = playerPreferences.resetPlayerPreferences;
-const userMenuOpen = ref(false);
-const userMenuHoverPaused = ref(false);
-const manualToken = ref("");
-const manualLoginEnabled =
-  import.meta.env.DEV ||
-  isEnabledFlag(import.meta.env.VITE_ENABLE_MANUAL_LOGIN) ||
-  isEnabledFlag(window.__KESINI_CONFIG__?.ENABLE_MANUAL_LOGIN);
-const token = ref(getToken());
-const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
+const authSession = useAuthSession({
+  notify,
+  getErrorMessage,
+  setAuthBusy: (value) => {
+    busy.auth = value;
+  },
+  loadPrivateData: () => loadPrivateData(),
+});
+const userMenuOpen = authSession.userMenuOpen;
+const userMenuHoverPaused = authSession.userMenuHoverPaused;
+const manualToken = authSession.manualToken;
+const manualLoginEnabled = authSession.manualLoginEnabled;
+const token = authSession.token;
+const currentUser = authSession.currentUser;
+const callbackBusy = authSession.callbackBusy;
+const isAuthed = authSession.isAuthed;
+const toggleUserMenu = authSession.toggleUserMenu;
+const closeUserMenu = authSession.closeUserMenu;
+const resetUserMenuHover = authSession.resetUserMenuHover;
+const handleOpenIdCallback = authSession.handleOpenIdCallback;
+const loginWithOpenId = authSession.loginWithOpenId;
+const applyManualToken = authSession.applyManualToken;
+const clearAuthSession = authSession.clearAuthSession;
 const announcementState = useAnnouncements();
 const announcements = announcementState.announcements;
 const announcementReadIds = announcementState.announcementReadIds;
@@ -557,7 +565,6 @@ const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
 const achievementToasts = ref<AchievementNotification[]>([]);
 const achievementToastQueue = ref<AchievementNotification[]>([]);
-const callbackBusy = ref(false);
 const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
@@ -604,19 +611,8 @@ const busy = reactive({
   signIn: false,
 });
 
-function isEnabledFlag(value: unknown): boolean {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value !== "string") {
-    return false;
-  }
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
 const achievementToastTimers = new Map<number, number>();
 
-const isAuthed = computed(() => Boolean(token.value));
 const activeSection = computed<SectionKey>(() => {
   if (route.name === "publicProfile") {
     return "profile";
@@ -862,23 +858,6 @@ const modalFocusKey = computed(() => {
   }
   return "";
 });
-
-function toggleUserMenu() {
-  userMenuHoverPaused.value = false;
-  userMenuOpen.value = !userMenuOpen.value;
-}
-
-function closeUserMenu(event?: Event) {
-  userMenuOpen.value = false;
-  userMenuHoverPaused.value = true;
-  if (event?.currentTarget instanceof HTMLElement) {
-    event.currentTarget.blur();
-  }
-}
-
-function resetUserMenuHover() {
-  userMenuHoverPaused.value = false;
-}
 
 const launchActivityInfo = computed(
   () => launchActivity.value?.activity || null,
@@ -1532,81 +1511,8 @@ function createRechargeRequestId() {
   return `website-${random}`;
 }
 
-async function handleOpenIdCallback() {
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has("openid.mode")) {
-    return;
-  }
-
-  const callbackKey = `kesini_website_openid:${params.get("openid.response_nonce") || params.get("openid.sig") || window.location.search}`;
-  if (sessionStorage.getItem(callbackKey)) {
-    return;
-  }
-
-  sessionStorage.setItem(callbackKey, "1");
-  callbackBusy.value = true;
-  try {
-    const payload = Object.fromEntries(params.entries());
-    const data = await request<LoginResponse>("/apis/login", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setToken(data.token);
-    setStoredUser(data.user);
-    token.value = data.token;
-    currentUser.value = data.user;
-    notify("success", "登录成功，欢迎回来");
-    window.history.replaceState({}, document.title, window.location.pathname);
-  } catch (error) {
-    sessionStorage.removeItem(callbackKey);
-    notify("error", getErrorMessage(error));
-  } finally {
-    callbackBusy.value = false;
-  }
-}
-
-async function loginWithOpenId() {
-  busy.auth = true;
-  try {
-    const oauthOrigin = window.location.origin;
-    const returnToUrl = new URL(window.location.pathname, oauthOrigin);
-    const data = await request<LoginUrlResponse>(
-      `/apis/login-url${toQuery({
-        returnTo: returnToUrl.toString(),
-        realm: oauthOrigin,
-      })}`,
-    );
-    window.location.href = data.url;
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.auth = false;
-  }
-}
-
-async function applyManualToken() {
-  if (!manualLoginEnabled) {
-    notify("error", "暂不可用");
-    return;
-  }
-  const value = manualToken.value.trim();
-  if (!value) {
-    notify("error", "请输入口令");
-    return;
-  }
-  setToken(value);
-  token.value = value;
-  currentUser.value = null;
-  notify("info", "正在加载资产");
-  await loadPrivateData();
-  userMenuOpen.value = false;
-}
-
 function logout() {
-  userMenuOpen.value = false;
-  clearToken();
-  token.value = "";
-  currentUser.value = null;
+  clearAuthSession();
   stats.value = null;
   fishpiPoint.value = null;
   fishpiPointError.value = "";
@@ -4831,7 +4737,6 @@ const appContext = {
   drawPhase,
   confirmDialogResolve,
   busy,
-  isEnabledFlag,
   achievementToastTimers,
   isAuthed,
   activeSection,
