@@ -134,6 +134,7 @@ import type {
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
 import { useAnnouncements } from "./composables/useAnnouncements";
 import { useAuthSession } from "./composables/useAuthSession";
+import { useDrawResults } from "./composables/useDrawResults";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
@@ -158,11 +159,9 @@ import {
   tradeStatusLabel,
 } from "./utils/format";
 import {
-  normalizeRarity,
   parseCardRarities,
   rarityClass,
   rarityOrder,
-  rarityRank,
   requiredFragmentsForRarity,
   strongestRarityClass,
   synthesisCostLabel,
@@ -252,7 +251,6 @@ type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
 };
-type DrawPhase = "idle" | "charging" | "burst";
 type CardDetailRow = {
   label: string;
   value: string;
@@ -345,7 +343,6 @@ type CardStateRefreshOptions = {
   tradeRecords?: boolean;
   achievements?: boolean;
 };
-const DRAW_RESULTS_KEY = "kesini_website_last_results";
 const BAG_PAGE_SIZE = 24;
 
 const route = useRoute();
@@ -521,7 +518,19 @@ const shopRecycleConfig = ref<ShopRecycleConfig>({
   priceSSR: 15,
   priceUR: 50,
 });
-const lastResults = ref<GachaResult[]>(getStoredDrawResults());
+const drawResults = useDrawResults({ notify });
+const lastResults = drawResults.lastResults;
+const resultModalOpen = drawResults.resultModalOpen;
+const drawPhase = drawResults.drawPhase;
+const bestResult = drawResults.bestResult;
+const resultSummary = drawResults.resultSummary;
+const drawPhaseText = drawResults.drawPhaseText;
+const resultModalTitle = drawResults.resultModalTitle;
+const resultModalSubtitle = drawResults.resultModalSubtitle;
+const setDrawResults = drawResults.setDrawResults;
+const clearDrawResults = drawResults.clearDrawResults;
+const openLastResults = drawResults.openLastResults;
+const closeResultModal = drawResults.closeResultModal;
 const rarityFilter = ref("");
 const poolFilter = ref<number | "">("");
 const bagNewOnly = ref(false);
@@ -559,8 +568,6 @@ const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
 const achievementToasts = ref<AchievementNotification[]>([]);
 const achievementToastQueue = ref<AchievementNotification[]>([]);
-const resultModalOpen = ref(false);
-const drawPhase = ref<DrawPhase>("idle");
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
 
 const busy = reactive({
@@ -1235,45 +1242,6 @@ const pveRecentRecords = computed<PveChallengeRecord[]>(
 const pveClearedCount = computed(
   () => pveRecentRecords.value.filter((record) => record.success).length,
 );
-const bestResult = computed(() => {
-  return [...lastResults.value].sort(
-    (a, b) => (rarityRank[b.rarity] || 0) - (rarityRank[a.rarity] || 0),
-  )[0];
-});
-const resultSummary = computed(() => {
-  const counts = rarityOrder.reduce(
-    (result, rarity) => ({ ...result, [rarity]: 0 }),
-    {} as Record<CardRarity, number>,
-  );
-  lastResults.value.forEach((item) => {
-    const rarity = normalizeRarity(item.rarity);
-    counts[rarity] += 1;
-  });
-  return counts;
-});
-const drawPhaseText = computed(() => {
-  if (drawPhase.value === "charging") {
-    return "星轨充能中";
-  }
-  if (drawPhase.value === "burst") {
-    return "星门已开启";
-  }
-  return bestResult.value
-    ? `${bestResult.value.rarity} 级信号已锁定`
-    : "选择卡池后抽取";
-});
-const resultModalTitle = computed(() =>
-  lastResults.value.length > 1 ? "十连回响" : "星轨回应",
-);
-const resultModalSubtitle = computed(() => {
-  if (lastResults.value.length === 0) {
-    return "暂无抽卡结果";
-  }
-  const best = bestResult.value;
-  return best
-    ? `${lastResults.value.length} 次抽取完成，最高稀有度 ${best.rarity}`
-    : `${lastResults.value.length} 次抽取完成`;
-});
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1475,24 +1443,6 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
 }
 
-function getStoredDrawResults(): GachaResult[] {
-  const raw = localStorage.getItem(DRAW_RESULTS_KEY);
-  if (!raw) {
-    return [];
-  }
-  try {
-    const value = JSON.parse(raw);
-    return Array.isArray(value) ? value : [];
-  } catch {
-    localStorage.removeItem(DRAW_RESULTS_KEY);
-    return [];
-  }
-}
-
-function setStoredDrawResults(results: GachaResult[]) {
-  localStorage.setItem(DRAW_RESULTS_KEY, JSON.stringify(results));
-}
-
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -1566,9 +1516,7 @@ function logout() {
   tradeRecords.value = [];
   upgradeTarget.value = null;
   upgradePreview.value = null;
-  lastResults.value = [];
-  resultModalOpen.value = false;
-  localStorage.removeItem(DRAW_RESULTS_KEY);
+  clearDrawResults();
   notify("info", "已退出登录");
 }
 
@@ -3172,8 +3120,7 @@ async function performDraw(mode: "once" | "ten") {
       method: "POST",
       body: JSON.stringify(body),
     });
-    lastResults.value = Array.isArray(data) ? data : [data];
-    setStoredDrawResults(lastResults.value);
+    setDrawResults(Array.isArray(data) ? data : [data]);
     drawPhase.value = "burst";
     await delay(360);
     resultModalOpen.value = true;
@@ -3186,18 +3133,6 @@ async function performDraw(mode: "once" | "ten") {
     busy.drawing = false;
     drawPhase.value = "idle";
   }
-}
-
-function openLastResults() {
-  if (lastResults.value.length === 0) {
-    notify("info", "暂无可查看的抽卡结果");
-    return;
-  }
-  resultModalOpen.value = true;
-}
-
-function closeResultModal() {
-  resultModalOpen.value = false;
 }
 
 function cardIntroText(desc?: string | null) {
@@ -4524,11 +4459,9 @@ const appContext = {
   poolTypeLabel,
   tradeRoleLabel,
   tradeStatusLabel,
-  normalizeRarity,
   parseCardRarities,
   rarityClass,
   rarityOrder,
-  rarityRank,
   requiredFragmentsForRarity,
   strongestRarityClass,
   synthesisCostLabel,
@@ -4539,7 +4472,6 @@ const appContext = {
   accountMenuSectionKeys,
   accountMenuItems,
   leaderboardTabs,
-  DRAW_RESULTS_KEY,
   BAG_PAGE_SIZE,
   route,
   feedbackState,
@@ -4834,8 +4766,6 @@ const appContext = {
   shortActivityText,
   activityLine,
   getErrorMessage,
-  getStoredDrawResults,
-  setStoredDrawResults,
   delay,
   createRechargeRequestId,
   handleOpenIdCallback,
