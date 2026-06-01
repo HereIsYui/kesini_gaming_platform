@@ -64,7 +64,6 @@ import {
   toQuery,
 } from "./api";
 import type {
-  CardItem,
   CardRarity,
   ClaimMessageRewardResponse,
   DailySignInClaimResponse,
@@ -117,13 +116,10 @@ import type {
   SaveShowcaseRequest,
   SendFriendRequestRequest,
   SendGuildMessageRequest,
-  SiteConfig,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   LoginResponse,
   LoginUrlResponse,
-  PoolInfo,
-  RechargeConfig,
   RechargePointsResponse,
   RedeemClaimResponse,
   SeasonOverview,
@@ -138,7 +134,6 @@ import type {
   TradePageResponse,
   TradeRecord,
   UserCatalogItem,
-  UserCatalogResponse,
   UserCardsResponse,
   UserGachaStats,
   UserProfile,
@@ -148,6 +143,7 @@ import { useAnnouncements } from "./composables/useAnnouncements";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
+import { usePublicData } from "./composables/usePublicData";
 import {
   cardMediaUrl,
   hasCardMedia,
@@ -269,10 +265,6 @@ const leaderboardTabs: Array<{
 type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
-};
-type PoolCatalogCard = {
-  card: CardItem;
-  rarities: CardRarity[];
 };
 type DrawPhase = "idle" | "charging" | "burst";
 type CardDetailRow = {
@@ -398,10 +390,6 @@ const manualLoginEnabled =
   isEnabledFlag(window.__KESINI_CONFIG__?.ENABLE_MANUAL_LOGIN);
 const token = ref(getToken());
 const currentUser = ref<UserProfile | null>(getStoredUser<UserProfile>());
-const siteConfig = ref<SiteConfig>({
-  websiteTitle: "Kesini 抽卡站",
-  adminTitle: "Kesini 运营台",
-});
 const announcementState = useAnnouncements();
 const announcements = announcementState.announcements;
 const announcementReadIds = announcementState.announcementReadIds;
@@ -420,16 +408,44 @@ const openAnnouncementList = announcementState.openAnnouncementList;
 const openAnnouncementDetail = announcementState.openAnnouncementDetail;
 const closeAnnouncementModal = announcementState.closeAnnouncementModal;
 const newCardSeenKeys = ref<Set<string>>(getStoredStringSet(NEW_CARD_SEEN_KEY));
-const pools = ref<PoolInfo[]>([]);
-const activePoolId = ref<number | null>(null);
-const poolCards = ref<CardItem[]>([]);
-const catalogItems = ref<UserCatalogResponse | null>(null);
-const catalogError = ref("");
-const poolDetailOpen = ref(false);
-const poolDetailLoading = ref(false);
-const poolDetailError = ref("");
-const poolDetailPool = ref<PoolInfo | null>(null);
-const poolDetailCards = ref<CardItem[]>([]);
+const publicData = usePublicData({
+  isAuthed: () => isAuthed.value,
+  setPublicBusy: (value) => {
+    busy.public = value;
+  },
+  setCatalogBusy: (value) => {
+    busy.catalog = value;
+  },
+  loadAnnouncements,
+  ensureBagPoolFilter,
+  notifyError: (error) => notify("error", getErrorMessage(error)),
+  notifyErrorText: (text) => notify("error", text),
+});
+const siteConfig = publicData.siteConfig;
+const pools = publicData.pools;
+const activePoolId = publicData.activePoolId;
+const poolCards = publicData.poolCards;
+const catalogItems = publicData.catalogItems;
+const catalogError = publicData.catalogError;
+const poolDetailOpen = publicData.poolDetailOpen;
+const poolDetailLoading = publicData.poolDetailLoading;
+const poolDetailError = publicData.poolDetailError;
+const poolDetailPool = publicData.poolDetailPool;
+const poolDetailCards = publicData.poolDetailCards;
+const rechargeConfig = publicData.rechargeConfig;
+const selectedPool = publicData.selectedPool;
+const selectedDrawCosts = publicData.selectedDrawCosts;
+const poolDetailProbabilityRows = publicData.poolDetailProbabilityRows;
+const poolDetailCatalogCards = publicData.poolDetailCatalogCards;
+const poolSortOrder = publicData.poolSortOrder;
+const sortPools = publicData.sortPools;
+const loadPublicData = publicData.loadPublicData;
+const loadSiteConfig = publicData.loadSiteConfig;
+const loadPoolCards = publicData.loadPoolCards;
+const loadUserCatalog = publicData.loadUserCatalog;
+const openPoolDetail = publicData.openPoolDetail;
+const closePoolDetail = publicData.closePoolDetail;
+const getPoolName = publicData.getPoolName;
 const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
@@ -465,7 +481,6 @@ const pveOverview = ref<PveOverview | null>(null);
 const pveRecords = ref<PveRecordsResponse | null>(null);
 const pveRecordPage = ref(1);
 const pveRecordTotalPages = ref(1);
-const rechargeConfig = ref<RechargeConfig | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
@@ -934,12 +949,6 @@ const seasonRankText = computed(() =>
     ? `第 ${seasonLeaderboard.value.me.rank} 名`
     : "暂未上榜",
 );
-const selectedPool = computed(() =>
-  pools.value.find((pool) => pool.id === activePoolId.value),
-);
-const selectedDrawCosts = computed(
-  () => selectedPool.value?.drawCosts || { once: 10, ten: 100 },
-);
 const selectedPoolPity = computed(() => getPityForPool(activePoolId.value));
 const selectedHardPity = computed(
   () => selectedPoolPity.value?.hard || selectedPoolPity.value?.soft || null,
@@ -964,26 +973,6 @@ const selectedPityText = computed(() => {
 });
 const poolDetailPity = computed(() =>
   getPityForPool(poolDetailPool.value?.id || activePoolId.value),
-);
-const poolDetailProbabilityRows = computed(() => {
-  const probabilities =
-    poolDetailPool.value?.rarityProbabilities ||
-    selectedPool.value?.rarityProbabilities ||
-    {};
-  return rarityOrder.map((rarity) => {
-    const value = Number(probabilities[rarity] || 0);
-    return {
-      rarity,
-      value,
-      percent: Math.max(0, Math.min(100, value * 100)),
-    };
-  });
-});
-const poolDetailCatalogCards = computed<PoolCatalogCard[]>(() =>
-  poolDetailCards.value.map((card) => ({
-    card,
-    rarities: parseCardRarities(card.card_level),
-  })),
 );
 const rechargeRangeLabel = computed(() => {
   const config = rechargeConfig.value;
@@ -1681,121 +1670,6 @@ function logout() {
   resultModalOpen.value = false;
   localStorage.removeItem(DRAW_RESULTS_KEY);
   notify("info", "已退出登录");
-}
-
-function poolSortOrder(pool: PoolInfo) {
-  const value = Number(pool.sortOrder ?? pool.sort_order ?? 0);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function sortPools(list: PoolInfo[]) {
-  return [...list].sort(
-    (a, b) => poolSortOrder(a) - poolSortOrder(b) || a.id - b.id,
-  );
-}
-
-async function loadPublicData() {
-  busy.public = true;
-  try {
-    const [list, recharge] = await Promise.all([
-      request<PoolInfo[]>("/card/pools"),
-      request<RechargeConfig>("/recharge/config").catch(() => null),
-      loadAnnouncements(),
-    ]);
-    pools.value = sortPools(list || []);
-    rechargeConfig.value = recharge;
-    if (!activePoolId.value && pools.value.length > 0) {
-      activePoolId.value = pools.value[0].id;
-    }
-    ensureBagPoolFilter();
-    await loadPoolCards();
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.public = false;
-  }
-}
-
-async function loadSiteConfig() {
-  try {
-    const data = await request<SiteConfig>("/apis/site-config");
-    siteConfig.value = {
-      websiteTitle: data.websiteTitle || "Kesini 抽卡站",
-      adminTitle: data.adminTitle || "Kesini 运营台",
-    };
-  } catch {
-    siteConfig.value = {
-      websiteTitle: "Kesini 抽卡站",
-      adminTitle: "Kesini 运营台",
-    };
-  }
-  document.title = siteConfig.value.websiteTitle;
-}
-
-async function loadPoolCards() {
-  if (!activePoolId.value) {
-    poolCards.value = [];
-    return;
-  }
-  try {
-    poolCards.value = await request<CardItem[]>(
-      `/card/pool/${activePoolId.value}/cards`,
-    );
-  } catch {
-    poolCards.value = [];
-  }
-}
-
-async function loadUserCatalog(options: SilentLoadOptions = {}) {
-  catalogError.value = "";
-  if (!activePoolId.value || !isAuthed.value) {
-    catalogItems.value = null;
-    return;
-  }
-  if (!options.silent) {
-    busy.catalog = true;
-  }
-  try {
-    catalogItems.value = await request<UserCatalogResponse>(
-      `/card/user/catalog${toQuery({ poolId: activePoolId.value })}`,
-    );
-  } catch (error) {
-    catalogItems.value = null;
-    catalogError.value = getErrorMessage(error);
-  } finally {
-    if (!options.silent) {
-      busy.catalog = false;
-    }
-  }
-}
-
-async function openPoolDetail() {
-  const poolId = activePoolId.value;
-  if (!poolId) {
-    notify("error", "请先选择一个卡池");
-    return;
-  }
-  poolDetailOpen.value = true;
-  poolDetailLoading.value = true;
-  poolDetailError.value = "";
-  poolDetailPool.value = selectedPool.value || null;
-  poolDetailCards.value = poolCards.value;
-  try {
-    const [pool, cards] = await Promise.all([
-      request<PoolInfo>(`/card/pool/${poolId}`),
-      request<CardItem[]>(`/card/pool/${poolId}/cards`),
-    ]);
-    poolDetailPool.value = pool;
-    poolDetailCards.value = cards || [];
-  } catch (error) {
-    poolDetailError.value = getErrorMessage(error);
-  } finally {
-    poolDetailLoading.value = false;
-  }
-}
-
-function closePoolDetail() {
-  poolDetailOpen.value = false;
 }
 
 async function loadPrivateData() {
@@ -3830,12 +3704,6 @@ async function handleCardDetailAction(action: CardDetailAction) {
   }
 }
 
-function getPoolName(poolId?: number | null) {
-  return (
-    pools.value.find((pool) => pool.id === Number(poolId))?.pool_name || ""
-  );
-}
-
 function drawHistoryDetailMeta(detail: DrawHistoryRecord["details"][number]) {
   const poolName = getPoolName(detail.poolId);
   if (poolName) {
@@ -4821,7 +4689,6 @@ const appContext = {
   manualLoginEnabled,
   token,
   currentUser,
-  siteConfig,
   announcementState,
   announcements,
   announcementReadIds,
@@ -4840,6 +4707,8 @@ const appContext = {
   openAnnouncementDetail,
   closeAnnouncementModal,
   newCardSeenKeys,
+  publicData,
+  siteConfig,
   pools,
   activePoolId,
   poolCards,
@@ -4850,6 +4719,20 @@ const appContext = {
   poolDetailError,
   poolDetailPool,
   poolDetailCards,
+  rechargeConfig,
+  selectedPool,
+  selectedDrawCosts,
+  poolDetailProbabilityRows,
+  poolDetailCatalogCards,
+  poolSortOrder,
+  sortPools,
+  loadPublicData,
+  loadSiteConfig,
+  loadPoolCards,
+  loadUserCatalog,
+  openPoolDetail,
+  closePoolDetail,
+  getPoolName,
   stats,
   fishpiPoint,
   fishpiPointError,
@@ -4885,7 +4768,6 @@ const appContext = {
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
-  rechargeConfig,
   launchActivity,
   dailySignIn,
   tasksOverview,
@@ -5009,15 +4891,11 @@ const appContext = {
   seasonLeaderboard,
   seasonLeaderboardRows,
   seasonRankText,
-  selectedPool,
-  selectedDrawCosts,
   selectedPoolPity,
   selectedHardPity,
   selectedPityPercent,
   selectedPityText,
   poolDetailPity,
-  poolDetailProbabilityRows,
-  poolDetailCatalogCards,
   rechargeRangeLabel,
   rechargeRatioLabel,
   rechargeLocalAmount,
@@ -5092,14 +4970,6 @@ const appContext = {
   loginWithOpenId,
   applyManualToken,
   logout,
-  poolSortOrder,
-  sortPools,
-  loadPublicData,
-  loadSiteConfig,
-  loadPoolCards,
-  loadUserCatalog,
-  openPoolDetail,
-  closePoolDetail,
   loadPrivateData,
   loadStats,
   loadFishpiPoint,
@@ -5216,7 +5086,6 @@ const appContext = {
   openCatalogCardDetail,
   openDrawResultDetail,
   handleCardDetailAction,
-  getPoolName,
   drawHistoryDetailMeta,
   getPityForPool,
   pityRuleLabel,
