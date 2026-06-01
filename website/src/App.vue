@@ -96,9 +96,6 @@ import type {
   LeaderboardEntry,
   LeaderboardMetric,
   LeaderboardResponse,
-  PointLedgerRecord,
-  PointLedgerRecordsResponse,
-  PointLedgerSourceType,
   PveChallengeRecord,
   PveChallengeResult,
   PveOverview,
@@ -137,6 +134,7 @@ import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
+import { usePointsLedger } from "./composables/usePointsLedger";
 import { usePublicData } from "./composables/usePublicData";
 import { useRechargeFlow } from "./composables/useRechargeFlow";
 import {
@@ -506,15 +504,10 @@ const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
-const pointRecords = ref<PointLedgerRecordsResponse | null>(null);
 const achievements = ref<AchievementRecord[]>([]);
 const achievementStatusFilter = ref<"all" | "achieved" | "progressing">("all");
 const achievementCategoryFilter = ref("");
 const achievementKeyword = ref("");
-const pointRecordPage = ref(1);
-const pointRecordTypeFilter = ref<"all" | "income" | "expense">("all");
-const pointRecordSourceFilter = ref<PointLedgerSourceType | "">("");
-const pointRecordTotalPages = ref(1);
 const exchangeItems = ref<ExchangeShopItem[]>([]);
 const seasonShopCounts = reactive<Record<number, number>>({});
 const tradeListings = ref<TradeListing[]>([]);
@@ -656,6 +649,38 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const pointsLedger = usePointsLedger({
+  isAuthed: () => isAuthed.value,
+  isActive: () => activeSection.value === "points",
+  setBusy: (value) => {
+    busy.points = value;
+  },
+  notify,
+  getErrorMessage,
+  syncCurrentPoint: (point) => {
+    if (stats.value) {
+      stats.value.point = point;
+    }
+    syncCurrentUserPoint(point);
+  },
+});
+const pointRecords = pointsLedger.pointRecords;
+const pointRecordPage = pointsLedger.pointRecordPage;
+const pointRecordTypeFilter = pointsLedger.pointRecordTypeFilter;
+const pointRecordSourceFilter = pointsLedger.pointRecordSourceFilter;
+const pointRecordTotalPages = pointsLedger.pointRecordTotalPages;
+const pointLedgerRows = pointsLedger.pointLedgerRows;
+const pointIncomeTotal = pointsLedger.pointIncomeTotal;
+const pointExpenseTotal = pointsLedger.pointExpenseTotal;
+const pointNetTotal = pointsLedger.pointNetTotal;
+const pointSourceOptions = pointsLedger.pointSourceOptions;
+const loadPointRecords = pointsLedger.loadPointRecords;
+const changePointPage = pointsLedger.changePointPage;
+const resetPointRecords = pointsLedger.resetPointRecords;
+const pointChangeClass = pointsLedger.pointChangeClass;
+const formatPointChange = pointsLedger.formatPointChange;
+const seasonPointSourceLabel = pointsLedger.seasonPointSourceLabel;
+const pointMetadataSummary = pointsLedger.pointMetadataSummary;
 const isPublicProfileRoute = computed(() => route.name === "publicProfile");
 const profileRouteId = computed(() =>
   isPublicProfileRoute.value
@@ -1052,9 +1077,6 @@ const podiumEntries = computed<LeaderboardEntry[]>(
 const leaderboardRows = computed<LeaderboardEntry[]>(
   () => activeLeaderboardBoard.value?.list.slice(3) || [],
 );
-const pointLedgerRows = computed<PointLedgerRecord[]>(
-  () => pointRecords.value?.list || [],
-);
 const achievementCategories = computed(() =>
   Array.from(
     new Set(
@@ -1126,37 +1148,6 @@ const achievementCompletionPercent = computed(() => {
     (achievementUnlockedCount.value / achievements.value.length) * 100,
   );
 });
-const pointIncomeTotal = computed(() =>
-  pointLedgerRows.value
-    .filter((record) => record.changeAmount > 0)
-    .reduce((sum, record) => sum + record.changeAmount, 0),
-);
-const pointExpenseTotal = computed(() =>
-  pointLedgerRows.value
-    .filter((record) => record.changeAmount < 0)
-    .reduce((sum, record) => sum + Math.abs(record.changeAmount), 0),
-);
-const pointNetTotal = computed(() =>
-  pointLedgerRows.value.reduce((sum, record) => sum + record.changeAmount, 0),
-);
-const pointSourceOptions = [
-  { value: "", label: "全部来源" },
-  { value: "draw_once", label: "单抽消耗" },
-  { value: "draw_ten", label: "十连消耗" },
-  { value: "recharge", label: "星穹币充值" },
-  { value: "redeem_code", label: "兑换码奖励" },
-  { value: "launch_activity", label: "开服福利" },
-  { value: "daily_sign_in", label: "每日签到" },
-  { value: "exchange_shop", label: "兑换商店" },
-  { value: "achievement", label: "成就奖励" },
-  { value: "task", label: "任务奖励" },
-  { value: "pve", label: "关卡奖励" },
-  { value: "trade_buy", label: "交易购买" },
-  { value: "trade_sell", label: "交易出售" },
-  { value: "shop_recycle", label: "商店回收" },
-  { value: "season_shop", label: "赛季商店" },
-  { value: "player_message", label: "消息奖励" },
-] as const;
 const totalPages = computed(() => userCards.value?.totalPages || 1);
 const bagHasMore = computed(
   () => Boolean(userCards.value) && cardPage.value < totalPages.value,
@@ -1502,10 +1493,9 @@ function logout() {
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
   leaderboardError.value = "";
-  pointRecords.value = null;
   achievements.value = [];
   clearAchievementToasts();
-  pointRecordPage.value = 1;
+  resetPointRecords();
   exchangeItems.value = [];
   Object.keys(seasonShopCounts).forEach((key) => {
     delete seasonShopCounts[Number(key)];
@@ -2613,38 +2603,6 @@ function dismissAchievementToast(achievementId: number) {
   flushAchievementToastQueue();
 }
 
-async function loadPointRecords() {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.points = true;
-  try {
-    const data = await request<PointLedgerRecordsResponse>(
-      `/points/records${toQuery({
-        page: pointRecordPage.value,
-        pageSize: 20,
-        type:
-          pointRecordTypeFilter.value === "all"
-            ? ""
-            : pointRecordTypeFilter.value,
-        sourceType: pointRecordSourceFilter.value,
-      })}`,
-    );
-    pointRecords.value = data;
-    pointRecordTotalPages.value = data.totalPages || 1;
-    if (stats.value && typeof data.currentPoint === "number") {
-      stats.value.point = data.currentPoint;
-      syncCurrentUserPoint(data.currentPoint);
-    }
-  } catch (error) {
-    if (activeSection.value === "points") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    busy.points = false;
-  }
-}
-
 async function loadExchangeItems() {
   if (!isAuthed.value) {
     return;
@@ -2821,18 +2779,6 @@ async function refreshAll() {
     await loadPrivateData();
   }
   notify("success", "页面数据已刷新");
-}
-
-function changePointPage(delta: number) {
-  const next = Math.min(
-    Math.max(1, pointRecordPage.value + delta),
-    pointRecordTotalPages.value,
-  );
-  if (next === pointRecordPage.value) {
-    return;
-  }
-  pointRecordPage.value = next;
-  void loadPointRecords();
 }
 
 function openLaunchActivityModal() {
@@ -4083,71 +4029,6 @@ async function buySeasonShopItem(item: SeasonShopItem) {
     notify("error", getErrorMessage(error));
   } finally {
     busy.seasonShop = false;
-  }
-}
-
-function pointChangeClass(amount: number) {
-  return amount >= 0 ? "income" : "expense";
-}
-
-function formatPointChange(amount: number) {
-  return `${amount > 0 ? "+" : ""}${amount}`;
-}
-
-function seasonPointSourceLabel(sourceType: string) {
-  const labels: Record<string, string> = {
-    task_activity: "任务活跃",
-    shop_spend: "赛季商店",
-    admin_adjust: "运营调整",
-  };
-  return labels[sourceType] || sourceType;
-}
-
-function pointMetadataSummary(record: PointLedgerRecord) {
-  const metadata = record.metadata || {};
-  const meta = (key: string) => metadata[key];
-  switch (record.sourceType) {
-    case "draw_once":
-    case "draw_ten":
-      return `卡池 ${String(meta("poolName") || meta("poolId") || "-")} · ${String(
-        meta("count") || 1,
-      )} 次`;
-    case "recharge":
-      return `鱼排用户名 ${String(meta("fishpiUserName") || "-")} · 扣除 ${String(
-        meta("fishpiCost") || Math.abs(record.changeAmount),
-      )}`;
-    case "redeem_code":
-      return `兑换码 ${String(meta("code") || "-")}`;
-    case "launch_activity":
-      return `活动 ${String(meta("activityName") || meta("activityKey") || "-")}`;
-    case "daily_sign_in":
-      return `第 ${String(meta("cycleDay") || "-")} 天`;
-    case "exchange_shop":
-      return `兑换项 ${String(meta("exchangeItemName") || meta("exchangeItemId") || "-")} · ${String(
-        meta("count") || 1,
-      )} 次`;
-    case "task":
-      return `${String(meta("taskName") || meta("milestone") || "任务")} · ${String(
-        meta("periodKey") || "-",
-      )}`;
-    case "pve":
-      return `${String(meta("stageName") || "关卡")} · 战力 ${String(
-        meta("formationPower") || "-",
-      )}/${String(meta("enemyPower") || "-")}`;
-    case "trade_buy":
-      return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
-    case "trade_sell":
-      return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
-    case "shop_recycle":
-      return `${String(meta("cardName") || "卡片")} · ${String(meta("count") || 1)} 张`;
-    case "season_shop":
-      return `赛季商店 ${String(meta("shopItemName") || meta("shopItemId") || "-")} · ${String(
-        meta("count") || 1,
-      )} 次`;
-    case "player_message":
-      return String(meta("title") || record.title || "消息奖励");
-    default:
-      return record.title;
   }
 }
 
