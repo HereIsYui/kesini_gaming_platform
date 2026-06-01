@@ -78,8 +78,6 @@ import type {
   AchievementListResponse,
   AchievementNotification,
   AchievementRecord,
-  Announcement,
-  AnnouncementListResponse,
   BulkDecomposeResponse,
   CardUpgradePreview,
   CardUpgradeResponse,
@@ -146,6 +144,7 @@ import type {
   UserProfile,
 } from "./types";
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
+import { useAnnouncements } from "./composables/useAnnouncements";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
@@ -183,9 +182,7 @@ import {
   synthesisCostLabel,
 } from "./utils/rarity";
 import {
-  getStoredNumberSet,
   getStoredStringSet,
-  persistNumberSet,
   persistStringSet,
 } from "./utils/storage";
 
@@ -371,8 +368,6 @@ type CardStateRefreshOptions = {
   achievements?: boolean;
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
-const ANNOUNCEMENT_READ_KEY = "kesini_announcement_read";
-const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
 const NEW_CARD_SEEN_KEY = "kesini_new_card_seen";
 const BAG_PAGE_SIZE = 24;
 
@@ -407,14 +402,24 @@ const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
   adminTitle: "Kesini 运营台",
 });
-const announcements = ref<AnnouncementListResponse["list"]>([]);
-const announcementReadIds = ref<Set<number>>(getStoredNumberSet(ANNOUNCEMENT_READ_KEY));
-const announcementClosedIds = ref<Set<number>>(
-  getStoredNumberSet(ANNOUNCEMENT_CLOSED_KEY),
-);
+const announcementState = useAnnouncements();
+const announcements = announcementState.announcements;
+const announcementReadIds = announcementState.announcementReadIds;
+const announcementClosedIds = announcementState.announcementClosedIds;
+const announcementModalOpen = announcementState.announcementModalOpen;
+const selectedAnnouncement = announcementState.selectedAnnouncement;
+const activeAnnouncements = announcementState.activeAnnouncements;
+const visibleAnnouncements = announcementState.visibleAnnouncements;
+const unreadAnnouncementCount = announcementState.unreadAnnouncementCount;
+const loadAnnouncements = announcementState.loadAnnouncements;
+const announcementSummary = announcementState.announcementSummary;
+const isAnnouncementRead = announcementState.isAnnouncementRead;
+const markAnnouncementRead = announcementState.markAnnouncementRead;
+const closeAnnouncement = announcementState.closeAnnouncement;
+const openAnnouncementList = announcementState.openAnnouncementList;
+const openAnnouncementDetail = announcementState.openAnnouncementDetail;
+const closeAnnouncementModal = announcementState.closeAnnouncementModal;
 const newCardSeenKeys = ref<Set<string>>(getStoredStringSet(NEW_CARD_SEEN_KEY));
-const announcementModalOpen = ref(false);
-const selectedAnnouncement = ref<Announcement | null>(null);
 const pools = ref<PoolInfo[]>([]);
 const activePoolId = ref<number | null>(null);
 const poolCards = ref<CardItem[]>([]);
@@ -1307,20 +1312,6 @@ const resultModalSubtitle = computed(() => {
     ? `${lastResults.value.length} 次抽取完成，最高稀有度 ${best.rarity}`
     : `${lastResults.value.length} 次抽取完成`;
 });
-const activeAnnouncements = computed(() =>
-  announcements.value.filter((item) => item.active !== false),
-);
-const visibleAnnouncements = computed(() =>
-  activeAnnouncements.value
-    .filter((item) => !announcementClosedIds.value.has(item.id))
-    .slice(0, 2),
-);
-const unreadAnnouncementCount = computed(
-  () =>
-    announcements.value.filter((item) => !announcementReadIds.value.has(item.id))
-      .length,
-);
-
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1522,49 +1513,6 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
 }
 
-function announcementSummary(content: string) {
-  const text = String(content || "").trim();
-  return text.length > 36 ? `${text.slice(0, 36)}…` : text;
-}
-
-function isAnnouncementRead(item: Announcement) {
-  return announcementReadIds.value.has(item.id);
-}
-
-function markAnnouncementRead(item: Announcement) {
-  if (announcementReadIds.value.has(item.id)) {
-    return;
-  }
-  const next = new Set(announcementReadIds.value);
-  next.add(item.id);
-  announcementReadIds.value = next;
-  persistNumberSet(ANNOUNCEMENT_READ_KEY, next);
-}
-
-function closeAnnouncement(item: Announcement) {
-  markAnnouncementRead(item);
-  const next = new Set(announcementClosedIds.value);
-  next.add(item.id);
-  announcementClosedIds.value = next;
-  persistNumberSet(ANNOUNCEMENT_CLOSED_KEY, next);
-}
-
-function openAnnouncementList() {
-  selectedAnnouncement.value = null;
-  announcementModalOpen.value = true;
-}
-
-function openAnnouncementDetail(item: Announcement) {
-  selectedAnnouncement.value = item;
-  markAnnouncementRead(item);
-  announcementModalOpen.value = true;
-}
-
-function closeAnnouncementModal() {
-  announcementModalOpen.value = false;
-  selectedAnnouncement.value = null;
-}
-
 function getStoredDrawResults(): GachaResult[] {
   const raw = localStorage.getItem(DRAW_RESULTS_KEY);
   if (!raw) {
@@ -1749,16 +1697,13 @@ function sortPools(list: PoolInfo[]) {
 async function loadPublicData() {
   busy.public = true;
   try {
-    const [list, recharge, announcementData] = await Promise.all([
+    const [list, recharge] = await Promise.all([
       request<PoolInfo[]>("/card/pools"),
       request<RechargeConfig>("/recharge/config").catch(() => null),
-      request<AnnouncementListResponse>("/announcements").catch(() => ({
-        list: [],
-      })),
+      loadAnnouncements(),
     ]);
     pools.value = sortPools(list || []);
     rechargeConfig.value = recharge;
-    announcements.value = announcementData.list || [];
     if (!activePoolId.value && pools.value.length > 0) {
       activePoolId.value = pools.value[0].id;
     }
@@ -4843,9 +4788,7 @@ const appContext = {
   requiredFragmentsForRarity,
   strongestRarityClass,
   synthesisCostLabel,
-  getStoredNumberSet,
   getStoredStringSet,
-  persistNumberSet,
   persistStringSet,
   sectionItems,
   sectionItemMap,
@@ -4855,8 +4798,6 @@ const appContext = {
   accountMenuItems,
   leaderboardTabs,
   DRAW_RESULTS_KEY,
-  ANNOUNCEMENT_READ_KEY,
-  ANNOUNCEMENT_CLOSED_KEY,
   NEW_CARD_SEEN_KEY,
   BAG_PAGE_SIZE,
   route,
@@ -4881,12 +4822,24 @@ const appContext = {
   token,
   currentUser,
   siteConfig,
+  announcementState,
   announcements,
   announcementReadIds,
   announcementClosedIds,
-  newCardSeenKeys,
   announcementModalOpen,
   selectedAnnouncement,
+  activeAnnouncements,
+  visibleAnnouncements,
+  unreadAnnouncementCount,
+  loadAnnouncements,
+  announcementSummary,
+  isAnnouncementRead,
+  markAnnouncementRead,
+  closeAnnouncement,
+  openAnnouncementList,
+  openAnnouncementDetail,
+  closeAnnouncementModal,
+  newCardSeenKeys,
   pools,
   activePoolId,
   poolCards,
@@ -5120,9 +5073,6 @@ const appContext = {
   drawPhaseText,
   resultModalTitle,
   resultModalSubtitle,
-  activeAnnouncements,
-  visibleAnnouncements,
-  unreadAnnouncementCount,
   closeTopOverlay,
   modalStack,
   modalOverlayOpen,
@@ -5134,13 +5084,6 @@ const appContext = {
   shortActivityText,
   activityLine,
   getErrorMessage,
-  announcementSummary,
-  isAnnouncementRead,
-  markAnnouncementRead,
-  closeAnnouncement,
-  openAnnouncementList,
-  openAnnouncementDetail,
-  closeAnnouncementModal,
   getStoredDrawResults,
   setStoredDrawResults,
   delay,
