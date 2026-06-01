@@ -136,6 +136,7 @@ import { useAnnouncements } from "./composables/useAnnouncements";
 import { useAuthSession } from "./composables/useAuthSession";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
+import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePublicData } from "./composables/usePublicData";
 import {
@@ -157,11 +158,6 @@ import {
   tradeStatusLabel,
 } from "./utils/format";
 import {
-  isRecentCardTime,
-  newCardSeenKey,
-  type NewCardMarkerTarget,
-} from "./utils/newCard";
-import {
   normalizeRarity,
   parseCardRarities,
   rarityClass,
@@ -171,10 +167,6 @@ import {
   strongestRarityClass,
   synthesisCostLabel,
 } from "./utils/rarity";
-import {
-  getStoredStringSet,
-  persistStringSet,
-} from "./utils/storage";
 
 const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
@@ -354,7 +346,6 @@ type CardStateRefreshOptions = {
   achievements?: boolean;
 };
 const DRAW_RESULTS_KEY = "kesini_website_last_results";
-const NEW_CARD_SEEN_KEY = "kesini_new_card_seen";
 const BAG_PAGE_SIZE = 24;
 
 const route = useRoute();
@@ -415,7 +406,10 @@ const closeAnnouncement = announcementState.closeAnnouncement;
 const openAnnouncementList = announcementState.openAnnouncementList;
 const openAnnouncementDetail = announcementState.openAnnouncementDetail;
 const closeAnnouncementModal = announcementState.closeAnnouncementModal;
-const newCardSeenKeys = ref<Set<string>>(getStoredStringSet(NEW_CARD_SEEN_KEY));
+const newCardMarkers = useNewCardMarkers();
+const newCardSeenKeys = newCardMarkers.newCardSeenKeys;
+const isNewCard = newCardMarkers.isNewCard;
+const markNewCardSeen = newCardMarkers.markNewCardSeen;
 const publicData = usePublicData({
   isAuthed: () => isAuthed.value,
   setPublicBusy: (value) => {
@@ -4384,28 +4378,6 @@ function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
   }
 }
 
-function isNewCard(
-  card?: NewCardMarkerTarget,
-  options: { ignoreSeen?: boolean } = {},
-) {
-  if (!isRecentCardTime(card?.latestObtainedAt || card?.obtainedAt)) {
-    return false;
-  }
-  const key = newCardSeenKey(card);
-  return Boolean(options.ignoreSeen || !key || !newCardSeenKeys.value.has(key));
-}
-
-function markNewCardSeen(card?: NewCardMarkerTarget) {
-  const key = newCardSeenKey(card);
-  if (!key || newCardSeenKeys.value.has(key)) {
-    return;
-  }
-  const next = new Set(newCardSeenKeys.value);
-  next.add(key);
-  newCardSeenKeys.value = next;
-  persistStringSet(NEW_CARD_SEEN_KEY, next);
-}
-
 function pvePowerPercent(stage: PveStage) {
   const enemyPower = Math.max(1, Number(stage.enemyPower || 0));
   return Math.max(
@@ -4552,8 +4524,6 @@ const appContext = {
   poolTypeLabel,
   tradeRoleLabel,
   tradeStatusLabel,
-  isRecentCardTime,
-  newCardSeenKey,
   normalizeRarity,
   parseCardRarities,
   rarityClass,
@@ -4562,8 +4532,6 @@ const appContext = {
   requiredFragmentsForRarity,
   strongestRarityClass,
   synthesisCostLabel,
-  getStoredStringSet,
-  persistStringSet,
   sectionItems,
   sectionItemMap,
   primaryNavSectionKeys,
@@ -4572,7 +4540,6 @@ const appContext = {
   accountMenuItems,
   leaderboardTabs,
   DRAW_RESULTS_KEY,
-  NEW_CARD_SEEN_KEY,
   BAG_PAGE_SIZE,
   route,
   feedbackState,
