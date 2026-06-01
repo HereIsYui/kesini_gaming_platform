@@ -112,7 +112,6 @@ import type {
   SendGuildMessageRequest,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
-  RechargePointsResponse,
   RedeemClaimResponse,
   SeasonOverview,
   SeasonPointRecord,
@@ -139,6 +138,7 @@ import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePublicData } from "./composables/usePublicData";
+import { useRechargeFlow } from "./composables/useRechargeFlow";
 import {
   cardMediaUrl,
   hasCardMedia,
@@ -579,8 +579,6 @@ const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
 const listingPrice = ref("");
 const recycleCount = ref(1);
 const redeemCode = ref("");
-const rechargeModalOpen = ref(false);
-const rechargeAmount = ref(10);
 const exchangeCounts = reactive<Record<number, number>>({});
 const achievementToasts = ref<AchievementNotification[]>([]);
 const achievementToastQueue = ref<AchievementNotification[]>([]);
@@ -629,6 +627,26 @@ const busy = reactive({
 });
 
 const achievementToastTimers = new Map<number, number>();
+
+const rechargeFlow = useRechargeFlow({
+  rechargeConfig,
+  isAuthed: () => isAuthed.value,
+  isBusy: () => busy.recharge,
+  setBusy: (value) => {
+    busy.recharge = value;
+  },
+  notify,
+  getErrorMessage,
+  loadPrivateData: () => loadPrivateData(),
+});
+const rechargeModalOpen = rechargeFlow.rechargeModalOpen;
+const rechargeAmount = rechargeFlow.rechargeAmount;
+const rechargeRangeLabel = rechargeFlow.rechargeRangeLabel;
+const rechargeRatioLabel = rechargeFlow.rechargeRatioLabel;
+const rechargeLocalAmount = rechargeFlow.rechargeLocalAmount;
+const openRechargeModal = rechargeFlow.openRechargeModal;
+const closeRechargeModal = rechargeFlow.closeRechargeModal;
+const submitRecharge = rechargeFlow.submitRecharge;
 
 const activeSection = computed<SectionKey>(() => {
   if (route.name === "publicProfile") {
@@ -970,25 +988,6 @@ const selectedPityText = computed(() => {
 const poolDetailPity = computed(() =>
   getPityForPool(poolDetailPool.value?.id || activePoolId.value),
 );
-const rechargeRangeLabel = computed(() => {
-  const config = rechargeConfig.value;
-  if (!config) {
-    return "充值配置同步中";
-  }
-  return `${config.minAmount} - ${config.maxAmount} 鱼排积分`;
-});
-const rechargeRatioLabel = computed(() => {
-  const ratio = Number(rechargeConfig.value?.ratio || 1);
-  return `1 鱼排积分 = ${ratio} 星穹币`;
-});
-const rechargeLocalAmount = computed(() => {
-  const amount = Number(rechargeAmount.value || 0);
-  const ratio = Number(rechargeConfig.value?.ratio || 1);
-  if (!Number.isFinite(amount) || !Number.isFinite(ratio)) {
-    return 0;
-  }
-  return Math.max(0, Math.floor(amount * ratio));
-});
 const inventoryItems = computed<InventoryItem[]>(
   () => userCards.value?.dropItems || [],
 );
@@ -1455,14 +1454,6 @@ function getErrorMessage(error: unknown) {
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function createRechargeRequestId() {
-  const random =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `website-${random}`;
 }
 
 function logout() {
@@ -2844,35 +2835,6 @@ function changePointPage(delta: number) {
   void loadPointRecords();
 }
 
-function openRechargeModal() {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  if (!rechargeConfig.value?.enabled) {
-    notify("error", "充值功能暂未开启");
-    return;
-  }
-  if (!rechargeConfig.value.hasGoldFingerKey) {
-    notify("error", "充值暂不可用");
-    return;
-  }
-  rechargeAmount.value = Math.max(
-    rechargeConfig.value.minAmount || 1,
-    Math.min(
-      rechargeConfig.value.maxAmount || 9999,
-      rechargeAmount.value || 10,
-    ),
-  );
-  rechargeModalOpen.value = true;
-}
-
-function closeRechargeModal() {
-  if (!busy.recharge) {
-    rechargeModalOpen.value = false;
-  }
-}
-
 function openLaunchActivityModal() {
   if (!isAuthed.value) {
     notify("error", "请先登录");
@@ -3018,51 +2980,6 @@ async function claimActivityReward(milestone: TaskActivityMilestone) {
     notify("error", getErrorMessage(error));
   } finally {
     busy.claimTask = false;
-  }
-}
-
-async function submitRecharge() {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  const config = rechargeConfig.value;
-  const amount = Number(rechargeAmount.value);
-  if (!config) {
-    notify("error", "充值配置还未加载完成");
-    return;
-  }
-  if (!Number.isInteger(amount) || amount <= 0) {
-    notify("error", "扣除鱼排积分数量必须为正整数");
-    return;
-  }
-  if (amount < config.minAmount || amount > config.maxAmount) {
-    notify(
-      "error",
-      `扣除鱼排积分需在 ${config.minAmount}-${config.maxAmount} 之间`,
-    );
-    return;
-  }
-
-  busy.recharge = true;
-  try {
-    const data = await request<RechargePointsResponse>("/recharge/points", {
-      method: "POST",
-      body: JSON.stringify({
-        amount,
-        requestId: createRechargeRequestId(),
-      }),
-    });
-    notify(
-      "success",
-      `充值成功：扣除鱼排积分 ${data.fishpiCost}，星穹币 ${data.pointBefore} → ${data.pointAfter}`,
-    );
-    rechargeModalOpen.value = false;
-    await loadPrivateData();
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.recharge = false;
   }
 }
 
@@ -4721,7 +4638,6 @@ const appContext = {
   activityLine,
   getErrorMessage,
   delay,
-  createRechargeRequestId,
   handleOpenIdCallback,
   loginWithOpenId,
   applyManualToken,
@@ -5642,9 +5558,7 @@ provide(APP_CONTEXT_KEY, appContext);
               </div>
               <div>
                 <dt>说明</dt>
-                <dd>
-                  充值成功后会刷新星穹币余额；重复提交同一请求不会重复入账。
-                </dd>
+                <dd>完成后到账</dd>
               </div>
             </dl>
           </div>
@@ -5665,7 +5579,7 @@ provide(APP_CONTEXT_KEY, appContext);
             >
               <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
               <Coins v-else :size="18" />
-              确认充值
+              确认
             </button>
           </footer>
         </section>
