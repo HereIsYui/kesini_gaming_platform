@@ -32,7 +32,15 @@ import {
   UsersRound,
   WandSparkles,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import {
@@ -331,6 +339,14 @@ const ANNOUNCEMENT_CLOSED_KEY = "kesini_announcement_closed";
 const THEME_KEY = "kesini_website_theme";
 const PLAYER_PREFS_KEY = "kesini_player_preferences";
 const NEW_CARD_SEEN_KEY = "kesini_new_card_seen";
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 const DEFAULT_PLAYER_PREFS: PlayerPreferences = {
   motionMode: "full",
   achievementNotices: true,
@@ -491,6 +507,7 @@ const resultModalOpen = ref(false);
 const drawPhase = ref<DrawPhase>("idle");
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
 let pageScrollSnapshot: { body: string; html: string } | null = null;
+let modalReturnFocusTarget: HTMLElement | null = null;
 
 const busy = reactive({
   public: false,
@@ -775,6 +792,51 @@ const modalOverlayOpen = computed(() =>
       announcementModalOpen.value,
   ),
 );
+const modalFocusKey = computed(() => {
+  if (confirmDialogTarget.value) {
+    return "confirm";
+  }
+  if (shareTextTarget.value) {
+    return "share";
+  }
+  if (cardIntroTarget.value) {
+    return "card";
+  }
+  if (recycleTarget.value) {
+    return "recycle";
+  }
+  if (upgradeTarget.value) {
+    return "upgrade";
+  }
+  if (listingTarget.value) {
+    return "listing";
+  }
+  if (formationPickerOpen.value) {
+    return "formation";
+  }
+  if (profilePickerOpen.value) {
+    return "profile";
+  }
+  if (resultModalOpen.value) {
+    return "result";
+  }
+  if (rechargeModalOpen.value) {
+    return "recharge";
+  }
+  if (launchActivityModalOpen.value) {
+    return "launch";
+  }
+  if (drawHistoryOpen.value) {
+    return "history";
+  }
+  if (poolDetailOpen.value) {
+    return "pool";
+  }
+  if (announcementModalOpen.value) {
+    return "announcement";
+  }
+  return "";
+});
 
 function toggleUserMenu() {
   userMenuHoverPaused.value = false;
@@ -1377,6 +1439,108 @@ function setPageScrollLocked(locked: boolean) {
   pageScrollSnapshot = null;
 }
 
+function getTopModalElement() {
+  const selectorByKey: Record<string, string> = {
+    confirm: ".confirm-modal",
+    share: ".share-text-modal",
+    card: ".card-intro-modal",
+    recycle: ".recycle-modal",
+    upgrade: ".upgrade-modal",
+    listing: ".trade-create-modal",
+    formation: ".formation-picker-modal",
+    profile: ".profile-picker-modal",
+    result: ".draw-result-modal",
+    recharge: ".recharge-modal",
+    launch: ".launch-activity-modal",
+    history: ".draw-history-modal",
+    pool: ".pool-detail-modal",
+    announcement: ".announcement-modal",
+  };
+  const selector = selectorByKey[modalFocusKey.value];
+  return selector
+    ? (document.querySelector(selector) as HTMLElement | null)
+    : null;
+}
+
+function isFocusableElement(element: Element): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  if (element.getAttribute("aria-hidden") === "true") {
+    return false;
+  }
+  return element.getClientRects().length > 0;
+}
+
+function getModalFocusableElements(container: HTMLElement) {
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+    isFocusableElement,
+  );
+}
+
+function rememberModalReturnFocus(container: HTMLElement) {
+  const activeElement = document.activeElement;
+  if (
+    !modalReturnFocusTarget &&
+    activeElement instanceof HTMLElement &&
+    !container.contains(activeElement)
+  ) {
+    modalReturnFocusTarget = activeElement;
+  }
+}
+
+function focusTopModal() {
+  const modal = getTopModalElement();
+  if (!modal) {
+    return;
+  }
+  rememberModalReturnFocus(modal);
+  const focusable = getModalFocusableElements(modal);
+  const target = focusable[0] || modal;
+  if (!modal.hasAttribute("tabindex")) {
+    modal.tabIndex = -1;
+  }
+  target.focus({ preventScroll: true });
+}
+
+function restoreModalReturnFocus() {
+  const target = modalReturnFocusTarget;
+  modalReturnFocusTarget = null;
+  if (!target || !document.contains(target)) {
+    return;
+  }
+  target.focus({ preventScroll: true });
+}
+
+function trapModalFocus(event: KeyboardEvent) {
+  const modal = getTopModalElement();
+  if (!modal) {
+    return;
+  }
+  const focusable = getModalFocusableElements(modal);
+  if (focusable.length === 0) {
+    event.preventDefault();
+    modal.focus({ preventScroll: true });
+    return;
+  }
+  const activeElement = document.activeElement;
+  const activeIndex =
+    activeElement instanceof HTMLElement
+      ? focusable.indexOf(activeElement)
+      : -1;
+  if (event.shiftKey) {
+    if (activeIndex <= 0) {
+      event.preventDefault();
+      focusable[focusable.length - 1].focus({ preventScroll: true });
+    }
+    return;
+  }
+  if (activeIndex === -1 || activeIndex >= focusable.length - 1) {
+    event.preventDefault();
+    focusable[0].focus({ preventScroll: true });
+  }
+}
+
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1438,6 +1602,10 @@ function closeTopOverlay() {
 }
 
 function handleGlobalKeydown(event: KeyboardEvent) {
+  if (event.key === "Tab" && modalFocusKey.value) {
+    trapModalFocus(event);
+    return;
+  }
   if (event.key !== "Escape") {
     return;
   }
@@ -1484,6 +1652,15 @@ watch(
 
 watch(modalOverlayOpen, (open) => {
   setPageScrollLocked(open);
+});
+
+watch(modalFocusKey, async (key) => {
+  if (!key) {
+    restoreModalReturnFocus();
+    return;
+  }
+  await nextTick();
+  focusTopModal();
 });
 
 watch(activePoolId, async (poolId) => {
@@ -9553,7 +9730,7 @@ function leaderboardRankLabel(rank?: number) {
         @click.self="closeTradeListingModal"
       >
         <section
-          class="trade-listing-modal"
+          class="trade-listing-modal trade-create-modal"
           role="dialog"
           aria-modal="true"
           aria-label="挂售卡片"
