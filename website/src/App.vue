@@ -76,8 +76,6 @@ import type {
   BulkDecomposeResponse,
   CardUpgradePreview,
   CardUpgradeResponse,
-  DrawHistoryRecord,
-  DrawHistoryResponse,
   ExchangeClaimResponse,
   ExchangeShopItem,
   FishpiPointResponse,
@@ -134,6 +132,7 @@ import type {
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
 import { useAnnouncements } from "./composables/useAnnouncements";
 import { useAuthSession } from "./composables/useAuthSession";
+import { useDrawHistory } from "./composables/useDrawHistory";
 import { useDrawResults } from "./composables/useDrawResults";
 import { useFeedback } from "./composables/useFeedback";
 import { useModalStack } from "./composables/useModalStack";
@@ -445,12 +444,29 @@ const loadUserCatalog = publicData.loadUserCatalog;
 const openPoolDetail = publicData.openPoolDetail;
 const closePoolDetail = publicData.closePoolDetail;
 const getPoolName = publicData.getPoolName;
+const drawHistoryState = useDrawHistory({
+  isAuthed: () => isAuthed.value,
+  setBusy: (value) => {
+    busy.drawHistory = value;
+  },
+  notify,
+  getErrorMessage,
+  getPoolName,
+});
+const drawHistory = drawHistoryState.drawHistory;
+const drawHistoryOpen = drawHistoryState.drawHistoryOpen;
+const drawHistoryPage = drawHistoryState.drawHistoryPage;
+const drawHistoryRows = drawHistoryState.drawHistoryRows;
+const drawHistoryTotalPages = drawHistoryState.drawHistoryTotalPages;
+const loadDrawHistory = drawHistoryState.loadDrawHistory;
+const openDrawHistory = drawHistoryState.openDrawHistory;
+const closeDrawHistory = drawHistoryState.closeDrawHistory;
+const changeDrawHistoryPage = drawHistoryState.changeDrawHistoryPage;
+const drawHistoryDetailMeta = drawHistoryState.drawHistoryDetailMeta;
+const resetDrawHistory = drawHistoryState.resetDrawHistory;
 const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
-const drawHistory = ref<DrawHistoryResponse | null>(null);
-const drawHistoryOpen = ref(false);
-const drawHistoryPage = ref(1);
 const userCards = ref<UserCardsResponse | null>(null);
 const playerProfile = ref<PlayerProfileResponse | null>(null);
 const profileCandidates = ref<UserCardsResponse["list"]>([]);
@@ -1163,12 +1179,6 @@ const bulkDecomposePreviewTotal = computed(
 const bulkDecomposeReservedCount = computed(
   () => bulkDecomposePreview.value?.reservedCount || 0,
 );
-const drawHistoryRows = computed<DrawHistoryRecord[]>(
-  () => drawHistory.value?.list || [],
-);
-const drawHistoryTotalPages = computed(
-  () => drawHistory.value?.totalPages || 1,
-);
 const tradeTotalPages = ref(1);
 const myTradeTotalPages = ref(1);
 const tradeRecordTotalPages = ref(1);
@@ -1460,9 +1470,7 @@ function logout() {
   stats.value = null;
   fishpiPoint.value = null;
   fishpiPointError.value = "";
-  drawHistory.value = null;
-  drawHistoryOpen.value = false;
-  drawHistoryPage.value = 1;
+  resetDrawHistory();
   userCards.value = null;
   playerProfile.value = null;
   profileCandidates.value = [];
@@ -1587,49 +1595,6 @@ async function loadFishpiPoint(showError = false) {
   } finally {
     busy.fishpiPoint = false;
   }
-}
-
-async function loadDrawHistory(page = drawHistoryPage.value) {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.drawHistory = true;
-  try {
-    const data = await request<DrawHistoryResponse>(
-      `/card/history${toQuery({ page, pageSize: 10 })}`,
-    );
-    drawHistory.value = data;
-    drawHistoryPage.value = data.page || page;
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.drawHistory = false;
-  }
-}
-
-async function openDrawHistory() {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  drawHistoryOpen.value = true;
-  drawHistoryPage.value = 1;
-  await loadDrawHistory(1);
-}
-
-function closeDrawHistory() {
-  drawHistoryOpen.value = false;
-}
-
-function changeDrawHistoryPage(delta: number) {
-  const next = Math.min(
-    Math.max(1, drawHistoryPage.value + delta),
-    drawHistoryTotalPages.value,
-  );
-  if (next === drawHistoryPage.value) {
-    return;
-  }
-  void loadDrawHistory(next);
 }
 
 function ensureBagPoolFilter() {
@@ -3537,17 +3502,6 @@ async function handleCardDetailAction(action: CardDetailAction) {
   if (action.key === "synthesize") {
     await synthesizeCard(action.payload as CatalogCard);
   }
-}
-
-function drawHistoryDetailMeta(detail: DrawHistoryRecord["details"][number]) {
-  const poolName = getPoolName(detail.poolId);
-  if (poolName) {
-    return poolName;
-  }
-  if (detail.cardType !== undefined && detail.cardType !== null) {
-    return cardTypeLabel(detail.cardType);
-  }
-  return "抽卡记录";
 }
 
 function getPityForPool(poolId?: number | null) {
