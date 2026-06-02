@@ -108,9 +108,20 @@ body {
 }
 
 .login-copy,
+.app-version,
 .checking-panel p {
   margin: 0;
   color: var(--admin-muted);
+}
+
+.app-version {
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-bg);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .login-form {
@@ -195,6 +206,12 @@ body {
   font-size: 12px;
 }
 
+.sidebar-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .sidebar-pill {
   width: fit-content;
   padding: 2px 7px;
@@ -202,6 +219,11 @@ body {
   border-radius: 999px;
   background: var(--admin-bg);
   font-size: 11px;
+}
+
+.version-pill {
+  color: var(--el-color-primary);
+  background: var(--admin-primary-soft);
 }
 
 .sidebar-menu-scroll {

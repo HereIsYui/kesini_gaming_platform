@@ -7,6 +7,7 @@
       <p class="eyebrow">{{ siteConfig.websiteTitle }}</p>
       <h1>{{ siteConfig.adminTitle }}</h1>
       <p class="login-copy">登录运营台。</p>
+      <p class="app-version">v{{ appVersion }}</p>
 
       <el-form label-position="top" class="login-form">
         <el-form-item label="服务地址">
@@ -802,6 +803,7 @@ const manualLoginEnabled =
   isEnabledFlag(import.meta.env.PUBLIC_ENABLE_MANUAL_LOGIN) ||
   isEnabledFlag(window.__KESINI_CONFIG__?.ENABLE_MANUAL_LOGIN);
 const loginLoading = ref(false);
+const appVersion = __APP_VERSION__;
 const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
   adminTitle: "Kesini 运营台",
@@ -1575,7 +1577,10 @@ const SidebarBrand = defineComponent({
             h("span", "运营控制台"),
           ]),
         ]),
-        h("span", { class: "sidebar-pill" }, "管理"),
+        h("div", { class: "sidebar-pills" }, [
+          h("span", { class: "sidebar-pill" }, "管理"),
+          h("span", { class: "sidebar-pill version-pill" }, `v${appVersion}`),
+        ]),
       ]);
   },
 });

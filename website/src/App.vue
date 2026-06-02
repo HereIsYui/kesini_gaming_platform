@@ -339,6 +339,7 @@ type CardStateRefreshOptions = {
   achievements?: boolean;
 };
 const BAG_PAGE_SIZE = 24;
+const appVersion = __APP_VERSION__;
 
 const route = useRoute();
 const feedbackState = useFeedback();
@@ -4665,7 +4666,7 @@ provide(APP_CONTEXT_KEY, appContext);
         <span class="brand-mark"><Sparkles :size="20" /></span>
         <span>
           <strong>{{ siteConfig.websiteTitle }}</strong>
-          <small>星穹调度台</small>
+          <small>星穹调度台 · v{{ appVersion }}</small>
         </span>
       </RouterLink>
 
