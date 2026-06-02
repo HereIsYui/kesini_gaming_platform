@@ -1406,13 +1406,56 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.point-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .point-card span,
 .point-card small {
   color: var(--text-soft);
   font-size: 12px;
+}
+
+.fishpi-point-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  max-width: 180px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+}
+
+:root[data-theme="light"] .fishpi-point-hint {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.fishpi-point-hint b {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fishpi-point-hint.muted b {
+  color: var(--text-soft);
 }
 
 .point-card strong {
@@ -1429,7 +1472,7 @@ h3 {
 
 .point-card-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -7107,6 +7150,16 @@ h3 {
 
   .point-card-head {
     align-items: flex-start;
+  }
+
+  .point-card-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .fishpi-point-hint {
+    flex: 1 1 150px;
+    max-width: none;
   }
 
   .launch-activity-callout {

@@ -226,26 +226,28 @@ const {
     <div v-if="isAuthed" class="point-card">
       <div class="point-card-head">
         <span>资产余额</span>
-        <button
-          class="recharge-trigger"
-          type="button"
-          :disabled="busy.recharge || rechargeConfig?.enabled === false"
-          @click="openRechargeModal"
-        >
-          <Coins :size="15" />
-          充值
-        </button>
+        <div class="point-card-actions">
+          <span
+            class="fishpi-point-hint"
+            :class="{ muted: fishpiPointError && !fishpiPoint }"
+          >
+            鱼排积分 <b>{{ fishpiPointLabel }}</b>
+          </span>
+          <button
+            class="recharge-trigger"
+            type="button"
+            :disabled="busy.recharge || rechargeConfig?.enabled === false"
+            @click="openRechargeModal"
+          >
+            <Coins :size="15" />
+            充值
+          </button>
+        </div>
       </div>
       <div class="point-card-metrics">
         <div>
           <span>星穹币</span>
           <strong>{{ stats?.point || 0 }}</strong>
-        </div>
-        <div>
-          <span>鱼排积分</span>
-          <strong :class="{ muted: fishpiPointError && !fishpiPoint }">
-            {{ fishpiPointLabel }}
-          </strong>
         </div>
       </div>
       <small>
