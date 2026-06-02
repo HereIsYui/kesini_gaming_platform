@@ -4139,6 +4139,35 @@ h3 {
   font-weight: 800;
 }
 
+.guild-announcement {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.055);
+  padding: 12px;
+}
+
+:root[data-theme="light"] .guild-announcement {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.guild-announcement div {
+  display: grid;
+  gap: 4px;
+}
+
+.guild-announcement h3,
+.guild-announcement p {
+  margin: 0;
+}
+
+.guild-announcement p:not(.eyebrow) {
+  color: var(--text);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 .guild-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

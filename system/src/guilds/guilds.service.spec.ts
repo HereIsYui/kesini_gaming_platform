@@ -307,8 +307,8 @@ describe("GuildsService 公会系统", () => {
       },
     });
     expect(messages.list.map((message) => message.content)).toEqual([
-      "大家好",
       "一起抽卡",
+      "大家好",
     ]);
     expect((messages.list[0].sender as any).point).toBeUndefined();
   });

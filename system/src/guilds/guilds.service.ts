@@ -10,7 +10,8 @@ import {
 } from "src/utils/user-public-id";
 
 const GUILD_LIST_LIMIT = 30;
-const DEFAULT_MESSAGE_LIMIT = 50;
+const DEFAULT_MESSAGE_LIST_LIMIT = 30;
+const MAX_MESSAGE_LIST_LIMIT = 30;
 const MAX_MESSAGE_LENGTH = 120;
 
 @Injectable()
@@ -58,7 +59,7 @@ export class GuildsService {
     };
   }
 
-  async listMessages(uid: string, rawLimit = DEFAULT_MESSAGE_LIMIT) {
+  async listMessages(uid: string, rawLimit = DEFAULT_MESSAGE_LIST_LIMIT) {
     const normalizedUid = this.normalizeUid(uid);
     const membership = await this.requireMembership(
       this.dataSource,
@@ -71,10 +72,7 @@ export class GuildsService {
     });
 
     return {
-      list: await this.toMessageViews(
-        this.dataSource,
-        messages.reverse(),
-      ),
+      list: await this.toMessageViews(this.dataSource, messages),
     };
   }
 
@@ -393,11 +391,11 @@ export class GuildsService {
   }
 
   private normalizeMessageLimit(value: number) {
-    const limit = Number(value || DEFAULT_MESSAGE_LIMIT);
+    const limit = Number(value || DEFAULT_MESSAGE_LIST_LIMIT);
     if (!Number.isInteger(limit) || limit <= 0) {
-      return DEFAULT_MESSAGE_LIMIT;
+      return DEFAULT_MESSAGE_LIST_LIMIT;
     }
-    return Math.min(100, limit);
+    return Math.min(MAX_MESSAGE_LIST_LIMIT, limit);
   }
 
   private normalizeMessageContent(content: string) {

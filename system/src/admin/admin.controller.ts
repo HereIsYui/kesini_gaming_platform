@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsBoolean,
   IsArray,
@@ -882,10 +882,14 @@ class RedeemCodeDto {
   enabled?: boolean;
 
   @IsOptional()
-  @Type(() => Number)
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
   @IsInt()
   @Min(1)
-  total_limit?: number;
+  total_limit?: number | null;
 
   @IsOptional()
   @IsDateString()

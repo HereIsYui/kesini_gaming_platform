@@ -346,6 +346,7 @@ type CardStateRefreshOptions = {
   achievements?: boolean;
 };
 const BAG_PAGE_SIZE = 24;
+const GUILD_MESSAGE_LIST_LIMIT = 30;
 const appVersion = __APP_VERSION__;
 
 const route = useRoute();
@@ -899,7 +900,17 @@ const guildRows = computed<GuildSummary[]>(
 const guildRoleLabel = computed(() =>
   currentGuild.value?.role === "leader" ? "会长" : "成员",
 );
-const guildMessageRows = computed(() => guildMessages.value);
+const guildMessageRows = computed(() =>
+  guildMessages.value
+    .slice()
+    .sort(
+      (left, right) =>
+        (Date.parse(right.createdAt || "") || 0) -
+          (Date.parse(left.createdAt || "") || 0) ||
+        Number(right.id || 0) - Number(left.id || 0),
+    )
+    .slice(0, GUILD_MESSAGE_LIST_LIMIT),
+);
 const modalFocusKey = computed(() => {
   if (confirmDialogTarget.value) {
     return "confirm";
@@ -2132,7 +2143,7 @@ async function loadGuildMessages(showError = activeSection.value === "guild") {
   guildMessageError.value = "";
   try {
     const data = await request<GuildMessagesResponse>(
-      "/guilds/me/messages?limit=50",
+      `/guilds/me/messages?limit=${GUILD_MESSAGE_LIST_LIMIT}`,
     );
     guildMessages.value = data.list || [];
   } catch (error) {
@@ -2280,14 +2291,23 @@ async function loadFormationCandidates() {
   }
   busy.formationCandidates = true;
   try {
-    const data = await request<UserCardsResponse>(
-      `/card/user/cards${toQuery({
-        grouped: false,
-        page: 1,
-        pageSize: 100,
-      })}`,
-    );
-    formationCandidates.value = data.list || [];
+    const pageSize = 100;
+    const candidates: UserCardsResponse["list"] = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const data = await request<UserCardsResponse>(
+        `/card/user/cards${toQuery({
+          grouped: false,
+          page,
+          pageSize,
+        })}`,
+      );
+      candidates.push(...(data.list || []));
+      totalPages = Math.max(1, Number(data.totalPages || 1));
+      page += 1;
+    } while (page <= totalPages);
+    formationCandidates.value = candidates;
   } catch (error) {
     formationCandidates.value = [];
     notify("error", getErrorMessage(error));

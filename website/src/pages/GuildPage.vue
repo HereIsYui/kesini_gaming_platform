@@ -105,6 +105,13 @@ const {
             </div>
             <small>{{ guildRoleLabel }}</small>
           </div>
+          <section class="guild-announcement">
+            <div>
+              <p class="eyebrow">公告</p>
+              <h3>公会公告</h3>
+            </div>
+            <p>{{ currentGuild.description || "暂无公告" }}</p>
+          </section>
           <div class="guild-stats">
             <article>
               <small>成员</small>

@@ -1,7 +1,12 @@
 <template>
   <div class="reward-editor">
     <el-form-item v-if="mode !== 'costs'" label="奖励星穹币">
-      <el-input-number v-model="localRewards.points" :min="0" :step="1" />
+      <el-input-number
+        :model-value="localRewards.points"
+        :min="0"
+        :step="1"
+        @update:model-value="updatePoints"
+      />
     </el-form-item>
 
     <div class="reward-row-header">
@@ -188,6 +193,14 @@ const cards = computed<Array<{ cardId: number; rarity: string; num: number }>>({
 
 function addItem() {
   items.value = [...items.value, { itemId: 0, num: 1 }];
+}
+
+function updatePoints(value: number | undefined) {
+  const points = Math.max(0, Number(value || 0));
+  localRewards.value = {
+    ...localRewards.value,
+    points,
+  };
 }
 
 function updateItem(
