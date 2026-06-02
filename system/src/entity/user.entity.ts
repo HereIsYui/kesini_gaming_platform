@@ -17,7 +17,7 @@ export class User {
   @Column()
   uid: string;
 
-  @Column({ length: 32, nullable: true })
+  @Column({ type: "varchar", length: 32, nullable: true })
   public_id: string | null;
 
   @Column()

@@ -22,7 +22,7 @@ export class UserCard {
   card_id: string;
 
   // 实际获得时的稀有度，旧数据允许为空
-  @Column({ nullable: true })
+  @Column({ type: "varchar", nullable: true })
   card_level?: string;
 
   // 是否可以出售
