@@ -79,7 +79,15 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElAlert } from "element-plus/es/components/alert/index";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElCard } from "element-plus/es/components/card/index";
+import { ElDatePicker } from "element-plus/es/components/date-picker/index";
+import { ElForm, ElFormItem } from "element-plus/es/components/form/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import { ElInputNumber } from "element-plus/es/components/input-number/index";
+import { ElMessage } from "element-plus/es/components/message/index";
+import { ElSwitch } from "element-plus/es/components/switch/index";
 import { Refresh } from "@element-plus/icons-vue";
 import { request } from "../api";
 import type { FieldConfig, SelectOption } from "../types";

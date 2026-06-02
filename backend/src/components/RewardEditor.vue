@@ -91,6 +91,14 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElEmpty } from "element-plus/es/components/empty/index";
+import { ElFormItem } from "element-plus/es/components/form/index";
+import { ElInputNumber } from "element-plus/es/components/input-number/index";
+import {
+  ElOption,
+  ElSelect,
+} from "element-plus/es/components/select/index";
 import type { ExchangeCostItem, RedeemRewards, SelectOption } from "../types";
 
 const props = withDefaults(defineProps<{

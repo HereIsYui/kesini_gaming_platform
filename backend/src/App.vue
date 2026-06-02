@@ -724,14 +724,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, ref, watch } from "vue";
-import { ElButton, ElMessage, ElMessageBox } from "element-plus";
+import {
+  computed,
+  defineAsyncComponent,
+  defineComponent,
+  h,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
+import { ElMessage } from "element-plus/es/components/message/index";
+import { ElMessageBox } from "element-plus/es/components/message-box/index";
 import {
   ArrowDown,
   Collection,
   Coin,
   DataAnalysis,
-  EditPen,
   Files,
   Goods,
   Histogram,
@@ -799,7 +807,6 @@ import type {
   AdminMeResponse,
   AdminOptions,
   DashboardData,
-  GachaConfigData,
   GachaPoolConfig,
   PoolGachaConfigDetail,
   RechargeStatsResponse,
@@ -808,21 +815,33 @@ import type {
 } from "./types";
 import {
   formatFieldValue,
-  getGachaSourceText,
   getPoolGachaModalConfig,
   getPoolTypeLabel,
   getPoolTypeTagType,
-  getProbabilityTotal,
   getValue,
-  summarizePityConfig,
-  summarizeUpConfig,
-  formatDate,
 } from "./utils";
-import AdminTable from "./components/AdminTable.vue";
-import ConfigPanel from "./components/ConfigPanel.vue";
-import GachaConfigDialog from "./components/GachaConfigDialog.vue";
-import PityProgress from "./components/PityProgress.vue";
-import RechargeStatsPanel from "./components/RechargeStatsPanel.vue";
+
+const AdminTable = defineAsyncComponent(
+  () => import("./components/AdminTable.vue"),
+);
+const ConfigPanel = defineAsyncComponent(
+  () => import("./components/ConfigPanel.vue"),
+);
+const DashboardPage = defineAsyncComponent(
+  () => import("./pages/DashboardPage.vue"),
+);
+const GachaConfigDialog = defineAsyncComponent(
+  () => import("./components/GachaConfigDialog.vue"),
+);
+const GachaConfigPage = defineAsyncComponent(
+  () => import("./pages/GachaConfigPage.vue"),
+);
+const PityProgress = defineAsyncComponent(
+  () => import("./components/PityProgress.vue"),
+);
+const RechargeStatsPanel = defineAsyncComponent(
+  () => import("./components/RechargeStatsPanel.vue"),
+);
 
 type Theme = "light" | "dark";
 
@@ -1659,276 +1678,4 @@ const SidebarBrand = defineComponent({
   },
 });
 
-const DashboardPage = defineComponent({
-  name: "DashboardPage",
-  props: {
-    data: { type: Object, default: null },
-    loading: { type: Boolean, default: false },
-    error: { type: String, default: "" },
-  },
-  emits: ["reload"],
-  setup(props, { emit }) {
-    return () =>
-      h("div", { class: "dashboard-page" }, [
-        h(
-          "div",
-          { class: "stat-grid" },
-          Object.entries(
-            (props.data as DashboardData | null)?.counters || {},
-          ).map(([key, value]) =>
-            h("div", { class: "stat-card", key }, [
-              h("span", counterLabel(key)),
-              h("strong", String(value)),
-            ]),
-          ),
-        ),
-        h("div", { class: "dashboard-grid" }, [
-          h("div", { class: "dashboard-main" }, [
-            props.error
-              ? h("div", { class: "state-box error" }, props.error)
-              : props.loading
-                ? h("div", { class: "state-box" }, "正在加载总览...")
-                : h("div", { class: "panel-card plain-card" }, [
-                    h("div", { class: "panel-header" }, [
-                      h("div", [
-                        h("p", { class: "eyebrow" }, "最近动态"),
-                        h("h2", "抽卡记录"),
-                      ]),
-                      h(
-                        "button",
-                        { class: "link-button", onClick: () => emit("reload") },
-                        "刷新",
-                      ),
-                    ]),
-                    h(
-                      "div",
-                      { class: "activity-list" },
-                      (
-                        (props.data as DashboardData | null)?.recentHistories ||
-                        []
-                      ).length
-                        ? (
-                            (props.data as DashboardData | null)
-                              ?.recentHistories || []
-                          ).map((item, index) =>
-                            h("div", { class: "activity-item", key: index }, [
-                              h("div", { class: "activity-user" }, [
-                                h(
-                                  "strong",
-                                  String(item.userName || "未知用户"),
-                                ),
-                                h("span", `账号 ${String(item.uid || "-")}`),
-                              ]),
-                              h("div", { class: "activity-detail" }, [
-                                h("strong", `${String(item.count || 0)} 抽`),
-                                h("span", String(item.card_levels || "-")),
-                                h(
-                                  "time",
-                                  item.createdAt
-                                    ? formatDate(item.createdAt)
-                                    : "-",
-                                ),
-                              ]),
-                            ]),
-                          )
-                        : [
-                            h(
-                              "div",
-                              { class: "state-box compact" },
-                              "暂无抽卡记录",
-                            ),
-                          ],
-                    ),
-                  ]),
-          ]),
-          h("div", { class: "side-stack" }, [
-            h("div", { class: "panel-card plain-card" }, [
-              h("p", { class: "eyebrow" }, "运营状态"),
-              h("h2", "数据已同步"),
-              h("div", { class: "status-list" }, [
-                statusItem("统计口径", "全量数据"),
-                statusItem(
-                  "最近记录",
-                  `${((props.data as DashboardData | null)?.recentHistories || []).length} 条`,
-                ),
-                statusItem("刷新方式", "手动刷新"),
-              ]),
-            ]),
-            h("div", { class: "panel-card plain-card" }, [
-              h("p", { class: "eyebrow" }, "稀有度库存"),
-              ...Object.entries(
-                (props.data as DashboardData | null)?.rarityTotals || {},
-              ).map(([key, value]) =>
-                h("div", { class: "rarity-row", key }, [
-                  h("span", key),
-                  h("strong", String(value)),
-                ]),
-              ),
-            ]),
-          ]),
-        ]),
-      ]);
-  },
-});
-
-const GachaConfigPage = defineComponent({
-  name: "GachaConfigPage",
-  props: {
-    options: { type: Object, default: null },
-  },
-  setup(props) {
-    const data = ref<GachaConfigData | null>(null);
-    const loading = ref(false);
-    const error = ref("");
-    const dialogVisible = ref(false);
-    const load = async () => {
-      loading.value = true;
-      error.value = "";
-      try {
-        data.value = await request<GachaConfigData>("/admin/config/gacha");
-      } catch (err) {
-        error.value = err instanceof Error ? err.message : "加载失败";
-      } finally {
-        loading.value = false;
-      }
-    };
-    const defaultConfig = computed(
-      () => data.value?.defaultConfig || data.value?.pools?.["0"],
-    );
-    const fallbackConfig = computed(
-      () => data.value?.fallbackConfig || data.value?.defaults?.["0"],
-    );
-    const editableDefaultConfig = computed<GachaPoolConfig>(
-      () =>
-        defaultConfig.value ||
-        fallbackConfig.value || {
-          poolId: 0,
-          enabled: true,
-          scope: "fallback",
-        },
-    );
-    const save = async (poolId: number, values: GachaPoolConfig) => {
-      const { poolId: _poolId, source, scope, updatedAt, ...payload } = values;
-      void _poolId;
-      void source;
-      void scope;
-      void updatedAt;
-      try {
-        await request(`/admin/config/gacha/${poolId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-        ElMessage.success("默认抽卡配置已保存");
-        dialogVisible.value = false;
-        await load();
-      } catch (err) {
-        ElMessage.error(err instanceof Error ? err.message : "保存失败");
-      }
-    };
-    onMounted(load);
-    return () =>
-      h("div", [
-        h("div", { class: "panel-card plain-card" }, [
-          h("div", { class: "panel-header" }, [
-            h("div", [
-              h("p", { class: "eyebrow" }, "系统配置"),
-              h("h2", "默认抽卡配置"),
-            ]),
-            h(
-              "button",
-              { class: "link-button", onClick: load },
-              loading.value ? "加载中" : "刷新",
-            ),
-          ]),
-          error.value
-            ? h("div", { class: "state-box error" }, error.value)
-            : editableDefaultConfig.value
-              ? h("div", { class: "config-summary-grid" }, [
-                  summaryItem(
-                    "配置来源",
-                    getGachaSourceText(editableDefaultConfig.value),
-                  ),
-                  summaryItem(
-                    "星穹币消耗",
-                    `单抽 ${editableDefaultConfig.value.drawCosts?.once ?? 10} / 十连 ${editableDefaultConfig.value.drawCosts?.ten ?? 100}`,
-                  ),
-                  summaryItem(
-                    "概率合计",
-                    `${(getProbabilityTotal(editableDefaultConfig.value.rarityProbabilities) * 100).toFixed(2)}%`,
-                  ),
-                  summaryItem(
-                    "UP",
-                    summarizeUpConfig(editableDefaultConfig.value.upCards),
-                  ),
-                  summaryItem(
-                    "保底",
-                    summarizePityConfig(editableDefaultConfig.value.pitySystem),
-                  ),
-                  summaryItem(
-                    "更新时间",
-                    editableDefaultConfig.value.updatedAt
-                      ? formatDate(editableDefaultConfig.value.updatedAt)
-                      : "-",
-                  ),
-                ])
-              : h(
-                  "div",
-                  { class: "state-box" },
-                  "暂无默认配置，保存后会写入 pool_id=0。",
-                ),
-          h("div", { class: "config-actions" }, [
-            h(
-              ElButton,
-              {
-                class: "config-edit-button",
-                type: "primary",
-                icon: EditPen,
-                onClick: () => (dialogVisible.value = true),
-              },
-              () => "编辑默认配置",
-            ),
-          ]),
-        ]),
-        editableDefaultConfig.value
-          ? h(GachaConfigDialog, {
-              modelValue: dialogVisible.value,
-              "onUpdate:modelValue": (value: boolean) =>
-                (dialogVisible.value = value),
-              mode: "default",
-              poolKey: "0",
-              config: editableDefaultConfig.value,
-              defaultConfig: fallbackConfig.value,
-              poolName: "全局默认配置",
-              options: props.options as AdminOptions | null,
-              onSave: save,
-            })
-          : null,
-      ]);
-  },
-});
-
-function counterLabel(key: string) {
-  const labels: Record<string, string> = {
-    userCount: "用户",
-    cardCount: "卡片",
-    poolCount: "卡池",
-    dropItemCount: "物品",
-    totalDraws: "总抽数",
-  };
-  return labels[key] || key;
-}
-
-function summaryItem(label: string, value: string) {
-  return h("div", { class: "summary-item" }, [
-    h("span", label),
-    h("strong", value),
-  ]);
-}
-
-function statusItem(label: string, value: string) {
-  return h("div", { class: "status-item" }, [
-    h("span", label),
-    h("strong", value),
-  ]);
-}
 </script>

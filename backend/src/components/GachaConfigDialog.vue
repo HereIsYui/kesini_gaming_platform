@@ -166,7 +166,27 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElAlert } from "element-plus/es/components/alert/index";
+import { ElButton } from "element-plus/es/components/button/index";
+import {
+  ElDescriptions,
+  ElDescriptionsItem,
+} from "element-plus/es/components/descriptions/index";
+import { ElDialog } from "element-plus/es/components/dialog/index";
+import { ElForm, ElFormItem } from "element-plus/es/components/form/index";
+import { ElInputNumber } from "element-plus/es/components/input-number/index";
+import { ElMessage } from "element-plus/es/components/message/index";
+import {
+  ElRadioButton,
+  ElRadioGroup,
+} from "element-plus/es/components/radio/index";
+import {
+  ElOption,
+  ElSelect,
+} from "element-plus/es/components/select/index";
+import { ElSwitch } from "element-plus/es/components/switch/index";
+import { ElTabPane, ElTabs } from "element-plus/es/components/tabs/index";
+import { ElTag } from "element-plus/es/components/tag/index";
 import { probabilityTemplates, rarityOptions } from "../constants";
 import type { AdminOptions, GachaPoolConfig } from "../types";
 import {

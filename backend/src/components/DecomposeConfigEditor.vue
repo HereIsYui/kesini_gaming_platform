@@ -16,13 +16,15 @@
                 placeholder="沿用卡片或默认碎片"
                 class="drop-item-select"
                 @update:model-value="
-                  updateDrop(row.rarity, index, { itemId: Number($event || 0) })
+                  updateDrop(toRarity(row.rarity), Number(index), {
+                    itemId: Number($event || 0),
+                  })
                 "
               >
                 <el-option label="沿用卡片配置 / 默认碎片" :value="0" />
                 <el-option
                   v-for="item in fragmentOptions"
-                  :key="item.value"
+                  :key="String(item.value)"
                   :label="item.label"
                   :value="Number(item.value)"
                   :disabled="item.disabled"
@@ -35,7 +37,9 @@
                 controls-position="right"
                 class="drop-count-input"
                 @update:model-value="
-                  updateDrop(row.rarity, index, { min: Number($event || 1) })
+                  updateDrop(toRarity(row.rarity), Number(index), {
+                    min: Number($event || 1),
+                  })
                 "
               />
               <span class="drop-count-separator">至</span>
@@ -46,7 +50,7 @@
                 controls-position="right"
                 class="drop-count-input"
                 @update:model-value="
-                  updateDrop(row.rarity, index, {
+                  updateDrop(toRarity(row.rarity), Number(index), {
                     max: Number($event || drop.min || 1),
                   })
                 "
@@ -58,7 +62,7 @@
                 type="danger"
                 :disabled="row.drops.length <= 1"
                 aria-label="删除碎片产出"
-                @click="removeDrop(row.rarity, index)"
+                @click="removeDrop(toRarity(row.rarity), Number(index))"
               />
             </div>
             <el-button
@@ -66,7 +70,7 @@
               plain
               type="primary"
               class="add-drop-button"
-              @click="addDrop(row.rarity)"
+              @click="addDrop(toRarity(row.rarity))"
             >
               添加碎片
             </el-button>
@@ -82,6 +86,16 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElInputNumber } from "element-plus/es/components/input-number/index";
+import {
+  ElOption,
+  ElSelect,
+} from "element-plus/es/components/select/index";
+import {
+  ElTable,
+  ElTableColumn,
+} from "element-plus/es/components/table/index";
 import { Delete, Plus } from "@element-plus/icons-vue";
 import type { SelectOption } from "../types";
 
@@ -130,6 +144,10 @@ const rows = computed(() =>
     drops: normalizeRule(rarity, props.modelValue[rarity]).drops,
   })),
 );
+
+function toRarity(value: unknown): Rarity {
+  return rarities.includes(value as Rarity) ? (value as Rarity) : "N";
+}
 
 function normalizeRule(rarity: Rarity, input?: LegacyDecomposeRule): DecomposeRule {
   const fallback = defaults[rarity];

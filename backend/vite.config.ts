@@ -12,6 +12,31 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+          const normalized = id.replace(/\\/g, "/");
+          if (
+            normalized.includes("/node_modules/vue/") ||
+            normalized.includes("/node_modules/@vue/")
+          ) {
+            return "vendor-vue";
+          }
+          if (normalized.includes("/node_modules/@element-plus/icons-vue/")) {
+            return "vendor-icons";
+          }
+          if (normalized.includes("/node_modules/dayjs/")) {
+            return "vendor-dayjs";
+          }
+          return "vendor";
+        },
+      },
+    },
+  },
   envPrefix: ["VITE_", "PUBLIC_"],
   server: {
     port: 7003,

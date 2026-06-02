@@ -304,7 +304,35 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElAlert } from "element-plus/es/components/alert/index";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElCard } from "element-plus/es/components/card/index";
+import {
+  ElCheckbox,
+  ElCheckboxGroup,
+} from "element-plus/es/components/checkbox/index";
+import { ElDatePicker } from "element-plus/es/components/date-picker/index";
+import {
+  ElDescriptions,
+  ElDescriptionsItem,
+} from "element-plus/es/components/descriptions/index";
+import { ElDialog } from "element-plus/es/components/dialog/index";
+import { ElForm, ElFormItem } from "element-plus/es/components/form/index";
+import { ElIcon } from "element-plus/es/components/icon/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import { ElInputNumber } from "element-plus/es/components/input-number/index";
+import { ElMessage } from "element-plus/es/components/message/index";
+import { ElMessageBox } from "element-plus/es/components/message-box/index";
+import { ElPagination } from "element-plus/es/components/pagination/index";
+import {
+  ElOption,
+  ElSelect,
+} from "element-plus/es/components/select/index";
+import { ElSwitch } from "element-plus/es/components/switch/index";
+import {
+  ElTable,
+  ElTableColumn,
+} from "element-plus/es/components/table/index";
 import { Download, Refresh, Search } from "@element-plus/icons-vue";
 import { getApiBase, request, toQuery } from "../api";
 import { rarityOptions } from "../constants";
