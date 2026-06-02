@@ -940,13 +940,13 @@ export class AdminService {
   }
 
   async createRedeemCode(body: Partial<RedeemCode>) {
-    const code = this.normalizeRedeemCode(body.code);
-    this.assertRequired(code, "兑换码不能为空");
+    const code =
+      this.normalizeRedeemCode(body.code) || (await this.generateRedeemCode());
     this.assertRequired(body.name, "兑换码名称不能为空");
     const existing = await this.redeemCodeRepository.findOne({
       where: { code },
     });
-    if (existing && !existing.delete_flag) {
+    if (existing) {
       throw new Error("兑换码已存在");
     }
     const rewards = await this.normalizeRewards(body.rewards);
@@ -978,7 +978,7 @@ export class AdminService {
       const existing = await this.redeemCodeRepository.findOne({
         where: { code: nextCode },
       });
-      if (existing && existing.id !== id && !existing.delete_flag) {
+      if (existing && existing.id !== id) {
         throw new Error("兑换码已存在");
       }
     }
@@ -2583,6 +2583,19 @@ export class AdminService {
     return String(code || "")
       .trim()
       .toUpperCase();
+  }
+
+  private async generateRedeemCode(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const code = `K${randomUUID().replace(/-/g, "").slice(0, 11).toUpperCase()}`;
+      const existing = await this.redeemCodeRepository.findOne({
+        where: { code },
+      });
+      if (!existing) {
+        return code;
+      }
+    }
+    throw new Error("兑换码生成失败，请重试");
   }
 
   private async normalizeRewards(

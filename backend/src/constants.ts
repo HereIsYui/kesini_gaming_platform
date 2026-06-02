@@ -124,6 +124,7 @@ export const poolTypeOptions: SelectOption[] = [
   { label: "常驻卡池", value: 0 },
   { label: "活动卡池", value: 1 },
   { label: "限定卡池", value: 2 },
+  { label: "轮转卡池", value: 3 },
 ];
 
 export const cardTypeOptions: SelectOption[] = [
@@ -368,7 +369,7 @@ export const historyFields: FieldConfig[] = [
 
 export const redeemCodeFields: FieldConfig[] = [
   { key: "id", label: "编号", readonly: true },
-  { key: "code", label: "兑换码", placeholder: "留空可由后端生成" },
+  { key: "code", label: "兑换码", placeholder: "留空自动生成" },
   { key: "name", label: "名称" },
   { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
   { key: "total_limit", label: "总库存", type: "number" },

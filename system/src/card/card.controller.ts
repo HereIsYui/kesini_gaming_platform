@@ -311,7 +311,7 @@ export class CardController {
   /**
    * 根据卡池类型获取卡池列表
    * GET /card/pools/type/:type
-   * @param type 0 常驻卡池 1 活动卡池 2 限定卡池
+   * @param type 0 常驻卡池 1 活动卡池 2 限定卡池 3 轮转卡池
    */
   @Get("pools/type/:type")
   async getPoolsByType(

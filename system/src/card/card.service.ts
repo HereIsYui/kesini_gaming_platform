@@ -610,7 +610,7 @@ export class CardService {
 
   /**
    * 根据卡池类型获取卡池列表
-   * @param cardType 0 常驻卡池 1 活动卡池 2 限定卡池
+   * @param cardType 0 常驻卡池 1 活动卡池 2 限定卡池 3 轮转卡池
    */
   async getPoolsByType(cardType: number): Promise<PoolInfo[]> {
     const pools = await this.poolRepository.find({

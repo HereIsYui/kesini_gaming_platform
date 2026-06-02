@@ -1,5 +1,5 @@
 export function poolTypeLabel(type?: number) {
-  return ["常驻", "活动", "限定"][Number(type || 0)] || "卡池";
+  return ["常驻", "活动", "限定", "轮转"][Number(type || 0)] || "卡池";
 }
 
 export function cardTypeLabel(type?: number) {

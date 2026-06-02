@@ -348,6 +348,7 @@ class LaunchActivityConfigPatchDto {
   rewards?: {
     points: number;
     items: Array<{ itemId: number; num: number }>;
+    cards?: Array<{ cardId: number; rarity: string; num: number }>;
   };
 }
 
@@ -899,6 +900,7 @@ class RedeemCodeDto {
   rewards?: {
     points: number;
     items: Array<{ itemId: number; num: number }>;
+    cards?: Array<{ cardId: number; rarity: string; num: number }>;
   };
 }
 

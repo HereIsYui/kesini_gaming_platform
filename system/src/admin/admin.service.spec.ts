@@ -1167,6 +1167,33 @@ describe("AdminService", () => {
     );
   });
 
+  it("创建兑换码留空时会自动生成码", async () => {
+    const redeemCodeRepository = createRepository();
+    const service = createService({
+      redeemCode: redeemCodeRepository,
+    });
+
+    await service.createRedeemCode({
+      code: " ",
+      name: "自动码",
+      rewards: {
+        points: 10,
+        items: [],
+      },
+    } as any);
+
+    expect(redeemCodeRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: expect.stringMatching(/^K[A-F0-9]{11}$/),
+        name: "自动码",
+        rewards: {
+          points: 10,
+          items: [],
+        },
+      }),
+    );
+  });
+
   it("创建兑换码支持卡片奖励", async () => {
     const redeemCodeRepository = createRepository();
     const cardRepository = createRepository({

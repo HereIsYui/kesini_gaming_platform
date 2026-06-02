@@ -18,7 +18,7 @@ export class PoolInfo {
   @Column()
   card_desc: string;
 
-  // 卡池类型 0 常驻卡池 1 活动卡池 2 限定卡池
+  // 卡池类型 0 常驻卡池 1 活动卡池 2 限定卡池 3 轮转卡池
   @Column()
   card_type: number;
 

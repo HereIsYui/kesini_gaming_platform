@@ -318,6 +318,7 @@ export function getPoolTypeTagType(value: unknown) {
     "0": "primary",
     "1": "warning",
     "2": "success",
+    "3": "info",
   };
   return map[String(value)] || "info";
 }
