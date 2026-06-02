@@ -76,8 +76,6 @@ import type {
   BulkDecomposeResponse,
   CardUpgradePreview,
   CardUpgradeResponse,
-  ExchangeClaimResponse,
-  ExchangeShopItem,
   FishpiPointResponse,
   FriendRelationRecord,
   FriendsOverviewResponse,
@@ -109,7 +107,6 @@ import type {
   SendGuildMessageRequest,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
-  RedeemClaimResponse,
   SeasonOverview,
   SeasonPointRecord,
   SeasonShopBuyResponse,
@@ -136,6 +133,7 @@ import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePointsLedger } from "./composables/usePointsLedger";
 import { usePublicData } from "./composables/usePublicData";
+import { useRedeemShop } from "./composables/useRedeemShop";
 import { useRechargeFlow } from "./composables/useRechargeFlow";
 import {
   cardMediaUrl,
@@ -508,7 +506,6 @@ const achievements = ref<AchievementRecord[]>([]);
 const achievementStatusFilter = ref<"all" | "achieved" | "progressing">("all");
 const achievementCategoryFilter = ref("");
 const achievementKeyword = ref("");
-const exchangeItems = ref<ExchangeShopItem[]>([]);
 const seasonShopCounts = reactive<Record<number, number>>({});
 const tradeListings = ref<TradeListing[]>([]);
 const myTradeListings = ref<TradeListing[]>([]);
@@ -571,8 +568,6 @@ const shareTextTarget = ref("");
 const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
 const listingPrice = ref("");
 const recycleCount = ref(1);
-const redeemCode = ref("");
-const exchangeCounts = reactive<Record<number, number>>({});
 const achievementToasts = ref<AchievementNotification[]>([]);
 const achievementToastQueue = ref<AchievementNotification[]>([]);
 let confirmDialogResolve: ((confirmed: boolean) => void) | null = null;
@@ -681,6 +676,25 @@ const pointChangeClass = pointsLedger.pointChangeClass;
 const formatPointChange = pointsLedger.formatPointChange;
 const seasonPointSourceLabel = pointsLedger.seasonPointSourceLabel;
 const pointMetadataSummary = pointsLedger.pointMetadataSummary;
+const redeemShop = useRedeemShop({
+  isAuthed: () => isAuthed.value,
+  setRedeemBusy: (value) => {
+    busy.redeem = value;
+  },
+  setShopBusy: (value) => {
+    busy.shop = value;
+  },
+  notify,
+  getErrorMessage,
+  loadPrivateData: () => loadPrivateData(),
+});
+const exchangeItems = redeemShop.exchangeItems;
+const redeemCode = redeemShop.redeemCode;
+const exchangeCounts = redeemShop.exchangeCounts;
+const loadExchangeItems = redeemShop.loadExchangeItems;
+const claimRedeemCode = redeemShop.claimRedeemCode;
+const claimExchange = redeemShop.claimExchange;
+const clearExchangeItems = redeemShop.clearExchangeItems;
 const isPublicProfileRoute = computed(() => route.name === "publicProfile");
 const profileRouteId = computed(() =>
   isPublicProfileRoute.value
@@ -1496,7 +1510,7 @@ function logout() {
   achievements.value = [];
   clearAchievementToasts();
   resetPointRecords();
-  exchangeItems.value = [];
+  clearExchangeItems();
   Object.keys(seasonShopCounts).forEach((key) => {
     delete seasonShopCounts[Number(key)];
   });
@@ -2601,18 +2615,6 @@ function dismissAchievementToast(achievementId: number) {
     (notice) => notice.achievementId !== achievementId,
   );
   flushAchievementToastQueue();
-}
-
-async function loadExchangeItems() {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.shop = true;
-  try {
-    exchangeItems.value = await request<ExchangeShopItem[]>("/exchange/items");
-  } finally {
-    busy.shop = false;
-  }
 }
 
 async function loadShopRecycleConfig() {
@@ -3942,49 +3944,6 @@ async function buyTradeListing(listing: TradeListing) {
     notify("error", getErrorMessage(error));
   } finally {
     busy.trade = false;
-  }
-}
-
-async function claimRedeemCode() {
-  const code = redeemCode.value.trim();
-  if (!code) {
-    notify("error", "请输入兑换码");
-    return;
-  }
-  busy.redeem = true;
-  try {
-    const data = await request<RedeemClaimResponse>("/redeem/claim", {
-      method: "POST",
-      body: JSON.stringify({ code }),
-    });
-    notify("success", `兑换成功：${formatRewards(data.rewards)}`);
-    redeemCode.value = "";
-    await loadPrivateData();
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.redeem = false;
-  }
-}
-
-async function claimExchange(item: ExchangeShopItem) {
-  const count = Math.max(1, Math.min(99, Number(exchangeCounts[item.id] || 1)));
-  exchangeCounts[item.id] = count;
-  busy.shop = true;
-  try {
-    const data = await request<ExchangeClaimResponse>(
-      `/exchange/items/${item.id}/claim`,
-      {
-        method: "POST",
-        body: JSON.stringify({ count }),
-      },
-    );
-    notify("success", `兑换成功：${formatRewards(data.rewards)}`);
-    await loadPrivateData();
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.shop = false;
   }
 }
 
