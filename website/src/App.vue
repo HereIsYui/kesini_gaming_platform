@@ -240,6 +240,12 @@ const leaderboardTabs: Array<{
     hint: "按稀有度版本完整集齐",
     unit: "个",
   },
+  {
+    key: "rechargeAmount",
+    label: "充值榜",
+    hint: "累计充值星穹币",
+    unit: "星穹币",
+  },
 ];
 
 type CatalogCard = UserCatalogItem & {

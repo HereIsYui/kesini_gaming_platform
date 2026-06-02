@@ -885,7 +885,8 @@ export type LeaderboardMetric =
   | "totalCards"
   | "ssrCards"
   | "urCards"
-  | "completedPools";
+  | "completedPools"
+  | "rechargeAmount";
 
 export interface LeaderboardEntry {
   rank: number;

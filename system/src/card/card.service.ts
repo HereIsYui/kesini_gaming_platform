@@ -20,6 +20,7 @@ import { UserInventory } from "src/entity/inventory.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
+import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import {
   CardRarity,
   DrawCosts,
@@ -117,7 +118,8 @@ type LeaderboardMetricKey =
   | "totalCards"
   | "ssrCards"
   | "urCards"
-  | "completedPools";
+  | "completedPools"
+  | "rechargeAmount";
 type LeaderboardMetrics = Record<LeaderboardMetricKey, number>;
 
 @Injectable()
@@ -146,6 +148,9 @@ export class CardService {
     private readonly achievementService?: AchievementService,
     @Optional()
     private readonly socialActivityService?: SocialActivityService,
+    @Optional()
+    @InjectRepository(RechargeRecord)
+    private readonly rechargeRecordRepository?: Repository<RechargeRecord>,
   ) {}
 
   /**
@@ -371,10 +376,11 @@ export class CardService {
     limit: number = 50,
   ): Promise<LeaderboardResponse> {
     const normalizedLimit = this.normalizeLeaderboardLimit(limit);
-    const [users, cards, userCards] = await Promise.all([
+    const [users, cards, userCards, rechargeTotals] = await Promise.all([
       this.userRepository.find(),
       this.cardRepository.find(),
       this.userCardRepository.find({ where: { delete_flag: false } }),
+      this.getRechargeLeaderboardTotals(),
     ]);
     await ensureUsersPublicIds(this.userRepository, users);
     const cardMap = new Map(cards.map((card) => [card.id, card]));
@@ -416,6 +422,14 @@ export class CardService {
       poolVersions.add(this.createPoolVersionKey(card.id, rarity));
     });
 
+    rechargeTotals.forEach((total) => {
+      if (!total.uid || total.amount <= 0) {
+        return;
+      }
+      const metrics = this.ensureLeaderboardMetrics(metricsByUid, total.uid);
+      metrics.rechargeAmount += total.amount;
+    });
+
     const requiredVersionsByPool = this.buildRequiredPoolVersionMap(cards);
     metricsByUid.forEach((metrics, ownerUid) => {
       const ownerPools = ownedVersionsByUid.get(ownerUid);
@@ -454,6 +468,13 @@ export class CardService {
           userMap,
           uid,
           "completedPools",
+          normalizedLimit,
+        ),
+        rechargeAmount: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "rechargeAmount",
           normalizedLimit,
         ),
       },
@@ -2236,7 +2257,28 @@ export class CardService {
       ssrCards: 0,
       urCards: 0,
       completedPools: 0,
+      rechargeAmount: 0,
     };
+  }
+
+  private async getRechargeLeaderboardTotals(): Promise<
+    Array<{ uid: string; amount: number }>
+  > {
+    if (!this.rechargeRecordRepository) {
+      return [];
+    }
+    const rows = await this.rechargeRecordRepository
+      .createQueryBuilder("record")
+      .select("record.uid", "uid")
+      .addSelect("COALESCE(SUM(record.amount), 0)", "amount")
+      .where("record.status = :status", { status: "success" })
+      .groupBy("record.uid")
+      .getRawMany<{ uid: string; amount: string | number }>();
+
+    return rows.map((row) => ({
+      uid: String(row.uid || ""),
+      amount: Number(row.amount || 0),
+    }));
   }
 
   private ensureLeaderboardMetrics(

@@ -13,6 +13,7 @@ import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
+import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
@@ -33,6 +34,7 @@ import { SocialActivityModule } from "src/social/social-activity.module";
       GachaPoolConfig,
       TradeListing,
       SystemConfig,
+      RechargeRecord,
     ]),
     AuthModule,
     PointLedgerModule,

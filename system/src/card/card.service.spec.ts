@@ -20,6 +20,7 @@ import { UserHistory } from "src/entity/history.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
+import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -717,6 +718,7 @@ describe("CardService 排行榜", () => {
       users?: Partial<User>[];
       cards?: Partial<CardItem>[];
       userCards?: Partial<UserCard>[];
+      rechargeRecords?: Partial<RechargeRecord>[];
     } = {},
   ) {
     const users = (overrides.users || [
@@ -743,6 +745,32 @@ describe("CardService 排行榜", () => {
       { id: 9, uid: "c", card_id: "4", card_level: "SR", delete_flag: false },
       { id: 10, uid: "c", card_id: "4", card_level: "SSR", delete_flag: false },
     ]) as UserCard[];
+    const rechargeRecords = (overrides.rechargeRecords || []) as RechargeRecord[];
+    const rechargeRows = Object.values(
+      rechargeRecords.reduce(
+        (result, record) => {
+          if (record.status !== "success" || !record.uid) {
+            return result;
+          }
+          result[record.uid] = result[record.uid] || {
+            uid: record.uid,
+            amount: 0,
+          };
+          result[record.uid].amount += Number(record.amount || 0);
+          return result;
+        },
+        {} as Record<string, { uid: string; amount: number }>,
+      ),
+    );
+    const rechargeRecordRepository = createRepository({
+      createQueryBuilder: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rechargeRows),
+      })),
+    });
 
     const service = new CardService(
       createRepository({ find: jest.fn().mockResolvedValue(cards) }) as any,
@@ -759,9 +787,13 @@ describe("CardService 排行榜", () => {
       createRepository() as any,
       {} as any,
       {} as any,
+      undefined,
+      undefined,
+      undefined,
+      rechargeRecordRepository as any,
     );
 
-    return { service };
+    return { service, rechargeRecordRepository };
   }
 
   it("当前收藏口径不统计已分解卡片", async () => {
@@ -843,6 +875,28 @@ describe("CardService 排行榜", () => {
     expect(result.rankings.totalCards.list).toHaveLength(100);
     expect(result.rankings.totalCards.me).toEqual(
       expect.objectContaining({ uid: "u119", value: 1 }),
+    );
+  });
+
+  it("充值榜只统计成功充值金额", async () => {
+    const { service } = createLeaderboardService({
+      rechargeRecords: [
+        { uid: "a", amount: 80, status: "success" },
+        { uid: "a", amount: 40, status: "failed" },
+        { uid: "b", amount: 120, status: "success" },
+        { uid: "c", amount: 30, status: "success" },
+      ],
+    });
+
+    const result = await service.getLeaderboard("a", 10);
+
+    expect(result.rankings.rechargeAmount.list).toEqual([
+      expect.objectContaining({ uid: "b", rank: 1, value: 120 }),
+      expect.objectContaining({ uid: "a", rank: 2, value: 80 }),
+      expect.objectContaining({ uid: "c", rank: 3, value: 30 }),
+    ]);
+    expect(result.rankings.rechargeAmount.me).toEqual(
+      expect.objectContaining({ uid: "a", rank: 2, value: 80 }),
     );
   });
 });

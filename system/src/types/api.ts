@@ -124,5 +124,6 @@ export interface LeaderboardResponse {
     ssrCards: LeaderboardBoard;
     urCards: LeaderboardBoard;
     completedPools: LeaderboardBoard;
+    rechargeAmount: LeaderboardBoard;
   };
 }
