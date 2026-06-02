@@ -27,7 +27,7 @@ export function useAnnouncements() {
   );
   const unreadAnnouncementCount = computed(
     () =>
-      announcements.value.filter((item) => !announcementReadIds.value.has(item.id))
+      activeAnnouncements.value.filter((item) => !announcementReadIds.value.has(item.id))
         .length,
   );
 
@@ -40,7 +40,7 @@ export function useAnnouncements() {
 
   function announcementSummary(content: string) {
     const text = String(content || "").trim();
-    return text.length > 36 ? `${text.slice(0, 36)}…` : text;
+    return text.length > 36 ? `${text.slice(0, 36)}...` : text;
   }
 
   function isAnnouncementRead(item: Announcement) {

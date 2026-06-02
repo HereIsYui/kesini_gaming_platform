@@ -36,6 +36,7 @@ import { computed, onMounted, provide, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AchievementToastStack from "./components/common/AchievementToastStack.vue";
+import AnnouncementBar from "./components/common/AnnouncementBar.vue";
 import FeedbackToast from "./components/common/FeedbackToast.vue";
 import DrawPage from "./pages/DrawPage.vue";
 import ProfilePage from "./pages/ProfilePage.vue";
@@ -4831,48 +4832,18 @@ provide(APP_CONTEXT_KEY, appContext);
       </div>
     </header>
 
+    <AnnouncementBar
+      :announcements="activeAnnouncements"
+      :visible-announcements="visibleAnnouncements"
+      :unread-count="unreadAnnouncementCount"
+      :summary="announcementSummary"
+      :is-read="isAnnouncementRead"
+      @open-list="openAnnouncementList"
+      @open-detail="openAnnouncementDetail"
+      @close="closeAnnouncement"
+    />
+
     <main class="page">
-      <section
-        v-if="announcements.length > 0"
-        class="announcement-strip"
-        :class="{ compact: visibleAnnouncements.length === 0 }"
-      >
-        <div class="announcement-strip-head">
-          <div>
-            <p class="eyebrow">公告</p>
-            <strong>{{
-              unreadAnnouncementCount > 0
-                ? `${unreadAnnouncementCount} 条未读`
-                : "全部已读"
-            }}</strong>
-          </div>
-          <button
-            class="secondary-action compact"
-            type="button"
-            @click="openAnnouncementList"
-          >
-            全部
-          </button>
-        </div>
-        <article
-          v-for="item in visibleAnnouncements"
-          :key="item.id"
-          class="announcement-item"
-          :class="{ read: isAnnouncementRead(item) }"
-          @click="openAnnouncementDetail(item)"
-        >
-          <div class="announcement-item-main">
-            <strong>{{ item.title }}</strong>
-            <span>{{ announcementSummary(item.content) }}</span>
-          </div>
-          <div class="announcement-item-actions">
-            <span v-if="!isAnnouncementRead(item)" class="unread-dot"></span>
-            <button type="button" @click.stop="closeAnnouncement(item)">
-              关闭
-            </button>
-          </div>
-        </article>
-      </section>
 
       <DrawPage v-if="activeSection === 'draw'" />
 
