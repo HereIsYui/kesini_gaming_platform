@@ -12,6 +12,7 @@ function createRepository(overrides: Record<string, any> = {}) {
     findAndCount: jest.fn().mockResolvedValue([[], 0]),
     findOne: jest.fn().mockResolvedValue(null),
     save: jest.fn((value) => Promise.resolve(value)),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
     createQueryBuilder: jest.fn(() => ({
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -22,6 +23,19 @@ function createRepository(overrides: Record<string, any> = {}) {
       getRawMany: jest.fn().mockResolvedValue([]),
     })),
     ...overrides,
+  };
+}
+
+function createDataSource(repositories: Record<string, any> = {}) {
+  const manager = {
+    getRepository: jest.fn(
+      (entity: { name?: string }) =>
+        repositories[String(entity?.name || "")] || createRepository(),
+    ),
+  };
+  return {
+    manager,
+    transaction: jest.fn((callback) => callback(manager)),
   };
 }
 
@@ -90,6 +104,7 @@ function createService(repositories: Record<string, any> = {}) {
     })),
     savePoolConfig: jest.fn(async (_poolId, config) => config),
   };
+  const dataSource = repositories.dataSource || createDataSource();
   return new AdminService(
     repositories.user || createRepository(),
     repositories.card || createRepository(),
@@ -104,6 +119,7 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.exchangeUsage || createRepository(),
     gachaService as any,
     { adminUids: ["admin"] } as any,
+    dataSource as any,
     repositories.tradeListing,
     repositories.tradeRecord,
     repositories.tradeConfig,
@@ -931,6 +947,71 @@ describe("AdminService", () => {
     ).rejects.toThrow("保底计数必须为非负整数");
   });
 
+  it("清空用户卡片数据会重置抽卡相关记录", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 3, uid: "u1" }),
+    });
+    const transactionUserRepository = createRepository();
+    const userCardRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 2 }),
+    });
+    const historyRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 4 }),
+    });
+    const pityRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    });
+    const formationRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    });
+    const showcaseRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    });
+    const tradeListingRepository = createRepository({
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    });
+    const dataSource = createDataSource({
+      User: transactionUserRepository,
+      UserCard: userCardRepository,
+      UserHistory: historyRepository,
+      UserGachaPity: pityRepository,
+      UserFormationSlot: formationRepository,
+      UserShowcaseCard: showcaseRepository,
+      TradeListing: tradeListingRepository,
+    });
+    const service = createService({ user: userRepository, dataSource });
+
+    await expect(service.resetUserCardData(3)).resolves.toEqual({
+      uid: "u1",
+      userCards: 2,
+      histories: 4,
+      pities: 1,
+      formationSlots: 1,
+      showcaseCards: 1,
+      tradeListings: 1,
+    });
+    expect(dataSource.transaction).toHaveBeenCalled();
+    expect(userCardRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(historyRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(pityRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(formationRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(showcaseRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(tradeListingRepository.update).toHaveBeenCalledWith(
+      { seller_uid: "u1", status: "active" },
+      expect.objectContaining({ status: "cancelled" }),
+    );
+    expect(transactionUserRepository.update).toHaveBeenCalledWith(
+      { id: 3 },
+      {
+        card_count_n: 0,
+        card_count_r: 0,
+        card_count_sr: 0,
+        card_count_ssr: 0,
+        card_count_ur: 0,
+      },
+    );
+  });
+
   it("更新抽卡配置会委托配置服务校验和保存", async () => {
     const gachaService = {
       getAllPoolConfigs: jest.fn(),
@@ -950,6 +1031,7 @@ describe("AdminService", () => {
       createRepository(),
       gachaService as any,
       { adminUids: [] } as any,
+      createDataSource() as any,
     );
 
     await expect(

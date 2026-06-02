@@ -1406,6 +1406,16 @@ export class AdminController {
     );
   }
 
+  @Post("users/:id/reset-card-data")
+  async resetUserCardData(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.resetUserCardData(id),
+      "清空用户数据成功",
+    );
+  }
+
   @Get("histories")
   async listHistories(
     @Query() query: HistoryQueryDto,

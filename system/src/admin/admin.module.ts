@@ -31,7 +31,10 @@ import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
+import { UserCard } from "src/entity/userCard.entity";
+import { UserFormationSlot } from "src/entity/userFormationSlot.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { PveStage } from "src/entity/pveStage.entity";
 import { AdminController } from "./admin.controller";
@@ -65,6 +68,9 @@ import { AdminService } from "./admin.service";
       TradeRecord,
       TradeConfig,
       SystemConfig,
+      UserCard,
+      UserFormationSlot,
+      UserShowcaseCard,
       PveStage,
       PveChallengeRecord,
       Announcement,

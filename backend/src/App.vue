@@ -191,6 +191,38 @@
           enable-rarity-filter
           search-placeholder="搜索卡片名称"
         >
+          <template #cell="{ field, row, reload }">
+            <el-switch
+              v-if="field.key === 'enabled'"
+              :model-value="row.enabled !== false"
+              active-text="上架"
+              inactive-text="下架"
+              :loading="togglingCardId === Number(row.id)"
+              @change="toggleCardEnabled(row, Boolean($event), reload)"
+            />
+            <div
+              v-else-if="field.type === 'imageUpload'"
+              class="table-image-cell"
+            >
+              <video
+                v-if="isMediaVideo(getValue(row, field.key))"
+                :src="assetUrl(getValue(row, field.key))"
+                muted
+                loop
+                autoplay
+                playsinline
+              />
+              <img
+                v-else-if="assetUrl(getValue(row, field.key))"
+                :src="assetUrl(getValue(row, field.key))"
+                alt="卡面素材"
+              />
+              <span v-else>未配置</span>
+            </div>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
+          </template>
           <template #actions="{ row, reload }">
             <el-button
               size="small"
@@ -199,15 +231,6 @@
               @click="openCardMedia(row, reload)"
             >
               卡面
-            </el-button>
-            <el-button
-              size="small"
-              :type="row.enabled !== false ? 'info' : 'success'"
-              plain
-              :loading="togglingCardId === Number(row.id)"
-              @click="toggleCardEnabled(row, row.enabled === false, reload)"
-            >
-              {{ row.enabled !== false ? "下架" : "上架" }}
             </el-button>
           </template>
         </AdminTable>
@@ -232,7 +255,19 @@
           editable
           detail-fetchable
           search-placeholder="搜索账号或昵称"
-        />
+        >
+          <template #actions="{ row, reload }">
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :loading="resettingUserId === Number(row.id)"
+              @click="resetUserCardData(row, reload)"
+            >
+              清空
+            </el-button>
+          </template>
+        </AdminTable>
 
         <AdminTable
           v-else-if="active === 'histories'"
@@ -690,7 +725,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref, watch } from "vue";
-import { ElButton, ElMessage } from "element-plus";
+import { ElButton, ElMessage, ElMessageBox } from "element-plus";
 import {
   ArrowDown,
   Collection,
@@ -820,6 +855,7 @@ const rechargeStatsLoading = ref(false);
 const rechargeStatsError = ref("");
 const togglingPoolId = ref<number | null>(null);
 const togglingCardId = ref<number | null>(null);
+const resettingUserId = ref<number | null>(null);
 const loadingPoolId = ref<number | null>(null);
 const poolGachaVisible = ref(false);
 const editingPoolGacha = ref<{
@@ -1375,6 +1411,44 @@ async function toggleCardEnabled(
     ElMessage.error(err instanceof Error ? err.message : "切换卡片状态失败");
   } finally {
     togglingCardId.value = null;
+  }
+}
+
+async function resetUserCardData(row: Record<string, any>, reload: () => void) {
+  const userId = Number(row.id);
+  const userName = String(row.nickname || row.name || row.uid || `#${userId}`);
+  try {
+    await ElMessageBox.confirm(
+      `清空 ${userName} 的卡片和抽卡记录？`,
+      "清空确认",
+      {
+        type: "warning",
+        confirmButtonText: "继续",
+        cancelButtonText: "取消",
+      },
+    );
+    const result = await ElMessageBox.prompt("输入“清空”继续", "再次确认", {
+      inputPattern: /^清空$/,
+      inputErrorMessage: "输入清空",
+      confirmButtonText: "清空",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+    if (result.value !== "清空") {
+      return;
+    }
+    resettingUserId.value = userId;
+    await request(`/admin/users/${userId}/reset-card-data`, {
+      method: "POST",
+    });
+    ElMessage.success("已清空");
+    reload();
+  } catch (err) {
+    if (err !== "cancel" && err !== "close") {
+      ElMessage.error(err instanceof Error ? err.message : "清空失败");
+    }
+  } finally {
+    resettingUserId.value = null;
   }
 }
 

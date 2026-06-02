@@ -170,8 +170,8 @@
           <el-switch
             v-else-if="field.type === 'boolean'"
             v-model="formValues[field.key]"
-            active-text="开启"
-            inactive-text="关闭"
+            :active-text="field.activeText || '开启'"
+            :inactive-text="field.inactiveText || '关闭'"
           />
           <el-select
             v-else-if="field.type === 'select'"

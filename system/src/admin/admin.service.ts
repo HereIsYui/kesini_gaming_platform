@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   Between,
+  DataSource,
   FindOptionsOrder,
   FindOptionsWhere,
   In,
@@ -53,7 +54,10 @@ import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
+import { UserCard } from "src/entity/userCard.entity";
+import { UserFormationSlot } from "src/entity/userFormationSlot.entity";
 import { UserGachaPity } from "src/entity/userGachaPity.entity";
+import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import {
   DECOMPOSE_CONFIG_KEY,
   DECOMPOSE_CONFIG_RARITIES,
@@ -124,6 +128,7 @@ export class AdminService {
     private readonly exchangeUsageRepository: Repository<ExchangeShopUsage>,
     private readonly gachaConfigService: GachaConfigService,
     private readonly configService: ConfigurationService,
+    private readonly dataSource: DataSource,
     @Optional()
     @InjectRepository(TradeListing)
     private readonly tradeListingRepository?: Repository<TradeListing>,
@@ -664,6 +669,52 @@ export class AdminService {
     }
     Object.assign(user, updates);
     return this.userRepository.save(user);
+  }
+
+  async resetUserCardData(id: number) {
+    const user = await this.mustFind(this.userRepository, id, "用户不存在");
+    const uid = user.uid;
+    return this.dataSource.transaction(async (manager) => {
+      const now = new Date();
+      const userCardResult = await manager
+        .getRepository(UserCard)
+        .delete({ uid });
+      const historyResult = await manager
+        .getRepository(UserHistory)
+        .delete({ uid });
+      const pityResult = await manager
+        .getRepository(UserGachaPity)
+        .delete({ uid });
+      const formationResult = await manager
+        .getRepository(UserFormationSlot)
+        .delete({ uid });
+      const showcaseResult = await manager
+        .getRepository(UserShowcaseCard)
+        .delete({ uid });
+      const listingResult = await manager.getRepository(TradeListing).update(
+        { seller_uid: uid, status: "active" },
+        { status: "cancelled", cancelled_at: now },
+      );
+      await manager.getRepository(User).update(
+        { id: user.id },
+        {
+          card_count_n: 0,
+          card_count_r: 0,
+          card_count_sr: 0,
+          card_count_ssr: 0,
+          card_count_ur: 0,
+        },
+      );
+      return {
+        uid,
+        userCards: userCardResult.affected || 0,
+        histories: historyResult.affected || 0,
+        pities: pityResult.affected || 0,
+        formationSlots: formationResult.affected || 0,
+        showcaseCards: showcaseResult.affected || 0,
+        tradeListings: listingResult.affected || 0,
+      };
+    });
   }
 
   async listHistories(

@@ -140,6 +140,8 @@ export interface FieldConfig {
   options?: SelectOption[];
   helper?: string;
   uploadEndpoint?: string;
+  activeText?: string;
+  inactiveText?: string;
   fullWidth?: boolean;
   minWidth?: number | string;
   placeholder?: string;
