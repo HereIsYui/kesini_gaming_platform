@@ -21,7 +21,6 @@ const {
   saveFormationSlot,
   cardIntroText,
   openFormationCardDetail,
-  isNewCard,
 } = useAppContext() as Record<string, any>;
 </script>
 
@@ -116,13 +115,6 @@ const {
               @error="hideBrokenCardMedia"
             />
             <span class="rarity-badge">{{ slot.card.cardLevel }}</span>
-            <span
-              v-if="isNewCard(slot.card)"
-              class="new-card-badge"
-              aria-label="新获得"
-            >
-              NEW
-            </span>
           </div>
           <div
             class="formation-card-body clickable-card-area"

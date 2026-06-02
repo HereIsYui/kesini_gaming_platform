@@ -496,6 +496,10 @@ const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
 const formationEditingPosition = ref<number | null>(null);
+const formationCandidateKeyword = ref("");
+const formationCandidateRarity = ref<CardRarity | "">("");
+const formationCandidatePool = ref<number | "">("");
+const formationCandidateAvailableOnly = ref(false);
 const pveOverview = ref<PveOverview | null>(null);
 const pveRecords = ref<PveRecordsResponse | null>(null);
 const pveRecordPage = ref(1);
@@ -570,6 +574,7 @@ const tradeMaxPrice = ref("");
 const listingTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const recycleTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const upgradeTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const upgradeCandidates = ref<UserCardsResponse["list"]>([]);
 const upgradePreview = ref<CardUpgradePreview | null>(null);
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
@@ -1249,6 +1254,26 @@ const formationEditingSlot = computed(() =>
     (slot) => slot.position === formationEditingPosition.value,
   ),
 );
+const filteredFormationCandidates = computed(() => {
+  const keyword = formationCandidateKeyword.value.trim().toLowerCase();
+  const rarity = formationCandidateRarity.value;
+  const poolId = Number(formationCandidatePool.value || 0);
+  return formationCandidates.value.filter((card) => {
+    if (keyword && !String(card.cardName || "").toLowerCase().includes(keyword)) {
+      return false;
+    }
+    if (rarity && card.cardLevel !== rarity) {
+      return false;
+    }
+    if (poolId && Number(card.poolId || 0) !== poolId) {
+      return false;
+    }
+    if (formationCandidateAvailableOnly.value && !isFormationCandidateAvailable(card)) {
+      return false;
+    }
+    return true;
+  });
+});
 const pveStages = computed<PveStage[]>(() => pveOverview.value?.list || []);
 const pveFormation = computed(
   () =>
@@ -1500,6 +1525,7 @@ function logout() {
   formationCandidates.value = [];
   formationPickerOpen.value = false;
   formationEditingPosition.value = null;
+  resetFormationCandidateFilters();
   pveOverview.value = null;
   pveRecords.value = null;
   pveRecordPage.value = 1;
@@ -1526,6 +1552,7 @@ function logout() {
   myTradeListings.value = [];
   tradeRecords.value = [];
   upgradeTarget.value = null;
+  upgradeCandidates.value = [];
   upgradePreview.value = null;
   clearDrawResults();
   notify("info", "已退出登录");
@@ -1776,7 +1803,6 @@ function isProfileCandidateSelected(card: UserCardsResponse["list"][number]) {
 }
 
 function toggleProfileCandidate(card: UserCardsResponse["list"][number]) {
-  markNewCardSeen(card);
   const uuid = candidateUuid(card);
   if (!uuid) {
     return;
@@ -2270,12 +2296,20 @@ async function loadFormationCandidates() {
   }
 }
 
+function resetFormationCandidateFilters() {
+  formationCandidateKeyword.value = "";
+  formationCandidateRarity.value = "";
+  formationCandidatePool.value = "";
+  formationCandidateAvailableOnly.value = false;
+}
+
 async function openFormationPicker(position: number) {
   if (!isAuthed.value) {
     notify("error", "请先登录");
     return;
   }
   formationEditingPosition.value = position;
+  resetFormationCandidateFilters();
   formationPickerOpen.value = true;
   await loadFormationCandidates();
 }
@@ -2303,14 +2337,17 @@ function isFormationCandidateSelected(card: UserCardsResponse["list"][number]) {
   return Boolean(uuid && formationCurrentUuids.value.has(uuid));
 }
 
+function isFormationCandidateAvailable(card: UserCardsResponse["list"][number]) {
+  return Boolean(
+    candidateUuid(card) && !card.isListed && !isFormationCandidateSelected(card),
+  );
+}
+
 async function saveFormationSlot(position: number, cardUuid: string | null) {
   if (!isAuthed.value) {
     notify("error", "请先登录");
     return;
   }
-  const selectedCard = cardUuid
-    ? formationCandidates.value.find((card) => candidateUuid(card) === cardUuid)
-    : null;
   const slots = formationSlots.value.map((slot) => ({
     position: slot.position,
     cardUuid: slot.position === position ? cardUuid : slot.card?.uuid || null,
@@ -2322,9 +2359,6 @@ async function saveFormationSlot(position: number, cardUuid: string | null) {
       body: JSON.stringify({ slots }),
     });
     notify("success", cardUuid ? "卡片已上阵" : "阵容位置已清空");
-    if (selectedCard) {
-      markNewCardSeen(selectedCard);
-    }
     formationPickerOpen.value = false;
     formationEditingPosition.value = null;
     if (pveOverview.value) {
@@ -3252,7 +3286,6 @@ function openBagCardDetail(card: UserCardsResponse["list"][number]) {
 }
 
 function openFormationCardDetail(card: FormationCard) {
-  markNewCardSeen(card);
   openCardIntro({
     name: card.cardName,
     desc: card.cardDesc,
@@ -3311,7 +3344,6 @@ function openCatalogCardDetail(item: CatalogCard) {
 }
 
 function openDrawResultDetail(card: GachaResult) {
-  markNewCardSeen(card);
   openCardIntro({
     name: card.cardName,
     desc: card.cardDesc,
@@ -3323,7 +3355,6 @@ function openDrawResultDetail(card: GachaResult) {
     statuses: [
       card.isUp ? "UP" : "",
       card.isPity ? "保底" : "",
-      "新获得",
     ].filter(Boolean),
     actions: [
       shareCardDetailAction(
@@ -3709,6 +3740,57 @@ function cardUpgradeUuid(card: UserCardsResponse["list"][number]) {
   return card.upgradeableUuid || (card.canUpgrade ? card.uuid : "") || "";
 }
 
+function upgradeCandidateStatus(card: UserCardsResponse["list"][number]) {
+  if (card.isListed) {
+    return "挂售中";
+  }
+  if (card.locked) {
+    return "已锁定";
+  }
+  if (
+    Number(card.cultivationMaxLevel || 0) > 0 &&
+    Number(card.cultivationLevel || 1) >= Number(card.cultivationMaxLevel || 0)
+  ) {
+    return "满级";
+  }
+  return cardUpgradeUuid(card) ? "可养成" : "不可选";
+}
+
+function isUpgradeCandidateDisabled(card: UserCardsResponse["list"][number]) {
+  return !cardUpgradeUuid(card);
+}
+
+async function loadUpgradeCandidates(card: UserCardsResponse["list"][number]) {
+  const data = await request<UserCardsResponse>(
+    `/card/user/cards${toQuery({
+      grouped: false,
+      poolId: card.poolId,
+      rarity: card.cardLevel,
+      page: 1,
+      pageSize: 100,
+    })}`,
+  );
+  return (data.list || []).filter(
+    (item) =>
+      Number(item.cardId || 0) === Number(card.cardId || 0) &&
+      item.cardLevel === card.cardLevel,
+  );
+}
+
+async function loadUpgradePreview(card: UserCardsResponse["list"][number]) {
+  const uuid = cardUpgradeUuid(card);
+  if (!uuid) {
+    notify("info", "当前没有可养成的卡片");
+    return false;
+  }
+  upgradeTarget.value = card;
+  upgradePreview.value = null;
+  upgradePreview.value = await request<CardUpgradePreview>(
+    `/card/user/cards/${uuid}/upgrade-preview`,
+  );
+  return true;
+}
+
 async function openUpgradeModal(card: UserCardsResponse["list"][number]) {
   if (!isAuthed.value) {
     notify("error", "请先登录");
@@ -3720,12 +3802,38 @@ async function openUpgradeModal(card: UserCardsResponse["list"][number]) {
     return;
   }
   upgradeTarget.value = card;
+  upgradeCandidates.value = [];
   upgradePreview.value = null;
   busy.upgrade = true;
   try {
-    upgradePreview.value = await request<CardUpgradePreview>(
-      `/card/user/cards/${uuid}/upgrade-preview`,
-    );
+    if (Number(card.count || 1) > 1) {
+      const candidates = await loadUpgradeCandidates(card);
+      if (candidates.length > 1) {
+        upgradeCandidates.value = candidates;
+        return;
+      }
+      await loadUpgradePreview(candidates[0] || card);
+      return;
+    }
+    await loadUpgradePreview(card);
+  } catch (error) {
+    upgradeTarget.value = null;
+    upgradeCandidates.value = [];
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.upgrade = false;
+  }
+}
+
+async function selectUpgradeCandidate(card: UserCardsResponse["list"][number]) {
+  if (isUpgradeCandidateDisabled(card)) {
+    return;
+  }
+  upgradeCandidates.value = [];
+  upgradePreview.value = null;
+  busy.upgrade = true;
+  try {
+    await loadUpgradePreview(card);
   } catch (error) {
     upgradeTarget.value = null;
     notify("error", getErrorMessage(error));
@@ -3739,6 +3847,7 @@ function closeUpgradeModal() {
     return;
   }
   upgradeTarget.value = null;
+  upgradeCandidates.value = [];
   upgradePreview.value = null;
 }
 
@@ -4288,6 +4397,10 @@ const appContext = {
   formationCandidates,
   formationPickerOpen,
   formationEditingPosition,
+  formationCandidateKeyword,
+  formationCandidateRarity,
+  formationCandidatePool,
+  formationCandidateAvailableOnly,
   pveOverview,
   pveRecords,
   pveRecordPage,
@@ -4338,6 +4451,7 @@ const appContext = {
   listingTarget,
   recycleTarget,
   upgradeTarget,
+  upgradeCandidates,
   upgradePreview,
   cardIntroTarget,
   shareTextTarget,
@@ -4465,6 +4579,7 @@ const appContext = {
   formationFilledCount,
   formationCurrentUuids,
   formationEditingSlot,
+  filteredFormationCandidates,
   pveStages,
   pveFormation,
   pveRecentRecords,
@@ -4537,6 +4652,8 @@ const appContext = {
   closeFormationPicker,
   candidateUuid,
   isFormationCandidateSelected,
+  isFormationCandidateAvailable,
+  resetFormationCandidateFilters,
   saveFormationSlot,
   loadPveStages,
   loadPveRecords,
@@ -4625,7 +4742,10 @@ const appContext = {
   openRecycleModal,
   closeRecycleModal,
   cardUpgradeUuid,
+  upgradeCandidateStatus,
+  isUpgradeCandidateDisabled,
   openUpgradeModal,
+  selectUpgradeCandidate,
   closeUpgradeModal,
   upgradeCard,
   recycleCards,
@@ -5478,13 +5598,6 @@ provide(APP_CONTEXT_KEY, appContext);
                     @error="hideBrokenCardMedia"
                   />
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
-                  <span
-                    v-if="isNewCard(card)"
-                    class="new-card-badge"
-                    aria-label="新获得"
-                  >
-                    NEW
-                  </span>
                 </div>
                 <div class="profile-candidate-body">
                   <strong>{{ card.cardName }}</strong>
@@ -5571,6 +5684,48 @@ provide(APP_CONTEXT_KEY, appContext);
             </button>
           </header>
           <div class="trade-listing-body formation-picker-body">
+            <div class="filter-row formation-filter-row">
+              <input
+                v-model="formationCandidateKeyword"
+                type="search"
+                placeholder="搜索卡名"
+              />
+              <select v-model="formationCandidateRarity">
+                <option value="">稀有度</option>
+                <option
+                  v-for="rarity in rarityOrder"
+                  :key="rarity"
+                  :value="rarity"
+                >
+                  {{ rarity }}
+                </option>
+              </select>
+              <select v-model="formationCandidatePool">
+                <option value="">卡池</option>
+                <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                  {{ pool.pool_name }}
+                </option>
+              </select>
+              <button
+                class="secondary-action compact filter-toggle"
+                :class="{ active: formationCandidateAvailableOnly }"
+                type="button"
+                :aria-pressed="formationCandidateAvailableOnly"
+                @click="
+                  formationCandidateAvailableOnly =
+                    !formationCandidateAvailableOnly
+                "
+              >
+                可上阵
+              </button>
+              <button
+                class="secondary-action compact"
+                type="button"
+                @click="resetFormationCandidateFilters"
+              >
+                清空
+              </button>
+            </div>
             <div v-if="busy.formationCandidates" class="empty-state compact">
               <LoaderCircle :size="26" class="spin" />
               <strong>正在读取背包</strong>
@@ -5584,9 +5739,17 @@ provide(APP_CONTEXT_KEY, appContext);
               <strong>暂无可选卡片</strong>
               <span>获得卡片后即可加入阵容。</span>
             </div>
+            <div
+              v-else-if="filteredFormationCandidates.length === 0"
+              class="empty-state compact"
+            >
+              <Package :size="26" />
+              <strong>暂无结果</strong>
+              <span>调整筛选</span>
+            </div>
             <div v-else class="formation-candidate-list">
               <article
-                v-for="card in formationCandidates"
+                v-for="card in filteredFormationCandidates"
                 :key="candidateUuid(card) || `${card.cardId}-${card.cardName}`"
                 class="formation-candidate"
                 :class="[
@@ -5619,13 +5782,6 @@ provide(APP_CONTEXT_KEY, appContext);
                     @error="hideBrokenCardMedia"
                   />
                   <span class="rarity-badge">{{ card.cardLevel }}</span>
-                  <span
-                    v-if="isNewCard(card)"
-                    class="new-card-badge"
-                    aria-label="新获得"
-                  >
-                    NEW
-                  </span>
                 </div>
                 <div class="formation-candidate-body">
                   <strong>{{ card.cardName }}</strong>
@@ -5816,6 +5972,39 @@ provide(APP_CONTEXT_KEY, appContext);
               <LoaderCircle :size="26" class="spin" />
               <strong>正在读取养成信息</strong>
               <span>碎片库存与等级状态加载中。</span>
+            </div>
+            <div
+              v-else-if="upgradeCandidates.length"
+              class="upgrade-candidate-list"
+            >
+              <article
+                v-for="card in upgradeCandidates"
+                :key="candidateUuid(card) || `${card.cardId}-${card.cardName}`"
+                class="upgrade-candidate"
+                :class="{ disabled: isUpgradeCandidateDisabled(card) }"
+              >
+                <div>
+                  <strong>{{ card.cardName }}</strong>
+                  <span>
+                    Lv.{{ card.cultivationLevel || 1 }} · 战力
+                    {{ card.power || 0 }}
+                  </span>
+                  <small>{{ formatCardDetailDate(card.obtainedAt) }}</small>
+                </div>
+                <span class="upgrade-candidate-status">
+                  {{ upgradeCandidateStatus(card) }}
+                </span>
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="
+                    busy.upgrade || isUpgradeCandidateDisabled(card)
+                  "
+                  @click="selectUpgradeCandidate(card)"
+                >
+                  选择
+                </button>
+              </article>
             </div>
             <template v-else-if="upgradePreview">
               <div class="upgrade-compare">
@@ -6298,9 +6487,6 @@ provide(APP_CONTEXT_KEY, appContext);
                   <div class="result-card-top">
                     <span class="rarity-badge">{{ card.rarity }}</span>
                     <div class="card-top-right">
-                      <span class="new-card-badge" aria-label="新获得">
-                        NEW
-                      </span>
                       <span class="card-type-pill">{{
                         cardTypeLabel(card.cardType)
                       }}</span>

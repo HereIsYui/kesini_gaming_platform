@@ -36,7 +36,6 @@ const {
   handleProfileFriendAction,
   shortCardIntro,
   openShowcaseCardDetail,
-  isNewCard,
 } = useAppContext() as Record<string, any>;
 </script>
 
@@ -217,13 +216,6 @@ const {
               <div class="result-card-top">
                 <span class="rarity-badge">{{ card.cardLevel }}</span>
                 <div class="card-top-right">
-                  <span
-                    v-if="isNewCard(card, { ignoreSeen: !profileCanEdit })"
-                    class="new-card-badge"
-                    aria-label="新获得"
-                  >
-                    NEW
-                  </span>
                   <span class="card-type-pill">
                     {{ cardTypeLabel(card.cardType) }}
                   </span>
