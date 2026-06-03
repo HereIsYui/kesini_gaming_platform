@@ -78,7 +78,6 @@ import type {
   CardUpgradeResponse,
   FishpiPointResponse,
   FormationCard,
-  FormationOverview,
   GachaResult,
   InventoryItem,
   LaunchActivityClaimResponse,
@@ -86,11 +85,6 @@ import type {
   LeaderboardEntry,
   LeaderboardMetric,
   LeaderboardResponse,
-  PveChallengeRecord,
-  PveChallengeResult,
-  PveOverview,
-  PveRecordsResponse,
-  PveStage,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   SeasonOverview,
@@ -113,6 +107,7 @@ import { useDrawHistory } from "./composables/useDrawHistory";
 import { useDrawResults } from "./composables/useDrawResults";
 import { useFeedback } from "./composables/useFeedback";
 import { useFriendsSocial } from "./composables/useFriendsSocial";
+import { useFormationPve } from "./composables/useFormationPve";
 import { useGuildSocial } from "./composables/useGuildSocial";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
@@ -459,18 +454,6 @@ const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
 const userCards = ref<UserCardsResponse | null>(null);
-const formation = ref<FormationOverview | null>(null);
-const formationCandidates = ref<UserCardsResponse["list"]>([]);
-const formationPickerOpen = ref(false);
-const formationEditingPosition = ref<number | null>(null);
-const formationCandidateKeyword = ref("");
-const formationCandidateRarity = ref<CardRarity | "">("");
-const formationCandidatePool = ref<number | "">("");
-const formationCandidateAvailableOnly = ref(false);
-const pveOverview = ref<PveOverview | null>(null);
-const pveRecords = ref<PveRecordsResponse | null>(null);
-const pveRecordPage = ref(1);
-const pveRecordTotalPages = ref(1);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
@@ -772,6 +755,86 @@ const pointChangeClass = pointsLedger.pointChangeClass;
 const formatPointChange = pointsLedger.formatPointChange;
 const seasonPointSourceLabel = pointsLedger.seasonPointSourceLabel;
 const pointMetadataSummary = pointsLedger.pointMetadataSummary;
+const formationPve = useFormationPve({
+  isAuthed: () => isAuthed.value,
+  getActiveSection: () => activeSection.value,
+  isFormationBusy: () => busy.formation,
+  setFormationBusy: (value) => {
+    busy.formation = value;
+  },
+  setFormationCandidatesBusy: (value) => {
+    busy.formationCandidates = value;
+  },
+  setPveBusy: (value) => {
+    busy.pve = value;
+  },
+  setPveRecordsBusy: (value) => {
+    busy.pveRecords = value;
+  },
+  setPveChallengeBusy: (value) => {
+    busy.pveChallenge = value;
+  },
+  notify,
+  getErrorMessage,
+  candidateUuid,
+  syncChallengePoint: (point) => {
+    if (typeof point === "number") {
+      if (stats.value) {
+        stats.value.point = point;
+      }
+      syncCurrentUserPoint(point);
+    }
+  },
+  refreshChallengeRewards: async () => {
+    await Promise.all([
+      loadStats(),
+      loadUserCards(),
+      loadUserCatalog(),
+      loadAchievements(),
+      loadAchievementNotifications(),
+      pointRecords.value ? loadPointRecords() : Promise.resolve(),
+    ]);
+  },
+});
+const formation = formationPve.formation;
+const formationCandidates = formationPve.formationCandidates;
+const formationPickerOpen = formationPve.formationPickerOpen;
+const formationEditingPosition = formationPve.formationEditingPosition;
+const formationCandidateKeyword = formationPve.formationCandidateKeyword;
+const formationCandidateRarity = formationPve.formationCandidateRarity;
+const formationCandidatePool = formationPve.formationCandidatePool;
+const formationCandidateAvailableOnly =
+  formationPve.formationCandidateAvailableOnly;
+const pveOverview = formationPve.pveOverview;
+const pveRecords = formationPve.pveRecords;
+const pveRecordPage = formationPve.pveRecordPage;
+const pveRecordTotalPages = formationPve.pveRecordTotalPages;
+const formationSlots = formationPve.formationSlots;
+const formationFilledCount = formationPve.formationFilledCount;
+const formationCurrentUuids = formationPve.formationCurrentUuids;
+const formationEditingSlot = formationPve.formationEditingSlot;
+const filteredFormationCandidates = formationPve.filteredFormationCandidates;
+const pveStages = formationPve.pveStages;
+const pveFormation = formationPve.pveFormation;
+const pveRecentRecords = formationPve.pveRecentRecords;
+const pveClearedCount = formationPve.pveClearedCount;
+const resetFormationPve = formationPve.resetFormationPve;
+const loadFormation = formationPve.loadFormation;
+const loadFormationCandidates = formationPve.loadFormationCandidates;
+const openFormationPicker = formationPve.openFormationPicker;
+const closeFormationPicker = formationPve.closeFormationPicker;
+const isFormationCandidateSelected = formationPve.isFormationCandidateSelected;
+const isFormationCandidateAvailable = formationPve.isFormationCandidateAvailable;
+const resetFormationCandidateFilters =
+  formationPve.resetFormationCandidateFilters;
+const saveFormationSlot = formationPve.saveFormationSlot;
+const loadPveStages = formationPve.loadPveStages;
+const loadPveRecords = formationPve.loadPveRecords;
+const refreshPve = formationPve.refreshPve;
+const challengePveStage = formationPve.challengePveStage;
+const changePveRecordPage = formationPve.changePveRecordPage;
+const pvePowerPercent = formationPve.pvePowerPercent;
+const pveStageLevelLabel = formationPve.pveStageLevelLabel;
 const redeemShop = useRedeemShop({
   isAuthed: () => isAuthed.value,
   setRedeemBusy: (value) => {
@@ -1193,69 +1256,6 @@ const upgradePowerGain = computed(() => {
   }
   return Math.max(0, preview.next.power - preview.current.power);
 });
-const formationSlots = computed(() => {
-  const slotCount = formation.value?.slotCount || 3;
-  return Array.from({ length: slotCount }, (_, index) => {
-    const position = index + 1;
-    return (
-      formation.value?.slots.find((slot) => slot.position === position) || {
-        position,
-        card: null,
-      }
-    );
-  });
-});
-const formationFilledCount = computed(
-  () => formationSlots.value.filter((slot) => slot.card).length,
-);
-const formationCurrentUuids = computed(
-  () =>
-    new Set(
-      formationSlots.value
-        .map((slot) => slot.card?.uuid)
-        .filter((uuid): uuid is string => Boolean(uuid)),
-    ),
-);
-const formationEditingSlot = computed(() =>
-  formationSlots.value.find(
-    (slot) => slot.position === formationEditingPosition.value,
-  ),
-);
-const filteredFormationCandidates = computed(() => {
-  const keyword = formationCandidateKeyword.value.trim().toLowerCase();
-  const rarity = formationCandidateRarity.value;
-  const poolId = Number(formationCandidatePool.value || 0);
-  return formationCandidates.value.filter((card) => {
-    if (keyword && !String(card.cardName || "").toLowerCase().includes(keyword)) {
-      return false;
-    }
-    if (rarity && card.cardLevel !== rarity) {
-      return false;
-    }
-    if (poolId && Number(card.poolId || 0) !== poolId) {
-      return false;
-    }
-    if (formationCandidateAvailableOnly.value && !isFormationCandidateAvailable(card)) {
-      return false;
-    }
-    return true;
-  });
-});
-const pveStages = computed<PveStage[]>(() => pveOverview.value?.list || []);
-const pveFormation = computed(
-  () =>
-    pveOverview.value?.formation || {
-      slotCount: formation.value?.slotCount || 3,
-      filledCount: formationFilledCount.value,
-      totalPower: formation.value?.totalPower || 0,
-    },
-);
-const pveRecentRecords = computed<PveChallengeRecord[]>(
-  () => pveRecords.value?.list || [],
-);
-const pveClearedCount = computed(
-  () => pveRecentRecords.value.filter((record) => record.success).length,
-);
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1454,15 +1454,7 @@ function logout() {
   resetFriends();
   resetPlayerMessages();
   resetGuild();
-  formation.value = null;
-  formationCandidates.value = [];
-  formationPickerOpen.value = false;
-  formationEditingPosition.value = null;
-  resetFormationCandidateFilters();
-  pveOverview.value = null;
-  pveRecords.value = null;
-  pveRecordPage.value = 1;
-  pveRecordTotalPages.value = 1;
+  resetFormationPve();
   catalogItems.value = null;
   catalogError.value = "";
   launchActivity.value = null;
@@ -1658,84 +1650,6 @@ async function loadUserCards(options: LoadUserCardsOptions = {}) {
   }
 }
 
-async function loadFormation(options: SilentLoadOptions = {}) {
-  if (!isAuthed.value) {
-    return;
-  }
-  if (!options.silent) {
-    busy.formation = true;
-  }
-  try {
-    formation.value = await request<FormationOverview>("/formation");
-  } catch (error) {
-    if (activeSection.value === "formation") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    if (!options.silent) {
-      busy.formation = false;
-    }
-  }
-}
-
-async function loadFormationCandidates() {
-  if (!isAuthed.value) {
-    formationCandidates.value = [];
-    return;
-  }
-  busy.formationCandidates = true;
-  try {
-    const pageSize = 100;
-    const candidates: UserCardsResponse["list"] = [];
-    let page = 1;
-    let totalPages = 1;
-    do {
-      const data = await request<UserCardsResponse>(
-        `/card/user/cards${toQuery({
-          grouped: false,
-          page,
-          pageSize,
-        })}`,
-      );
-      candidates.push(...(data.list || []));
-      totalPages = Math.max(1, Number(data.totalPages || 1));
-      page += 1;
-    } while (page <= totalPages);
-    formationCandidates.value = candidates;
-  } catch (error) {
-    formationCandidates.value = [];
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.formationCandidates = false;
-  }
-}
-
-function resetFormationCandidateFilters() {
-  formationCandidateKeyword.value = "";
-  formationCandidateRarity.value = "";
-  formationCandidatePool.value = "";
-  formationCandidateAvailableOnly.value = false;
-}
-
-async function openFormationPicker(position: number) {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  formationEditingPosition.value = position;
-  resetFormationCandidateFilters();
-  formationPickerOpen.value = true;
-  await loadFormationCandidates();
-}
-
-function closeFormationPicker() {
-  if (busy.formation) {
-    return;
-  }
-  formationPickerOpen.value = false;
-  formationEditingPosition.value = null;
-}
-
 function candidateUuid(card: UserCardsResponse["list"][number]) {
   return (
     card.uuid ||
@@ -1744,142 +1658,6 @@ function candidateUuid(card: UserCardsResponse["list"][number]) {
     card.unlockableUuid ||
     ""
   );
-}
-
-function isFormationCandidateSelected(card: UserCardsResponse["list"][number]) {
-  const uuid = candidateUuid(card);
-  return Boolean(uuid && formationCurrentUuids.value.has(uuid));
-}
-
-function isFormationCandidateAvailable(card: UserCardsResponse["list"][number]) {
-  return Boolean(
-    candidateUuid(card) && !card.isListed && !isFormationCandidateSelected(card),
-  );
-}
-
-async function saveFormationSlot(position: number, cardUuid: string | null) {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  const slots = formationSlots.value.map((slot) => ({
-    position: slot.position,
-    cardUuid: slot.position === position ? cardUuid : slot.card?.uuid || null,
-  }));
-  busy.formation = true;
-  try {
-    formation.value = await request<FormationOverview>("/formation", {
-      method: "PUT",
-      body: JSON.stringify({ slots }),
-    });
-    notify("success", cardUuid ? "卡片已上阵" : "阵容位置已清空");
-    formationPickerOpen.value = false;
-    formationEditingPosition.value = null;
-    if (pveOverview.value) {
-      await loadPveStages();
-    }
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.formation = false;
-  }
-}
-
-async function loadPveStages() {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.pve = true;
-  try {
-    pveOverview.value = await request<PveOverview>("/pve/stages");
-  } catch (error) {
-    if (activeSection.value === "pve") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    busy.pve = false;
-  }
-}
-
-async function loadPveRecords(page = pveRecordPage.value) {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.pveRecords = true;
-  try {
-    const data = await request<PveRecordsResponse>(
-      `/pve/records${toQuery({ page, pageSize: 6 })}`,
-    );
-    pveRecords.value = data;
-    pveRecordPage.value = data.page || page;
-    pveRecordTotalPages.value = data.totalPages || 1;
-  } catch (error) {
-    if (activeSection.value === "pve") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    busy.pveRecords = false;
-  }
-}
-
-async function refreshPve() {
-  await Promise.all([loadPveStages(), loadPveRecords()]);
-}
-
-async function challengePveStage(stage: PveStage) {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  if (!stage.canChallenge) {
-    notify("info", stage.unavailableReason || "当前无法挑战");
-    return;
-  }
-  busy.pveChallenge = true;
-  try {
-    const data = await request<PveChallengeResult>(
-      `/pve/stages/${stage.id}/challenge`,
-      { method: "POST" },
-    );
-    if (stats.value && typeof data.pointAfter === "number") {
-      stats.value.point = data.pointAfter;
-    }
-    if (currentUser.value && typeof data.pointAfter === "number") {
-      currentUser.value.point = data.pointAfter;
-      setStoredUser(currentUser.value);
-    }
-    notify(
-      data.success ? "success" : "info",
-      data.success
-        ? `挑战胜利：${formatRewards(data.rewards || undefined)}`
-        : `挑战失败：战力 ${data.formationPower} / ${data.enemyPower}`,
-    );
-    await Promise.all([
-      loadPveStages(),
-      loadPveRecords(1),
-      loadStats(),
-      loadUserCards(),
-      loadUserCatalog(),
-      loadAchievements(),
-      loadAchievementNotifications(),
-      pointRecords.value ? loadPointRecords() : Promise.resolve(),
-    ]);
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.pveChallenge = false;
-  }
-}
-
-function changePveRecordPage(delta: number) {
-  const next = Math.min(
-    Math.max(1, pveRecordPage.value + delta),
-    pveRecordTotalPages.value,
-  );
-  if (next === pveRecordPage.value) {
-    return;
-  }
-  void loadPveRecords(next);
 }
 
 function resetUserCards() {
@@ -3549,28 +3327,6 @@ function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
     tradeRecordPage.value = next;
     void loadTradeRecords();
   }
-}
-
-function pvePowerPercent(stage: PveStage) {
-  const enemyPower = Math.max(1, Number(stage.enemyPower || 0));
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round((pveFormation.value.totalPower / enemyPower) * 100),
-    ),
-  );
-}
-
-function pveStageLevelLabel(stage: PveStage) {
-  const power = Number(stage.enemyPower || 0);
-  if (power >= 5000) {
-    return "高危";
-  }
-  if (power >= 2000) {
-    return "精英";
-  }
-  return "巡逻";
 }
 
 function achievementProgressPercent(achievement: AchievementRecord) {
