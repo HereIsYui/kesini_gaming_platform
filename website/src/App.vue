@@ -62,7 +62,6 @@ import {
 } from "./api";
 import type {
   CardRarity,
-  ClaimMessageRewardResponse,
   DailySignInClaimResponse,
   DailySignInStatus,
   TaskActivityMilestone,
@@ -94,8 +93,6 @@ import type {
   PveOverview,
   PveRecordsResponse,
   PveStage,
-  PlayerMessage,
-  PlayerMessagesResponse,
   PlayerProfileResponse,
   SaveShowcaseRequest,
   SendFriendRequestRequest,
@@ -125,6 +122,7 @@ import { useFeedback } from "./composables/useFeedback";
 import { useGuildSocial } from "./composables/useGuildSocial";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
+import { usePlayerMessages } from "./composables/usePlayerMessages";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePointsLedger } from "./composables/usePointsLedger";
 import { usePublicData } from "./composables/usePublicData";
@@ -475,9 +473,6 @@ const friendsError = ref("");
 const friendFeed = ref<SocialActivityRecord[]>([]);
 const friendFeedError = ref("");
 const friendActionBusy = ref("");
-const playerMessages = ref<PlayerMessage[]>([]);
-const playerMessagesError = ref("");
-const messageClaimBusy = ref<number | null>(null);
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -643,6 +638,26 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const playerMessageState = usePlayerMessages({
+  isAuthed: () => isAuthed.value,
+  isActive: () => activeSection.value === "messages",
+  setMessagesBusy: (value) => {
+    busy.messages = value;
+  },
+  notify,
+  getErrorMessage,
+  refreshRewardState: async () => {
+    await Promise.allSettled([loadStats(), loadUserCards()]);
+  },
+});
+const playerMessages = playerMessageState.playerMessages;
+const playerMessagesError = playerMessageState.playerMessagesError;
+const messageClaimBusy = playerMessageState.messageClaimBusy;
+const unreadMessageCount = playerMessageState.unreadMessageCount;
+const resetPlayerMessages = playerMessageState.resetPlayerMessages;
+const loadMessages = playerMessageState.loadMessages;
+const markMessageRead = playerMessageState.markMessageRead;
+const claimMessageReward = playerMessageState.claimMessageReward;
 const guildSocial = useGuildSocial({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "guild",
@@ -915,9 +930,6 @@ const profileFriendActionDisabled = computed(() => {
     isProfileFriendOutgoing.value
   );
 });
-const unreadMessageCount = computed(
-  () => playerMessages.value.filter((item) => !item.read).length,
-);
 const modalFocusKey = computed(() => {
   if (confirmDialogTarget.value) {
     return "confirm";
@@ -1528,9 +1540,7 @@ function logout() {
   friendFeed.value = [];
   friendFeedError.value = "";
   friendActionBusy.value = "";
-  playerMessages.value = [];
-  playerMessagesError.value = "";
-  messageClaimBusy.value = null;
+  resetPlayerMessages();
   resetGuild();
   formation.value = null;
   formationCandidates.value = [];
@@ -2026,64 +2036,6 @@ async function handleProfileFriendAction() {
     return;
   }
   await sendFriendRequest(target);
-}
-
-async function loadMessages(showError = activeSection.value === "messages") {
-  if (!isAuthed.value) {
-    playerMessages.value = [];
-    playerMessagesError.value = "";
-    return;
-  }
-  busy.messages = true;
-  playerMessagesError.value = "";
-  try {
-    const data = await request<PlayerMessagesResponse>("/messages");
-    playerMessages.value = data.list || [];
-  } catch (error) {
-    playerMessages.value = [];
-    playerMessagesError.value = getErrorMessage(error);
-    if (showError) {
-      notify("error", playerMessagesError.value);
-    }
-  } finally {
-    busy.messages = false;
-  }
-}
-
-async function markMessageRead(message: PlayerMessage) {
-  if (message.read) {
-    return;
-  }
-  try {
-    await request(`/messages/${message.id}/read`, { method: "POST" });
-    playerMessages.value = playerMessages.value.map((item) =>
-      item.id === message.id ? { ...item, read: true } : item,
-    );
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  }
-}
-
-async function claimMessageReward(message: PlayerMessage) {
-  if (!message.hasReward || message.claimed || messageClaimBusy.value) {
-    return;
-  }
-  messageClaimBusy.value = message.id;
-  try {
-    const data = await request<ClaimMessageRewardResponse>(
-      `/messages/${message.id}/claim`,
-      { method: "POST" },
-    );
-    playerMessages.value = playerMessages.value.map((item) =>
-      item.id === message.id ? { ...item, read: true, claimed: true } : item,
-    );
-    await Promise.allSettled([loadStats(), loadUserCards()]);
-    notify("success", `领取成功：${formatRewards(data.rewards)}`);
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    messageClaimBusy.value = null;
-  }
 }
 
 async function loadFormation(options: SilentLoadOptions = {}) {
