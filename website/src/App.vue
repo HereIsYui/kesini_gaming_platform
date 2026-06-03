@@ -103,6 +103,7 @@ import type {
   PlayerMessage,
   PlayerMessagesResponse,
   PlayerProfileResponse,
+  SaveGuildAnnouncementRequest,
   SaveShowcaseRequest,
   SendFriendRequestRequest,
   SendGuildMessageRequest,
@@ -492,6 +493,7 @@ const guildMessageError = ref("");
 const guildMessageText = ref("");
 const guildName = ref("");
 const guildDescription = ref("");
+const guildAnnouncement = ref("");
 const guildActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
@@ -1531,6 +1533,7 @@ function logout() {
   guildMessageText.value = "";
   guildName.value = "";
   guildDescription.value = "";
+  guildAnnouncement.value = "";
   guildActionBusy.value = "";
   formation.value = null;
   formationCandidates.value = [];
@@ -2118,6 +2121,8 @@ async function loadGuild(showError = activeSection.value === "guild") {
   guildError.value = "";
   try {
     guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
+    guildAnnouncement.value =
+      guildOverview.value.current?.guild.announcement || "";
     if (!guildOverview.value.current) {
       guildMessages.value = [];
       guildMessageError.value = "";
@@ -2125,6 +2130,7 @@ async function loadGuild(showError = activeSection.value === "guild") {
   } catch (error) {
     guildOverview.value = null;
     guildError.value = getErrorMessage(error);
+    guildAnnouncement.value = "";
     if (showError) {
       notify("error", guildError.value);
     }
@@ -2186,6 +2192,8 @@ async function createGuild() {
     });
     guildName.value = "";
     guildDescription.value = "";
+    guildAnnouncement.value =
+      guildOverview.value.current?.guild.announcement || "";
     notify("success", "已创建");
     await loadGuildMessages(false);
   } catch (error) {
@@ -2202,6 +2210,8 @@ async function joinGuild(guildId: number) {
       `/guilds/${guildId}/join`,
       { method: "POST" },
     );
+    guildAnnouncement.value =
+      guildOverview.value.current?.guild.announcement || "";
     notify("success", "已加入");
     await loadGuildMessages(false);
   } catch (error) {
@@ -2233,7 +2243,34 @@ async function leaveGuild() {
     guildMessages.value = [];
     guildMessageError.value = "";
     guildMessageText.value = "";
+    guildAnnouncement.value = "";
     notify("success", "已退出");
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    guildActionBusy.value = "";
+  }
+}
+
+async function saveGuildAnnouncement() {
+  if (!currentGuild.value) {
+    return;
+  }
+  guildActionBusy.value = "announcement";
+  try {
+    const payload: SaveGuildAnnouncementRequest = {
+      announcement: guildAnnouncement.value.trim(),
+    };
+    guildOverview.value = await request<GuildOverviewResponse>(
+      "/guilds/me/announcement",
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
+    guildAnnouncement.value =
+      guildOverview.value.current?.guild.announcement || "";
+    notify("success", "已保存");
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {
@@ -4412,6 +4449,7 @@ const appContext = {
   guildMessageText,
   guildName,
   guildDescription,
+  guildAnnouncement,
   guildActionBusy,
   formation,
   formationCandidates,
@@ -4665,6 +4703,7 @@ const appContext = {
   createGuild,
   joinGuild,
   leaveGuild,
+  saveGuildAnnouncement,
   sendGuildMessage,
   loadFormation,
   loadFormationCandidates,

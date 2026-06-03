@@ -13,6 +13,7 @@ const {
   guildMessageText,
   guildName,
   guildDescription,
+  guildAnnouncement,
   guildActionBusy,
   busy,
   isAuthed,
@@ -33,6 +34,7 @@ const {
   createGuild,
   joinGuild,
   leaveGuild,
+  saveGuildAnnouncement,
   sendGuildMessage,
 } = useAppContext() as Record<string, any>;
 </script>
@@ -110,7 +112,25 @@ const {
               <p class="eyebrow">公告</p>
               <h3>公会公告</h3>
             </div>
-            <p>{{ currentGuild.description || "暂无公告" }}</p>
+            <form
+              v-if="currentGuild.role === 'leader'"
+              class="guild-announcement-form"
+              @submit.prevent="saveGuildAnnouncement"
+            >
+              <textarea
+                v-model="guildAnnouncement"
+                maxlength="160"
+                placeholder="公告"
+              ></textarea>
+              <button
+                class="primary-action compact"
+                type="submit"
+                :disabled="guildActionBusy === 'announcement'"
+              >
+                保存
+              </button>
+            </form>
+            <p v-else>{{ currentGuild.announcement || "暂无公告" }}</p>
           </section>
           <div class="guild-stats">
             <article>

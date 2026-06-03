@@ -13,6 +13,7 @@ const GUILD_LIST_LIMIT = 30;
 const DEFAULT_MESSAGE_LIST_LIMIT = 30;
 const MAX_MESSAGE_LIST_LIMIT = 30;
 const MAX_MESSAGE_LENGTH = 120;
+const MAX_ANNOUNCEMENT_LENGTH = 160;
 
 @Injectable()
 export class GuildsService {
@@ -117,6 +118,7 @@ export class GuildsService {
         guildRepository.create({
           name: normalizedName,
           description: normalizedDescription,
+          announcement: "",
           owner_uid: normalizedUid,
           member_count: 1,
         }),
@@ -129,6 +131,30 @@ export class GuildsService {
           role: "leader",
         }),
       );
+    });
+
+    return this.getOverview(normalizedUid);
+  }
+
+  async updateAnnouncement(uid: string, announcement?: string) {
+    const normalizedUid = this.normalizeUid(uid);
+    const normalizedAnnouncement = this.normalizeAnnouncement(announcement);
+
+    await this.dataSource.transaction(async (manager) => {
+      const membership = await this.requireMembership(manager, normalizedUid);
+      if (membership.role !== "leader") {
+        throw new Error("只有会长可改");
+      }
+      const guildRepository = manager.getRepository(Guild);
+      const guild = await guildRepository.findOne({
+        where: { id: membership.guild_id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!guild) {
+        throw new Error("公会不存在");
+      }
+      guild.announcement = normalizedAnnouncement;
+      await guildRepository.save(guild);
     });
 
     return this.getOverview(normalizedUid);
@@ -348,6 +374,7 @@ export class GuildsService {
       id: guild.id,
       name: guild.name,
       description: guild.description || "",
+      announcement: guild.announcement || "",
       memberCount: Number(guild.member_count || 0),
       role: membership?.role || null,
       joined: Boolean(membership),
@@ -388,6 +415,13 @@ export class GuildsService {
     return String(description || "")
       .trim()
       .slice(0, 60);
+  }
+
+  private normalizeAnnouncement(announcement?: string) {
+    return String(announcement || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, MAX_ANNOUNCEMENT_LENGTH);
   }
 
   private normalizeMessageLimit(value: number) {

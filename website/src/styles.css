@@ -4168,6 +4168,20 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.guild-announcement-form {
+  display: grid;
+  gap: 8px;
+}
+
+.guild-announcement-form textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.guild-announcement-form .primary-action {
+  justify-self: end;
+}
+
 .guild-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

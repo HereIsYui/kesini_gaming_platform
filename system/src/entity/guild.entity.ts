@@ -20,6 +20,9 @@ export class Guild {
   @Column({ type: "varchar", length: 80, default: "" })
   description: string;
 
+  @Column({ type: "varchar", length: 160, default: "" })
+  announcement: string;
+
   @Column()
   owner_uid: string;
 

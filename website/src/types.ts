@@ -299,6 +299,7 @@ export interface GuildSummary {
   id: number;
   name: string;
   description?: string;
+  announcement?: string;
   memberCount: number;
   role?: GuildMemberRole | null;
   joined?: boolean;
@@ -346,6 +347,10 @@ export interface CreateGuildRequest {
 
 export interface SendGuildMessageRequest {
   content: string;
+}
+
+export interface SaveGuildAnnouncementRequest {
+  announcement: string;
 }
 
 export interface UserCatalogItem {

@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
   UseFilters,
@@ -35,6 +36,12 @@ class CreateGuildDto {
 class SendGuildMessageDto {
   @IsString()
   content: string;
+}
+
+class UpdateGuildAnnouncementDto {
+  @IsOptional()
+  @IsString()
+  announcement?: string;
 }
 
 @Controller("guilds")
@@ -129,6 +136,27 @@ export class GuildsController {
       );
     } catch (error) {
       return ResponseDto.error(error.message || "发送失败");
+    }
+  }
+
+  @Patch("me/announcement")
+  async updateAnnouncement(
+    @GetUser() user: UserInfo,
+    @Body() body: UpdateGuildAnnouncementDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.guildsService.updateAnnouncement(
+          user.uid,
+          body.announcement,
+        ),
+        "已保存",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "保存失败");
     }
   }
 

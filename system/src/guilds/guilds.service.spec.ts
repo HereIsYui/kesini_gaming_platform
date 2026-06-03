@@ -203,6 +203,7 @@ describe("GuildsService 公会系统", () => {
     expect(result.current?.guild).toMatchObject({
       name: "星海会",
       description: "一起收集",
+      announcement: "",
       memberCount: 1,
       role: "leader",
       joined: true,
@@ -212,6 +213,26 @@ describe("GuildsService 公会系统", () => {
       nickname: "玩家u1",
       role: "leader",
     });
+  });
+
+  it("会长可以更新公会公告", async () => {
+    await createGuild(service, "u1", "星海会");
+
+    const result = await service.updateAnnouncement("u1", "  今晚开车  ");
+
+    expect(store.guilds[0].announcement).toBe("今晚开车");
+    expect(result.current?.guild).toMatchObject({
+      announcement: "今晚开车",
+    });
+  });
+
+  it("普通成员不能更新公会公告", async () => {
+    await createGuild(service, "u1", "星海会");
+    await service.joinGuild("u2", 1);
+
+    await expect(service.updateAnnouncement("u2", "成员公告")).rejects.toThrow(
+      "只有会长可改",
+    );
   });
 
   it("不能重复创建、加入或使用重名公会", async () => {
