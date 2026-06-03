@@ -91,8 +91,6 @@ import type {
   PveOverview,
   PveRecordsResponse,
   PveStage,
-  PlayerProfileResponse,
-  SaveShowcaseRequest,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   SeasonOverview,
@@ -119,6 +117,7 @@ import { useGuildSocial } from "./composables/useGuildSocial";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerMessages } from "./composables/usePlayerMessages";
+import { usePlayerProfile } from "./composables/usePlayerProfile";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePointsLedger } from "./composables/usePointsLedger";
 import { usePublicData } from "./composables/usePublicData";
@@ -460,10 +459,6 @@ const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
 const userCards = ref<UserCardsResponse | null>(null);
-const playerProfile = ref<PlayerProfileResponse | null>(null);
-const profileCandidates = ref<UserCardsResponse["list"]>([]);
-const profilePickerOpen = ref(false);
-const profileSelectedUuids = ref<string[]>([]);
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -629,6 +624,57 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const profileState = usePlayerProfile({
+  isAuthed: () => isAuthed.value,
+  getActiveSection: () => activeSection.value,
+  getRouteName: () => route.name,
+  getRoutePublicId: () =>
+    String(route.params.publicId || route.params.uid || "").trim(),
+  getCurrentUser: () => currentUser.value,
+  setProfileBusy: (value) => {
+    busy.profile = value;
+  },
+  setProfileCandidatesBusy: (value) => {
+    busy.profileCandidates = value;
+  },
+  setProfileSavingBusy: (value) => {
+    busy.profileSaving = value;
+  },
+  isProfileSavingBusy: () => busy.profileSaving,
+  notify,
+  getErrorMessage,
+  publicPlayerName,
+  publicProfileParam,
+  candidateUuid,
+});
+const playerProfile = profileState.playerProfile;
+const profileCandidates = profileState.profileCandidates;
+const profilePickerOpen = profileState.profilePickerOpen;
+const profileSelectedUuids = profileState.profileSelectedUuids;
+const isPublicProfileRoute = profileState.isPublicProfileRoute;
+const profileRouteId = profileState.profileRouteId;
+const profileDisplayName = profileState.profileDisplayName;
+const profileOwnerUid = profileState.profileOwnerUid;
+const profileOwnerPublicId = profileState.profileOwnerPublicId;
+const currentUserPublicId = profileState.currentUserPublicId;
+const profileActionTarget = profileState.profileActionTarget;
+const profileInitial = profileState.profileInitial;
+const profileCanEdit = profileState.profileCanEdit;
+const profileShareUrl = profileState.profileShareUrl;
+const profileCardCountRows = profileState.profileCardCountRows;
+const profileShowcase = profileState.profileShowcase;
+const profileFormation = profileState.profileFormation;
+const profileSelectedSet = profileState.profileSelectedSet;
+const resetProfile = profileState.resetProfile;
+const shouldRefreshOwnProfile = profileState.shouldRefreshOwnProfile;
+const loadPlayerProfile = profileState.loadPlayerProfile;
+const loadProfileCandidates = profileState.loadProfileCandidates;
+const openProfilePicker = profileState.openProfilePicker;
+const closeProfilePicker = profileState.closeProfilePicker;
+const isProfileCandidateSelected = profileState.isProfileCandidateSelected;
+const toggleProfileCandidate = profileState.toggleProfileCandidate;
+const saveProfileShowcase = profileState.saveProfileShowcase;
+const copyProfileLink = profileState.copyProfileLink;
 const playerMessageState = usePlayerMessages({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "messages",
@@ -745,57 +791,6 @@ const loadExchangeItems = redeemShop.loadExchangeItems;
 const claimRedeemCode = redeemShop.claimRedeemCode;
 const claimExchange = redeemShop.claimExchange;
 const clearExchangeItems = redeemShop.clearExchangeItems;
-const isPublicProfileRoute = computed(() => route.name === "publicProfile");
-const profileRouteId = computed(() =>
-  isPublicProfileRoute.value
-    ? String(route.params.publicId || route.params.uid || "").trim()
-    : "",
-);
-const profileDisplayName = computed(() =>
-  publicPlayerName(
-    playerProfile.value?.user.nickname,
-    playerProfile.value?.user.uid,
-    "玩家主页",
-  ),
-);
-const profileOwnerUid = computed(() =>
-  String(playerProfile.value?.user.uid || "").trim(),
-);
-const profileOwnerPublicId = computed(() =>
-  publicProfileParam(playerProfile.value?.user),
-);
-const currentUserPublicId = computed(() => publicProfileParam(currentUser.value));
-const profileActionTarget = computed(
-  () => profileOwnerPublicId.value || profileOwnerUid.value,
-);
-const profileInitial = computed(() =>
-  String(profileDisplayName.value || "?")
-    .trim()
-    .slice(0, 1)
-    .toUpperCase(),
-);
-const profileCanEdit = computed(() => {
-  if (!isAuthed.value) {
-    return false;
-  }
-  const currentUid = String(currentUser.value?.uid || "").trim();
-  if (profileOwnerUid.value && currentUid) {
-    return profileOwnerUid.value === currentUid;
-  }
-  return Boolean(
-    profileOwnerPublicId.value &&
-      currentUserPublicId.value &&
-      profileOwnerPublicId.value === currentUserPublicId.value,
-  );
-});
-const profileShareUrl = computed(() => {
-  const profileId = publicProfileParam(
-    playerProfile.value?.user || currentUser.value,
-  );
-  return profileId
-    ? `${window.location.origin}/u/${encodeURIComponent(profileId)}`
-    : "";
-});
 const playerDisplayName = computed(() => {
   const uid = currentUser.value?.uid;
   return publicPlayerName(
@@ -823,22 +818,6 @@ const fishpiPointLabel = computed(() => {
   }
   return "--";
 });
-const profileCardCountRows = computed(() =>
-  rarityOrder.map((rarity) => ({
-    rarity,
-    count: playerProfile.value?.user.cardCounts?.[rarity] || 0,
-  })),
-);
-const profileShowcase = computed(() => playerProfile.value?.showcase || []);
-const profileFormation = computed(
-  () =>
-    playerProfile.value?.formation || {
-      slotCount: 3,
-      filledCount: 0,
-      totalPower: 0,
-    },
-);
-const profileSelectedSet = computed(() => new Set(profileSelectedUuids.value));
 const friendsSocial = useFriendsSocial({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "friends",
@@ -1471,10 +1450,7 @@ function logout() {
   fishpiPointError.value = "";
   resetDrawHistory();
   userCards.value = null;
-  playerProfile.value = null;
-  profileCandidates.value = [];
-  profilePickerOpen.value = false;
-  profileSelectedUuids.value = [];
+  resetProfile();
   resetFriends();
   resetPlayerMessages();
   resetGuild();
@@ -1679,139 +1655,6 @@ async function loadUserCards(options: LoadUserCardsOptions = {}) {
     } else if (!silent) {
       busy.assets = false;
     }
-  }
-}
-
-async function loadPlayerProfile(options: SilentLoadOptions = {}) {
-  if (isPublicProfileRoute.value && !profileRouteId.value) {
-    playerProfile.value = null;
-    return;
-  }
-  if (!isPublicProfileRoute.value && !isAuthed.value) {
-    playerProfile.value = null;
-    return;
-  }
-
-  if (!options.silent) {
-    busy.profile = true;
-  }
-  try {
-    playerProfile.value = await request<PlayerProfileResponse>(
-      isPublicProfileRoute.value
-        ? `/profile/${encodeURIComponent(profileRouteId.value)}`
-        : "/profile/me",
-    );
-  } catch (error) {
-    playerProfile.value = null;
-    if (activeSection.value === "profile") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    if (!options.silent) {
-      busy.profile = false;
-    }
-  }
-}
-
-async function loadProfileCandidates() {
-  if (!isAuthed.value) {
-    profileCandidates.value = [];
-    return;
-  }
-  busy.profileCandidates = true;
-  try {
-    const data = await request<UserCardsResponse>(
-      `/card/user/cards${toQuery({
-        grouped: false,
-        page: 1,
-        pageSize: 100,
-      })}`,
-    );
-    profileCandidates.value = data.list || [];
-  } catch (error) {
-    profileCandidates.value = [];
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.profileCandidates = false;
-  }
-}
-
-async function openProfilePicker() {
-  if (!profileCanEdit.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  profileSelectedUuids.value = profileShowcase.value.map((card) => card.uuid);
-  profilePickerOpen.value = true;
-  await loadProfileCandidates();
-}
-
-function closeProfilePicker() {
-  if (busy.profileSaving) {
-    return;
-  }
-  profilePickerOpen.value = false;
-  profileSelectedUuids.value = [];
-}
-
-function isProfileCandidateSelected(card: UserCardsResponse["list"][number]) {
-  const uuid = candidateUuid(card);
-  return Boolean(uuid && profileSelectedSet.value.has(uuid));
-}
-
-function toggleProfileCandidate(card: UserCardsResponse["list"][number]) {
-  const uuid = candidateUuid(card);
-  if (!uuid) {
-    return;
-  }
-  if (profileSelectedSet.value.has(uuid)) {
-    profileSelectedUuids.value = profileSelectedUuids.value.filter(
-      (item) => item !== uuid,
-    );
-    return;
-  }
-  if (profileSelectedUuids.value.length >= 6) {
-    notify("info", "最多 6 张");
-    return;
-  }
-  profileSelectedUuids.value = [...profileSelectedUuids.value, uuid];
-}
-
-async function saveProfileShowcase() {
-  if (!profileCanEdit.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  busy.profileSaving = true;
-  try {
-    const payload: SaveShowcaseRequest = {
-      cardUuids: [...profileSelectedUuids.value],
-    };
-    playerProfile.value = await request<PlayerProfileResponse>(
-      "/profile/showcase",
-      {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      },
-    );
-    profilePickerOpen.value = false;
-    notify("success", "展示已保存");
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.profileSaving = false;
-  }
-}
-
-async function copyProfileLink() {
-  if (!profileShareUrl.value) {
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(profileShareUrl.value);
-    notify("success", "链接已复制");
-  } catch {
-    notify("error", "复制失败");
   }
 }
 
@@ -2333,10 +2176,6 @@ function findUserCardGroup(card: UserCardsResponse["list"][number]) {
     userCards.value?.list.find((item) => isSameUserCardGroup(item, card)) ||
     null
   );
-}
-
-function shouldRefreshOwnProfile() {
-  return Boolean(playerProfile.value) && !isPublicProfileRoute.value;
 }
 
 async function refreshCardState(options: CardStateRefreshOptions) {
