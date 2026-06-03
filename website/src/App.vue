@@ -33,28 +33,33 @@ import {
   WandSparkles,
 } from "@lucide/vue";
 import { computed, onMounted, provide, reactive, ref, watch } from "vue";
-import type { Component } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import AchievementToastStack from "./components/common/AchievementToastStack.vue";
 import AnnouncementBar from "./components/common/AnnouncementBar.vue";
 import FeedbackToast from "./components/common/FeedbackToast.vue";
-import DrawPage from "./pages/DrawPage.vue";
-import ProfilePage from "./pages/ProfilePage.vue";
-import FriendsPage from "./pages/FriendsPage.vue";
-import MessagesPage from "./pages/MessagesPage.vue";
-import SettingsPage from "./pages/SettingsPage.vue";
-import GuildPage from "./pages/GuildPage.vue";
-import BagPage from "./pages/BagPage.vue";
-import FormationPage from "./pages/FormationPage.vue";
-import PvePage from "./pages/PvePage.vue";
-import SynthesizePage from "./pages/SynthesizePage.vue";
-import PointsPage from "./pages/PointsPage.vue";
-import TradePage from "./pages/TradePage.vue";
-import LeaderboardPage from "./pages/LeaderboardPage.vue";
-import TasksPage from "./pages/TasksPage.vue";
-import SeasonPage from "./pages/SeasonPage.vue";
-import AchievementsPage from "./pages/AchievementsPage.vue";
-import RedeemPage from "./pages/RedeemPage.vue";
+import AppHeader from "./components/layout/AppHeader.vue";
+import MobileNav from "./components/layout/MobileNav.vue";
+import PageHost from "./components/layout/PageHost.vue";
+import CardDetailModal from "./components/modals/CardDetailModal.vue";
+import ConfirmDialog from "./components/modals/ConfirmDialog.vue";
+import ShareTextModal from "./components/modals/ShareTextModal.vue";
+import type {
+  CardDetailAction,
+  CardDetailInput,
+  CardDetailRow,
+  CardIntroTarget,
+  CardSharePayload,
+  ConfirmDialogTarget,
+} from "./components/modals/types";
+import {
+  accountMenuItems,
+  accountMenuSectionKeys,
+  primaryNavItems,
+  primaryNavSectionKeys,
+  sectionItemMap,
+  sectionItems,
+} from "./constants/navigation";
+import type { SectionKey } from "./constants/navigation";
 import {
   request,
   setStoredUser,
@@ -148,64 +153,6 @@ import {
   synthesisCostLabel,
 } from "./utils/rarity";
 
-const sectionItems = [
-  { key: "draw", label: "抽卡", icon: Sparkles },
-  { key: "profile", label: "主页", icon: UserRound },
-  { key: "messages", label: "消息", icon: Mail },
-  { key: "settings", label: "设置", icon: Settings },
-  { key: "friends", label: "好友", icon: UsersRound },
-  { key: "guild", label: "公会", icon: UsersRound },
-  { key: "bag", label: "背包", icon: Boxes },
-  { key: "formation", label: "阵容", icon: Swords },
-  { key: "pve", label: "关卡", icon: Trophy },
-  { key: "synthesize", label: "图鉴", icon: Package },
-  { key: "points", label: "星穹币", icon: Coins },
-  { key: "leaderboard", label: "排行", icon: Trophy },
-  { key: "tasks", label: "任务", icon: ListChecks },
-  { key: "season", label: "赛季", icon: CalendarDays },
-  { key: "achievements", label: "成就", icon: ShieldCheck },
-  { key: "trade", label: "交易", icon: Store },
-  { key: "redeem", label: "兑换", icon: Gift },
-] as const;
-
-type SectionItem = (typeof sectionItems)[number];
-type SectionKey = (typeof sectionItems)[number]["key"];
-
-const sectionItemMap = new Map<SectionKey, SectionItem>(
-  sectionItems.map((item) => [item.key, item]),
-);
-
-const primaryNavSectionKeys = [
-  "draw",
-  "pve",
-  "synthesize",
-  "season",
-  "leaderboard",
-  "guild",
-] as const satisfies readonly SectionKey[];
-
-const primaryNavItems = primaryNavSectionKeys
-  .map((key) => sectionItemMap.get(key))
-  .filter((item): item is SectionItem => Boolean(item));
-
-const accountMenuSectionKeys = [
-  "profile",
-  "messages",
-  "settings",
-  "friends",
-  "bag",
-  "formation",
-  "tasks",
-  "achievements",
-  "points",
-  "trade",
-  "redeem",
-] as const satisfies readonly SectionKey[];
-
-const accountMenuItems = accountMenuSectionKeys
-  .map((key) => sectionItemMap.get(key))
-  .filter((item): item is SectionItem => Boolean(item));
-
 const leaderboardTabs: Array<{
   key: LeaderboardMetric;
   label: string;
@@ -237,75 +184,6 @@ const leaderboardTabs: Array<{
 type CatalogCard = UserCatalogItem & {
   costLabel: string;
   disabled: boolean;
-};
-type CardDetailRow = {
-  label: string;
-  value: string;
-};
-type CardDetailActionKey =
-  | "lock"
-  | "upgrade"
-  | "trade"
-  | "recycle"
-  | "share"
-  | "buy"
-  | "synthesize";
-type CardDetailAction = {
-  key: CardDetailActionKey;
-  label: string;
-  icon: Component;
-  variant?: "primary" | "secondary";
-  disabled?: boolean;
-  payload?: unknown;
-};
-type CardSharePayload = {
-  cardName: string;
-  cardDesc?: string | null;
-  cardLevel?: string;
-  rarity?: string;
-  poolId?: number;
-};
-type CardIntroTarget = {
-  name: string;
-  desc: string;
-  rarity?: string;
-  type?: string;
-  extra?: string;
-  cardImage?: string | null;
-  rows: CardDetailRow[];
-  actions: CardDetailAction[];
-};
-type CardDetailInput = {
-  name: string;
-  desc?: string | null;
-  rarity?: string | number | null;
-  type?: string | null;
-  extra?: string | null;
-  cardImage?: string | null;
-  poolId?: number | string | null;
-  poolName?: string | null;
-  obtainedAt?: string | null;
-  latestObtainedAt?: string | null;
-  cultivationLevel?: number | null;
-  power?: number | null;
-  locked?: boolean;
-  listed?: boolean;
-  count?: number | null;
-  price?: number | null;
-  source?: string;
-  statuses?: string[];
-  rows?: CardDetailRow[];
-  actions?: CardDetailAction[];
-};
-type ConfirmDialogVariant = "primary" | "danger";
-type ConfirmDialogTarget = {
-  title: string;
-  message?: string;
-  details?: string[];
-  confirmText?: string;
-  cancelText?: string;
-  variant?: ConfirmDialogVariant;
-  icon?: Component;
 };
 type SilentLoadOptions = {
   silent?: boolean;
@@ -3854,169 +3732,37 @@ provide(APP_CONTEXT_KEY, appContext);
       <span class="star star-c"></span>
     </div>
 
-    <header class="topbar">
-      <RouterLink class="brand" :to="{ name: 'draw' }">
-        <span class="brand-mark"><Sparkles :size="20" /></span>
-        <span>
-          <strong>{{ siteConfig.websiteTitle }}</strong>
-          <small>星穹调度台 · v{{ appVersion }}</small>
-        </span>
-      </RouterLink>
-
-      <nav class="desktop-nav" aria-label="页面导航">
-        <RouterLink
-          v-for="item in primaryNavItems"
-          :key="item.key"
-          :to="{ name: item.key }"
-          :class="{ active: activeSection === item.key }"
-        >
-          <component :is="item.icon" :size="16" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-      </nav>
-
-      <div class="top-actions">
-        <button
-          class="icon-button ghost theme-toggle"
-          type="button"
-          title="切换主题"
-          aria-label="切换主题"
-          @click="toggleThemeMode"
-        >
-          <Sun v-if="themeMode === 'dark'" :size="17" />
-          <Moon v-else :size="17" />
-          <span>{{ themeMode === "dark" ? "白色" : "暗色" }}</span>
-        </button>
-        <button
-          class="icon-button"
-          type="button"
-          :disabled="busy.public || busy.assets || busy.leaderboard"
-          @click="refreshAll"
-        >
-          <RefreshCw
-            :size="17"
-            :class="{ spin: busy.public || busy.assets || busy.leaderboard }"
-          />
-          <span>刷新</span>
-        </button>
-        <div
-          class="user-menu-wrap"
-          :class="{ open: userMenuOpen, 'hover-paused': userMenuHoverPaused }"
-          @keydown.escape="userMenuOpen = false"
-          @mouseleave="resetUserMenuHover"
-        >
-          <button
-            class="user-menu-trigger"
-            type="button"
-            :aria-expanded="userMenuOpen"
-            aria-haspopup="true"
-            :aria-label="isAuthed ? '玩家菜单' : '登录菜单'"
-            @click="toggleUserMenu"
-          >
-            <span class="user-menu-avatar">
-              <img
-                v-if="isAuthed && currentUser?.avatar"
-                :src="currentUser.avatar"
-                :alt="playerDisplayName"
-              />
-              <span v-else-if="isAuthed">{{ playerInitial }}</span>
-              <LogIn v-else :size="17" />
-            </span>
-            <span class="user-menu-trigger-text">
-              <strong>{{ isAuthed ? playerDisplayName : "登录" }}</strong>
-              <small v-if="isAuthed">{{ stats?.point ?? 0 }} 星穹币</small>
-            </span>
-          </button>
-
-          <div class="user-menu-panel" role="menu">
-            <template v-if="isAuthed">
-              <div class="user-menu-head">
-                <span class="user-menu-avatar large">
-                  <img
-                    v-if="currentUser?.avatar"
-                    :src="currentUser.avatar"
-                    :alt="playerDisplayName"
-                  />
-                  <span v-else>{{ playerInitial }}</span>
-                </span>
-                <div>
-                  <strong>{{ playerDisplayName }}</strong>
-                  <small>{{ playerStatusLabel }}</small>
-                </div>
-              </div>
-              <div class="user-menu-balances">
-                <div class="user-menu-balance">
-                  <span>星穹币</span>
-                  <strong>{{ stats?.point ?? currentUser?.point ?? 0 }}</strong>
-                </div>
-                <div class="user-menu-balance">
-                  <span>鱼排积分</span>
-                  <strong :class="{ muted: fishpiPointError && !fishpiPoint }">
-                    {{ fishpiPointLabel }}
-                  </strong>
-                </div>
-              </div>
-              <nav class="user-menu-shortcuts" aria-label="快捷入口">
-                <RouterLink
-                  v-for="item in accountMenuItems"
-                  :key="item.key"
-                  class="user-menu-link"
-                  :to="{ name: item.key }"
-                  :class="{ active: activeSection === item.key }"
-                  role="menuitem"
-                  @click="closeUserMenu"
-                >
-                  <component :is="item.icon" :size="16" />
-                  {{ item.label }}
-                  <span
-                    v-if="item.key === 'messages' && unreadMessageCount > 0"
-                    class="user-menu-badge"
-                  >
-                    {{ unreadMessageCount }}
-                  </span>
-                </RouterLink>
-              </nav>
-              <button
-                class="user-menu-link danger"
-                type="button"
-                role="menuitem"
-                @click="logout"
-              >
-                <LogOut :size="16" />
-                退出登录
-              </button>
-            </template>
-            <template v-else>
-              <div class="user-menu-head guest">
-                <span class="user-menu-avatar large">
-                  <UserRound :size="22" />
-                </span>
-                <div>
-                  <strong>登录</strong>
-                  <small>同步资产</small>
-                </div>
-              </div>
-              <div class="guest-login-actions">
-                <button
-                  class="primary-action wide"
-                  type="button"
-                  :disabled="busy.auth || callbackBusy"
-                  @click="loginWithOpenId"
-                >
-                  <LoaderCircle
-                    v-if="busy.auth || callbackBusy"
-                    :size="18"
-                    class="spin"
-                  />
-                  <LogIn v-else :size="18" />
-                  登录
-                </button>
-              </div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </header>
+    <AppHeader
+      :site-title="siteConfig.websiteTitle"
+      :app-version="appVersion"
+      :primary-nav-items="primaryNavItems"
+      :account-menu-items="accountMenuItems"
+      :active-section="activeSection"
+      :theme-mode="themeMode"
+      :refresh-busy="busy.public || busy.assets || busy.leaderboard"
+      :auth-busy="busy.auth"
+      :callback-busy="callbackBusy"
+      :is-authed="isAuthed"
+      :current-user="currentUser"
+      :player-display-name="playerDisplayName"
+      :player-initial="playerInitial"
+      :player-status-label="playerStatusLabel"
+      :trigger-point="stats?.point ?? 0"
+      :account-point="stats?.point ?? currentUser?.point ?? 0"
+      :fishpi-point-label="fishpiPointLabel"
+      :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
+      :user-menu-open="userMenuOpen"
+      :user-menu-hover-paused="userMenuHoverPaused"
+      :unread-message-count="unreadMessageCount"
+      @toggle-theme="toggleThemeMode"
+      @refresh="refreshAll"
+      @toggle-user-menu="toggleUserMenu"
+      @close-user-menu="closeUserMenu"
+      @collapse-user-menu="userMenuOpen = false"
+      @reset-user-menu-hover="resetUserMenuHover"
+      @login="loginWithOpenId"
+      @logout="logout"
+    />
 
     <AnnouncementBar
       :announcements="activeAnnouncements"
@@ -4029,55 +3775,9 @@ provide(APP_CONTEXT_KEY, appContext);
       @close="closeAnnouncement"
     />
 
-    <main class="page">
+    <PageHost :active-section="activeSection" />
 
-      <DrawPage v-if="activeSection === 'draw'" />
-
-      <ProfilePage v-if="activeSection === 'profile'" />
-
-      <FriendsPage v-if="activeSection === 'friends'" />
-
-      <MessagesPage v-if="activeSection === 'messages'" />
-
-      <SettingsPage v-if="activeSection === 'settings'" />
-
-      <GuildPage v-if="activeSection === 'guild'" />
-
-      <BagPage v-if="activeSection === 'bag'" />
-
-      <FormationPage v-if="activeSection === 'formation'" />
-
-      <PvePage v-if="activeSection === 'pve'" />
-
-      <SynthesizePage v-if="activeSection === 'synthesize'" />
-
-      <PointsPage v-if="activeSection === 'points'" />
-
-      <TradePage v-if="activeSection === 'trade'" />
-
-      <LeaderboardPage v-if="activeSection === 'leaderboard'" />
-
-      <TasksPage v-if="activeSection === 'tasks'" />
-
-      <SeasonPage v-if="activeSection === 'season'" />
-
-      <AchievementsPage v-if="activeSection === 'achievements'" />
-
-      <RedeemPage v-if="activeSection === 'redeem'" />
-
-    </main>
-
-    <nav class="mobile-nav" aria-label="移动端导航">
-      <RouterLink
-        v-for="item in primaryNavItems"
-        :key="item.key"
-        :to="{ name: item.key }"
-        :class="{ active: activeSection === item.key }"
-      >
-        <component :is="item.icon" :size="18" />
-        <span>{{ item.label }}</span>
-      </RouterLink>
-    </nav>
+    <MobileNav :items="primaryNavItems" :active-section="activeSection" />
 
     <FeedbackToast :feedback="feedback" />
     <AchievementToastStack
@@ -4085,58 +3785,10 @@ provide(APP_CONTEXT_KEY, appContext);
       @dismiss="dismissAchievementToast"
     />
 
-    <Teleport to="body">
-      <div
-        v-if="confirmDialogTarget"
-        class="result-modal-backdrop confirm-modal-backdrop"
-        role="presentation"
-        @click.self="settleConfirmDialog(false)"
-      >
-        <section
-          class="confirm-modal"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="confirmDialogTarget.title"
-        >
-          <div class="confirm-modal-icon">
-            <component
-              :is="confirmDialogTarget.icon || ShieldCheck"
-              :size="22"
-            />
-          </div>
-          <div class="confirm-modal-body">
-            <h2>{{ confirmDialogTarget.title }}</h2>
-            <p v-if="confirmDialogTarget.message">
-              {{ confirmDialogTarget.message }}
-            </p>
-            <ul v-if="confirmDialogTarget.details?.length">
-              <li
-                v-for="detail in confirmDialogTarget.details"
-                :key="detail"
-              >
-                {{ detail }}
-              </li>
-            </ul>
-          </div>
-          <footer class="result-modal-actions confirm-modal-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              @click="settleConfirmDialog(false)"
-            >
-              {{ confirmDialogTarget.cancelText }}
-            </button>
-            <button
-              :class="confirmDialogActionClass(confirmDialogTarget)"
-              type="button"
-              @click="settleConfirmDialog(true)"
-            >
-              {{ confirmDialogTarget.confirmText }}
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      :target="confirmDialogTarget"
+      @settle="settleConfirmDialog"
+    />
 
     <Teleport to="body">
       <div
@@ -5225,150 +4877,17 @@ provide(APP_CONTEXT_KEY, appContext);
       </div>
     </Teleport>
 
-    <Teleport to="body">
-      <div
-        v-if="cardIntroTarget"
-        class="result-modal-backdrop"
-        role="presentation"
-        @click.self="closeCardIntro"
-      >
-        <section
-          class="trade-listing-modal card-intro-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="卡片详情"
-        >
-          <header class="result-modal-head">
-            <div>
-              <p class="eyebrow">卡片详情</p>
-              <h2>{{ cardIntroTarget.name }}</h2>
-              <span>
-                {{
-                  [
-                    cardIntroTarget.rarity,
-                    cardIntroTarget.type,
-                    cardIntroTarget.extra,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                }}
-              </span>
-            </div>
-            <button class="modal-close" type="button" @click="closeCardIntro">
-              关闭
-            </button>
-          </header>
-          <div class="trade-listing-body card-intro-body card-detail-body">
-            <div
-              class="card-detail-preview"
-              :class="rarityClass(cardIntroTarget.rarity || '')"
-            >
-              <div
-                class="card-media-frame"
-                :class="{ 'has-media': hasCardMedia(cardIntroTarget.cardImage) }"
-              >
-                <video
-                  v-if="isCardVideo(cardIntroTarget.cardImage)"
-                  class="card-art-media"
-                  :src="cardMediaUrl(cardIntroTarget.cardImage)"
-                  muted
-                  loop
-                  autoplay
-                  playsinline
-                  @error="hideBrokenCardMedia"
-                />
-                <img
-                  v-else-if="cardMediaUrl(cardIntroTarget.cardImage)"
-                  class="card-art-media"
-                  :src="cardMediaUrl(cardIntroTarget.cardImage)"
-                  :alt="cardIntroTarget.name"
-                  @error="hideBrokenCardMedia"
-                />
-                <div class="card-sigil"></div>
-                <div class="result-card-top">
-                  <span v-if="cardIntroTarget.rarity" class="rarity-badge">
-                    {{ cardIntroTarget.rarity }}
-                  </span>
-                  <span v-if="cardIntroTarget.type" class="card-type-pill">
-                    {{ cardIntroTarget.type }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div class="card-detail-info">
-              <p>{{ cardIntroTarget.desc }}</p>
-              <dl v-if="cardIntroTarget.rows.length" class="card-detail-meta">
-                <div v-for="row in cardIntroTarget.rows" :key="row.label">
-                  <dt>{{ row.label }}</dt>
-                  <dd>{{ row.value }}</dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-          <footer
-            v-if="cardIntroTarget.actions.length"
-            class="result-modal-actions card-detail-actions"
-          >
-            <button
-              v-for="action in cardIntroTarget.actions"
-              :key="action.key"
-              :class="cardDetailActionClass(action)"
-              type="button"
-              :disabled="action.disabled"
-              @click="handleCardDetailAction(action)"
-            >
-              <component :is="action.icon" :size="16" />
-              {{ action.label }}
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <CardDetailModal
+      :target="cardIntroTarget"
+      @close="closeCardIntro"
+      @action="handleCardDetailAction"
+    />
 
-    <Teleport to="body">
-      <div
-        v-if="shareTextTarget"
-        class="result-modal-backdrop share-modal-backdrop"
-        role="presentation"
-        @click.self="closeShareText"
-      >
-        <section
-          class="trade-listing-modal share-text-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="分享文案"
-        >
-          <header class="result-modal-head">
-            <div>
-              <p class="eyebrow">分享</p>
-              <h2>分享文案</h2>
-            </div>
-            <button class="modal-close" type="button" @click="closeShareText">
-              关闭
-            </button>
-          </header>
-          <div class="trade-listing-body">
-            <textarea
-              class="share-textarea"
-              readonly
-              :value="shareTextTarget"
-            ></textarea>
-          </div>
-          <footer class="result-modal-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              @click="closeShareText"
-            >
-              关闭
-            </button>
-            <button class="primary-action" type="button" @click="copyShareText">
-              复制
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <ShareTextModal
+      :text="shareTextTarget"
+      @close="closeShareText"
+      @copy="copyShareText"
+    />
 
     <Teleport to="body">
       <div
