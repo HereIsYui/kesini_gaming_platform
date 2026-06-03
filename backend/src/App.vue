@@ -1438,7 +1438,7 @@ async function resetUserCardData(row: Record<string, any>, reload: () => void) {
   const userName = String(row.nickname || row.name || row.uid || `#${userId}`);
   try {
     await ElMessageBox.confirm(
-      `清空 ${userName} 的卡片和抽卡记录？`,
+      `清空 ${userName} 的卡片、抽卡和充值记录？`,
       "清空确认",
       {
         type: "warning",

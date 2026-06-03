@@ -691,6 +691,9 @@ export class AdminService {
       const showcaseResult = await manager
         .getRepository(UserShowcaseCard)
         .delete({ uid });
+      const rechargeResult = await manager
+        .getRepository(RechargeRecord)
+        .delete({ uid });
       const listingResult = await manager.getRepository(TradeListing).update(
         { seller_uid: uid, status: "active" },
         { status: "cancelled", cancelled_at: now },
@@ -712,6 +715,7 @@ export class AdminService {
         pities: pityResult.affected || 0,
         formationSlots: formationResult.affected || 0,
         showcaseCards: showcaseResult.affected || 0,
+        rechargeRecords: rechargeResult.affected || 0,
         tradeListings: listingResult.affected || 0,
       };
     });

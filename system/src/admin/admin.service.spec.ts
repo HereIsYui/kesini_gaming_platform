@@ -947,7 +947,7 @@ describe("AdminService", () => {
     ).rejects.toThrow("保底计数必须为非负整数");
   });
 
-  it("清空用户卡片数据会重置抽卡相关记录", async () => {
+  it("清空用户卡片数据会重置抽卡和充值相关记录", async () => {
     const userRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({ id: 3, uid: "u1" }),
     });
@@ -967,6 +967,9 @@ describe("AdminService", () => {
     const showcaseRepository = createRepository({
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
     });
+    const rechargeRecordRepository = createRepository({
+      delete: jest.fn().mockResolvedValue({ affected: 3 }),
+    });
     const tradeListingRepository = createRepository({
       update: jest.fn().mockResolvedValue({ affected: 1 }),
     });
@@ -977,6 +980,7 @@ describe("AdminService", () => {
       UserGachaPity: pityRepository,
       UserFormationSlot: formationRepository,
       UserShowcaseCard: showcaseRepository,
+      RechargeRecord: rechargeRecordRepository,
       TradeListing: tradeListingRepository,
     });
     const service = createService({ user: userRepository, dataSource });
@@ -988,6 +992,7 @@ describe("AdminService", () => {
       pities: 1,
       formationSlots: 1,
       showcaseCards: 1,
+      rechargeRecords: 3,
       tradeListings: 1,
     });
     expect(dataSource.transaction).toHaveBeenCalled();
@@ -996,6 +1001,7 @@ describe("AdminService", () => {
     expect(pityRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
     expect(formationRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
     expect(showcaseRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
+    expect(rechargeRecordRepository.delete).toHaveBeenCalledWith({ uid: "u1" });
     expect(tradeListingRepository.update).toHaveBeenCalledWith(
       { seller_uid: "u1", status: "active" },
       expect.objectContaining({ status: "cancelled" }),
