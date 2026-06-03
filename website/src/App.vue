@@ -79,7 +79,6 @@ import type {
   FishpiPointResponse,
   FormationCard,
   GachaResult,
-  InventoryItem,
   LaunchActivityClaimResponse,
   LaunchActivityCurrentResponse,
   LeaderboardEntry,
@@ -103,6 +102,10 @@ import type {
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
 import { useAnnouncements } from "./composables/useAnnouncements";
 import { useAuthSession } from "./composables/useAuthSession";
+import {
+  BAG_PAGE_SIZE,
+  useCardCollection,
+} from "./composables/useCardCollection";
 import { useDrawHistory } from "./composables/useDrawHistory";
 import { useDrawResults } from "./composables/useDrawResults";
 import { useFeedback } from "./composables/useFeedback";
@@ -304,11 +307,6 @@ type ConfirmDialogTarget = {
   variant?: ConfirmDialogVariant;
   icon?: Component;
 };
-type LoadUserCardsOptions = {
-  append?: boolean;
-  preserveLoaded?: boolean;
-  silent?: boolean;
-};
 type SilentLoadOptions = {
   silent?: boolean;
 };
@@ -327,7 +325,6 @@ type CardStateRefreshOptions = {
   tradeRecords?: boolean;
   achievements?: boolean;
 };
-const BAG_PAGE_SIZE = 24;
 const appVersion = __APP_VERSION__;
 
 const route = useRoute();
@@ -401,7 +398,7 @@ const publicData = usePublicData({
     busy.catalog = value;
   },
   loadAnnouncements,
-  ensureBagPoolFilter,
+  ensureBagPoolFilter: () => ensureBagPoolFilter(),
   notifyError: (error) => notify("error", getErrorMessage(error)),
   notifyErrorText: (text) => notify("error", text),
 });
@@ -430,6 +427,33 @@ const loadUserCatalog = publicData.loadUserCatalog;
 const openPoolDetail = publicData.openPoolDetail;
 const closePoolDetail = publicData.closePoolDetail;
 const getPoolName = publicData.getPoolName;
+const cardCollection = useCardCollection({
+  isAuthed: () => isAuthed.value,
+  isAssetsBusy: () => busy.assets,
+  isCardsMoreBusy: () => busy.cardsMore,
+  getActivePoolId: () => activePoolId.value,
+  getPools: () => pools.value,
+  setAssetsBusy: (value) => {
+    busy.assets = value;
+  },
+  setCardsMoreBusy: (value) => {
+    busy.cardsMore = value;
+  },
+});
+const userCards = cardCollection.userCards;
+const rarityFilter = cardCollection.rarityFilter;
+const poolFilter = cardCollection.poolFilter;
+const bagNewOnly = cardCollection.bagNewOnly;
+const cardPage = cardCollection.cardPage;
+const inventoryItems = cardCollection.inventoryItems;
+const totalPages = cardCollection.totalPages;
+const bagHasMore = cardCollection.bagHasMore;
+const bagLoadedCount = cardCollection.bagLoadedCount;
+const ensureBagPoolFilter = cardCollection.ensureBagPoolFilter;
+const loadUserCards = cardCollection.loadUserCards;
+const resetUserCards = cardCollection.resetUserCards;
+const toggleBagNewOnly = cardCollection.toggleBagNewOnly;
+const loadMoreUserCards = cardCollection.loadMoreUserCards;
 const drawHistoryState = useDrawHistory({
   isAuthed: () => isAuthed.value,
   setBusy: (value) => {
@@ -453,7 +477,6 @@ const resetDrawHistory = drawHistoryState.resetDrawHistory;
 const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
-const userCards = ref<UserCardsResponse | null>(null);
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
@@ -499,9 +522,6 @@ const setDrawResults = drawResults.setDrawResults;
 const clearDrawResults = drawResults.clearDrawResults;
 const openLastResults = drawResults.openLastResults;
 const closeResultModal = drawResults.closeResultModal;
-const rarityFilter = ref("");
-const poolFilter = ref<number | "">("");
-const bagNewOnly = ref(false);
 const synthesisRarityFilter = ref<CardRarity | "">("");
 const bulkDecomposeRarities = reactive<Record<CardRarity, boolean>>({
   N: true,
@@ -511,7 +531,6 @@ const bulkDecomposeRarities = reactive<Record<CardRarity, boolean>>({
   UR: false,
 });
 const bulkDecomposePreview = ref<BulkDecomposeResponse | null>(null);
-const cardPage = ref(1);
 const tradePage = ref(1);
 const myTradePage = ref(1);
 const tradeRecordPage = ref(1);
@@ -1070,9 +1089,6 @@ const selectedPityText = computed(() => {
 const poolDetailPity = computed(() =>
   getPityForPool(poolDetailPool.value?.id || activePoolId.value),
 );
-const inventoryItems = computed<InventoryItem[]>(
-  () => userCards.value?.dropItems || [],
-);
 const localCatalogCards = computed<CatalogCard[]>(() =>
   poolCards.value.flatMap((card) =>
     parseCardRarities(card.card_level).map((rarity) => ({
@@ -1205,11 +1221,6 @@ const achievementCompletionPercent = computed(() => {
     (achievementUnlockedCount.value / achievements.value.length) * 100,
   );
 });
-const totalPages = computed(() => userCards.value?.totalPages || 1);
-const bagHasMore = computed(
-  () => Boolean(userCards.value) && cardPage.value < totalPages.value,
-);
-const bagLoadedCount = computed(() => userCards.value?.list.length || 0);
 const bulkDecomposeSelectedRarities = computed(() =>
   rarityOrder.filter(
     (rarity) => rarity !== "UR" && bulkDecomposeRarities[rarity],
@@ -1552,104 +1563,6 @@ async function loadFishpiPoint(showError = false) {
   }
 }
 
-function ensureBagPoolFilter() {
-  const poolId = activePoolId.value || pools.value[0]?.id || null;
-  if (!poolFilter.value && poolId) {
-    poolFilter.value = poolId;
-  }
-  if (
-    poolFilter.value &&
-    !pools.value.some((pool) => pool.id === Number(poolFilter.value))
-  ) {
-    poolFilter.value = poolId || "";
-  }
-}
-
-async function loadUserCards(options: LoadUserCardsOptions = {}) {
-  if (!isAuthed.value) {
-    return;
-  }
-  ensureBagPoolFilter();
-  const append = options.append === true;
-  const preserveLoaded = !append && options.preserveLoaded === true;
-  const silent = !append && options.silent === true;
-  if (append && (busy.assets || busy.cardsMore || !bagHasMore.value)) {
-    return;
-  }
-  if (!poolFilter.value) {
-    userCards.value = {
-      list: [],
-      dropItems: [],
-      total: 0,
-      page: 1,
-      pageSize: BAG_PAGE_SIZE,
-      totalPages: 0,
-    };
-    cardPage.value = 1;
-    return;
-  }
-  const requestedRarity = rarityFilter.value;
-  const requestedPoolId = poolFilter.value;
-  const requestedNewOnly = bagNewOnly.value;
-  const requestedPages = Math.max(1, cardPage.value || 1);
-  const page = append ? cardPage.value + 1 : 1;
-  const pageSize = preserveLoaded
-    ? Math.max(BAG_PAGE_SIZE, requestedPages * BAG_PAGE_SIZE)
-    : BAG_PAGE_SIZE;
-  if (append) {
-    busy.cardsMore = true;
-  } else if (!silent) {
-    busy.assets = true;
-  }
-  try {
-    const data = await request<UserCardsResponse>(
-      `/card/user/cards${toQuery({
-        rarity: requestedRarity,
-        poolId: requestedPoolId,
-        grouped: true,
-        newOnly: requestedNewOnly ? true : "",
-        page,
-        pageSize,
-      })}`,
-    );
-    if (
-      requestedRarity !== rarityFilter.value ||
-      requestedPoolId !== poolFilter.value ||
-      requestedNewOnly !== bagNewOnly.value
-    ) {
-      return;
-    }
-    if (append && userCards.value) {
-      userCards.value = {
-        ...data,
-        list: [...userCards.value.list, ...data.list],
-        dropItems: data.dropItems,
-      };
-    } else if (preserveLoaded) {
-      const restoredTotalPages = Math.max(
-        1,
-        Math.ceil(Number(data.total || 0) / BAG_PAGE_SIZE),
-      );
-      const restoredPage = Math.min(requestedPages, restoredTotalPages);
-      userCards.value = {
-        ...data,
-        page: restoredPage,
-        pageSize: BAG_PAGE_SIZE,
-        totalPages: restoredTotalPages,
-      };
-    } else {
-      userCards.value = data;
-    }
-    cardPage.value = userCards.value?.page || data.page || page;
-  } finally {
-    if (append) {
-      busy.cardsMore = false;
-    } else if (!silent) {
-      busy.assets = false;
-    }
-  }
-}
-
 function candidateUuid(card: UserCardsResponse["list"][number]) {
   return (
     card.uuid ||
@@ -1658,21 +1571,6 @@ function candidateUuid(card: UserCardsResponse["list"][number]) {
     card.unlockableUuid ||
     ""
   );
-}
-
-function resetUserCards() {
-  cardPage.value = 1;
-  userCards.value = null;
-  void loadUserCards();
-}
-
-function toggleBagNewOnly() {
-  bagNewOnly.value = !bagNewOnly.value;
-  resetUserCards();
-}
-
-function loadMoreUserCards() {
-  void loadUserCards({ append: true });
 }
 
 async function loadLaunchActivity() {
