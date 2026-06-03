@@ -40,8 +40,11 @@ import FeedbackToast from "./components/common/FeedbackToast.vue";
 import AppHeader from "./components/layout/AppHeader.vue";
 import MobileNav from "./components/layout/MobileNav.vue";
 import PageHost from "./components/layout/PageHost.vue";
+import AnnouncementModal from "./components/modals/AnnouncementModal.vue";
 import CardDetailModal from "./components/modals/CardDetailModal.vue";
 import ConfirmDialog from "./components/modals/ConfirmDialog.vue";
+import LaunchActivityModal from "./components/modals/LaunchActivityModal.vue";
+import RechargeModal from "./components/modals/RechargeModal.vue";
 import ShareTextModal from "./components/modals/ShareTextModal.vue";
 import type {
   CardDetailAction,
@@ -3790,111 +3793,17 @@ provide(APP_CONTEXT_KEY, appContext);
       @settle="settleConfirmDialog"
     />
 
-    <Teleport to="body">
-      <div
-        v-if="announcementModalOpen"
-        class="result-modal-backdrop"
-        role="presentation"
-        @click.self="closeAnnouncementModal"
-      >
-        <section
-          class="announcement-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="公告"
-        >
-          <header class="result-modal-head">
-            <div>
-              <p class="eyebrow">公告</p>
-              <h2>{{ selectedAnnouncement?.title || "公告" }}</h2>
-              <span v-if="selectedAnnouncement">
-                {{ selectedAnnouncement.active !== false ? "进行中" : "已归档" }}
-                · {{ formatDate(selectedAnnouncement.createdAt) }}
-              </span>
-              <span v-else>{{ announcements.length }} 条</span>
-            </div>
-            <button
-              class="modal-close"
-              type="button"
-              @click="closeAnnouncementModal"
-            >
-              关闭
-            </button>
-          </header>
-
-          <div class="announcement-modal-body">
-            <article
-              v-if="selectedAnnouncement"
-              class="announcement-detail-card"
-            >
-              <p>{{ selectedAnnouncement.content }}</p>
-              <dl>
-                <div>
-                  <dt>时间</dt>
-                  <dd>
-                    {{ formatDate(selectedAnnouncement.startsAt) }} 至
-                    {{ formatDate(selectedAnnouncement.endsAt) }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>状态</dt>
-                  <dd>
-                    {{
-                      selectedAnnouncement.active !== false
-                        ? "进行中"
-                        : "已归档"
-                    }}
-                  </dd>
-                </div>
-              </dl>
-            </article>
-            <div v-else class="announcement-list">
-              <button
-                v-for="item in announcements"
-                :key="item.id"
-                class="announcement-list-item"
-                :class="{ read: isAnnouncementRead(item) }"
-                type="button"
-                @click="openAnnouncementDetail(item)"
-              >
-                <span class="announcement-status">{{
-                  item.active !== false ? "进行中" : "已归档"
-                }}</span>
-                <strong>{{ item.title }}</strong>
-                <span>{{ announcementSummary(item.content) }}</span>
-                <small>{{ isAnnouncementRead(item) ? "已读" : "未读" }}</small>
-              </button>
-            </div>
-          </div>
-
-          <footer class="result-modal-actions">
-            <button
-              v-if="selectedAnnouncement"
-              class="secondary-action"
-              type="button"
-              @click="selectedAnnouncement = null"
-            >
-              返回
-            </button>
-            <button
-              v-if="selectedAnnouncement"
-              class="secondary-action"
-              type="button"
-              @click="selectedAnnouncement && closeAnnouncement(selectedAnnouncement)"
-            >
-              隐藏
-            </button>
-            <button
-              class="primary-action"
-              type="button"
-              @click="closeAnnouncementModal"
-            >
-              关闭
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <AnnouncementModal
+      :open="announcementModalOpen"
+      :announcements="announcements"
+      :selected="selectedAnnouncement"
+      :summary="announcementSummary"
+      :is-read="isAnnouncementRead"
+      @close="closeAnnouncementModal"
+      @select="openAnnouncementDetail"
+      @back="selectedAnnouncement = null"
+      @hide="closeAnnouncement"
+    />
 
     <Teleport to="body">
       <div
@@ -4074,173 +3983,25 @@ provide(APP_CONTEXT_KEY, appContext);
       </div>
     </Teleport>
 
-    <Teleport to="body">
-      <div
-        v-if="launchActivityModalOpen && launchActivityInfo"
-        class="result-modal-backdrop"
-        role="presentation"
-        @click.self="closeLaunchActivityModal"
-      >
-        <section
-          class="trade-listing-modal launch-activity-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="开服福利"
-        >
-          <header class="result-modal-head">
-            <div>
-              <p class="eyebrow">开服福利</p>
-              <h2>{{ launchActivityInfo.name }}</h2>
-              <span>
-                {{ formatDate(launchActivityInfo.startsAt) }} 至
-                {{ formatDate(launchActivityInfo.endsAt) }}
-              </span>
-            </div>
-            <button
-              class="modal-close"
-              type="button"
-              :disabled="busy.launchActivity"
-              @click="closeLaunchActivityModal"
-            >
-              关闭
-            </button>
-          </header>
-          <div class="trade-listing-body launch-activity-body">
-            <p class="launch-activity-desc">
-              {{ launchActivityInfo.description || "登录可领一次" }}
-            </p>
-            <div class="launch-reward-card">
-              <span>本次奖励</span>
-              <strong>{{ formatRewards(launchActivityInfo.rewards) }}</strong>
-              <small>领取后刷新资产</small>
-            </div>
-            <div class="launch-reward-grid">
-              <article
-                v-if="Number(launchActivityInfo.rewards.points || 0) > 0"
-              >
-                <span>星穹币</span>
-                <strong>{{ launchActivityInfo.rewards.points }}</strong>
-              </article>
-              <article
-                v-for="item in launchActivityInfo.rewards.items"
-                :key="`${item.itemId}-${item.num}`"
-              >
-                <span>{{ item.itemName || `物品 ${item.itemId}` }}</span>
-                <strong>x{{ item.num }}</strong>
-              </article>
-            </div>
-          </div>
-          <footer class="result-modal-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              :disabled="busy.launchActivity"
-              @click="closeLaunchActivityModal"
-            >
-              稍后领取
-            </button>
-            <button
-              class="primary-action golden"
-              type="button"
-              :disabled="busy.launchActivity"
-              @click="claimLaunchActivity"
-            >
-              <LoaderCircle
-                v-if="busy.launchActivity"
-                :size="18"
-                class="spin"
-              />
-              <Gift v-else :size="18" />
-              立即领取
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <LaunchActivityModal
+      :open="launchActivityModalOpen"
+      :activity="launchActivityInfo"
+      :loading="busy.launchActivity"
+      @close="closeLaunchActivityModal"
+      @claim="claimLaunchActivity"
+    />
 
-    <Teleport to="body">
-      <div
-        v-if="rechargeModalOpen"
-        class="result-modal-backdrop"
-        role="presentation"
-        @click.self="closeRechargeModal"
-      >
-        <section
-          class="trade-listing-modal recharge-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="星穹币充值"
-        >
-          <header class="result-modal-head">
-            <div>
-              <p class="eyebrow">星穹币充值</p>
-              <h2>扣鱼排积分换星穹币</h2>
-              <span>{{ rechargeRatioLabel }}</span>
-            </div>
-            <button
-              class="modal-close"
-              type="button"
-              :disabled="busy.recharge"
-              @click="closeRechargeModal"
-            >
-              关闭
-            </button>
-          </header>
-          <div class="trade-listing-body recharge-modal-body">
-            <label class="redeem-input">
-              <span>扣除鱼排积分</span>
-              <input
-                v-model.number="rechargeAmount"
-                type="number"
-                :min="rechargeConfig?.minAmount || 1"
-                :max="rechargeConfig?.maxAmount || 9999"
-                step="1"
-                placeholder="输入要扣除的鱼排积分"
-                @keyup.enter="submitRecharge"
-              />
-            </label>
-            <dl>
-              <div>
-                <dt>充值范围</dt>
-                <dd>{{ rechargeRangeLabel }}</dd>
-              </div>
-              <div>
-                <dt>将扣除鱼排积分</dt>
-                <dd>{{ rechargeAmount || 0 }}</dd>
-              </div>
-              <div>
-                <dt>到账星穹币</dt>
-                <dd>{{ rechargeLocalAmount }}</dd>
-              </div>
-              <div>
-                <dt>说明</dt>
-                <dd>完成后到账</dd>
-              </div>
-            </dl>
-          </div>
-          <footer class="result-modal-actions">
-            <button
-              class="secondary-action"
-              type="button"
-              :disabled="busy.recharge"
-              @click="closeRechargeModal"
-            >
-              取消
-            </button>
-            <button
-              class="primary-action"
-              type="button"
-              :disabled="busy.recharge"
-              @click="submitRecharge"
-            >
-              <LoaderCircle v-if="busy.recharge" :size="18" class="spin" />
-              <Coins v-else :size="18" />
-              确认
-            </button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <RechargeModal
+      v-model:amount="rechargeAmount"
+      :open="rechargeModalOpen"
+      :loading="busy.recharge"
+      :config="rechargeConfig"
+      :range-label="rechargeRangeLabel"
+      :ratio-label="rechargeRatioLabel"
+      :local-amount="rechargeLocalAmount"
+      @close="closeRechargeModal"
+      @submit="submitRecharge"
+    />
 
     <Teleport to="body">
       <div
