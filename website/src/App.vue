@@ -83,12 +83,6 @@ import type {
   FormationCard,
   FormationOverview,
   GachaResult,
-  CreateGuildRequest,
-  GuildMember,
-  GuildMessage,
-  GuildMessagesResponse,
-  GuildOverviewResponse,
-  GuildSummary,
   InventoryItem,
   LaunchActivityClaimResponse,
   LaunchActivityCurrentResponse,
@@ -103,10 +97,8 @@ import type {
   PlayerMessage,
   PlayerMessagesResponse,
   PlayerProfileResponse,
-  SaveGuildAnnouncementRequest,
   SaveShowcaseRequest,
   SendFriendRequestRequest,
-  SendGuildMessageRequest,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   SeasonOverview,
@@ -130,6 +122,7 @@ import { useAuthSession } from "./composables/useAuthSession";
 import { useDrawHistory } from "./composables/useDrawHistory";
 import { useDrawResults } from "./composables/useDrawResults";
 import { useFeedback } from "./composables/useFeedback";
+import { useGuildSocial } from "./composables/useGuildSocial";
 import { useModalStack } from "./composables/useModalStack";
 import { useNewCardMarkers } from "./composables/useNewCardMarkers";
 import { usePlayerPreferences } from "./composables/usePlayerPreferences";
@@ -347,7 +340,6 @@ type CardStateRefreshOptions = {
   achievements?: boolean;
 };
 const BAG_PAGE_SIZE = 24;
-const GUILD_MESSAGE_LIST_LIMIT = 30;
 const appVersion = __APP_VERSION__;
 
 const route = useRoute();
@@ -486,15 +478,6 @@ const friendActionBusy = ref("");
 const playerMessages = ref<PlayerMessage[]>([]);
 const playerMessagesError = ref("");
 const messageClaimBusy = ref<number | null>(null);
-const guildOverview = ref<GuildOverviewResponse | null>(null);
-const guildError = ref("");
-const guildMessages = ref<GuildMessage[]>([]);
-const guildMessageError = ref("");
-const guildMessageText = ref("");
-const guildName = ref("");
-const guildDescription = ref("");
-const guildAnnouncement = ref("");
-const guildActionBusy = ref("");
 const formation = ref<FormationOverview | null>(null);
 const formationCandidates = ref<UserCardsResponse["list"]>([]);
 const formationPickerOpen = ref(false);
@@ -660,6 +643,51 @@ const activeSection = computed<SectionKey>(() => {
     ? (route.name as SectionKey)
     : "draw";
 });
+const guildSocial = useGuildSocial({
+  isAuthed: () => isAuthed.value,
+  isActive: () => activeSection.value === "guild",
+  setGuildBusy: (value) => {
+    busy.guild = value;
+  },
+  setGuildMessagesBusy: (value) => {
+    busy.guildMessages = value;
+  },
+  setGuildSendingBusy: (value) => {
+    busy.guildSending = value;
+  },
+  notify,
+  getErrorMessage,
+  askConfirm,
+  publicPlayerName,
+});
+const guildOverview = guildSocial.guildOverview;
+const guildError = guildSocial.guildError;
+const guildMessages = guildSocial.guildMessages;
+const guildMessageError = guildSocial.guildMessageError;
+const guildMessageText = guildSocial.guildMessageText;
+const guildName = guildSocial.guildName;
+const guildDescription = guildSocial.guildDescription;
+const guildAnnouncement = guildSocial.guildAnnouncement;
+const guildActionBusy = guildSocial.guildActionBusy;
+const currentGuild = guildSocial.currentGuild;
+const guildMembers = guildSocial.guildMembers;
+const guildRows = guildSocial.guildRows;
+const guildRoleLabel = guildSocial.guildRoleLabel;
+const guildMessageRows = guildSocial.guildMessageRows;
+const resetGuild = guildSocial.resetGuild;
+const guildRoleName = guildSocial.guildRoleName;
+const guildMemberName = guildSocial.guildMemberName;
+const guildMemberInitial = guildSocial.guildMemberInitial;
+const guildMessageSenderName = guildSocial.guildMessageSenderName;
+const guildMessageInitial = guildSocial.guildMessageInitial;
+const loadGuild = guildSocial.loadGuild;
+const loadGuildMessages = guildSocial.loadGuildMessages;
+const refreshGuildSection = guildSocial.refreshGuildSection;
+const createGuild = guildSocial.createGuild;
+const joinGuild = guildSocial.joinGuild;
+const leaveGuild = guildSocial.leaveGuild;
+const saveGuildAnnouncement = guildSocial.saveGuildAnnouncement;
+const sendGuildMessage = guildSocial.sendGuildMessage;
 const pointsLedger = usePointsLedger({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "points",
@@ -889,29 +917,6 @@ const profileFriendActionDisabled = computed(() => {
 });
 const unreadMessageCount = computed(
   () => playerMessages.value.filter((item) => !item.read).length,
-);
-const currentGuild = computed(
-  () => guildOverview.value?.current?.guild || null,
-);
-const guildMembers = computed<GuildMember[]>(
-  () => guildOverview.value?.current?.members || [],
-);
-const guildRows = computed<GuildSummary[]>(
-  () => guildOverview.value?.guilds || [],
-);
-const guildRoleLabel = computed(() =>
-  currentGuild.value?.role === "leader" ? "会长" : "成员",
-);
-const guildMessageRows = computed(() =>
-  guildMessages.value
-    .slice()
-    .sort(
-      (left, right) =>
-        (Date.parse(right.createdAt || "") || 0) -
-          (Date.parse(left.createdAt || "") || 0) ||
-        Number(right.id || 0) - Number(left.id || 0),
-    )
-    .slice(0, GUILD_MESSAGE_LIST_LIMIT),
 );
 const modalFocusKey = computed(() => {
   if (confirmDialogTarget.value) {
@@ -1526,15 +1531,7 @@ function logout() {
   playerMessages.value = [];
   playerMessagesError.value = "";
   messageClaimBusy.value = null;
-  guildOverview.value = null;
-  guildError.value = "";
-  guildMessages.value = [];
-  guildMessageError.value = "";
-  guildMessageText.value = "";
-  guildName.value = "";
-  guildDescription.value = "";
-  guildAnnouncement.value = "";
-  guildActionBusy.value = "";
+  resetGuild();
   formation.value = null;
   formationCandidates.value = [];
   formationPickerOpen.value = false;
@@ -2086,218 +2083,6 @@ async function claimMessageReward(message: PlayerMessage) {
     notify("error", getErrorMessage(error));
   } finally {
     messageClaimBusy.value = null;
-  }
-}
-
-function guildRoleName(role?: string | null) {
-  return role === "leader" ? "会长" : "成员";
-}
-
-function guildMemberName(member: GuildMember) {
-  return publicPlayerName(member.nickname, member.uid);
-}
-
-function guildMemberInitial(member: GuildMember) {
-  return guildMemberName(member).slice(0, 1).toUpperCase();
-}
-
-function guildMessageSenderName(message: GuildMessage) {
-  return publicPlayerName(message.sender.nickname, message.sender.uid);
-}
-
-function guildMessageInitial(message: GuildMessage) {
-  return guildMessageSenderName(message).slice(0, 1).toUpperCase();
-}
-
-async function loadGuild(showError = activeSection.value === "guild") {
-  if (!isAuthed.value) {
-    guildOverview.value = null;
-    guildError.value = "";
-    guildMessages.value = [];
-    guildMessageError.value = "";
-    return;
-  }
-  busy.guild = true;
-  guildError.value = "";
-  try {
-    guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
-    guildAnnouncement.value =
-      guildOverview.value.current?.guild.announcement || "";
-    if (!guildOverview.value.current) {
-      guildMessages.value = [];
-      guildMessageError.value = "";
-    }
-  } catch (error) {
-    guildOverview.value = null;
-    guildError.value = getErrorMessage(error);
-    guildAnnouncement.value = "";
-    if (showError) {
-      notify("error", guildError.value);
-    }
-  } finally {
-    busy.guild = false;
-  }
-}
-
-async function loadGuildMessages(showError = activeSection.value === "guild") {
-  if (!isAuthed.value || !currentGuild.value) {
-    guildMessages.value = [];
-    guildMessageError.value = "";
-    return;
-  }
-  busy.guildMessages = true;
-  guildMessageError.value = "";
-  try {
-    const data = await request<GuildMessagesResponse>(
-      `/guilds/me/messages?limit=${GUILD_MESSAGE_LIST_LIMIT}`,
-    );
-    guildMessages.value = data.list || [];
-  } catch (error) {
-    guildMessages.value = [];
-    guildMessageError.value = getErrorMessage(error);
-    if (showError) {
-      notify("error", guildMessageError.value);
-    }
-  } finally {
-    busy.guildMessages = false;
-  }
-}
-
-async function refreshGuildSection(
-  showError = activeSection.value === "guild",
-) {
-  await loadGuild(showError);
-  if (currentGuild.value) {
-    await loadGuildMessages(showError);
-  }
-}
-
-async function createGuild() {
-  const name = guildName.value.trim();
-  const description = guildDescription.value.trim();
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  if (!name) {
-    notify("error", "请输入公会名");
-    return;
-  }
-  guildActionBusy.value = "create";
-  try {
-    const payload: CreateGuildRequest = { name, description };
-    guildOverview.value = await request<GuildOverviewResponse>("/guilds", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    guildName.value = "";
-    guildDescription.value = "";
-    guildAnnouncement.value =
-      guildOverview.value.current?.guild.announcement || "";
-    notify("success", "已创建");
-    await loadGuildMessages(false);
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    guildActionBusy.value = "";
-  }
-}
-
-async function joinGuild(guildId: number) {
-  guildActionBusy.value = `join:${guildId}`;
-  try {
-    guildOverview.value = await request<GuildOverviewResponse>(
-      `/guilds/${guildId}/join`,
-      { method: "POST" },
-    );
-    guildAnnouncement.value =
-      guildOverview.value.current?.guild.announcement || "";
-    notify("success", "已加入");
-    await loadGuildMessages(false);
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    guildActionBusy.value = "";
-  }
-}
-
-async function leaveGuild() {
-  if (!currentGuild.value) {
-    return;
-  }
-  const confirmed = await askConfirm({
-    title: "退出公会",
-    message: "成员身份将移除",
-    confirmText: "退出",
-    variant: "danger",
-    icon: LogOut,
-  });
-  if (!confirmed) {
-    return;
-  }
-  guildActionBusy.value = "leave";
-  try {
-    guildOverview.value = await request<GuildOverviewResponse>("/guilds/me", {
-      method: "DELETE",
-    });
-    guildMessages.value = [];
-    guildMessageError.value = "";
-    guildMessageText.value = "";
-    guildAnnouncement.value = "";
-    notify("success", "已退出");
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    guildActionBusy.value = "";
-  }
-}
-
-async function saveGuildAnnouncement() {
-  if (!currentGuild.value) {
-    return;
-  }
-  guildActionBusy.value = "announcement";
-  try {
-    const payload: SaveGuildAnnouncementRequest = {
-      announcement: guildAnnouncement.value.trim(),
-    };
-    guildOverview.value = await request<GuildOverviewResponse>(
-      "/guilds/me/announcement",
-      {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      },
-    );
-    guildAnnouncement.value =
-      guildOverview.value.current?.guild.announcement || "";
-    notify("success", "已保存");
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    guildActionBusy.value = "";
-  }
-}
-
-async function sendGuildMessage() {
-  const content = guildMessageText.value.trim();
-  if (!content) {
-    notify("error", "请输入消息");
-    return;
-  }
-  busy.guildSending = true;
-  try {
-    const payload: SendGuildMessageRequest = { content };
-    const data = await request<GuildMessagesResponse>("/guilds/me/messages", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    guildMessages.value = data.list || [];
-    guildMessageText.value = "";
-    notify("success", "已发送");
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.guildSending = false;
   }
 }
 
