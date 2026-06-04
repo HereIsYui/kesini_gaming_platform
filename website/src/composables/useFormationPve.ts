@@ -26,6 +26,12 @@ type PveBattleResult = {
   enemyPower: number;
 };
 
+type PveBattleHp = {
+  stageId: number | null;
+  player: number;
+  enemy: number;
+};
+
 type UseFormationPveOptions = {
   isAuthed: () => boolean;
   getActiveSection: () => string;
@@ -61,6 +67,11 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const pveBattleStageId = ref<number | null>(null);
   const pveBattlePhase = ref<PveBattlePhase>("idle");
   const pveBattleResult = ref<PveBattleResult | null>(null);
+  const pveBattleHp = ref<PveBattleHp>({
+    stageId: null,
+    player: 100,
+    enemy: 100,
+  });
 
   const formationSlots = computed(() => {
     const slotCount = formation.value?.slotCount || 3;
@@ -143,6 +154,11 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveBattleStageId.value = null;
     pveBattlePhase.value = "idle";
     pveBattleResult.value = null;
+    pveBattleHp.value = {
+      stageId: null,
+      player: 100,
+      enemy: 100,
+    };
   }
 
   function resetFormationPve() {
@@ -330,6 +346,36 @@ export function useFormationPve(options: UseFormationPveOptions) {
     return new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
 
+  function waitForBattleFrame() {
+    return new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+  }
+
+  function waitForBattleHpDrain() {
+    return new Promise((resolve) => window.setTimeout(resolve, 1250));
+  }
+
+  function battleHpTarget(result: PveBattleResult) {
+    return result.success
+      ? {
+          player: battleSurvivorHpPercent(
+            result.formationPower,
+            result.enemyPower,
+          ),
+          enemy: 0,
+        }
+      : {
+          player: 0,
+          enemy: battleSurvivorHpPercent(
+            result.enemyPower,
+            result.formationPower,
+          ),
+        };
+  }
+
   async function challengePveStage(stage: PveStage) {
     if (!options.isAuthed()) {
       options.notify("error", "请先登录");
@@ -342,6 +388,11 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveBattleStageId.value = Number(stage.id);
     pveBattlePhase.value = "fighting";
     pveBattleResult.value = null;
+    pveBattleHp.value = {
+      stageId: Number(stage.id),
+      player: 100,
+      enemy: 100,
+    };
     const animationDone = waitForBattleAnimation();
     options.setPveChallengeBusy(true);
     try {
@@ -353,17 +404,29 @@ export function useFormationPve(options: UseFormationPveOptions) {
       options.syncChallengePoint(data.pointAfter);
       pveBattleStageId.value = Number(stage.id);
       pveBattlePhase.value = "result";
-      pveBattleResult.value = {
+      const result = {
         stageId: Number(stage.id),
         success: data.success,
         rewards: data.rewards || null,
         formationPower: data.formationPower,
         enemyPower: data.enemyPower,
       };
+      pveBattleResult.value = result;
+      pveBattleHp.value = {
+        stageId: Number(stage.id),
+        player: 100,
+        enemy: 100,
+      };
+      await waitForBattleFrame();
+      pveBattleHp.value = {
+        stageId: Number(stage.id),
+        ...battleHpTarget(result),
+      };
       options.notify(
         data.success ? "success" : "info",
         data.success ? "胜利" : "失败",
       );
+      await waitForBattleHpDrain();
       await Promise.all([
         loadPveStages(pveStagePage.value),
         loadPveRecords(1),
@@ -419,35 +482,16 @@ export function useFormationPve(options: UseFormationPveOptions) {
     return Math.max(35, Math.min(96, percent));
   }
 
-  function currentBattleResult(stage: PveStage) {
-    if (
-      pveBattleStageId.value !== Number(stage.id) ||
-      pveBattlePhase.value !== "result" ||
-      !pveBattleResult.value
-    ) {
-      return null;
-    }
-    return pveBattleResult.value;
-  }
-
   function pveBattlePlayerHpPercent(stage: PveStage) {
-    const result = currentBattleResult(stage);
-    if (!result) {
-      return 100;
-    }
-    return result.success
-      ? battleSurvivorHpPercent(result.formationPower, result.enemyPower)
-      : 0;
+    return pveBattleHp.value.stageId === Number(stage.id)
+      ? pveBattleHp.value.player
+      : 100;
   }
 
   function pveBattleEnemyHpPercent(stage: PveStage) {
-    const result = currentBattleResult(stage);
-    if (!result) {
-      return 100;
-    }
-    return result.success
-      ? 0
-      : battleSurvivorHpPercent(result.enemyPower, result.formationPower);
+    return pveBattleHp.value.stageId === Number(stage.id)
+      ? pveBattleHp.value.enemy
+      : 100;
   }
 
   function pveStageLevelLabel(stage: PveStage) {

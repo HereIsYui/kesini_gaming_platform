@@ -158,7 +158,7 @@ function pveBattleRewardText(rewards: unknown) {
             <em class="pve-battle-hp" aria-hidden="true">
               <i
                 :style="{
-                  '--hp': `${pveBattlePlayerHpPercent(stage)}%`,
+                  width: `${pveBattlePlayerHpPercent(stage)}%`,
                 }"
               ></i>
             </em>
@@ -173,7 +173,7 @@ function pveBattleRewardText(rewards: unknown) {
             <em class="pve-battle-hp" aria-hidden="true">
               <i
                 :style="{
-                  '--hp': `${pveBattleEnemyHpPercent(stage)}%`,
+                  width: `${pveBattleEnemyHpPercent(stage)}%`,
                 }"
               ></i>
             </em>
