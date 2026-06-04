@@ -4,6 +4,7 @@
 -- 普通关卡碎片：401-500 R/SR x1，501-650 SR x1，651-750 SR x2。
 -- 普通关卡碎片：751-850 SR/SSR x1，851-950 SSR x1，951-1000 SSR x2。
 -- 里程碑：每 10 关额外通用碎片 x5，每 50 关 x20，每 100 关 x60，按最高档发放。
+-- 百关星穹币：第 100 关额外 x100，此后每 100 关递增 x50，计入 points。
 -- 可重复导入：同名“星域远征”关卡会先软下线，再插入新关卡。
 
 START TRANSACTION;
@@ -193,7 +194,7 @@ VALUES
 ('星域远征 097', '第1区-97', 1060, 1060, 3, JSON_OBJECT('points', 20, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1))), 1, 1097, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 098', '第1区-98', 1070, 1070, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1))), 1, 1098, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 099', '第1区-99', 1080, 1080, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1))), 1, 1099, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 100', '第1区-100', 1090, 1090, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1100, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 100', '第1区-100', 1090, 1090, 3, JSON_OBJECT('points', 125, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1100, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 101', '第2区-01', 1100, 1100, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1101, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 102', '第2区-02', 1120, 1120, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1102, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 103', '第2区-03', 1130, 1130, 3, JSON_OBJECT('points', 25, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1103, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -293,7 +294,7 @@ VALUES
 ('星域远征 197', '第2区-97', 2500, 2500, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1197, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 198', '第2区-98', 2510, 2510, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1198, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 199', '第2区-99', 2530, 2530, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2))), 1, 1199, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 200', '第2区-100', 2550, 2550, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1200, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 200', '第2区-100', 2550, 2550, 3, JSON_OBJECT('points', 185, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1200, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 201', '第3区-01', 2560, 2560, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1201, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 202', '第3区-02', 2580, 2580, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1202, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 203', '第3区-03', 2600, 2600, 3, JSON_OBJECT('points', 35, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1203, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -393,7 +394,7 @@ VALUES
 ('星域远征 297', '第3区-97', 4330, 4330, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1297, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 298', '第3区-98', 4350, 4350, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1298, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 299', '第3区-99', 4370, 4370, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1))), 1, 1299, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 300', '第3区-100', 4390, 4390, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1300, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 300', '第3区-100', 4390, 4390, 3, JSON_OBJECT('points', 250, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @n_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1300, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 301', '第4区-01', 4410, 4410, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1301, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 302', '第4区-02', 4430, 4430, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1302, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 303', '第4区-03', 4450, 4450, 3, JSON_OBJECT('points', 50, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1303, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -493,7 +494,7 @@ VALUES
 ('星域远征 397', '第4区-97', 6470, 6470, 3, JSON_OBJECT('points', 60, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1397, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 398', '第4区-98', 6490, 6490, 3, JSON_OBJECT('points', 60, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1398, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 399', '第4区-99', 6510, 6510, 3, JSON_OBJECT('points', 65, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2))), 1, 1399, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 400', '第4区-100', 6530, 6530, 3, JSON_OBJECT('points', 65, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1400, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 400', '第4区-100', 6530, 6530, 3, JSON_OBJECT('points', 315, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1400, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 401', '第5区-01', 6560, 6560, 3, JSON_OBJECT('points', 65, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1401, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 402', '第5区-02', 6580, 6580, 3, JSON_OBJECT('points', 65, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1402, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 403', '第5区-03', 6600, 6600, 3, JSON_OBJECT('points', 65, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1403, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -593,7 +594,7 @@ VALUES
 ('星域远征 497', '第5区-97', 8860, 8860, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1497, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 498', '第5区-98', 8890, 8890, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1498, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 499', '第5区-99', 8910, 8910, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1499, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 500', '第5区-100', 8940, 8940, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1500, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 500', '第5区-100', 8940, 8940, 3, JSON_OBJECT('points', 375, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @r_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1500, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 501', '第6区-01', 8960, 8960, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1501, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 502', '第6区-02', 8990, 8990, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1502, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 503', '第6区-03', 9010, 9010, 3, JSON_OBJECT('points', 75, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1503, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -693,7 +694,7 @@ VALUES
 ('星域远征 597', '第6区-97', 11490, 11490, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1597, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 598', '第6区-98', 11510, 11510, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1598, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 599', '第6区-99', 11540, 11540, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1599, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 600', '第6区-100', 11570, 11570, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1600, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 600', '第6区-100', 11570, 11570, 3, JSON_OBJECT('points', 440, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1600, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 601', '第7区-01', 11600, 11600, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1601, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 602', '第7区-02', 11620, 11620, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1602, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 603', '第7区-03', 11650, 11650, 3, JSON_OBJECT('points', 90, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1))), 1, 1603, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -793,7 +794,7 @@ VALUES
 ('星域远征 697', '第7区-97', 14320, 14320, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1697, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 698', '第7区-98', 14350, 14350, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1698, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 699', '第7区-99', 14380, 14380, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1699, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 700', '第7区-100', 14400, 14400, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1700, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 700', '第7区-100', 14400, 14400, 3, JSON_OBJECT('points', 505, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1700, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 701', '第8区-01', 14430, 14430, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1701, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 702', '第8区-02', 14460, 14460, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1702, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 703', '第8区-03', 14490, 14490, 3, JSON_OBJECT('points', 105, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 2))), 1, 1703, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -893,7 +894,7 @@ VALUES
 ('星域远征 797', '第8区-97', 17340, 17340, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1797, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 798', '第8区-98', 17370, 17370, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1798, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 799', '第8区-99', 17400, 17400, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1799, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 800', '第8区-100', 17430, 17430, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1800, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 800', '第8区-100', 17430, 17430, 3, JSON_OBJECT('points', 570, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1800, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 801', '第9区-01', 17460, 17460, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1801, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 802', '第9区-02', 17490, 17490, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1802, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 803', '第9区-03', 17520, 17520, 3, JSON_OBJECT('points', 120, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @sr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1803, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -993,7 +994,7 @@ VALUES
 ('星域远征 897', '第9区-97', 20530, 20530, 3, JSON_OBJECT('points', 130, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1897, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 898', '第9区-98', 20570, 20570, 3, JSON_OBJECT('points', 130, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1898, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 899', '第9区-99', 20600, 20600, 3, JSON_OBJECT('points', 135, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1899, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 900', '第9区-100', 20630, 20630, 3, JSON_OBJECT('points', 135, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1900, NULL, NULL, 0, NOW(6), NOW(6)),
+('星域远征 900', '第9区-100', 20630, 20630, 3, JSON_OBJECT('points', 635, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 1900, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 901', '第10区-01', 20670, 20670, 3, JSON_OBJECT('points', 135, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1901, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 902', '第10区-02', 20700, 20700, 3, JSON_OBJECT('points', 135, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1902, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 903', '第10区-03', 20730, 20730, 3, JSON_OBJECT('points', 135, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 1))), 1, 1903, NULL, NULL, 0, NOW(6), NOW(6)),
@@ -1093,7 +1094,7 @@ VALUES
 ('星域远征 997', '第10区-97', 23900, 23900, 3, JSON_OBJECT('points', 145, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 2))), 1, 1997, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 998', '第10区-98', 23930, 23930, 3, JSON_OBJECT('points', 145, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 2))), 1, 1998, NULL, NULL, 0, NOW(6), NOW(6)),
 ('星域远征 999', '第10区-99', 23970, 23970, 3, JSON_OBJECT('points', 145, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 2))), 1, 1999, NULL, NULL, 0, NOW(6), NOW(6)),
-('星域远征 1000', '第10区-100', 24000, 24000, 3, JSON_OBJECT('points', 145, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 2000, NULL, NULL, 0, NOW(6), NOW(6))
+('星域远征 1000', '第10区-100', 24000, 24000, 3, JSON_OBJECT('points', 695, 'items', JSON_ARRAY(JSON_OBJECT('itemId', @ssr_fragment_item_id, 'num', 2), JSON_OBJECT('itemId', @default_fragment_item_id, 'num', 60))), 1, 2000, NULL, NULL, 0, NOW(6), NOW(6))
 ;
 
 COMMIT;
