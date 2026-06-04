@@ -10,11 +10,20 @@ import type {
   PveStage,
   UserCardsResponse,
 } from "../types";
-import { formatRewards } from "../utils/format";
 import type { FeedbackType } from "./useFeedback";
 
 type SilentLoadOptions = {
   silent?: boolean;
+};
+
+type PveBattlePhase = "idle" | "fighting" | "result";
+
+type PveBattleResult = {
+  stageId: number;
+  success: boolean;
+  rewards: PveChallengeResult["rewards"];
+  formationPower: number;
+  enemyPower: number;
 };
 
 type UseFormationPveOptions = {
@@ -49,6 +58,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const pveRecords = ref<PveRecordsResponse | null>(null);
   const pveRecordPage = ref(1);
   const pveRecordTotalPages = ref(1);
+  const pveBattleStageId = ref<number | null>(null);
+  const pveBattlePhase = ref<PveBattlePhase>("idle");
+  const pveBattleResult = ref<PveBattleResult | null>(null);
 
   const formationSlots = computed(() => {
     const slotCount = formation.value?.slotCount || 3;
@@ -127,6 +139,12 @@ export function useFormationPve(options: UseFormationPveOptions) {
     formationCandidateAvailableOnly.value = false;
   }
 
+  function clearPveBattle() {
+    pveBattleStageId.value = null;
+    pveBattlePhase.value = "idle";
+    pveBattleResult.value = null;
+  }
+
   function resetFormationPve() {
     formation.value = null;
     formationCandidates.value = [];
@@ -140,6 +158,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveRecords.value = null;
     pveRecordPage.value = 1;
     pveRecordTotalPages.value = 1;
+    clearPveBattle();
   }
 
   async function loadFormation(loadOptions: SilentLoadOptions = {}) {
@@ -249,6 +268,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
       formationPickerOpen.value = false;
       formationEditingPosition.value = null;
       if (pveOverview.value) {
+        clearPveBattle();
         await loadPveStages();
       }
     } catch (error) {
@@ -302,7 +322,12 @@ export function useFormationPve(options: UseFormationPveOptions) {
   }
 
   async function refreshPve() {
+    clearPveBattle();
     await Promise.all([loadPveStages(pveStagePage.value), loadPveRecords()]);
+  }
+
+  function waitForBattleAnimation() {
+    return new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
 
   async function challengePveStage(stage: PveStage) {
@@ -314,18 +339,30 @@ export function useFormationPve(options: UseFormationPveOptions) {
       options.notify("info", stage.unavailableReason || "当前无法挑战");
       return;
     }
+    pveBattleStageId.value = Number(stage.id);
+    pveBattlePhase.value = "fighting";
+    pveBattleResult.value = null;
+    const animationDone = waitForBattleAnimation();
     options.setPveChallengeBusy(true);
     try {
       const data = await request<PveChallengeResult>(
         `/pve/stages/${stage.id}/challenge`,
         { method: "POST" },
       );
+      await animationDone;
       options.syncChallengePoint(data.pointAfter);
+      pveBattleStageId.value = Number(stage.id);
+      pveBattlePhase.value = "result";
+      pveBattleResult.value = {
+        stageId: Number(stage.id),
+        success: data.success,
+        rewards: data.rewards || null,
+        formationPower: data.formationPower,
+        enemyPower: data.enemyPower,
+      };
       options.notify(
         data.success ? "success" : "info",
-        data.success
-          ? `挑战胜利：${formatRewards(data.rewards || undefined)}`
-          : `挑战失败：战力 ${data.formationPower} / ${data.enemyPower}`,
+        data.success ? "胜利" : "失败",
       );
       await Promise.all([
         loadPveStages(pveStagePage.value),
@@ -333,6 +370,8 @@ export function useFormationPve(options: UseFormationPveOptions) {
         options.refreshChallengeRewards(),
       ]);
     } catch (error) {
+      await animationDone;
+      clearPveBattle();
       options.notify("error", options.getErrorMessage(error));
     } finally {
       options.setPveChallengeBusy(false);
@@ -358,6 +397,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     if (next === pveStagePage.value) {
       return;
     }
+    clearPveBattle();
     void loadPveStages(next);
   }
 
@@ -399,6 +439,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveRecords,
     pveRecordPage,
     pveRecordTotalPages,
+    pveBattleStageId,
+    pveBattlePhase,
+    pveBattleResult,
     formationSlots,
     formationFilledCount,
     formationCurrentUuids,
@@ -408,6 +451,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveFormation,
     pveRecentRecords,
     pveClearedCount,
+    clearPveBattle,
     resetFormationPve,
     loadFormation,
     loadFormationCandidates,

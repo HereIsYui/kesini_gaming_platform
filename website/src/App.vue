@@ -725,6 +725,9 @@ const pveStageTotal = formationPve.pveStageTotal;
 const pveRecords = formationPve.pveRecords;
 const pveRecordPage = formationPve.pveRecordPage;
 const pveRecordTotalPages = formationPve.pveRecordTotalPages;
+const pveBattleStageId = formationPve.pveBattleStageId;
+const pveBattlePhase = formationPve.pveBattlePhase;
+const pveBattleResult = formationPve.pveBattleResult;
 const formationSlots = formationPve.formationSlots;
 const formationFilledCount = formationPve.formationFilledCount;
 const formationCurrentUuids = formationPve.formationCurrentUuids;
@@ -3377,6 +3380,9 @@ const appContext = {
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
+  pveBattleStageId,
+  pveBattlePhase,
+  pveBattleResult,
   launchActivity,
   dailySignIn,
   tasksOverview,

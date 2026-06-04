@@ -4589,6 +4589,8 @@ h3 {
 
 .pve-stage-card {
   display: grid;
+  position: relative;
+  overflow: hidden;
   gap: 13px;
   align-content: start;
   min-height: 330px;
@@ -4598,6 +4600,19 @@ h3 {
     linear-gradient(180deg, rgba(84, 216, 255, 0.08), transparent 44%),
     rgba(255, 255, 255, 0.055);
   padding: 16px;
+}
+
+.pve-stage-card.battle-active {
+  border-color: rgba(84, 216, 255, 0.42);
+  box-shadow: 0 0 28px rgba(84, 216, 255, 0.12);
+}
+
+.pve-stage-card.battle-result.battle-success {
+  border-color: rgba(97, 229, 162, 0.35);
+}
+
+.pve-stage-card.battle-result.battle-failure {
+  border-color: rgba(255, 122, 122, 0.35);
 }
 
 .pve-stage-card header,
@@ -4668,6 +4683,174 @@ h3 {
   border-radius: inherit;
   background: linear-gradient(90deg, var(--primary), var(--success));
   content: "";
+}
+
+.pve-battle-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 82px;
+  border: 1px solid rgba(196, 220, 255, 0.16);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(90deg, rgba(84, 216, 255, 0.1), transparent 42%),
+    linear-gradient(270deg, rgba(255, 122, 122, 0.1), transparent 42%),
+    rgba(255, 255, 255, 0.045);
+  padding: 10px;
+}
+
+:root[data-theme="light"] .pve-battle-board {
+  border-color: rgba(35, 66, 108, 0.14);
+  background:
+    linear-gradient(90deg, rgba(16, 122, 180, 0.1), transparent 42%),
+    linear-gradient(270deg, rgba(197, 75, 75, 0.08), transparent 42%),
+    rgba(255, 255, 255, 0.78);
+}
+
+.pve-battle-side {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pve-battle-side.enemy {
+  text-align: right;
+}
+
+.pve-battle-side span,
+.pve-battle-side strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pve-battle-side span {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pve-battle-side strong {
+  color: var(--text);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pve-battle-side::after {
+  display: block;
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  content: "";
+}
+
+.pve-battle-side.enemy::after {
+  background: linear-gradient(90deg, #ff7a7a, #ffd36a);
+}
+
+.pve-battle-core {
+  display: grid;
+  position: relative;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 211, 106, 0.35);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--primary-strong);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.pve-battle-core i {
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 90deg,
+    transparent,
+    rgba(255, 211, 106, 0.55),
+    transparent,
+    rgba(84, 216, 255, 0.48),
+    transparent
+  );
+  opacity: 0.45;
+}
+
+.pve-battle-core b {
+  position: relative;
+  z-index: 1;
+}
+
+.pve-battle-board.fighting .pve-battle-core {
+  animation: pve-clash-core 620ms ease-in-out infinite alternate;
+}
+
+.pve-battle-board.fighting .pve-battle-core i {
+  animation: spin 900ms linear infinite;
+}
+
+.pve-battle-board.fighting .pve-battle-side.player {
+  animation: pve-strike-left 720ms ease-in-out infinite alternate;
+}
+
+.pve-battle-board.fighting .pve-battle-side.enemy {
+  animation: pve-strike-right 720ms ease-in-out infinite alternate;
+}
+
+.pve-battle-result {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(196, 220, 255, 0.16);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px 12px;
+}
+
+.pve-battle-result.success {
+  border-color: rgba(97, 229, 162, 0.32);
+  background: rgba(97, 229, 162, 0.08);
+}
+
+.pve-battle-result.failure {
+  border-color: rgba(255, 122, 122, 0.3);
+  background: rgba(255, 122, 122, 0.08);
+}
+
+:root[data-theme="light"] .pve-battle-result {
+  border-color: rgba(35, 66, 108, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .pve-battle-result.success {
+  border-color: rgba(25, 137, 87, 0.24);
+  background: rgba(25, 137, 87, 0.08);
+}
+
+:root[data-theme="light"] .pve-battle-result.failure {
+  border-color: rgba(186, 66, 66, 0.22);
+  background: rgba(186, 66, 66, 0.07);
+}
+
+.pve-battle-result strong,
+.pve-battle-result span,
+.pve-battle-result small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pve-battle-result strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.pve-battle-result span,
+.pve-battle-result small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .pve-stage-meta {
@@ -6600,6 +6783,28 @@ h3 {
   }
 }
 
+@keyframes pve-clash-core {
+  to {
+    border-color: rgba(255, 211, 106, 0.68);
+    box-shadow:
+      0 0 20px rgba(255, 211, 106, 0.18),
+      0 0 28px rgba(84, 216, 255, 0.14);
+    transform: scale(1.06);
+  }
+}
+
+@keyframes pve-strike-left {
+  to {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes pve-strike-right {
+  to {
+    transform: translateX(-5px);
+  }
+}
+
 @keyframes modal-enter {
   from {
     opacity: 0;
@@ -7063,6 +7268,20 @@ h3 {
   .trade-card,
   .trade-list article {
     grid-template-columns: 1fr;
+  }
+
+  .pve-battle-board {
+    grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .pve-battle-side strong {
+    font-size: 15px;
+  }
+
+  .pve-battle-core {
+    font-size: 12px;
   }
 
   .formation-slot {

@@ -18,6 +18,9 @@ const {
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
+  pveBattleStageId,
+  pveBattlePhase,
+  pveBattleResult,
   busy,
   isAuthed,
   activeSection,
@@ -33,6 +36,11 @@ const {
   pvePowerPercent,
   pveStageLevelLabel,
 } = useAppContext() as Record<string, any>;
+
+function pveBattleRewardText(rewards: unknown) {
+  const text = formatRewards(rewards || undefined);
+  return text === "无奖励" ? "无奖励" : `奖励 ${text}`;
+}
 </script>
 
 <template>
@@ -103,6 +111,16 @@ const {
         v-for="stage in pveStages"
         :key="stage.id"
         class="pve-stage-card"
+        :class="{
+          'battle-active':
+            pveBattleStageId === stage.id && pveBattlePhase === 'fighting',
+          'battle-result':
+            pveBattleStageId === stage.id && pveBattlePhase === 'result',
+          'battle-success':
+            pveBattleStageId === stage.id && pveBattleResult?.success,
+          'battle-failure':
+            pveBattleStageId === stage.id && pveBattleResult?.success === false,
+        }"
       >
         <header>
           <span>{{ stage.cleared ? "已通关" : pveStageLevelLabel(stage) }}</span>
@@ -120,6 +138,54 @@ const {
             <span>敌方 {{ stage.enemyPower }}</span>
           </div>
           <i></i>
+        </div>
+
+        <div
+          v-if="pveBattleStageId === stage.id && pveBattlePhase !== 'idle'"
+          class="pve-battle-board"
+          :class="{
+            fighting: pveBattlePhase === 'fighting',
+            success: pveBattleResult?.success,
+            failure: pveBattleResult?.success === false,
+          }"
+          aria-live="polite"
+        >
+          <div class="pve-battle-side player">
+            <span>我方</span>
+            <strong>{{ pveFormation.totalPower }}</strong>
+          </div>
+          <div class="pve-battle-core">
+            <i></i>
+            <b>战</b>
+          </div>
+          <div class="pve-battle-side enemy">
+            <span>敌方</span>
+            <strong>{{ stage.enemyPower }}</strong>
+          </div>
+        </div>
+
+        <div
+          v-if="
+            pveBattleStageId === stage.id &&
+            pveBattlePhase === 'result' &&
+            pveBattleResult
+          "
+          class="pve-battle-result"
+          :class="{
+            success: pveBattleResult.success,
+            failure: !pveBattleResult.success,
+          }"
+        >
+          <strong>{{ pveBattleResult.success ? "胜利" : "失败" }}</strong>
+          <span
+            >战力 {{ pveBattleResult.formationPower }} /
+            {{ pveBattleResult.enemyPower }}</span
+          >
+          <small>{{
+            pveBattleResult.success
+              ? pveBattleRewardText(pveBattleResult.rewards)
+              : "未获奖励"
+          }}</small>
         </div>
 
         <dl class="pve-stage-meta">
@@ -144,13 +210,17 @@ const {
           @click="challengePveStage(stage)"
         >
           <LoaderCircle
-            v-if="busy.pveChallenge"
+            v-if="
+              pveBattleStageId === stage.id && pveBattlePhase === 'fighting'
+            "
             :size="17"
             class="spin"
           />
           <Swords v-else :size="17" />
           {{
-            stage.canChallenge
+            pveBattleStageId === stage.id && pveBattlePhase === "fighting"
+              ? "交锋"
+              : stage.canChallenge
               ? "挑战"
               : stage.unavailableReason || "不可挑战"
           }}
