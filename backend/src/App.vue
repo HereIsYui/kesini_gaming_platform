@@ -801,6 +801,7 @@ import {
   request,
   setApiBase,
   setToken,
+  setUnauthorizedHandler,
   toQuery,
 } from "./api";
 import type {
@@ -861,6 +862,14 @@ const appVersion = __APP_VERSION__;
 const siteConfig = ref<SiteConfig>({
   websiteTitle: "Kesini 抽卡站",
   adminTitle: "Kesini 运营台",
+});
+
+setUnauthorizedHandler(() => {
+  if (!token.value) {
+    return;
+  }
+  logout();
+  authError.value = "登录已失效";
 });
 const theme = ref<Theme>(
   (localStorage.getItem("kesini_theme") as Theme) || "light",

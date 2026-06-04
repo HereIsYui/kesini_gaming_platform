@@ -6,6 +6,21 @@ const API_BASE_KEY = "kesini_website_api_base";
 const TOKEN_KEY = "kesini_website_token";
 const USER_KEY = "kesini_website_user";
 
+type UnauthorizedHandler = () => void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("登录已失效");
+    this.name = "UnauthorizedError";
+  }
+}
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+  unauthorizedHandler = handler;
+}
+
 function normalizeBase(value: string | null | undefined) {
   return value?.trim().replace(/\/+$/, "") || "";
 }
@@ -103,6 +118,12 @@ export function setStoredUser(value: unknown) {
   localStorage.setItem(USER_KEY, JSON.stringify(value));
 }
 
+function handleUnauthorized(): never {
+  clearToken();
+  unauthorizedHandler?.();
+  throw new UnauthorizedError();
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -122,11 +143,17 @@ export async function request<T>(
   try {
     payload = JSON.parse(raw) as ApiResponse<T>;
   } catch {
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
     const contentType = response.headers.get("Content-Type") || "";
     if (contentType.includes("text/html") || raw.trimStart().startsWith("<")) {
       throw new Error("暂时无法连接");
     }
     throw new Error("请求失败");
+  }
+  if (response.status === 401) {
+    handleUnauthorized();
   }
   if (!response.ok || payload.code !== 0) {
     throw new Error(payload.msg || "请求失败");

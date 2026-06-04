@@ -65,6 +65,7 @@ import {
 import type { SectionKey } from "./constants/navigation";
 import {
   request,
+  setUnauthorizedHandler,
   setStoredUser,
   toQuery,
 } from "./api";
@@ -255,6 +256,12 @@ const handleOpenIdCallback = authSession.handleOpenIdCallback;
 const loginWithOpenId = authSession.loginWithOpenId;
 const applyManualToken = authSession.applyManualToken;
 const clearAuthSession = authSession.clearAuthSession;
+setUnauthorizedHandler(() => {
+  if (!isAuthed.value) {
+    return;
+  }
+  logout("");
+});
 const announcementState = useAnnouncements();
 const announcements = announcementState.announcements;
 const announcementReadIds = announcementState.announcementReadIds;
@@ -1341,7 +1348,7 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function logout() {
+function logout(message = "已退出登录") {
   clearAuthSession();
   stats.value = null;
   fishpiPoint.value = null;
@@ -1378,7 +1385,9 @@ function logout() {
   upgradeCandidates.value = [];
   upgradePreview.value = null;
   clearDrawResults();
-  notify("info", "已退出登录");
+  if (message) {
+    notify("info", message);
+  }
 }
 
 async function loadPrivateData() {
@@ -1415,9 +1424,13 @@ async function loadPrivateData() {
     loadTradeData(),
   ]);
   const failed = results.filter((item) => item.status === "rejected");
+  if (!isAuthed.value) {
+    notify("error", "登录已失效");
+    return;
+  }
   if (failed.length === results.length) {
-    notify("error", "登录状态不可用，请重新登录");
-    logout();
+    notify("error", "登录已失效");
+    logout("");
   }
 }
 
