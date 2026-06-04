@@ -4868,6 +4868,14 @@ h3 {
   opacity: 0.42;
 }
 
+.pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp i.draining,
+.pve-battle-board.failure .pve-battle-side.player .pve-battle-hp i.draining {
+  animation: pve-hp-drain-out 1.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: saturate(1.12) brightness(1.08);
+  opacity: 1;
+  transition: none;
+}
+
 .pve-battle-result {
   display: grid;
   gap: 5px;
@@ -6918,6 +6926,29 @@ h3 {
   }
 }
 
+@keyframes pve-hp-drain-out {
+  0% {
+    filter: saturate(1.16) brightness(1.08);
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  48% {
+    filter: saturate(1.26) brightness(1.18);
+    opacity: 1;
+    transform: scaleX(0.52);
+  }
+  82% {
+    filter: saturate(0.82) brightness(0.92);
+    opacity: 0.75;
+    transform: scaleX(0.12);
+  }
+  100% {
+    filter: saturate(0.35) brightness(0.86);
+    opacity: 0.42;
+    transform: scaleX(0);
+  }
+}
+
 @keyframes modal-enter {
   from {
     opacity: 0;
@@ -6970,6 +7001,18 @@ h3 {
 
 :root[data-motion="reduced"] .starfield {
   display: none;
+}
+
+:root[data-motion="full"] .pve-battle-hp i.draining {
+  animation-duration: 1.25s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+}
+
+:root[data-motion="full"] .pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp,
+:root[data-motion="full"] .pve-battle-board.failure .pve-battle-side.player .pve-battle-hp {
+  animation-duration: 1.25s !important;
+  animation-iteration-count: 1 !important;
 }
 
 @media (max-width: 1120px) {

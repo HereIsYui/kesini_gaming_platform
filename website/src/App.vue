@@ -728,6 +728,7 @@ const pveRecordTotalPages = formationPve.pveRecordTotalPages;
 const pveBattleStageId = formationPve.pveBattleStageId;
 const pveBattlePhase = formationPve.pveBattlePhase;
 const pveBattleResult = formationPve.pveBattleResult;
+const pveBattleDraining = formationPve.pveBattleDraining;
 const formationSlots = formationPve.formationSlots;
 const formationFilledCount = formationPve.formationFilledCount;
 const formationCurrentUuids = formationPve.formationCurrentUuids;
@@ -756,6 +757,8 @@ const changePveRecordPage = formationPve.changePveRecordPage;
 const pvePowerPercent = formationPve.pvePowerPercent;
 const pveBattlePlayerHpPercent = formationPve.pveBattlePlayerHpPercent;
 const pveBattleEnemyHpPercent = formationPve.pveBattleEnemyHpPercent;
+const pveBattlePlayerHpDraining = formationPve.pveBattlePlayerHpDraining;
+const pveBattleEnemyHpDraining = formationPve.pveBattleEnemyHpDraining;
 const pveStageLevelLabel = formationPve.pveStageLevelLabel;
 const redeemShop = useRedeemShop({
   isAuthed: () => isAuthed.value,
@@ -3385,6 +3388,7 @@ const appContext = {
   pveBattleStageId,
   pveBattlePhase,
   pveBattleResult,
+  pveBattleDraining,
   launchActivity,
   dailySignIn,
   tasksOverview,
@@ -3747,6 +3751,8 @@ const appContext = {
   pvePowerPercent,
   pveBattlePlayerHpPercent,
   pveBattleEnemyHpPercent,
+  pveBattlePlayerHpDraining,
+  pveBattleEnemyHpDraining,
   pveStageLevelLabel,
   achievementProgressPercent,
   achievementProgressText,

@@ -23,6 +23,8 @@ const {
   pveBattleResult,
   pveBattlePlayerHpPercent,
   pveBattleEnemyHpPercent,
+  pveBattlePlayerHpDraining,
+  pveBattleEnemyHpDraining,
   busy,
   isAuthed,
   activeSection,
@@ -157,6 +159,9 @@ function pveBattleRewardText(rewards: unknown) {
             <strong>{{ pveFormation.totalPower }}</strong>
             <em class="pve-battle-hp" aria-hidden="true">
               <i
+                :class="{
+                  draining: pveBattlePlayerHpDraining(stage),
+                }"
                 :style="{
                   width: `${pveBattlePlayerHpPercent(stage)}%`,
                 }"
@@ -172,6 +177,9 @@ function pveBattleRewardText(rewards: unknown) {
             <strong>{{ stage.enemyPower }}</strong>
             <em class="pve-battle-hp" aria-hidden="true">
               <i
+                :class="{
+                  draining: pveBattleEnemyHpDraining(stage),
+                }"
                 :style="{
                   width: `${pveBattleEnemyHpPercent(stage)}%`,
                 }"

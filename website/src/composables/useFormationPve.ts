@@ -67,6 +67,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const pveBattleStageId = ref<number | null>(null);
   const pveBattlePhase = ref<PveBattlePhase>("idle");
   const pveBattleResult = ref<PveBattleResult | null>(null);
+  const pveBattleDraining = ref(false);
   const pveBattleHp = ref<PveBattleHp>({
     stageId: null,
     player: 100,
@@ -154,6 +155,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveBattleStageId.value = null;
     pveBattlePhase.value = "idle";
     pveBattleResult.value = null;
+    pveBattleDraining.value = false;
     pveBattleHp.value = {
       stageId: null,
       player: 100,
@@ -388,6 +390,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveBattleStageId.value = Number(stage.id);
     pveBattlePhase.value = "fighting";
     pveBattleResult.value = null;
+    pveBattleDraining.value = false;
     pveBattleHp.value = {
       stageId: Number(stage.id),
       player: 100,
@@ -412,12 +415,14 @@ export function useFormationPve(options: UseFormationPveOptions) {
         enemyPower: data.enemyPower,
       };
       pveBattleResult.value = result;
+      pveBattleDraining.value = false;
       pveBattleHp.value = {
         stageId: Number(stage.id),
         player: 100,
         enemy: 100,
       };
       await waitForBattleFrame();
+      pveBattleDraining.value = true;
       pveBattleHp.value = {
         stageId: Number(stage.id),
         ...battleHpTarget(result),
@@ -427,6 +432,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
         data.success ? "胜利" : "失败",
       );
       await waitForBattleHpDrain();
+      pveBattleDraining.value = false;
       await Promise.all([
         loadPveStages(pveStagePage.value),
         loadPveRecords(1),
@@ -483,15 +489,39 @@ export function useFormationPve(options: UseFormationPveOptions) {
   }
 
   function pveBattlePlayerHpPercent(stage: PveStage) {
+    if (pveBattlePlayerHpDraining(stage)) {
+      return 100;
+    }
     return pveBattleHp.value.stageId === Number(stage.id)
       ? pveBattleHp.value.player
       : 100;
   }
 
   function pveBattleEnemyHpPercent(stage: PveStage) {
+    if (pveBattleEnemyHpDraining(stage)) {
+      return 100;
+    }
     return pveBattleHp.value.stageId === Number(stage.id)
       ? pveBattleHp.value.enemy
       : 100;
+  }
+
+  function pveBattlePlayerHpDraining(stage: PveStage) {
+    return Boolean(
+      pveBattleDraining.value &&
+        pveBattleResult.value &&
+        pveBattleResult.value.stageId === Number(stage.id) &&
+        !pveBattleResult.value.success,
+    );
+  }
+
+  function pveBattleEnemyHpDraining(stage: PveStage) {
+    return Boolean(
+      pveBattleDraining.value &&
+        pveBattleResult.value &&
+        pveBattleResult.value.stageId === Number(stage.id) &&
+        pveBattleResult.value.success,
+    );
   }
 
   function pveStageLevelLabel(stage: PveStage) {
@@ -524,6 +554,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveBattleStageId,
     pveBattlePhase,
     pveBattleResult,
+    pveBattleDraining,
     formationSlots,
     formationFilledCount,
     formationCurrentUuids,
@@ -552,6 +583,8 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pvePowerPercent,
     pveBattlePlayerHpPercent,
     pveBattleEnemyHpPercent,
+    pveBattlePlayerHpDraining,
+    pveBattleEnemyHpDraining,
     pveStageLevelLabel,
   };
 }
