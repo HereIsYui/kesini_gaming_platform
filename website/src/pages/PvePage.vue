@@ -105,7 +105,7 @@ const {
         class="pve-stage-card"
       >
         <header>
-          <span>{{ pveStageLevelLabel(stage) }}</span>
+          <span>{{ stage.cleared ? "已通关" : pveStageLevelLabel(stage) }}</span>
           <b>{{ stage.remainingAttempts }}/{{ stage.dailyLimit }} 次</b>
         </header>
         <h3>{{ stage.name }}</h3>
@@ -128,8 +128,12 @@ const {
             <dd>{{ stage.recommendedPower }}</dd>
           </div>
           <div>
-            <dt>胜利奖励</dt>
-            <dd>{{ formatRewards(stage.rewards) }}</dd>
+            <dt>首通</dt>
+            <dd>{{ formatRewards(stage.firstClearRewards || stage.rewards) }}</dd>
+          </div>
+          <div>
+            <dt>重复</dt>
+            <dd>{{ formatRewards(stage.repeatRewards) }}</dd>
           </div>
         </dl>
 

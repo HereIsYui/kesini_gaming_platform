@@ -15,6 +15,11 @@ export interface PvePageQuery {
   pageSize?: number;
 }
 
+type RewardLookup = {
+  itemMap: Map<number, DropItem>;
+  cardMap: Map<number, CardItem>;
+};
+
 @Injectable()
 export class PveService {
   constructor(
@@ -53,9 +58,22 @@ export class PveService {
       (page - 1) * pageSize,
       page * pageSize,
     );
+    const pageStageIds = pageStages.map((stage) => Number(stage.id));
     const rewardLookup = await this.buildRewardLookup(
       this.dataSource,
       pageStages.map((stage) => stage.rewards),
+    );
+    const clearedRecords = pageStageIds.length
+      ? await recordRepository.find({
+          where: {
+            uid,
+            stage_id: In(pageStageIds),
+            success: true,
+          },
+        })
+      : [];
+    const clearedStageIds = new Set(
+      clearedRecords.map((record) => Number(record.stage_id)),
     );
     const todayCountMap = todayRecords.reduce((map, record) => {
       map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
@@ -74,6 +92,7 @@ export class PveService {
           formation.totalPower,
           todayCountMap.get(stage.id) || 0,
           rewardLookup,
+          clearedStageIds.has(Number(stage.id)),
         ),
       ),
       total,
@@ -129,11 +148,24 @@ export class PveService {
       const formationPower = Number(formation.totalPower || 0);
       const enemyPower = this.normalizePower(stage.enemy_power);
       const success = formationPower >= enemyPower;
-      const rewardSnapshot = success
+      const clearedBefore =
+        (await manager.getRepository(PveChallengeRecord).count({
+          where: {
+            uid,
+            stage_id: stage.id,
+            success: true,
+          },
+        })) > 0;
+      const firstClearRewards = success
         ? this.rewardService.normalizeRewards(stage.rewards, "关卡奖励不能为空")
         : null;
+      const rewardSnapshot = firstClearRewards
+        ? clearedBefore
+          ? this.toRepeatRewards(firstClearRewards)
+          : firstClearRewards
+        : null;
 
-      if (rewardSnapshot) {
+      if (this.hasGrantableRewards(rewardSnapshot)) {
         await this.assertRewardAvailable(manager, rewardSnapshot);
       }
 
@@ -150,7 +182,7 @@ export class PveService {
         }),
       );
 
-      if (rewardSnapshot) {
+      if (this.hasGrantableRewards(rewardSnapshot)) {
         await this.rewardService.grantRewards(manager, user, rewardSnapshot, {
           sourceType: "pve",
           sourceId: stage.id,
@@ -162,6 +194,8 @@ export class PveService {
             enemyPower,
           },
         });
+      }
+      if (success) {
         await this.socialActivityService?.recordActivity(
           {
             actorUid: uid,
@@ -190,6 +224,7 @@ export class PveService {
           formationPower,
           todayCount + 1,
           rewardLookup,
+          clearedBefore || success,
         ),
         success,
         rewards: rewardSnapshot
@@ -258,10 +293,8 @@ export class PveService {
     stage: PveStage,
     formationPower: number,
     todayCount: number,
-    rewardLookup?: {
-      itemMap: Map<number, DropItem>;
-      cardMap: Map<number, CardItem>;
-    },
+    rewardLookup?: RewardLookup,
+    cleared = false,
   ) {
     const dailyLimit = this.normalizeDailyLimit(stage.daily_limit);
     const unavailableReason = this.getUnavailableReason(
@@ -269,6 +302,17 @@ export class PveService {
       formationPower,
       todayCount,
     );
+    const firstClearRewards = this.rewardService.normalizeRewards(
+      stage.rewards,
+      "关卡奖励不能为空",
+    );
+    const repeatRewards = this.toRepeatRewards(firstClearRewards);
+    const decoratedFirstClearRewards = rewardLookup
+      ? this.decorateRewards(firstClearRewards, rewardLookup)
+      : firstClearRewards;
+    const decoratedRepeatRewards = rewardLookup
+      ? this.decorateRewards(repeatRewards, rewardLookup)
+      : repeatRewards;
     return {
       id: stage.id,
       name: stage.name,
@@ -280,9 +324,10 @@ export class PveService {
       remainingAttempts: Math.max(0, dailyLimit - todayCount),
       canChallenge: !unavailableReason,
       unavailableReason,
-      rewards: rewardLookup
-        ? this.decorateRewards(stage.rewards, rewardLookup)
-        : stage.rewards,
+      cleared,
+      rewards: cleared ? decoratedRepeatRewards : decoratedFirstClearRewards,
+      firstClearRewards: decoratedFirstClearRewards,
+      repeatRewards: decoratedRepeatRewards,
       enabled: stage.enabled === true,
       sortOrder: Number(stage.sort_order || 0),
       startsAt: stage.starts_at || null,
@@ -324,10 +369,7 @@ export class PveService {
 
   private decorateRewards(
     rewards: RedeemRewards,
-    lookup: {
-      itemMap: Map<number, DropItem>;
-      cardMap: Map<number, CardItem>;
-    },
+    lookup: RewardLookup,
   ): RedeemRewards {
     return {
       points: Number(rewards.points || 0),
@@ -349,10 +391,7 @@ export class PveService {
 
   private toRecordView(
     record: PveChallengeRecord,
-    rewardLookup?: {
-      itemMap: Map<number, DropItem>;
-      cardMap: Map<number, CardItem>;
-    },
+    rewardLookup?: RewardLookup,
   ) {
     return {
       id: record.id,
@@ -392,6 +431,24 @@ export class PveService {
       return "请先配置阵容";
     }
     return "";
+  }
+
+  private toRepeatRewards(rewards: RedeemRewards): RedeemRewards {
+    return {
+      points: 0,
+      items: (rewards.items || []).map((item) => ({ ...item })),
+    };
+  }
+
+  private hasGrantableRewards(
+    rewards?: RedeemRewards | null,
+  ): rewards is RedeemRewards {
+    return Boolean(
+      rewards &&
+        (Number(rewards.points || 0) > 0 ||
+          (rewards.items || []).length > 0 ||
+          (rewards.cards || []).length > 0),
+    );
   }
 
   private isStageInVisibleTime(stage: PveStage) {

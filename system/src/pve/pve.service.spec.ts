@@ -143,14 +143,17 @@ class PveTestStore {
         ...value,
         [idKey]: value[idKey] ?? items.length + 1,
       }),
-      save: async (value: T) => {
-        const key = value[idKey];
-        const index = items.findIndex((item) => item[idKey] === key);
-        if (index >= 0) {
-          items[index] = value;
-        } else {
-          items.push(value);
-        }
+      save: async (value: T | T[]) => {
+        const values = Array.isArray(value) ? value : [value];
+        values.forEach((entry) => {
+          const key = entry[idKey];
+          const index = items.findIndex((item) => item[idKey] === key);
+          if (index >= 0) {
+            items[index] = entry;
+          } else {
+            items.push(entry);
+          }
+        });
         return value;
       },
     };
@@ -303,9 +306,13 @@ describe("PveService 轻量关卡", () => {
     expect(result.list).toHaveLength(1);
     expect(result.list[0]).toMatchObject({
       id: 1,
+      cleared: true,
       todayCount: 1,
       remainingAttempts: 2,
       canChallenge: true,
+      firstClearRewards: { points: 20, items: [{ itemId: 1, num: 2 }] },
+      repeatRewards: { points: 0, items: [{ itemId: 1, num: 2 }] },
+      rewards: { points: 0, items: [{ itemId: 1, num: 2 }] },
     });
   });
 
@@ -339,6 +346,85 @@ describe("PveService 轻量关卡", () => {
       item_id: 1,
       num: 2,
     });
+  });
+
+  it("重复通关只发碎片", async () => {
+    store.stages = [createStage(1, { enemy_power: 100 })];
+    store.records = [
+      {
+        id: 1,
+        uid: "u1",
+        stage_id: 1,
+        stage_name: "测试关卡1",
+        formation_power: 1000,
+        enemy_power: 100,
+        success: true,
+        reward_snapshot: { points: 20, items: [{ itemId: 1, num: 2 }] },
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      } as PveChallengeRecord,
+    ];
+
+    const result = await service.challenge("u1", 1);
+
+    expect(result.success).toBe(true);
+    expect(store.records[1]).toMatchObject({
+      stage_id: 1,
+      success: true,
+      reward_snapshot: { points: 0, items: [{ itemId: 1, num: 2 }] },
+    });
+    expect(store.users[0].point).toBe(100);
+    expect(store.inventories[0]).toMatchObject({
+      user_id: 1,
+      item_id: 1,
+      num: 2,
+    });
+    expect(result.stage).toMatchObject({
+      cleared: true,
+      rewards: { points: 0, items: [{ itemId: 1, num: 2 }] },
+      firstClearRewards: { points: 20, items: [{ itemId: 1, num: 2 }] },
+    });
+  });
+
+  it("重复通关不发奖励卡片", async () => {
+    store.stages = [
+      createStage(1, {
+        enemy_power: 100,
+        rewards: {
+          points: 20,
+          items: [{ itemId: 1, num: 2 }],
+          cards: [{ cardId: 1, rarity: "SSR", num: 1 }],
+        },
+      }),
+    ];
+    store.records = [
+      {
+        id: 1,
+        uid: "u1",
+        stage_id: 1,
+        stage_name: "测试关卡1",
+        formation_power: 1000,
+        enemy_power: 100,
+        success: true,
+        reward_snapshot: {
+          points: 20,
+          items: [{ itemId: 1, num: 2 }],
+          cards: [{ cardId: 1, rarity: "SSR", num: 1 }],
+        },
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      } as PveChallengeRecord,
+    ];
+    const initialCardCount = store.userCards.length;
+
+    const result = await service.challenge("u1", 1);
+
+    expect(result.rewards).toMatchObject({
+      points: 0,
+      items: [{ itemId: 1, num: 2 }],
+    });
+    expect(result.rewards?.cards).toBeUndefined();
+    expect(store.records[1].reward_snapshot?.cards).toBeUndefined();
+    expect(store.userCards).toHaveLength(initialCardCount);
+    expect(store.users[0].card_count_ssr).toBe(1);
   });
 
   it("战力不足时记录失败且不发奖励", async () => {

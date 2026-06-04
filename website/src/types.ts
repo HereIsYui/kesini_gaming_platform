@@ -801,7 +801,10 @@ export interface PveStage {
   remainingAttempts: number;
   canChallenge: boolean;
   unavailableReason?: string;
+  cleared: boolean;
   rewards: RedeemRewards;
+  firstClearRewards: RedeemRewards;
+  repeatRewards: RedeemRewards;
   enabled: boolean;
   sortOrder?: number;
   startsAt?: string | null;
