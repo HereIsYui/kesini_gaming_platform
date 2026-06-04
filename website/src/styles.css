@@ -4737,17 +4737,56 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-.pve-battle-side::after {
+.pve-battle-hp {
   display: block;
+  position: relative;
   width: 100%;
-  height: 7px;
+  height: 8px;
+  overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), var(--success));
-  content: "";
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-.pve-battle-side.enemy::after {
+.pve-battle-hp i {
+  display: block;
+  position: relative;
+  width: var(--hp, 100%);
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  content: "";
+  transform-origin: left center;
+  transition:
+    width 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    filter 220ms ease;
+}
+
+.pve-battle-hp i::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.5),
+    transparent
+  );
+  content: "";
+  opacity: 0.55;
+  transform: translateX(-120%);
+}
+
+.pve-battle-side.enemy .pve-battle-hp i {
+  margin-left: auto;
   background: linear-gradient(90deg, #ff7a7a, #ffd36a);
+  transform-origin: right center;
+}
+
+:root[data-theme="light"] .pve-battle-hp {
+  background: rgba(24, 54, 92, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(35, 66, 108, 0.1);
 }
 
 .pve-battle-core {
@@ -4798,6 +4837,30 @@ h3 {
 
 .pve-battle-board.fighting .pve-battle-side.enemy {
   animation: pve-strike-right 720ms ease-in-out infinite alternate;
+}
+
+.pve-battle-board.fighting .pve-battle-hp i {
+  animation: pve-hp-hit 620ms ease-in-out infinite alternate;
+}
+
+.pve-battle-board.fighting .pve-battle-hp i::after {
+  animation: pve-hp-shine 900ms ease-in-out infinite;
+}
+
+.pve-battle-board.fighting .pve-battle-side.enemy .pve-battle-hp i,
+.pve-battle-board.fighting .pve-battle-side.enemy .pve-battle-hp i::after {
+  animation-delay: 160ms;
+}
+
+.pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp,
+.pve-battle-board.failure .pve-battle-side.player .pve-battle-hp {
+  background: rgba(255, 122, 122, 0.18);
+}
+
+.pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp i,
+.pve-battle-board.failure .pve-battle-side.player .pve-battle-hp i {
+  filter: saturate(0.35);
+  opacity: 0.42;
 }
 
 .pve-battle-result {
@@ -6802,6 +6865,33 @@ h3 {
 @keyframes pve-strike-right {
   to {
     transform: translateX(-5px);
+  }
+}
+
+@keyframes pve-hp-hit {
+  0% {
+    filter: brightness(1);
+    transform: scaleX(1);
+  }
+  46% {
+    filter: brightness(1.24);
+    transform: scaleX(0.9);
+  }
+  100% {
+    filter: brightness(0.95);
+    transform: scaleX(0.97);
+  }
+}
+
+@keyframes pve-hp-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+  62% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(120%);
   }
 }
 

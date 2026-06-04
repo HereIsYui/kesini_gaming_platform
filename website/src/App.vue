@@ -754,6 +754,8 @@ const challengePveStage = formationPve.challengePveStage;
 const changePveStagePage = formationPve.changePveStagePage;
 const changePveRecordPage = formationPve.changePveRecordPage;
 const pvePowerPercent = formationPve.pvePowerPercent;
+const pveBattlePlayerHpPercent = formationPve.pveBattlePlayerHpPercent;
+const pveBattleEnemyHpPercent = formationPve.pveBattleEnemyHpPercent;
 const pveStageLevelLabel = formationPve.pveStageLevelLabel;
 const redeemShop = useRedeemShop({
   isAuthed: () => isAuthed.value,
@@ -3743,6 +3745,8 @@ const appContext = {
   isNewCard,
   markNewCardSeen,
   pvePowerPercent,
+  pveBattlePlayerHpPercent,
+  pveBattleEnemyHpPercent,
   pveStageLevelLabel,
   achievementProgressPercent,
   achievementProgressText,

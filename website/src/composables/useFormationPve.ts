@@ -412,6 +412,44 @@ export function useFormationPve(options: UseFormationPveOptions) {
     );
   }
 
+  function battleSurvivorHpPercent(winnerPower: number, loserPower: number) {
+    const winner = Math.max(1, Number(winnerPower || 0));
+    const loser = Math.max(1, Number(loserPower || 0));
+    const percent = Math.round((winner / (winner + loser)) * 100);
+    return Math.max(35, Math.min(96, percent));
+  }
+
+  function currentBattleResult(stage: PveStage) {
+    if (
+      pveBattleStageId.value !== Number(stage.id) ||
+      pveBattlePhase.value !== "result" ||
+      !pveBattleResult.value
+    ) {
+      return null;
+    }
+    return pveBattleResult.value;
+  }
+
+  function pveBattlePlayerHpPercent(stage: PveStage) {
+    const result = currentBattleResult(stage);
+    if (!result) {
+      return 100;
+    }
+    return result.success
+      ? battleSurvivorHpPercent(result.formationPower, result.enemyPower)
+      : 0;
+  }
+
+  function pveBattleEnemyHpPercent(stage: PveStage) {
+    const result = currentBattleResult(stage);
+    if (!result) {
+      return 100;
+    }
+    return result.success
+      ? 0
+      : battleSurvivorHpPercent(result.enemyPower, result.formationPower);
+  }
+
   function pveStageLevelLabel(stage: PveStage) {
     const power = Number(stage.enemyPower || 0);
     if (power >= 5000) {
@@ -468,6 +506,8 @@ export function useFormationPve(options: UseFormationPveOptions) {
     changePveStagePage,
     changePveRecordPage,
     pvePowerPercent,
+    pveBattlePlayerHpPercent,
+    pveBattleEnemyHpPercent,
     pveStageLevelLabel,
   };
 }
