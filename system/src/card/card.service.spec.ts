@@ -21,6 +21,7 @@ import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
+import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -719,6 +720,7 @@ describe("CardService 排行榜", () => {
       cards?: Partial<CardItem>[];
       userCards?: Partial<UserCard>[];
       rechargeRecords?: Partial<RechargeRecord>[];
+      pveRecords?: Partial<PveChallengeRecord>[];
     } = {},
   ) {
     const users = (overrides.users || [
@@ -746,6 +748,7 @@ describe("CardService 排行榜", () => {
       { id: 10, uid: "c", card_id: "4", card_level: "SSR", delete_flag: false },
     ]) as UserCard[];
     const rechargeRecords = (overrides.rechargeRecords || []) as RechargeRecord[];
+    const pveRecords = (overrides.pveRecords || []) as PveChallengeRecord[];
     const rechargeRows = Object.values(
       rechargeRecords.reduce(
         (result, record) => {
@@ -762,6 +765,22 @@ describe("CardService 排行榜", () => {
         {} as Record<string, { uid: string; amount: number }>,
       ),
     );
+    const pveRows = Object.values(
+      pveRecords.reduce(
+        (result, record) => {
+          if (record.success !== true || !record.uid) {
+            return result;
+          }
+          result[record.uid] = result[record.uid] || {
+            uid: record.uid,
+            cleared: 0,
+          };
+          result[record.uid].cleared += 1;
+          return result;
+        },
+        {} as Record<string, { uid: string; cleared: number }>,
+      ),
+    );
     const rechargeRecordRepository = createRepository({
       createQueryBuilder: jest.fn(() => ({
         select: jest.fn().mockReturnThis(),
@@ -769,6 +788,15 @@ describe("CardService 排行榜", () => {
         where: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
         getRawMany: jest.fn().mockResolvedValue(rechargeRows),
+      })),
+    });
+    const pveRecordRepository = createRepository({
+      createQueryBuilder: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(pveRows),
       })),
     });
 
@@ -791,9 +819,10 @@ describe("CardService 排行榜", () => {
       undefined,
       undefined,
       rechargeRecordRepository as any,
+      pveRecordRepository as any,
     );
 
-    return { service, rechargeRecordRepository };
+    return { service, rechargeRecordRepository, pveRecordRepository };
   }
 
   it("当前收藏口径不统计已分解卡片", async () => {
@@ -897,6 +926,29 @@ describe("CardService 排行榜", () => {
     ]);
     expect(result.rankings.rechargeAmount.me).toEqual(
       expect.objectContaining({ uid: "a", rank: 2, value: 80 }),
+    );
+  });
+
+  it("闯关榜只统计成功通关次数", async () => {
+    const { service } = createLeaderboardService({
+      pveRecords: [
+        { uid: "a", success: true },
+        { uid: "a", success: false },
+        { uid: "b", success: true },
+        { uid: "b", success: true },
+        { uid: "c", success: true },
+      ],
+    });
+
+    const result = await service.getLeaderboard("a", 10);
+
+    expect(result.rankings.pveCleared.list).toEqual([
+      expect.objectContaining({ uid: "b", rank: 1, value: 2 }),
+      expect.objectContaining({ uid: "a", rank: 2, value: 1 }),
+      expect.objectContaining({ uid: "c", rank: 2, value: 1 }),
+    ]);
+    expect(result.rankings.pveCleared.me).toEqual(
+      expect.objectContaining({ uid: "a", rank: 2, value: 1 }),
     );
   });
 });

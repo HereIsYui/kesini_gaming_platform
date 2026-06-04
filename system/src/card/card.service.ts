@@ -21,6 +21,7 @@ import { UserGachaPity } from "src/entity/userGachaPity.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
+import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import {
   CardRarity,
   DrawCosts,
@@ -119,7 +120,8 @@ type LeaderboardMetricKey =
   | "ssrCards"
   | "urCards"
   | "completedPools"
-  | "rechargeAmount";
+  | "rechargeAmount"
+  | "pveCleared";
 type LeaderboardMetrics = Record<LeaderboardMetricKey, number>;
 
 @Injectable()
@@ -151,6 +153,9 @@ export class CardService {
     @Optional()
     @InjectRepository(RechargeRecord)
     private readonly rechargeRecordRepository?: Repository<RechargeRecord>,
+    @Optional()
+    @InjectRepository(PveChallengeRecord)
+    private readonly pveRecordRepository?: Repository<PveChallengeRecord>,
   ) {}
 
   /**
@@ -376,12 +381,14 @@ export class CardService {
     limit: number = 50,
   ): Promise<LeaderboardResponse> {
     const normalizedLimit = this.normalizeLeaderboardLimit(limit);
-    const [users, cards, userCards, rechargeTotals] = await Promise.all([
-      this.userRepository.find(),
-      this.cardRepository.find(),
-      this.userCardRepository.find({ where: { delete_flag: false } }),
-      this.getRechargeLeaderboardTotals(),
-    ]);
+    const [users, cards, userCards, rechargeTotals, pveTotals] =
+      await Promise.all([
+        this.userRepository.find(),
+        this.cardRepository.find(),
+        this.userCardRepository.find({ where: { delete_flag: false } }),
+        this.getRechargeLeaderboardTotals(),
+        this.getPveLeaderboardTotals(),
+      ]);
     await ensureUsersPublicIds(this.userRepository, users);
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const userMap = new Map(users.map((user) => [user.uid, user]));
@@ -430,6 +437,14 @@ export class CardService {
       metrics.rechargeAmount += total.amount;
     });
 
+    pveTotals.forEach((total) => {
+      if (!total.uid || total.cleared <= 0) {
+        return;
+      }
+      const metrics = this.ensureLeaderboardMetrics(metricsByUid, total.uid);
+      metrics.pveCleared += total.cleared;
+    });
+
     const requiredVersionsByPool = this.buildRequiredPoolVersionMap(cards);
     metricsByUid.forEach((metrics, ownerUid) => {
       const ownerPools = ownedVersionsByUid.get(ownerUid);
@@ -475,6 +490,13 @@ export class CardService {
           userMap,
           uid,
           "rechargeAmount",
+          normalizedLimit,
+        ),
+        pveCleared: this.createLeaderboardBoard(
+          metricsByUid,
+          userMap,
+          uid,
+          "pveCleared",
           normalizedLimit,
         ),
       },
@@ -2258,6 +2280,7 @@ export class CardService {
       urCards: 0,
       completedPools: 0,
       rechargeAmount: 0,
+      pveCleared: 0,
     };
   }
 
@@ -2278,6 +2301,26 @@ export class CardService {
     return rows.map((row) => ({
       uid: String(row.uid || ""),
       amount: Number(row.amount || 0),
+    }));
+  }
+
+  private async getPveLeaderboardTotals(): Promise<
+    Array<{ uid: string; cleared: number }>
+  > {
+    if (!this.pveRecordRepository) {
+      return [];
+    }
+    const rows = await this.pveRecordRepository
+      .createQueryBuilder("record")
+      .select("record.uid", "uid")
+      .addSelect("COUNT(record.id)", "cleared")
+      .where("record.success = :success", { success: true })
+      .groupBy("record.uid")
+      .getRawMany<{ uid: string; cleared: string | number }>();
+
+    return rows.map((row) => ({
+      uid: String(row.uid || ""),
+      cleared: Number(row.cleared || 0),
     }));
   }
 

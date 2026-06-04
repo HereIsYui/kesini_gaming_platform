@@ -35,7 +35,7 @@ const {
   <div class="section-head">
     <div>
       <p class="eyebrow">玩家排行</p>
-      <h2>收藏榜单</h2>
+      <h2>玩家榜单</h2>
     </div>
     <div class="section-actions">
       <button
@@ -53,7 +53,7 @@ const {
   <div v-if="!isAuthed" class="empty-state">
     <Trophy :size="30" />
     <strong>登录后查看排行榜</strong>
-    <span>按当前收藏排名</span>
+    <span>查看玩家榜单</span>
   </div>
   <div
     v-else-if="busy.leaderboard && !leaderboard"
@@ -106,7 +106,7 @@ const {
     <div v-if="!activeLeaderboardBoard?.list.length" class="empty-state">
       <Trophy :size="30" />
       <strong>当前暂无上榜玩家</strong>
-      <span>获得卡片后榜单会自动更新。</span>
+      <span>产生记录后自动更新。</span>
     </div>
     <div v-else class="leaderboard-board">
       <div class="podium-grid">

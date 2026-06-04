@@ -14,6 +14,7 @@ import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
+import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
@@ -35,6 +36,7 @@ import { SocialActivityModule } from "src/social/social-activity.module";
       TradeListing,
       SystemConfig,
       RechargeRecord,
+      PveChallengeRecord,
     ]),
     AuthModule,
     PointLedgerModule,

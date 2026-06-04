@@ -177,6 +177,12 @@ const leaderboardTabs: Array<{
     unit: "个",
   },
   {
+    key: "pveCleared",
+    label: "闯关榜",
+    hint: "成功通关次数",
+    unit: "次",
+  },
+  {
     key: "rechargeAmount",
     label: "充值榜",
     hint: "累计充值星穹币",

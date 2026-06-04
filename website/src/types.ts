@@ -891,7 +891,8 @@ export type LeaderboardMetric =
   | "ssrCards"
   | "urCards"
   | "completedPools"
-  | "rechargeAmount";
+  | "rechargeAmount"
+  | "pveCleared";
 
 export interface LeaderboardEntry {
   rank: number;
