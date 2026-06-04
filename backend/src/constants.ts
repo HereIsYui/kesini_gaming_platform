@@ -846,6 +846,11 @@ export const rechargeConfigFields: FieldConfig[] = [
     label: "鱼排金手指密钥",
     placeholder: "留空则不修改已有密钥",
   },
+  {
+    key: "fishpi_api_key",
+    label: "鱼排接口密钥",
+    placeholder: "留空则不修改已有密钥",
+  },
 ];
 
 export const probabilityTemplates: Array<{

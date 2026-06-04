@@ -590,6 +590,7 @@ export interface RechargeConfig {
   maxAmount: number;
   ratio: number;
   hasGoldFingerKey: boolean;
+  hasFishpiApiKey: boolean;
 }
 
 export interface RechargePointsResponse {
@@ -603,6 +604,14 @@ export interface RechargePointsResponse {
 export interface FishpiPointResponse {
   userName: string;
   point: number;
+  vip: FishpiVipStatus;
+}
+
+export interface FishpiVipStatus {
+  checked: boolean;
+  active: boolean;
+  levelCode: string;
+  expiresAt: string | null;
 }
 
 export interface BulkDecomposeFragment {

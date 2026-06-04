@@ -23,6 +23,8 @@ const props = defineProps<{
   accountPoint: number;
   fishpiPointLabel: string;
   fishpiPointMuted: boolean;
+  fishpiVipLabel: string;
+  fishpiVipMuted: boolean;
   userMenuOpen: boolean;
   userMenuHoverPaused: boolean;
   unreadMessageCount: number;
@@ -140,6 +142,12 @@ const emit = defineEmits<{
                 <span>鱼排积分</span>
                 <strong :class="{ muted: props.fishpiPointMuted }">
                   {{ props.fishpiPointLabel }}
+                </strong>
+              </div>
+              <div class="user-menu-balance">
+                <span>鱼排VIP</span>
+                <strong :class="{ muted: props.fishpiVipMuted }">
+                  {{ props.fishpiVipLabel }}
                 </strong>
               </div>
             </div>

@@ -1389,6 +1389,10 @@ export class AdminService {
     if (nextKey) {
       next.gold_finger_key = nextKey;
     }
+    const nextFishpiApiKey = String(body.fishpi_api_key || "").trim();
+    if (nextFishpiApiKey) {
+      next.fishpi_api_key = nextFishpiApiKey;
+    }
     this.assertRechargeConfig(next);
     return this.toRechargeConfigView(await repository.save(next));
   }
@@ -2311,6 +2315,7 @@ export class AdminService {
 
   private toRechargeConfigView(config: RechargeConfig) {
     const key = String(config.gold_finger_key || "").trim();
+    const fishpiApiKey = String(config.fishpi_api_key || "").trim();
     return {
       id: config.id,
       enabled: config.enabled === true,
@@ -2320,6 +2325,8 @@ export class AdminService {
       memo_template: config.memo_template || DEFAULT_RECHARGE_MEMO_TEMPLATE,
       hasGoldFingerKey: Boolean(key),
       maskedGoldFingerKey: this.maskSecret(key),
+      hasFishpiApiKey: Boolean(fishpiApiKey),
+      maskedFishpiApiKey: this.maskSecret(fishpiApiKey),
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };

@@ -13,6 +13,7 @@ import { AchievementService } from "src/achievement/achievement.service";
 
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
 const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
+const FISHPI_MEMBERSHIP_ENDPOINT = "https://fishpi.cn/api/membership";
 const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const FISHPI_HEADERS = {
   "User-Agent": "Kesini-Gacha-Platform/1.0",
@@ -30,6 +31,14 @@ export interface RechargeConfigView {
 export interface FishpiPointView {
   userName: string;
   point: number;
+  vip: FishpiVipView;
+}
+
+export interface FishpiVipView {
+  checked: boolean;
+  active: boolean;
+  levelCode: string;
+  expiresAt: string | null;
 }
 
 @Injectable()
@@ -50,8 +59,7 @@ export class RechargeService {
       maxAmount: Number(config.max_amount || 9999),
       ratio: this.getRechargeRatio(config),
       hasGoldFingerKey: Boolean(String(config.gold_finger_key || "").trim()),
-      // 兼容旧前端字段，新鱼排积分查询接口不再需要 API Key。
-      hasFishpiApiKey: true,
+      hasFishpiApiKey: Boolean(String(config.fishpi_api_key || "").trim()),
     };
   }
 
@@ -67,10 +75,12 @@ export class RechargeService {
       throw new Error("缺少鱼排用户名");
     }
 
+    const config = await this.ensureConfig();
     const data = await this.callFishpiPoint(fishpiUserName);
     return {
       userName: fishpiUserName,
       point: this.extractFishpiPoint(data),
+      vip: await this.resolveFishpiVip(user.uid, config),
     };
   }
 
@@ -283,6 +293,75 @@ export class RechargeService {
       }
       throw error;
     }
+  }
+
+  private async resolveFishpiVip(
+    userId: string,
+    config: RechargeConfig,
+  ): Promise<FishpiVipView> {
+    const apiKey = String(config.fishpi_api_key || "").trim();
+    if (!apiKey) {
+      return this.uncheckedFishpiVip();
+    }
+    try {
+      const data = await this.callFishpiMembership(userId, apiKey);
+      return this.extractFishpiVip(data);
+    } catch {
+      return this.uncheckedFishpiVip();
+    }
+  }
+
+  private async callFishpiMembership(userId: string, apiKey: string) {
+    const endpoint = `${FISHPI_MEMBERSHIP_ENDPOINT}/${encodeURIComponent(
+      userId,
+    )}?apiKey=${encodeURIComponent(apiKey)}`;
+    const response = await axios.get(endpoint, {
+      timeout: 10000,
+      headers: FISHPI_HEADERS,
+    });
+    if (
+      response.data?.code !== undefined &&
+      !this.isFishpiSuccess(response.data)
+    ) {
+      throw new Error(
+        this.getFishpiErrorMessage(response.data, "鱼排会员查询失败"),
+      );
+    }
+    return response.data;
+  }
+
+  private extractFishpiVip(data: any): FishpiVipView {
+    const payload = data?.data ?? data ?? {};
+    const expiresAt = this.normalizeFishpiVipExpiresAt(payload?.expiresAt);
+    const state = Number(payload?.state ?? 0);
+    return {
+      checked: true,
+      active: state !== 0 && this.isFutureFishpiVipExpiry(expiresAt),
+      levelCode: String(payload?.lvCode || ""),
+      expiresAt,
+    };
+  }
+
+  private normalizeFishpiVipExpiresAt(value: unknown): string | null {
+    const text = String(value || "").trim();
+    return text ? text : null;
+  }
+
+  private isFutureFishpiVipExpiry(expiresAt: string | null) {
+    if (!expiresAt) {
+      return false;
+    }
+    const time = Date.parse(expiresAt);
+    return Number.isFinite(time) && time > Date.now();
+  }
+
+  private uncheckedFishpiVip(): FishpiVipView {
+    return {
+      checked: false,
+      active: false,
+      levelCode: "",
+      expiresAt: null,
+    };
   }
 
   private async callFishpiDeduct(

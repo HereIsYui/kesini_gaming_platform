@@ -806,6 +806,23 @@ const fishpiPointLabel = computed(() => {
   }
   return "--";
 });
+const fishpiVipLabel = computed(() => {
+  if (busy.fishpiPoint && !fishpiPoint.value) {
+    return "同步中";
+  }
+  const vip = fishpiPoint.value?.vip;
+  if (vip?.checked) {
+    return vip.active ? "VIP" : "非VIP";
+  }
+  if (fishpiPoint.value || fishpiPointError.value) {
+    return "未同步";
+  }
+  return "--";
+});
+const fishpiVipMuted = computed(() => {
+  const vip = fishpiPoint.value?.vip;
+  return !vip?.checked || !vip.active;
+});
 const friendsSocial = useFriendsSocial({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "friends",
@@ -3470,6 +3487,8 @@ const appContext = {
   playerInitial,
   playerStatusLabel,
   fishpiPointLabel,
+  fishpiVipLabel,
+  fishpiVipMuted,
   profileCardCountRows,
   profileShowcase,
   profileFormation,
@@ -3797,6 +3816,8 @@ provide(APP_CONTEXT_KEY, appContext);
       :account-point="stats?.point ?? currentUser?.point ?? 0"
       :fishpi-point-label="fishpiPointLabel"
       :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
+      :fishpi-vip-label="fishpiVipLabel"
+      :fishpi-vip-muted="fishpiVipMuted"
       :user-menu-open="userMenuOpen"
       :user-menu-hover-paused="userMenuHoverPaused"
       :unread-message-count="unreadMessageCount"

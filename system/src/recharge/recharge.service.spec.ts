@@ -77,6 +77,12 @@ describe("RechargeService", () => {
     await expect(service.getFishpiPoint("u1")).resolves.toEqual({
       userName: "fish-user",
       point: 156625,
+      vip: {
+        checked: false,
+        active: false,
+        levelCode: "",
+        expiresAt: null,
+      },
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "https://fishpi.cn/user/fish-user/point",
@@ -86,6 +92,220 @@ describe("RechargeService", () => {
         }),
       }),
     );
+  });
+
+  it("鱼排会员查询成功时返回VIP状态", async () => {
+    const expiresAt = new Date(Date.now() + 86400_000).toISOString();
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+        point: 20,
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 156625, userName: "fish-user" } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: {
+            oId: "123456",
+            lvCode: "VIP2_MONTH",
+            state: 1,
+            expiresAt,
+          },
+        },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toEqual({
+      userName: "fish-user",
+      point: 156625,
+      vip: {
+        checked: true,
+        active: true,
+        levelCode: "VIP2_MONTH",
+        expiresAt,
+      },
+    });
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+      2,
+      "https://fishpi.cn/api/membership/123456?apiKey=api-key",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "Kesini-Gacha-Platform/1.0",
+        }),
+      }),
+    );
+  });
+
+  it("鱼排会员state为0时返回非VIP", async () => {
+    const expiresAt = new Date(Date.now() + 86400_000).toISOString();
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { lvCode: "VIP1_MONTH", state: 0, expiresAt } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      vip: {
+        checked: true,
+        active: false,
+        levelCode: "VIP1_MONTH",
+        expiresAt,
+      },
+    });
+  });
+
+  it("鱼排会员过期时返回非VIP", async () => {
+    const expiresAt = new Date(Date.now() - 86400_000).toISOString();
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { lvCode: "VIP1_MONTH", state: 1, expiresAt } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      vip: {
+        checked: true,
+        active: false,
+        levelCode: "VIP1_MONTH",
+        expiresAt,
+      },
+    });
+  });
+
+  it("缺少鱼排会员密钥时只返回积分", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { code: 0, data: { userPoint: 100 } },
+    });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest
+              .fn()
+              .mockResolvedValue(createEnabledConfig({ fishpi_api_key: "" })),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toEqual({
+      userName: "fish-user",
+      point: 100,
+      vip: {
+        checked: false,
+        active: false,
+        levelCode: "",
+        expiresAt: null,
+      },
+    });
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("鱼排会员查询失败时不影响积分", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockRejectedValueOnce(new Error("membership down"));
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toEqual({
+      userName: "fish-user",
+      point: 100,
+      vip: {
+        checked: false,
+        active: false,
+        levelCode: "",
+        expiresAt: null,
+      },
+    });
   });
 
   it("鱼排积分查询缺少用户名时返回错误", async () => {
