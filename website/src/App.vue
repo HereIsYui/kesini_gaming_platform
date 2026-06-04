@@ -719,6 +719,9 @@ const formationCandidatePool = formationPve.formationCandidatePool;
 const formationCandidateAvailableOnly =
   formationPve.formationCandidateAvailableOnly;
 const pveOverview = formationPve.pveOverview;
+const pveStagePage = formationPve.pveStagePage;
+const pveStageTotalPages = formationPve.pveStageTotalPages;
+const pveStageTotal = formationPve.pveStageTotal;
 const pveRecords = formationPve.pveRecords;
 const pveRecordPage = formationPve.pveRecordPage;
 const pveRecordTotalPages = formationPve.pveRecordTotalPages;
@@ -745,6 +748,7 @@ const loadPveStages = formationPve.loadPveStages;
 const loadPveRecords = formationPve.loadPveRecords;
 const refreshPve = formationPve.refreshPve;
 const challengePveStage = formationPve.challengePveStage;
+const changePveStagePage = formationPve.changePveStagePage;
 const changePveRecordPage = formationPve.changePveRecordPage;
 const pvePowerPercent = formationPve.pvePowerPercent;
 const pveStageLevelLabel = formationPve.pveStageLevelLabel;
@@ -3367,6 +3371,9 @@ const appContext = {
   formationCandidatePool,
   formationCandidateAvailableOnly,
   pveOverview,
+  pveStagePage,
+  pveStageTotalPages,
+  pveStageTotal,
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
@@ -3625,6 +3632,7 @@ const appContext = {
   loadPveRecords,
   refreshPve,
   challengePveStage,
+  changePveStagePage,
   changePveRecordPage,
   resetUserCards,
   toggleBagNewOnly,

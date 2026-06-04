@@ -309,6 +309,19 @@ describe("PveService 轻量关卡", () => {
     });
   });
 
+  it("关卡列表按分页返回", async () => {
+    store.stages = Array.from({ length: 15 }, (_, index) =>
+      createStage(index + 1),
+    );
+
+    const result = await service.listStages("u1", { page: 2, pageSize: 5 });
+
+    expect(result.total).toBe(15);
+    expect(result.page).toBe(2);
+    expect(result.totalPages).toBe(3);
+    expect(result.list.map((stage) => stage.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
   it("战力足够时挑战胜利并发放奖励", async () => {
     store.stages = [createStage(1, { enemy_power: 100 })];
 

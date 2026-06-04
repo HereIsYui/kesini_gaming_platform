@@ -43,6 +43,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const formationCandidatePool = ref<number | "">("");
   const formationCandidateAvailableOnly = ref(false);
   const pveOverview = ref<PveOverview | null>(null);
+  const pveStagePage = ref(1);
+  const pveStageTotalPages = ref(1);
+  const pveStageTotal = ref(0);
   const pveRecords = ref<PveRecordsResponse | null>(null);
   const pveRecordPage = ref(1);
   const pveRecordTotalPages = ref(1);
@@ -131,6 +134,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
     formationEditingPosition.value = null;
     resetFormationCandidateFilters();
     pveOverview.value = null;
+    pveStagePage.value = 1;
+    pveStageTotalPages.value = 1;
+    pveStageTotal.value = 0;
     pveRecords.value = null;
     pveRecordPage.value = 1;
     pveRecordTotalPages.value = 1;
@@ -252,13 +258,19 @@ export function useFormationPve(options: UseFormationPveOptions) {
     }
   }
 
-  async function loadPveStages() {
+  async function loadPveStages(page = pveStagePage.value) {
     if (!options.isAuthed()) {
       return;
     }
     options.setPveBusy(true);
     try {
-      pveOverview.value = await request<PveOverview>("/pve/stages");
+      const data = await request<PveOverview>(
+        `/pve/stages${toQuery({ page, pageSize: 12 })}`,
+      );
+      pveOverview.value = data;
+      pveStagePage.value = data.page || page;
+      pveStageTotalPages.value = data.totalPages || 1;
+      pveStageTotal.value = data.total ?? data.list?.length ?? 0;
     } catch (error) {
       if (options.getActiveSection() === "pve") {
         options.notify("error", options.getErrorMessage(error));
@@ -290,7 +302,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
   }
 
   async function refreshPve() {
-    await Promise.all([loadPveStages(), loadPveRecords()]);
+    await Promise.all([loadPveStages(pveStagePage.value), loadPveRecords()]);
   }
 
   async function challengePveStage(stage: PveStage) {
@@ -316,7 +328,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
           : `挑战失败：战力 ${data.formationPower} / ${data.enemyPower}`,
       );
       await Promise.all([
-        loadPveStages(),
+        loadPveStages(pveStagePage.value),
         loadPveRecords(1),
         options.refreshChallengeRewards(),
       ]);
@@ -336,6 +348,17 @@ export function useFormationPve(options: UseFormationPveOptions) {
       return;
     }
     void loadPveRecords(next);
+  }
+
+  function changePveStagePage(delta: number) {
+    const next = Math.min(
+      Math.max(1, pveStagePage.value + delta),
+      pveStageTotalPages.value,
+    );
+    if (next === pveStagePage.value) {
+      return;
+    }
+    void loadPveStages(next);
   }
 
   function pvePowerPercent(stage: PveStage) {
@@ -370,6 +393,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
     formationCandidatePool,
     formationCandidateAvailableOnly,
     pveOverview,
+    pveStagePage,
+    pveStageTotalPages,
+    pveStageTotal,
     pveRecords,
     pveRecordPage,
     pveRecordTotalPages,
@@ -395,6 +421,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     loadPveRecords,
     refreshPve,
     challengePveStage,
+    changePveStagePage,
     changePveRecordPage,
     pvePowerPercent,
     pveStageLevelLabel,

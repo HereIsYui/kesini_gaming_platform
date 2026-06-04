@@ -12,6 +12,9 @@ const {
   formatDate,
   formatRewards,
   pveOverview,
+  pveStagePage,
+  pveStageTotalPages,
+  pveStageTotal,
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
@@ -25,6 +28,7 @@ const {
   loadPveRecords,
   refreshPve,
   challengePveStage,
+  changePveStagePage,
   changePveRecordPage,
   pvePowerPercent,
   pveStageLevelLabel,
@@ -81,7 +85,7 @@ const {
       </article>
       <article>
         <small>开放关卡</small>
-        <strong>{{ pveStages.length }}</strong>
+        <strong>{{ pveStageTotal }}</strong>
       </article>
       <article>
         <small>本页胜场</small>
@@ -148,6 +152,27 @@ const {
           }}
         </button>
       </article>
+    </div>
+    <div v-if="pveOverview && pveStageTotalPages > 1" class="pager">
+      <button
+        class="secondary-action compact"
+        type="button"
+        :disabled="pveStagePage <= 1 || busy.pve"
+        @click="changePveStagePage(-1)"
+      >
+        <ChevronLeft :size="15" />
+        上一页
+      </button>
+      <span>第 {{ pveStagePage }} / {{ pveStageTotalPages }} 页</span>
+      <button
+        class="secondary-action compact"
+        type="button"
+        :disabled="pveStagePage >= pveStageTotalPages || busy.pve"
+        @click="changePveStagePage(1)"
+      >
+        下一页
+        <ChevronRight :size="15" />
+      </button>
     </div>
 
     <div class="pve-record-panel">

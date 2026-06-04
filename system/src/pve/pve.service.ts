@@ -25,7 +25,9 @@ export class PveService {
     private readonly socialActivityService?: SocialActivityService,
   ) {}
 
-  async listStages(uid: string) {
+  async listStages(uid: string, query: PvePageQuery = {}) {
+    const requestedPage = this.normalizePage(query.page);
+    const pageSize = this.normalizePageSize(query.pageSize);
     const stageRepository = this.dataSource.getRepository(PveStage);
     const recordRepository = this.dataSource.getRepository(PveChallengeRecord);
     const [stages, formation, todayRecords] = await Promise.all([
@@ -44,9 +46,16 @@ export class PveService {
     const visibleStages = stages.filter((stage) =>
       this.isStageInVisibleTime(stage),
     );
+    const total = visibleStages.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const pageStages = visibleStages.slice(
+      (page - 1) * pageSize,
+      page * pageSize,
+    );
     const rewardLookup = await this.buildRewardLookup(
       this.dataSource,
-      visibleStages.map((stage) => stage.rewards),
+      pageStages.map((stage) => stage.rewards),
     );
     const todayCountMap = todayRecords.reduce((map, record) => {
       map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
@@ -59,7 +68,7 @@ export class PveService {
         filledCount: formation.slots.filter((slot) => Boolean(slot.card)).length,
         totalPower: formation.totalPower,
       },
-      list: visibleStages.map((stage) =>
+      list: pageStages.map((stage) =>
         this.toStageView(
           stage,
           formation.totalPower,
@@ -67,6 +76,10 @@ export class PveService {
           rewardLookup,
         ),
       ),
+      total,
+      page,
+      pageSize,
+      totalPages,
     };
   }
 

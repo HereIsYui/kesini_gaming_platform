@@ -22,7 +22,7 @@ interface UserInfo {
   uid: string;
 }
 
-class PveRecordQueryDto {
+class PvePageQueryDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -44,13 +44,16 @@ export class PveController {
   constructor(private readonly pveService: PveService) {}
 
   @Get("stages")
-  async listStages(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+  async listStages(
+    @GetUser() user: UserInfo,
+    @Query() query: PvePageQueryDto,
+  ): Promise<ResponseDto<any>> {
     if (!user?.uid) {
       return ResponseDto.error("用户身份验证失败");
     }
     try {
       return ResponseDto.success(
-        await this.pveService.listStages(user.uid),
+        await this.pveService.listStages(user.uid, query),
         "获取关卡列表成功",
       );
     } catch (error) {
@@ -79,7 +82,7 @@ export class PveController {
   @Get("records")
   async listRecords(
     @GetUser() user: UserInfo,
-    @Query() query: PveRecordQueryDto,
+    @Query() query: PvePageQueryDto,
   ): Promise<ResponseDto<any>> {
     if (!user?.uid) {
       return ResponseDto.error("用户身份验证失败");

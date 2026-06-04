@@ -815,6 +815,10 @@ export interface PveOverview {
     totalPower: number;
   };
   list: PveStage[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface PveChallengeRecord {
