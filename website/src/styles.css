@@ -4759,9 +4759,9 @@ h3 {
   content: "";
   transform-origin: left center;
   transition:
-    width 560ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease,
-    filter 220ms ease;
+    width 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms ease,
+    filter 260ms ease;
 }
 
 .pve-battle-hp i::after {
@@ -4855,10 +4855,15 @@ h3 {
 .pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp,
 .pve-battle-board.failure .pve-battle-side.player .pve-battle-hp {
   background: rgba(255, 122, 122, 0.18);
+  animation: pve-hp-empty-glow 1.25s ease-out;
 }
 
 .pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp i,
 .pve-battle-board.failure .pve-battle-side.player .pve-battle-hp i {
+  transition:
+    width 1.25s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 320ms ease 920ms,
+    filter 320ms ease 920ms;
   filter: saturate(0.35);
   opacity: 0.42;
 }
@@ -6892,6 +6897,24 @@ h3 {
   }
   100% {
     transform: translateX(120%);
+  }
+}
+
+@keyframes pve-hp-empty-glow {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 0 0 rgba(255, 122, 122, 0);
+  }
+  58% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 0 14px rgba(255, 122, 122, 0.2);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 0 0 rgba(255, 122, 122, 0);
   }
 }
 
