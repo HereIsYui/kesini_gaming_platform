@@ -145,71 +145,80 @@ function pveBattleRewardText(rewards: unknown) {
         </div>
 
         <div
-          v-if="pveBattleStageId === stage.id && pveBattlePhase !== 'idle'"
-          class="pve-battle-board"
+          v-if="
+            pveBattleStageId === stage.id &&
+            pveBattlePhase !== 'idle'
+          "
+          class="pve-battle-overlay"
           :class="{
             fighting: pveBattlePhase === 'fighting',
+            result: pveBattlePhase === 'result',
             success: pveBattleResult?.success,
             failure: pveBattleResult?.success === false,
           }"
           aria-live="polite"
         >
-          <div class="pve-battle-side player">
-            <span>我方</span>
-            <strong>{{ pveFormation.totalPower }}</strong>
-            <em class="pve-battle-hp" aria-hidden="true">
-              <i
-                :class="{
-                  draining: pveBattlePlayerHpDraining(stage),
-                }"
-                :style="{
-                  width: `${pveBattlePlayerHpPercent(stage)}%`,
-                }"
-              ></i>
-            </em>
-          </div>
-          <div class="pve-battle-core">
-            <i></i>
-            <b>战</b>
-          </div>
-          <div class="pve-battle-side enemy">
-            <span>敌方</span>
-            <strong>{{ stage.enemyPower }}</strong>
-            <em class="pve-battle-hp" aria-hidden="true">
-              <i
-                :class="{
-                  draining: pveBattleEnemyHpDraining(stage),
-                }"
-                :style="{
-                  width: `${pveBattleEnemyHpPercent(stage)}%`,
-                }"
-              ></i>
-            </em>
-          </div>
-        </div>
-
-        <div
-          v-if="
-            pveBattleStageId === stage.id &&
-            pveBattlePhase === 'result' &&
-            pveBattleResult
-          "
-          class="pve-battle-result"
-          :class="{
-            success: pveBattleResult.success,
-            failure: !pveBattleResult.success,
-          }"
-        >
-          <strong>{{ pveBattleResult.success ? "胜利" : "失败" }}</strong>
-          <span
-            >战力 {{ pveBattleResult.formationPower }} /
-            {{ pveBattleResult.enemyPower }}</span
+          <div
+            class="pve-battle-board"
+            :class="{
+              fighting: pveBattlePhase === 'fighting',
+              success: pveBattleResult?.success,
+              failure: pveBattleResult?.success === false,
+            }"
           >
-          <small>{{
-            pveBattleResult.success
-              ? pveBattleRewardText(pveBattleResult.rewards)
-              : "未获奖励"
-          }}</small>
+            <div class="pve-battle-side player">
+              <span>我方</span>
+              <strong>{{ pveFormation.totalPower }}</strong>
+              <em class="pve-battle-hp" aria-hidden="true">
+                <i
+                  :class="{
+                    draining: pveBattlePlayerHpDraining(stage),
+                  }"
+                  :style="{
+                    width: `${pveBattlePlayerHpPercent(stage)}%`,
+                  }"
+                ></i>
+              </em>
+            </div>
+            <div class="pve-battle-core">
+              <i></i>
+              <b>战</b>
+            </div>
+            <div class="pve-battle-side enemy">
+              <span>敌方</span>
+              <strong>{{ stage.enemyPower }}</strong>
+              <em class="pve-battle-hp" aria-hidden="true">
+                <i
+                  :class="{
+                    draining: pveBattleEnemyHpDraining(stage),
+                  }"
+                  :style="{
+                    width: `${pveBattleEnemyHpPercent(stage)}%`,
+                  }"
+                ></i>
+              </em>
+            </div>
+          </div>
+
+          <div
+            v-if="pveBattlePhase === 'result' && pveBattleResult"
+            class="pve-battle-result"
+            :class="{
+              success: pveBattleResult.success,
+              failure: !pveBattleResult.success,
+            }"
+          >
+            <strong>{{ pveBattleResult.success ? "胜利" : "失败" }}</strong>
+            <span
+              >战力 {{ pveBattleResult.formationPower }} /
+              {{ pveBattleResult.enemyPower }}</span
+            >
+            <small>{{
+              pveBattleResult.success
+                ? pveBattleRewardText(pveBattleResult.rewards)
+                : "未获奖励"
+            }}</small>
+          </div>
         </div>
 
         <dl class="pve-stage-meta">
