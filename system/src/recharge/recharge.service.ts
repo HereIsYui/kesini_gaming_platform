@@ -84,6 +84,16 @@ export class RechargeService {
     };
   }
 
+  async getFishpiVipStatus(uid: string): Promise<FishpiVipView> {
+    const userRepository = this.dataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    const config = await this.ensureConfig();
+    return this.resolveFishpiVip(user.uid, config);
+  }
+
   async recharge(uid: string, rawAmount: number, rawRequestId?: string) {
     const fishpiCost = this.normalizeAmount(rawAmount);
     const requestId = this.normalizeRequestId(rawRequestId);

@@ -7,12 +7,44 @@ import { PveStage } from "src/entity/pveStage.entity";
 import type { RedeemRewards } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
 import { FormationService } from "src/formation/formation.service";
+import {
+  FishpiVipView,
+  RechargeService,
+} from "src/recharge/recharge.service";
 import { RewardService } from "src/reward/reward.service";
 import { SocialActivityService } from "src/social/social-activity.service";
 
 export interface PvePageQuery {
   page?: number;
   pageSize?: number;
+  focus?: string;
+}
+
+export interface PveSweepInput {
+  stageIds: number[];
+}
+
+export interface PveSweepStageResult {
+  stageId: number;
+  stageName: string;
+  success: boolean;
+  rewards: RedeemRewards | null;
+}
+
+export interface PveSweepResult {
+  vipLevel: number;
+  vipLabel: string;
+  dailyLimit: number;
+  usedToday: number;
+  remaining: number;
+  swept: number;
+  skipped: Array<{
+    stageId: number;
+    stageName: string;
+    reason: string;
+  }>;
+  list: PveSweepStageResult[];
+  pointAfter: number;
 }
 
 type RewardLookup = {
@@ -28,11 +60,15 @@ export class PveService {
     private readonly rewardService: RewardService,
     @Optional()
     private readonly socialActivityService?: SocialActivityService,
+    @Optional()
+    private readonly rechargeService?: RechargeService,
   ) {}
 
   async listStages(uid: string, query: PvePageQuery = {}) {
     const requestedPage = this.normalizePage(query.page);
     const pageSize = this.normalizePageSize(query.pageSize);
+    const shouldFocusNextUncleared =
+      String(query.focus || "").trim() === "nextUncleared";
     const stageRepository = this.dataSource.getRepository(PveStage);
     const recordRepository = this.dataSource.getRepository(PveChallengeRecord);
     const [stages, formation, todayRecords] = await Promise.all([
@@ -53,7 +89,32 @@ export class PveService {
     );
     const total = visibleStages.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(requestedPage, totalPages);
+    const visibleStageIds = visibleStages.map((stage) => Number(stage.id));
+    const allClearedRecords = visibleStageIds.length
+      ? await recordRepository.find({
+          where: {
+            uid,
+            stage_id: In(visibleStageIds),
+            success: true,
+          },
+        })
+      : [];
+    const allClearedStageIds = new Set(
+      allClearedRecords.map((record) => Number(record.stage_id)),
+    );
+    const nextUnclearedIndex = visibleStages.findIndex(
+      (stage) => !allClearedStageIds.has(Number(stage.id)),
+    );
+    const nextUnclearedStageId =
+      nextUnclearedIndex >= 0 ? Number(visibleStages[nextUnclearedIndex].id) : null;
+    const nextUnclearedPage =
+      nextUnclearedIndex >= 0
+        ? Math.floor(nextUnclearedIndex / pageSize) + 1
+        : null;
+    const page =
+      shouldFocusNextUncleared && nextUnclearedPage
+        ? nextUnclearedPage
+        : Math.min(requestedPage, totalPages);
     const pageStages = visibleStages.slice(
       (page - 1) * pageSize,
       page * pageSize,
@@ -62,18 +123,6 @@ export class PveService {
     const rewardLookup = await this.buildRewardLookup(
       this.dataSource,
       pageStages.map((stage) => stage.rewards),
-    );
-    const clearedRecords = pageStageIds.length
-      ? await recordRepository.find({
-          where: {
-            uid,
-            stage_id: In(pageStageIds),
-            success: true,
-          },
-        })
-      : [];
-    const clearedStageIds = new Set(
-      clearedRecords.map((record) => Number(record.stage_id)),
     );
     const todayCountMap = todayRecords.reduce((map, record) => {
       map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
@@ -92,13 +141,15 @@ export class PveService {
           formation.totalPower,
           todayCountMap.get(stage.id) || 0,
           rewardLookup,
-          clearedStageIds.has(Number(stage.id)),
+          allClearedStageIds.has(Number(stage.id)),
         ),
       ),
       total,
       page,
       pageSize,
       totalPages,
+      nextUnclearedStageId,
+      nextUnclearedPage,
     };
   }
 
@@ -179,6 +230,7 @@ export class PveService {
           enemy_power: enemyPower,
           success,
           reward_snapshot: rewardSnapshot,
+          mode: "challenge",
         }),
       );
 
@@ -235,6 +287,225 @@ export class PveService {
         pointAfter: user.point,
       };
     });
+  }
+
+  async sweep(uid: string, input: PveSweepInput): Promise<PveSweepResult> {
+    const stageIds = this.normalizeSweepStageIds(input?.stageIds || []);
+    if (stageIds.length === 0) {
+      throw new Error("请选择关卡");
+    }
+    const vip = await this.getSweepVip(uid);
+    const vipLevel = this.getVipLevel(vip.levelCode);
+    const dailyLimit = this.getVipSweepLimit(vipLevel);
+
+    return this.dataSource.transaction(async (manager) => {
+      const recordRepository = manager.getRepository(PveChallengeRecord);
+      const stageRepository = manager.getRepository(PveStage);
+      const user = await manager.getRepository(User).findOne({
+        where: { uid },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+
+      const todayRange = this.getTodayRange();
+      const usedToday = await recordRepository.count({
+        where: {
+          uid,
+          mode: "sweep",
+          createdAt: Between(...todayRange),
+        },
+      });
+      const stages = await stageRepository.find({
+        where: {
+          id: In(stageIds),
+          delete_flag: false,
+        },
+        order: { sort_order: "ASC", id: "ASC" } as any,
+      });
+      const stageMap = new Map(stages.map((stage) => [Number(stage.id), stage]));
+      const clearedRecords = stageIds.length
+        ? await recordRepository.find({
+            where: {
+              uid,
+              stage_id: In(stageIds),
+              success: true,
+            },
+          })
+        : [];
+      const clearedStageIds = new Set(
+        clearedRecords.map((record) => Number(record.stage_id)),
+      );
+      const todayRecords = stageIds.length
+        ? await recordRepository.find({
+            where: {
+              uid,
+              stage_id: In(stageIds),
+              createdAt: Between(...todayRange),
+            },
+          })
+        : [];
+      const todayCountMap = todayRecords.reduce((map, record) => {
+        map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
+        return map;
+      }, new Map<number, number>());
+
+      const list: PveSweepStageResult[] = [];
+      const skipped: PveSweepResult["skipped"] = [];
+      const rewardSnapshots: RedeemRewards[] = [];
+      let usedByRequest = 0;
+
+      for (const stageId of stageIds) {
+        const stage = stageMap.get(stageId);
+        if (!stage) {
+          skipped.push({
+            stageId,
+            stageName: "",
+            reason: "关卡无效",
+          });
+          continue;
+        }
+        const skipReason = this.getSweepSkipReason(
+          stage,
+          clearedStageIds,
+          todayCountMap,
+          usedToday + usedByRequest,
+          dailyLimit,
+        );
+        if (skipReason) {
+          skipped.push({
+            stageId: stage.id,
+            stageName: stage.name,
+            reason: skipReason,
+          });
+          continue;
+        }
+
+        const firstClearRewards = this.rewardService.normalizeRewards(
+          stage.rewards,
+          "关卡奖励不能为空",
+        );
+        const rewardSnapshot = this.toRepeatRewards(firstClearRewards);
+        if (this.hasGrantableRewards(rewardSnapshot)) {
+          await this.assertRewardAvailable(manager, rewardSnapshot);
+        }
+        const record = await recordRepository.save(
+          recordRepository.create({
+            uid,
+            stage_id: stage.id,
+            stage_name: stage.name,
+            formation_power: 0,
+            enemy_power: this.normalizePower(stage.enemy_power),
+            success: true,
+            reward_snapshot: rewardSnapshot,
+            mode: "sweep",
+          }),
+        );
+        if (this.hasGrantableRewards(rewardSnapshot)) {
+          await this.rewardService.grantRewards(manager, user, rewardSnapshot, {
+            sourceType: "pve",
+            sourceId: stage.id,
+            title: `关卡奖励：${stage.name}`,
+            metadata: {
+              stageId: stage.id,
+              stageName: stage.name,
+              mode: "sweep",
+            },
+          });
+        }
+        todayCountMap.set(stage.id, (todayCountMap.get(stage.id) || 0) + 1);
+        usedByRequest += 1;
+        rewardSnapshots.push(rewardSnapshot);
+        list.push({
+          stageId: record.stage_id,
+          stageName: record.stage_name,
+          success: true,
+          rewards: rewardSnapshot,
+        });
+      }
+
+      const rewardLookup = await this.buildRewardLookup(manager, rewardSnapshots);
+      return {
+        vipLevel,
+        vipLabel: `VIP${vipLevel}`,
+        dailyLimit,
+        usedToday: usedToday + usedByRequest,
+        remaining: Math.max(0, dailyLimit - usedToday - usedByRequest),
+        swept: list.length,
+        skipped,
+        list: list.map((item) => ({
+          ...item,
+          rewards: item.rewards
+            ? this.decorateRewards(item.rewards, rewardLookup)
+            : null,
+        })),
+        pointAfter: user.point || 0,
+      };
+    });
+  }
+
+  private async getSweepVip(uid: string): Promise<FishpiVipView> {
+    if (!this.rechargeService) {
+      throw new Error("VIP未同步");
+    }
+    const vip = await this.rechargeService.getFishpiVipStatus(uid);
+    if (!vip.checked) {
+      throw new Error("VIP未同步");
+    }
+    if (!vip.active) {
+      throw new Error("非VIP");
+    }
+    return vip;
+  }
+
+  private getVipLevel(levelCode: string) {
+    const match = String(levelCode || "")
+      .trim()
+      .toUpperCase()
+      .match(/^VIP([1-4])(?:[_-].*)?$/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  private getVipSweepLimit(level: number) {
+    if (level <= 0) {
+      throw new Error("VIP等级无效");
+    }
+    return [0, 5, 10, 20, 50][level] || 0;
+  }
+
+  private normalizeSweepStageIds(stageIds: number[]) {
+    return [...new Set(stageIds)]
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+  }
+
+  private getSweepSkipReason(
+    stage: PveStage,
+    clearedStageIds: Set<number>,
+    todayCountMap: Map<number, number>,
+    usedToday: number,
+    dailyLimit: number,
+  ) {
+    if (stage.enabled !== true) {
+      return "关卡暂未开放";
+    }
+    if (!this.isStageInVisibleTime(stage)) {
+      return "当前不在开放时间";
+    }
+    if (!clearedStageIds.has(Number(stage.id))) {
+      return "未通关";
+    }
+    if (
+      (todayCountMap.get(Number(stage.id)) || 0) >=
+      this.normalizeDailyLimit(stage.daily_limit)
+    ) {
+      return "今日次数已用完";
+    }
+    if (usedToday >= dailyLimit) {
+      return "VIP次数已用完";
+    }
+    return "";
   }
 
   async listRecords(uid: string, query: PvePageQuery = {}) {
@@ -401,6 +672,7 @@ export class PveService {
       formationPower: record.formation_power,
       enemyPower: record.enemy_power,
       success: record.success === true,
+      mode: record.mode || "challenge",
       rewards:
         record.reward_snapshot && rewardLookup
           ? this.decorateRewards(record.reward_snapshot, rewardLookup)

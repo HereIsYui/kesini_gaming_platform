@@ -725,6 +725,7 @@ const pveStageTotal = formationPve.pveStageTotal;
 const pveRecords = formationPve.pveRecords;
 const pveRecordPage = formationPve.pveRecordPage;
 const pveRecordTotalPages = formationPve.pveRecordTotalPages;
+const pveSweepResult = formationPve.pveSweepResult;
 const pveBattleStageId = formationPve.pveBattleStageId;
 const pveBattlePhase = formationPve.pveBattlePhase;
 const pveBattleResult = formationPve.pveBattleResult;
@@ -738,6 +739,8 @@ const pveStages = formationPve.pveStages;
 const pveFormation = formationPve.pveFormation;
 const pveRecentRecords = formationPve.pveRecentRecords;
 const pveClearedCount = formationPve.pveClearedCount;
+const pveSweepableStages = formationPve.pveSweepableStages;
+const pveSweepableCount = formationPve.pveSweepableCount;
 const resetFormationPve = formationPve.resetFormationPve;
 const loadFormation = formationPve.loadFormation;
 const loadFormationCandidates = formationPve.loadFormationCandidates;
@@ -751,6 +754,7 @@ const saveFormationSlot = formationPve.saveFormationSlot;
 const loadPveStages = formationPve.loadPveStages;
 const loadPveRecords = formationPve.loadPveRecords;
 const refreshPve = formationPve.refreshPve;
+const sweepPveStages = formationPve.sweepPveStages;
 const challengePveStage = formationPve.challengePveStage;
 const changePveStagePage = formationPve.changePveStagePage;
 const changePveRecordPage = formationPve.changePveRecordPage;
@@ -1311,7 +1315,10 @@ watch(activeSection, async (section) => {
     await loadFormation();
   }
   if (section === "pve" && isAuthed.value) {
-    await Promise.all([loadPveStages(), loadPveRecords()]);
+    await Promise.all([
+      loadPveStages(pveStagePage.value, { focus: "nextUncleared" }),
+      loadPveRecords(),
+    ]);
   }
 });
 
@@ -1437,7 +1444,7 @@ async function loadPrivateData() {
       ? refreshGuildSection(false)
       : loadGuild(false),
     loadFormation(),
-    loadPveStages(),
+    loadPveStages(pveStagePage.value, { focus: "nextUncleared" }),
     loadPveRecords(),
     loadUserCatalog(),
     loadLaunchActivity(),
@@ -3402,6 +3409,7 @@ const appContext = {
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
+  pveSweepResult,
   pveBattleStageId,
   pveBattlePhase,
   pveBattleResult,
@@ -3587,6 +3595,8 @@ const appContext = {
   pveFormation,
   pveRecentRecords,
   pveClearedCount,
+  pveSweepableStages,
+  pveSweepableCount,
   bestResult,
   resultSummary,
   drawPhaseText,
@@ -3662,6 +3672,7 @@ const appContext = {
   loadPveStages,
   loadPveRecords,
   refreshPve,
+  sweepPveStages,
   challengePveStage,
   changePveStagePage,
   changePveRecordPage,

@@ -831,6 +831,8 @@ export interface PveOverview {
   page: number;
   pageSize: number;
   totalPages: number;
+  nextUnclearedStageId?: number | null;
+  nextUnclearedPage?: number | null;
 }
 
 export interface PveChallengeRecord {
@@ -841,6 +843,7 @@ export interface PveChallengeRecord {
   formationPower: number;
   enemyPower: number;
   success: boolean;
+  mode?: "challenge" | "sweep";
   rewards?: RedeemRewards | null;
   createdAt: string;
 }
@@ -861,6 +864,27 @@ export interface PveRecordsResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+export interface PveSweepResult {
+  vipLevel: number;
+  vipLabel: string;
+  dailyLimit: number;
+  usedToday: number;
+  remaining: number;
+  swept: number;
+  skipped: Array<{
+    stageId: number;
+    stageName: string;
+    reason: string;
+  }>;
+  list: Array<{
+    stageId: number;
+    stageName: string;
+    success: boolean;
+    rewards: RedeemRewards | null;
+  }>;
+  pointAfter: number;
 }
 
 export type PointLedgerSourceType =

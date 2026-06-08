@@ -7,6 +7,7 @@ import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { PveStage } from "src/entity/pveStage.entity";
 import { User } from "src/entity/user.entity";
 import { FormationModule } from "src/formation/formation.module";
+import { RechargeModule } from "src/recharge/recharge.module";
 import { RewardModule } from "src/reward/reward.module";
 import { SocialActivityModule } from "src/social/social-activity.module";
 import { PveController } from "./pve.controller";
@@ -23,6 +24,7 @@ import { PveService } from "./pve.service";
     ]),
     AuthModule,
     FormationModule,
+    RechargeModule,
     RewardModule,
     SocialActivityModule,
   ],

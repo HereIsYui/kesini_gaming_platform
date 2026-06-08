@@ -7,6 +7,7 @@ import type {
   PveChallengeResult,
   PveOverview,
   PveRecordsResponse,
+  PveSweepResult,
   PveStage,
   UserCardsResponse,
 } from "../types";
@@ -64,6 +65,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const pveRecords = ref<PveRecordsResponse | null>(null);
   const pveRecordPage = ref(1);
   const pveRecordTotalPages = ref(1);
+  const pveSweepResult = ref<PveSweepResult | null>(null);
   const pveBattleStageId = ref<number | null>(null);
   const pveBattlePhase = ref<PveBattlePhase>("idle");
   const pveBattleResult = ref<PveBattleResult | null>(null);
@@ -163,6 +165,10 @@ export function useFormationPve(options: UseFormationPveOptions) {
     };
   }
 
+  function clearPveSweep() {
+    pveSweepResult.value = null;
+  }
+
   function resetFormationPve() {
     formation.value = null;
     formationCandidates.value = [];
@@ -177,6 +183,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveRecordPage.value = 1;
     pveRecordTotalPages.value = 1;
     clearPveBattle();
+    clearPveSweep();
   }
 
   async function loadFormation(loadOptions: SilentLoadOptions = {}) {
@@ -296,14 +303,21 @@ export function useFormationPve(options: UseFormationPveOptions) {
     }
   }
 
-  async function loadPveStages(page = pveStagePage.value) {
+  async function loadPveStages(
+    page = pveStagePage.value,
+    loadOptions: { focus?: string } = {},
+  ) {
     if (!options.isAuthed()) {
       return;
     }
     options.setPveBusy(true);
     try {
       const data = await request<PveOverview>(
-        `/pve/stages${toQuery({ page, pageSize: 12 })}`,
+        `/pve/stages${toQuery({
+          page,
+          pageSize: 12,
+          focus: loadOptions.focus,
+        })}`,
       );
       pveOverview.value = data;
       pveStagePage.value = data.page || page;
@@ -341,7 +355,11 @@ export function useFormationPve(options: UseFormationPveOptions) {
 
   async function refreshPve() {
     clearPveBattle();
-    await Promise.all([loadPveStages(pveStagePage.value), loadPveRecords()]);
+    clearPveSweep();
+    await Promise.all([
+      loadPveStages(pveStagePage.value, { focus: "nextUncleared" }),
+      loadPveRecords(),
+    ]);
   }
 
   function waitForBattleAnimation() {
@@ -447,6 +465,42 @@ export function useFormationPve(options: UseFormationPveOptions) {
     }
   }
 
+  async function sweepPveStages() {
+    if (!options.isAuthed()) {
+      options.notify("error", "请先登录");
+      return;
+    }
+    const stageIds = pveStages.value
+      .filter((stage) => stage.cleared && stage.remainingAttempts > 0)
+      .map((stage) => stage.id);
+    if (stageIds.length === 0) {
+      options.notify("info", "暂无可扫荡");
+      return;
+    }
+    options.setPveChallengeBusy(true);
+    try {
+      const data = await request<PveSweepResult>("/pve/sweep", {
+        method: "POST",
+        body: JSON.stringify({ stageIds }),
+      });
+      pveSweepResult.value = data;
+      options.syncChallengePoint(data.pointAfter);
+      options.notify(
+        "success",
+        `扫荡${data.swept}关${data.skipped.length > 0 ? `，跳过${data.skipped.length}关` : ""}`,
+      );
+      await Promise.all([
+        loadPveStages(pveStagePage.value),
+        loadPveRecords(1),
+        options.refreshChallengeRewards(),
+      ]);
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      options.setPveChallengeBusy(false);
+    }
+  }
+
   function changePveRecordPage(delta: number) {
     const next = Math.min(
       Math.max(1, pveRecordPage.value + delta),
@@ -535,6 +589,13 @@ export function useFormationPve(options: UseFormationPveOptions) {
     return "巡逻";
   }
 
+  const pveSweepableStages = computed(() =>
+    pveStages.value.filter(
+      (stage) => stage.cleared && stage.remainingAttempts > 0,
+    ),
+  );
+  const pveSweepableCount = computed(() => pveSweepableStages.value.length);
+
   return {
     formation,
     formationCandidates,
@@ -551,6 +612,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveRecords,
     pveRecordPage,
     pveRecordTotalPages,
+    pveSweepResult,
     pveBattleStageId,
     pveBattlePhase,
     pveBattleResult,
@@ -564,7 +626,10 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveFormation,
     pveRecentRecords,
     pveClearedCount,
+    pveSweepableStages,
+    pveSweepableCount,
     clearPveBattle,
+    clearPveSweep,
     resetFormationPve,
     loadFormation,
     loadFormationCandidates,
@@ -577,6 +642,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     loadPveStages,
     loadPveRecords,
     refreshPve,
+    sweepPveStages,
     challengePveStage,
     changePveStagePage,
     changePveRecordPage,

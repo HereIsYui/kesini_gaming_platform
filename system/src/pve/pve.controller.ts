@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -10,7 +11,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Min } from "class-validator";
+import { IsArray, IsInt, IsOptional, IsString, Min } from "class-validator";
 import { GetUser } from "src/auth/get-user.decorator";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { ResponseDto } from "src/common/dto/response.dto";
@@ -34,6 +35,18 @@ class PvePageQueryDto {
   @IsInt()
   @Min(1)
   pageSize?: number;
+
+  @IsOptional()
+  @IsString()
+  focus?: string;
+}
+
+class PveSweepDto {
+  @IsArray()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  stageIds: number[];
 }
 
 @Controller("pve")
@@ -76,6 +89,24 @@ export class PveController {
       );
     } catch (error) {
       return ResponseDto.error(error.message || "挑战失败");
+    }
+  }
+
+  @Post("sweep")
+  async sweep(
+    @GetUser() user: UserInfo,
+    @Body() body: PveSweepDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.pveService.sweep(user.uid, body),
+        "扫荡完成",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "扫荡失败");
     }
   }
 

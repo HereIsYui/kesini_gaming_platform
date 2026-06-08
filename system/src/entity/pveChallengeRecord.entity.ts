@@ -10,6 +10,7 @@ import type { RedeemRewards } from "./redeemCode.entity";
 @Entity()
 @Index("IDX_pve_record_uid_created", ["uid", "createdAt"])
 @Index("IDX_pve_record_uid_stage_created", ["uid", "stage_id", "createdAt"])
+@Index("IDX_pve_record_uid_mode_created", ["uid", "mode", "createdAt"])
 export class PveChallengeRecord {
   @PrimaryGeneratedColumn()
   id: number;
@@ -34,6 +35,9 @@ export class PveChallengeRecord {
 
   @Column({ type: "json", nullable: true })
   reward_snapshot?: RedeemRewards | null;
+
+  @Column({ length: 16, default: "challenge" })
+  mode: "challenge" | "sweep";
 
   @CreateDateColumn()
   createdAt: Date;

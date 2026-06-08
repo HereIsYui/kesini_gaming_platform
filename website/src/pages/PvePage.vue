@@ -18,6 +18,7 @@ const {
   pveRecords,
   pveRecordPage,
   pveRecordTotalPages,
+  pveSweepResult,
   pveBattleStageId,
   pveBattlePhase,
   pveBattleResult,
@@ -25,6 +26,10 @@ const {
   pveBattleEnemyHpPercent,
   pveBattlePlayerHpDraining,
   pveBattleEnemyHpDraining,
+  pveSweepableCount,
+  sweepPveStages,
+  fishpiVipLabel,
+  fishpiVipMuted,
   busy,
   isAuthed,
   activeSection,
@@ -45,6 +50,13 @@ function pveBattleRewardText(rewards: unknown) {
   const text = formatRewards(rewards || undefined);
   return text === "无奖励" ? "无奖励" : `奖励 ${text}`;
 }
+
+function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
+  if (record.mode === "sweep") {
+    return "扫荡";
+  }
+  return record.success ? "胜利" : "失败";
+}
 </script>
 
 <template>
@@ -59,6 +71,30 @@ function pveBattleRewardText(rewards: unknown) {
       <h2>星港挑战</h2>
     </div>
     <div class="section-actions">
+      <div class="pve-sweep-meta">
+        <span class="pve-sweep-count">可扫 {{ pveSweepableCount }}</span>
+        <span class="pve-sweep-vip" :class="{ muted: fishpiVipMuted }">
+          {{ fishpiVipLabel }}
+        </span>
+      </div>
+      <button
+        class="secondary-action compact"
+        type="button"
+        :disabled="
+          busy.pve ||
+          busy.pveChallenge ||
+          pveSweepableCount <= 0 ||
+          fishpiVipMuted
+        "
+        @click="sweepPveStages"
+      >
+        <LoaderCircle
+          v-if="busy.pveChallenge && pveSweepableCount > 0"
+          :size="16"
+          class="spin"
+        />
+        扫荡
+      </button>
       <button
         class="secondary-action compact"
         type="button"
@@ -103,6 +139,12 @@ function pveBattleRewardText(rewards: unknown) {
         <small>本页胜场</small>
         <strong>{{ pveClearedCount }}</strong>
       </article>
+    </div>
+
+    <div v-if="pveSweepResult" class="pve-sweep-result">
+      <strong>扫荡 {{ pveSweepResult.swept }} 关</strong>
+      <span>跳过 {{ pveSweepResult.skipped.length }} 关</span>
+      <small>剩余 {{ pveSweepResult.remaining }}</small>
     </div>
 
     <div v-if="pveStages.length === 0" class="empty-state">
@@ -313,7 +355,7 @@ function pveBattleRewardText(rewards: unknown) {
           <div>
             <strong>{{ record.stageName }}</strong>
             <span
-              >{{ record.success ? "胜利" : "失败" }} ·
+              >{{ pveRecordModeLabel(record) }} ·
               {{ formatDate(record.createdAt) }}</span
             >
           </div>

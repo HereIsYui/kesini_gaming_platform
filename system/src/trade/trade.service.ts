@@ -374,14 +374,6 @@ export class TradeService {
         listing.card_level || this.getUserCardRarity(userCard, card),
       );
       this.assertTradableRarity(rarity, "交易");
-      await this.assertCanRemoveOwnedCard(
-        manager,
-        listing.seller_uid,
-        userCard,
-        card,
-        rarity,
-        "出售",
-      );
       const pool = await poolRepository.findOne({ where: { id: card.pool } });
       const feeAmount = this.calculateFee(listing.price, listing.fee_rate);
       const sellerIncome = listing.price - feeAmount;

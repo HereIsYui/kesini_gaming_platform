@@ -628,7 +628,7 @@ describe("TradeService", () => {
     expect(listingRepository.save).not.toHaveBeenCalled();
   });
 
-  it("成交时仍会保护卖家的最后一张同稀有度卡片", async () => {
+  it("已存在的最后一张挂单仍可成交", async () => {
     const listingRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({
         id: 1,
@@ -641,6 +641,9 @@ describe("TradeService", () => {
         status: "active",
       }),
       save: jest.fn(),
+    });
+    const recordRepository = createRepository({
+      save: jest.fn(async (value) => ({ id: 6, ...value })),
     });
     const userCard = {
       uid: "seller",
@@ -677,6 +680,7 @@ describe("TradeService", () => {
           }),
         ],
         [TradeListing, listingRepository],
+        [TradeRecord, recordRepository],
         [UserCard, userCardRepository],
         [User, userRepository],
         [
@@ -685,20 +689,34 @@ describe("TradeService", () => {
             findOne: jest.fn().mockResolvedValue({
               id: 7,
               card_name: "测试卡",
+              card_desc: "描述",
+              card_type: 0,
               card_level: "SSR",
               pool: 2,
             }),
           }),
         ],
+        [
+          PoolInfo,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({ id: 2, pool_name: "测试池" }),
+          }),
+        ],
       ]),
     );
 
-    await expect(service.buyListing("buyer", 1)).rejects.toThrow(
-      "至少保留一张SSR卡片，不能出售",
+    await expect(service.buyListing("buyer", 1)).resolves.toEqual(
+      expect.objectContaining({
+        cardUuid: "card-uuid",
+        price: 100,
+      }),
     );
-    expect(userRepository.save).not.toHaveBeenCalled();
-    expect(userCardRepository.save).not.toHaveBeenCalled();
-    expect(listingRepository.save).not.toHaveBeenCalled();
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: "buyer", card_uuid: "card-uuid" }),
+    );
+    expect(listingRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, status: "sold", buyer_uid: "buyer" }),
+    );
   });
 
   it("取消挂售只允许取消交易中的挂单", async () => {

@@ -252,17 +252,32 @@ function seedFormation(store: PveTestStore) {
   ];
 }
 
-function createService(store: PveTestStore) {
+function createService(
+  store: PveTestStore,
+  vip: {
+    checked: boolean;
+    active: boolean;
+    levelCode: string;
+    expiresAt: string | null;
+  } | null = null,
+) {
   const pointLedgerService = {
     applyChange: jest.fn(async (_manager, user: User, amount: number) => {
       user.point = Number(user.point || 0) + amount;
       return {};
     }),
   };
+  const rechargeService = vip
+    ? {
+        getFishpiVipStatus: jest.fn().mockResolvedValue(vip),
+      }
+    : undefined;
   return new PveService(
     store as any,
     new FormationService(store as any),
     new RewardService(pointLedgerService as any),
+    undefined,
+    rechargeService as any,
   );
 }
 
@@ -326,6 +341,35 @@ describe("PveService 轻量关卡", () => {
     expect(result.total).toBe(15);
     expect(result.page).toBe(2);
     expect(result.totalPages).toBe(3);
+    expect(result.list.map((stage) => stage.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
+  it("关卡列表可定位到下一关", async () => {
+    store.stages = Array.from({ length: 12 }, (_, index) =>
+      createStage(index + 1),
+    );
+    store.records = Array.from({ length: 5 }, (_, index) => ({
+      id: index + 1,
+      uid: "u1",
+      stage_id: index + 1,
+      stage_name: `测试关卡${index + 1}`,
+      formation_power: 1000,
+      enemy_power: 500,
+      success: true,
+      reward_snapshot: { points: 20, items: [] },
+      mode: "challenge",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    })) as PveChallengeRecord[];
+
+    const result = await service.listStages("u1", {
+      page: 1,
+      pageSize: 5,
+      focus: "nextUncleared",
+    });
+
+    expect(result.page).toBe(2);
+    expect(result.nextUnclearedStageId).toBe(6);
+    expect(result.nextUnclearedPage).toBe(2);
     expect(result.list.map((stage) => stage.id)).toEqual([6, 7, 8, 9, 10]);
   });
 
@@ -468,6 +512,116 @@ describe("PveService 轻量关卡", () => {
     store.slots = [];
 
     await expect(service.challenge("u1", 1)).rejects.toThrow("请先配置阵容");
+  });
+
+  it("VIP1每日最多扫荡5关且只发重复奖励", async () => {
+    service = createService(store, {
+      checked: true,
+      active: true,
+      levelCode: "VIP1_MONTH",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+    store.stages = Array.from({ length: 6 }, (_, index) =>
+      createStage(index + 1, {
+        rewards: {
+          points: 20,
+          items: [{ itemId: 1, num: 2 }],
+          cards: [{ cardId: 1, rarity: "SSR", num: 1 }],
+        },
+      }),
+    );
+    const initialCardCount = store.userCards.length;
+    store.records = store.stages.map((stage, index) => ({
+      id: index + 1,
+      uid: "u1",
+      stage_id: stage.id,
+      stage_name: stage.name,
+      formation_power: 1000,
+      enemy_power: 500,
+      success: true,
+      reward_snapshot: { points: 20, items: [] },
+      mode: "challenge",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    })) as PveChallengeRecord[];
+    store.nextRecordId = 20;
+
+    const result = await service.sweep("u1", {
+      stageIds: [1, 2, 3, 4, 5, 6],
+    });
+
+    expect(result).toMatchObject({
+      vipLevel: 1,
+      dailyLimit: 5,
+      usedToday: 5,
+      remaining: 0,
+      swept: 5,
+    });
+    expect(result.skipped).toEqual([
+      { stageId: 6, stageName: "测试关卡6", reason: "VIP次数已用完" },
+    ]);
+    const sweepRecords = store.records.filter((record) => record.mode === "sweep");
+    expect(sweepRecords).toHaveLength(5);
+    expect(sweepRecords[0].reward_snapshot).toEqual({
+      points: 0,
+      items: [{ itemId: 1, num: 2 }],
+    });
+    expect(store.users[0].point).toBe(100);
+    expect(store.inventories[0]).toMatchObject({
+      user_id: 1,
+      item_id: 1,
+      num: 10,
+    });
+    expect(store.userCards).toHaveLength(initialCardCount);
+  });
+
+  it("非VIP不能扫荡", async () => {
+    service = createService(store, {
+      checked: true,
+      active: false,
+      levelCode: "VIP1_MONTH",
+      expiresAt: "2026-01-01T00:00:00.000Z",
+    });
+    store.stages = [createStage(1)];
+
+    await expect(service.sweep("u1", { stageIds: [1] })).rejects.toThrow(
+      "非VIP",
+    );
+  });
+
+  it("扫荡会跳过未通关和次数用完关卡", async () => {
+    service = createService(store, {
+      checked: true,
+      active: true,
+      levelCode: "VIP4_YEAR",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+    store.stages = [
+      createStage(1, { daily_limit: 1 }),
+      createStage(2, { daily_limit: 3 }),
+    ];
+    store.records = [
+      {
+        id: 1,
+        uid: "u1",
+        stage_id: 1,
+        stage_name: "测试关卡1",
+        formation_power: 1000,
+        enemy_power: 500,
+        success: true,
+        reward_snapshot: { points: 20, items: [] },
+        mode: "challenge",
+        createdAt: new Date(),
+      } as PveChallengeRecord,
+    ];
+
+    const result = await service.sweep("u1", { stageIds: [1, 2] });
+
+    expect(result.swept).toBe(0);
+    expect(result.skipped).toEqual([
+      { stageId: 1, stageName: "测试关卡1", reason: "今日次数已用完" },
+      { stageId: 2, stageName: "测试关卡2", reason: "未通关" },
+    ]);
+    expect(store.records.filter((record) => record.mode === "sweep")).toHaveLength(0);
   });
 
   it("挑战记录按分页返回", async () => {
