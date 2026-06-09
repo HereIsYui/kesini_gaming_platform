@@ -93,6 +93,9 @@ import type {
   LeaderboardEntry,
   LeaderboardMetric,
   LeaderboardResponse,
+  MonthlyCardPurchaseResponse,
+  MonthlyCardStatusResponse,
+  MonthlyCardType,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   SeasonOverview,
@@ -372,6 +375,8 @@ const resetDrawHistory = drawHistoryState.resetDrawHistory;
 const stats = ref<UserGachaStats | null>(null);
 const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
+const monthlyCardStatus = ref<MonthlyCardStatusResponse | null>(null);
+const monthlyCardError = ref("");
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
@@ -455,6 +460,7 @@ const busy = reactive({
   drawing: false,
   fishpiPoint: false,
   vipDaily: false,
+  monthlyCard: false,
   assets: false,
   profile: false,
   profileCandidates: false,
@@ -1394,6 +1400,8 @@ function logout(message = "已退出登录") {
   stats.value = null;
   fishpiPoint.value = null;
   fishpiPointError.value = "";
+  monthlyCardStatus.value = null;
+  monthlyCardError.value = "";
   resetDrawHistory();
   userCards.value = null;
   resetProfile();
@@ -1438,6 +1446,7 @@ async function loadPrivateData() {
   const results = await Promise.allSettled([
     loadStats(),
     loadFishpiPoint(),
+    loadMonthlyCardStatus(),
     loadUserCards(),
     activeSection.value === "profile" ? loadPlayerProfile() : Promise.resolve(),
     loadFriends(false),
@@ -1501,6 +1510,67 @@ async function loadFishpiPoint(showError = false) {
     }
   } finally {
     busy.fishpiPoint = false;
+  }
+}
+
+async function loadMonthlyCardStatus(showError = false) {
+  if (!isAuthed.value) {
+    monthlyCardStatus.value = null;
+    monthlyCardError.value = "";
+    return;
+  }
+  busy.monthlyCard = true;
+  monthlyCardError.value = "";
+  try {
+    monthlyCardStatus.value =
+      await request<MonthlyCardStatusResponse>("/monthly-card/me");
+  } catch (error) {
+    monthlyCardStatus.value = null;
+    monthlyCardError.value = getErrorMessage(error);
+    if (showError) {
+      notify("error", monthlyCardError.value);
+    }
+  } finally {
+    busy.monthlyCard = false;
+  }
+}
+
+function createMonthlyCardRequestId() {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `monthly-${random}`;
+}
+
+async function purchaseMonthlyCard(cardType: MonthlyCardType) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  busy.monthlyCard = true;
+  try {
+    const data = await request<MonthlyCardPurchaseResponse>(
+      "/monthly-card/purchase",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          cardType,
+          requestId: createMonthlyCardRequestId(),
+        }),
+      },
+    );
+    notify("success", data.status === "success" ? "已开通" : "已购买");
+    await Promise.allSettled([
+      loadMonthlyCardStatus(),
+      loadFishpiPoint(),
+      loadStats(),
+      loadPointRecords(),
+    ]);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.monthlyCard = false;
   }
 }
 
@@ -3406,6 +3476,8 @@ const appContext = {
   stats,
   fishpiPoint,
   fishpiPointError,
+  monthlyCardStatus,
+  monthlyCardError,
   drawHistory,
   drawHistoryOpen,
   drawHistoryPage,
@@ -3659,6 +3731,8 @@ const appContext = {
   loadPrivateData,
   loadStats,
   loadFishpiPoint,
+  loadMonthlyCardStatus,
+  purchaseMonthlyCard,
   claimVipDailyPack,
   loadDrawHistory,
   openDrawHistory,

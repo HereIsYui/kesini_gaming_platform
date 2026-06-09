@@ -10,8 +10,10 @@ import {
 import { User } from "src/entity/user.entity";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { MonthlyCardSubscription } from "src/entity/monthlyCardSubscription.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
+import { monthlyCardVipTier } from "src/monthly-card/monthly-card.config";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
 import { RewardService } from "src/reward/reward.service";
@@ -290,6 +292,41 @@ export class RechargeService {
     }
   }
 
+  async deductFishpiPoints(uid: string, rawAmount: number, memo: string) {
+    const fishpiCost = this.normalizeAmount(rawAmount);
+    const config = await this.ensureConfig();
+    if (!String(config.gold_finger_key || "").trim()) {
+      throw new Error("购买暂不可用");
+    }
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { uid },
+    });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    const fishpiUserName = String(user.name || "").trim();
+    if (!fishpiUserName) {
+      throw new Error("缺少鱼排用户名");
+    }
+    const balanceResponse = await this.callFishpiPoint(fishpiUserName);
+    const userPoint = this.extractFishpiPoint(balanceResponse);
+    this.assertFishpiBalance(userPoint, fishpiCost);
+    const deductResponse = await this.callFishpiDeduct(
+      config,
+      fishpiUserName,
+      fishpiCost,
+      fishpiCost,
+      memo,
+    );
+    return {
+      balance: {
+        userName: fishpiUserName,
+        userPoint,
+      },
+      deduct: deductResponse,
+    };
+  }
+
   async ensureConfig(manager?: EntityManager): Promise<RechargeConfig> {
     const repository = (manager || this.dataSource).getRepository(
       RechargeConfig,
@@ -447,7 +484,8 @@ export class RechargeService {
     const vip = fishpiVip || (await this.getFishpiVipStatus(user.uid));
     const fishpiTier = fishpiVipTier(vip.levelCode, vip.active);
     const badge = await this.resolveBadgeVip(user);
-    const tier = Math.max(fishpiTier, badge.tier) as GameVipTier;
+    const monthlyCardTier = await this.resolveMonthlyCardVip(user.uid);
+    const tier = Math.max(fishpiTier, badge.tier, monthlyCardTier) as GameVipTier;
     const sources: GameVipSource[] = [];
     if (fishpiTier === tier && tier > 0) {
       sources.push("fishpi");
@@ -455,7 +493,15 @@ export class RechargeService {
     if (badge.tier === tier && tier > 0) {
       sources.push("badge");
     }
-    const checked = vip.checked || badge.tier > 0;
+    if (monthlyCardTier === tier && tier > 0) {
+      sources.push("monthly_card");
+    }
+    const sourceTiers: Partial<Record<GameVipSource, GameVipTier>> = {
+      fishpi: fishpiTier,
+      badge: badge.tier,
+      monthly_card: monthlyCardTier,
+    };
+    const checked = vip.checked || badge.tier > 0 || monthlyCardTier > 0;
     const config = await this.readGameVipConfig();
     const benefit = getGameVipBenefit(config, tier);
     const claimDate = this.getDateKey(new Date());
@@ -474,6 +520,7 @@ export class RechargeService {
       label: checked ? gameVipLabel(tier) : "未同步",
       sources,
       sourceLabels: this.toGameVipSourceLabels(sources),
+      sourceTiers,
       sweepLimit: benefit.sweepLimit,
       tradeFeeDiscount: benefit.tradeFeeDiscount,
       dailyRewards: cloneRewards(benefit.dailyRewards),
@@ -489,6 +536,13 @@ export class RechargeService {
     } catch {
       return { tier: 0 };
     }
+  }
+
+  private async resolveMonthlyCardVip(uid: string): Promise<GameVipTier> {
+    const subscriptions = await this.dataSource
+      .getRepository(MonthlyCardSubscription)
+      .find({ where: { uid } });
+    return monthlyCardVipTier(subscriptions);
   }
 
   private async callFishpiUserInfo(userId: string) {
@@ -556,7 +610,12 @@ export class RechargeService {
   }
 
   private toGameVipSourceLabels(sources: GameVipSource[]) {
-    return sources.map((source) => (source === "badge" ? "小冰" : "鱼排"));
+    const labels: Record<GameVipSource, string> = {
+      fishpi: "鱼排",
+      badge: "小冰",
+      monthly_card: "月卡",
+    };
+    return sources.map((source) => labels[source] || source);
   }
 
   private async callFishpiMembership(userId: string, apiKey: string) {
@@ -763,12 +822,13 @@ export class RechargeService {
     userName: string,
     fishpiCost: number,
     localAmount: number,
+    memoOverride?: string,
   ) {
     const payload = {
       goldFingerKey: String(config.gold_finger_key || "").trim(),
       userName,
       point: -fishpiCost,
-      memo: this.renderMemo(config.memo_template, localAmount, fishpiCost),
+      memo: memoOverride || this.renderMemo(config.memo_template, localAmount, fishpiCost),
     };
     try {
       const response = await axios.post(FISHPI_POINTS_ENDPOINT, payload, {
@@ -911,14 +971,14 @@ export class RechargeService {
     return fallback;
   }
 
-  private getThirdPartyErrorResponse(error: unknown) {
+  getThirdPartyErrorResponse(error: unknown) {
     if (axios.isAxiosError(error)) {
       return this.sanitizeThirdPartyResponse(error.response?.data || null);
     }
     return { message: this.getErrorMessage(error) };
   }
 
-  private sanitizeThirdPartyResponse(value: unknown) {
+  sanitizeThirdPartyResponse(value: unknown) {
     if (value === undefined) {
       return null;
     }

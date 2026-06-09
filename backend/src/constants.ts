@@ -29,6 +29,8 @@ export type PageKey =
   | "trade-listings"
   | "trade-records"
   | "vip-config"
+  | "monthly-card-config"
+  | "monthly-card-records"
   | "recharge-config"
   | "recharge-records"
   | "shop-recycle-config"
@@ -75,6 +77,8 @@ export const pageKeys: PageKey[] = [
   "trade-listings",
   "trade-records",
   "vip-config",
+  "monthly-card-config",
+  "monthly-card-records",
   "recharge-config",
   "recharge-records",
   "shop-recycle-config",
@@ -96,6 +100,7 @@ export const routeAliases: Record<string, PageKey> = {
   config: "gacha-config",
   trade: "trade-listings",
   recharge: "recharge-records",
+  monthly: "monthly-card-records",
   pve: "pve-stages",
 };
 
@@ -839,6 +844,57 @@ export const vipConfigFields: FieldConfig[] = [
     type: "rewards",
     fullWidth: true,
   },
+];
+
+export const monthlyCardConfigFields: FieldConfig[] = [
+  { key: "enabled", label: "月卡状态", type: "boolean", defaultValue: false },
+  {
+    key: "durationDays",
+    label: "有效天数",
+    type: "number",
+    defaultValue: 30,
+  },
+  {
+    key: "ice_enabled",
+    label: "小冰开关",
+    type: "boolean",
+    defaultValue: false,
+  },
+  { key: "ice_price", label: "小冰价格", type: "number", defaultValue: 0 },
+  {
+    key: "platinum_enabled",
+    label: "白金开关",
+    type: "boolean",
+    defaultValue: false,
+  },
+  {
+    key: "platinum_price",
+    label: "白金价格",
+    type: "number",
+    defaultValue: 0,
+  },
+];
+
+export const monthlyCardRecordFields: FieldConfig[] = [
+  { key: "id", label: "编号", readonly: true },
+  { key: "statusLabel", label: "状态", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
+  { key: "fishpi_user_name", label: "鱼排名", readonly: true },
+  { key: "cardTypeLabel", label: "月卡", readonly: true },
+  { key: "vip_level", label: "VIP", readonly: true },
+  { key: "fishpi_cost", label: "鱼排积分", readonly: true },
+  { key: "starts_at", label: "生效时间", readonly: true },
+  { key: "expires_at", label: "到期时间", readonly: true },
+  { key: "request_id", label: "流水号", readonly: true },
+  { key: "thirdPartyMsg", label: "鱼排结果", readonly: true },
+  { key: "failure_reason", label: "失败原因", readonly: true },
+  { key: "createdAt", label: "购买时间", readonly: true },
 ];
 
 export const shopRecycleConfigFields: FieldConfig[] = [

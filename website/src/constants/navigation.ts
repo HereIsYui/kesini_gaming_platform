@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Coins,
   Gift,
+  Gem,
   ListChecks,
   Mail,
   Package,
@@ -28,6 +29,7 @@ export const sectionItems = [
   { key: "pve", label: "关卡", icon: Trophy },
   { key: "synthesize", label: "图鉴", icon: Package },
   { key: "points", label: "星穹币", icon: Coins },
+  { key: "monthlyCard", label: "月卡", icon: Gem },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "tasks", label: "任务", icon: ListChecks },
   { key: "season", label: "赛季", icon: CalendarDays },
@@ -66,6 +68,7 @@ export const accountMenuSectionKeys = [
   "tasks",
   "achievements",
   "points",
+  "monthlyCard",
   "trade",
   "redeem",
 ] as const satisfies readonly SectionKey[];

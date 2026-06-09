@@ -23,6 +23,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/pve", name: "pve", component: PageShell },
   { path: "/synthesize", name: "synthesize", component: PageShell },
   { path: "/points", name: "points", component: PageShell },
+  { path: "/monthly-card", name: "monthlyCard", component: PageShell },
   { path: "/leaderboard", name: "leaderboard", component: PageShell },
   { path: "/tasks", name: "tasks", component: PageShell },
   { path: "/season", name: "season", component: PageShell },

@@ -3031,6 +3031,136 @@ h3 {
   color: var(--danger);
 }
 
+.monthly-card-content {
+  display: grid;
+  gap: 16px;
+}
+
+.monthly-card-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.monthly-card-summary article,
+.monthly-card {
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  border-radius: 8px;
+}
+
+.monthly-card-summary article {
+  padding: 14px;
+  display: grid;
+  gap: 4px;
+}
+
+.monthly-card-summary small,
+.monthly-card small,
+.monthly-card-price span,
+.monthly-card-expire {
+  color: var(--muted);
+}
+
+.monthly-card-summary strong {
+  font-size: 20px;
+}
+
+.monthly-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.monthly-card {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.monthly-card.active {
+  border-color: rgba(80, 210, 160, 0.45);
+  box-shadow: 0 14px 34px rgba(80, 210, 160, 0.1);
+}
+
+.monthly-card header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.monthly-card header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.monthly-card header strong {
+  font-size: 18px;
+}
+
+.monthly-card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-strong);
+  background: rgba(112, 211, 255, 0.12);
+  border: 1px solid rgba(112, 211, 255, 0.22);
+  flex: 0 0 auto;
+}
+
+.monthly-card-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.monthly-card-price strong {
+  font-size: 22px;
+}
+
+.monthly-card-expire {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.monthly-card-benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.monthly-card-benefits span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.monthly-card-skeleton span {
+  min-height: 220px;
+}
+
+@media (max-width: 720px) {
+  .monthly-card-summary,
+  .monthly-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-card-price {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 .point-filter-row {
   justify-content: flex-start;
 }

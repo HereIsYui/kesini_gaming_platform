@@ -276,6 +276,32 @@ class RechargeRecordQueryDto extends PageDto {
   end?: string;
 }
 
+class MonthlyCardRecordQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @IsString()
+  userName?: string;
+
+  @IsOptional()
+  @IsIn(["ice", "platinum"])
+  cardType?: string;
+
+  @IsOptional()
+  @IsIn(["pending", "success", "failed", "local_failed"])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  start?: string;
+
+  @IsOptional()
+  @IsString()
+  end?: string;
+}
+
 class RechargeConfigPatchDto {
   @IsOptional()
   @IsBoolean()
@@ -1864,6 +1890,24 @@ export class AdminController {
     );
   }
 
+  @Get("config/monthly-card")
+  async getMonthlyCardConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getMonthlyCardConfig(),
+      "获取月卡配置成功",
+    );
+  }
+
+  @Patch("config/monthly-card")
+  async updateMonthlyCardConfig(
+    @Body() body: Record<string, unknown>,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateMonthlyCardConfig(body),
+      "更新月卡配置成功",
+    );
+  }
+
   @Get("launch-activity-claims")
   async listLaunchActivityClaims(
     @Query() query: LaunchActivityClaimQueryDto,
@@ -1881,6 +1925,16 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listRechargeRecords(query),
       "获取充值记录成功",
+    );
+  }
+
+  @Get("monthly-card-records")
+  async listMonthlyCardPurchaseRecords(
+    @Query() query: MonthlyCardRecordQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listMonthlyCardPurchaseRecords(query),
+      "获取月卡记录成功",
     );
   }
 

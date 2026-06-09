@@ -5,7 +5,7 @@ export const GAME_VIP_TIERS = [1, 2, 3, 4] as const;
 
 export type GameVipTier = 0 | (typeof GAME_VIP_TIERS)[number];
 export type GameVipTierKey = `${(typeof GAME_VIP_TIERS)[number]}`;
-export type GameVipSource = "fishpi" | "badge";
+export type GameVipSource = "fishpi" | "badge" | "monthly_card";
 
 export interface GameVipBenefit {
   sweepLimit: number;
@@ -24,6 +24,7 @@ export interface GameVipStatusView {
   label: string;
   sources: GameVipSource[];
   sourceLabels: string[];
+  sourceTiers: Partial<Record<GameVipSource, GameVipTier>>;
   sweepLimit: number;
   tradeFeeDiscount: number;
   dailyRewards: RedeemRewards;

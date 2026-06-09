@@ -8,6 +8,7 @@ import FriendsPage from "../../pages/FriendsPage.vue";
 import GuildPage from "../../pages/GuildPage.vue";
 import LeaderboardPage from "../../pages/LeaderboardPage.vue";
 import MessagesPage from "../../pages/MessagesPage.vue";
+import MonthlyCardPage from "../../pages/MonthlyCardPage.vue";
 import PointsPage from "../../pages/PointsPage.vue";
 import ProfilePage from "../../pages/ProfilePage.vue";
 import PvePage from "../../pages/PvePage.vue";
@@ -36,6 +37,7 @@ const props = defineProps<{
     <PvePage v-if="props.activeSection === 'pve'" />
     <SynthesizePage v-if="props.activeSection === 'synthesize'" />
     <PointsPage v-if="props.activeSection === 'points'" />
+    <MonthlyCardPage v-if="props.activeSection === 'monthlyCard'" />
     <TradePage v-if="props.activeSection === 'trade'" />
     <LeaderboardPage v-if="props.activeSection === 'leaderboard'" />
     <TasksPage v-if="props.activeSection === 'tasks'" />

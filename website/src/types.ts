@@ -620,13 +620,59 @@ export interface GameVipStatus {
   active: boolean;
   tier: 0 | 1 | 2 | 3 | 4;
   label: string;
-  sources: Array<"fishpi" | "badge">;
+  sources: Array<"fishpi" | "badge" | "monthly_card">;
   sourceLabels: string[];
+  sourceTiers?: Partial<Record<"fishpi" | "badge" | "monthly_card", 0 | 1 | 2 | 3 | 4>>;
   sweepLimit: number;
   tradeFeeDiscount: number;
   dailyRewards: RedeemRewards;
   dailyClaimed: boolean;
   dailyClaimDate: string;
+}
+
+export type MonthlyCardType = "ice" | "platinum";
+
+export interface MonthlyCardPlan {
+  cardType: MonthlyCardType;
+  enabled: boolean;
+  price: number;
+  vipLevel: 3 | 4;
+  label: string;
+  durationDays: number;
+}
+
+export interface MonthlyCardPublicConfig {
+  enabled: boolean;
+  durationDays: number;
+  ice_enabled: boolean;
+  ice_price: number;
+  platinum_enabled: boolean;
+  platinum_price: number;
+  cards: MonthlyCardPlan[];
+}
+
+export interface MonthlyCardStatusCard extends MonthlyCardPlan {
+  active: boolean;
+  permanent: boolean;
+  expiresAt: string | null;
+  statusLabel: string;
+  actionLabel: string;
+}
+
+export interface MonthlyCardStatusResponse {
+  config: MonthlyCardPublicConfig;
+  cards: MonthlyCardStatusCard[];
+  gameVip: GameVipStatus;
+}
+
+export interface MonthlyCardPurchaseResponse {
+  requestId: string;
+  cardType: MonthlyCardType;
+  vipLevel: number;
+  fishpiCost: number;
+  startsAt: string;
+  expiresAt: string;
+  status: string;
 }
 
 export interface VipDailyClaimResponse {

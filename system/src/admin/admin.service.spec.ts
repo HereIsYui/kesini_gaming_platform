@@ -126,6 +126,7 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.systemConfig,
     repositories.rechargeConfig,
     repositories.rechargeRecord,
+    repositories.monthlyCardPurchase,
     repositories.launchActivityConfig,
     repositories.launchActivityClaim,
     repositories.pveStage,

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { MonthlyCardSubscription } from "src/entity/monthlyCardSubscription.entity";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
@@ -30,6 +31,7 @@ function createService(
   const repositoryMap = new Map<any, any>([
     [SystemConfig, createRepository()],
     [VipDailyClaim, createRepository()],
+    [MonthlyCardSubscription, createRepository({ find: jest.fn().mockResolvedValue([]) })],
     [DropItem, createRepository({ find: jest.fn().mockResolvedValue([]) })],
     [CardItem, createRepository({ find: jest.fn().mockResolvedValue([]) })],
     [UserInventory, createRepository()],
@@ -61,6 +63,11 @@ function expectedGameVip(patch: Record<string, any> = {}) {
     label: "未同步",
     sources: [],
     sourceLabels: [],
+    sourceTiers: {
+      fishpi: 0,
+      badge: 0,
+      monthly_card: 0,
+    },
     sweepLimit: 0,
     tradeFeeDiscount: 0,
     dailyRewards: { points: 0, items: [] },
@@ -187,6 +194,11 @@ describe("RechargeService", () => {
         tier: 2,
         label: "VIP2",
         sources: ["fishpi"],
+        sourceTiers: {
+          fishpi: 2,
+          badge: 0,
+          monthly_card: 0,
+        },
         sourceLabels: ["鱼排"],
         sweepLimit: 10,
         tradeFeeDiscount: 0.04,

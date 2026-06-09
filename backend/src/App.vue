@@ -584,6 +584,14 @@
         />
 
         <ConfigPanel
+          v-else-if="active === 'monthly-card-config'"
+          title="月卡配置"
+          description="配置月卡开关、价格和有效天数。"
+          endpoint="/admin/config/monthly-card"
+          :fields="monthlyCardConfigFields"
+        />
+
+        <ConfigPanel
           v-else-if="active === 'shop-recycle-config'"
           title="商店回收"
           description="配置回收开关和各稀有度价格。"
@@ -644,6 +652,16 @@
             search-placeholder="按账号查询"
           />
         </section>
+
+        <AdminTable
+          v-else-if="active === 'monthly-card-records'"
+          title="月卡记录"
+          endpoint="/admin/monthly-card-records"
+          :fields="monthlyCardRecordFields"
+          detail-fetchable
+          keyword-param="uid"
+          search-placeholder="按账号查询"
+        />
 
         <GachaConfigPage
           v-else-if="active === 'gacha-config'"
@@ -779,6 +797,8 @@ import {
   inventoryFields,
   launchActivityClaimFields,
   launchActivityFields,
+  monthlyCardConfigFields,
+  monthlyCardRecordFields,
   navGroups,
   pageKeys,
   pityFields,
@@ -1157,6 +1177,20 @@ const pageDefinitions = computed(
         description: "配置游戏VIP礼包、扫荡次数和手续费减免。",
         group: "交易与支付",
         icon: Medal,
+      },
+      {
+        key: "monthly-card-config",
+        label: "月卡配置",
+        description: "配置月卡开关、价格和有效天数。",
+        group: "交易与支付",
+        icon: Wallet,
+      },
+      {
+        key: "monthly-card-records",
+        label: "月卡记录",
+        description: "查看月卡购买与开通状态。",
+        group: "交易与支付",
+        icon: Files,
       },
       {
         key: "recharge-config",

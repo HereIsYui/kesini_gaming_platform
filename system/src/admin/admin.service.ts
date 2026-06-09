@@ -35,6 +35,10 @@ import { UserHistory } from "src/entity/history.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
 import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
+import {
+  MonthlyCardPurchaseRecord,
+  MonthlyCardPurchaseStatus,
+} from "src/entity/monthlyCardPurchaseRecord.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { PveStage } from "src/entity/pveStage.entity";
 import { PoolInfo } from "src/entity/pool.entity";
@@ -73,6 +77,11 @@ import {
   GameVipTierKey,
   normalizeGameVipConfig,
 } from "src/vip/game-vip";
+import {
+  flattenMonthlyCardConfig,
+  MONTHLY_CARD_CONFIG_KEY,
+  normalizeMonthlyCardConfig,
+} from "src/monthly-card/monthly-card.config";
 
 export interface PageQuery {
   page?: number;
@@ -105,6 +114,12 @@ const DEFAULT_LAUNCH_ACTIVITY_KEY = "launch-2026";
 const DEFAULT_LAUNCH_ACTIVITY_NAME = "开服福利";
 const DEFAULT_LAUNCH_ACTIVITY_DESCRIPTION = "登录后可领取一次的开服福利。";
 const RECHARGE_STATUSES: RechargeRecordStatus[] = [
+  "pending",
+  "success",
+  "failed",
+  "local_failed",
+];
+const MONTHLY_CARD_PURCHASE_STATUSES: MonthlyCardPurchaseStatus[] = [
   "pending",
   "success",
   "failed",
@@ -156,6 +171,9 @@ export class AdminService {
     @Optional()
     @InjectRepository(RechargeRecord)
     private readonly rechargeRecordRepository?: Repository<RechargeRecord>,
+    @Optional()
+    @InjectRepository(MonthlyCardPurchaseRecord)
+    private readonly monthlyCardPurchaseRecordRepository?: Repository<MonthlyCardPurchaseRecord>,
     @Optional()
     @InjectRepository(LaunchActivityConfig)
     private readonly launchActivityConfigRepository?: Repository<LaunchActivityConfig>,
@@ -1375,6 +1393,29 @@ export class AdminService {
     return flattenGameVipConfig(config);
   }
 
+  async getMonthlyCardConfig() {
+    return flattenMonthlyCardConfig(await this.readMonthlyCardConfig());
+  }
+
+  async updateMonthlyCardConfig(body: unknown) {
+    const repository = this.mustSystemConfigRepository();
+    const config = normalizeMonthlyCardConfig(body);
+    this.assertMonthlyCardConfig(config);
+    let row = await repository.findOne({
+      where: { key: MONTHLY_CARD_CONFIG_KEY },
+    });
+    if (!row) {
+      row = repository.create({
+        key: MONTHLY_CARD_CONFIG_KEY,
+        description: "月卡配置",
+      });
+    }
+    row.value = JSON.stringify(config);
+    row.description = "月卡配置";
+    await repository.save(row);
+    return flattenMonthlyCardConfig(config);
+  }
+
   async getRechargeConfig() {
     const config = await this.ensureRechargeConfig();
     return this.toRechargeConfigView(config);
@@ -1484,6 +1525,68 @@ export class AdminService {
       pageSize,
     });
     return decorated;
+  }
+
+  async listMonthlyCardPurchaseRecords(
+    query: PageQuery & {
+      uid?: string;
+      userName?: string;
+      status?: string;
+      cardType?: string;
+      start?: string;
+      end?: string;
+    },
+  ) {
+    const { page, pageSize } = this.normalizePage(query);
+    const repository = this.mustMonthlyCardPurchaseRecordRepository();
+    const queryBuilder = repository
+      .createQueryBuilder("record")
+      .orderBy("record.id", "DESC")
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    if (query.uid) {
+      queryBuilder.andWhere("record.uid LIKE :uid", {
+        uid: `%${query.uid}%`,
+      });
+    }
+    if (query.userName) {
+      queryBuilder.andWhere("record.fishpi_user_name LIKE :userName", {
+        userName: `%${query.userName}%`,
+      });
+    }
+    if (query.cardType) {
+      queryBuilder.andWhere("record.card_type = :cardType", {
+        cardType: query.cardType,
+      });
+    }
+    if (query.status) {
+      const status = query.status as MonthlyCardPurchaseStatus;
+      if (!MONTHLY_CARD_PURCHASE_STATUSES.includes(status)) {
+        throw new Error("月卡状态无效");
+      }
+      queryBuilder.andWhere("record.status = :status", { status });
+    }
+    if (query.start) {
+      const start = this.parseOptionalDate(query.start);
+      if (start) {
+        queryBuilder.andWhere("record.createdAt >= :start", { start });
+      }
+    }
+    if (query.end) {
+      const end = this.parseOptionalDate(query.end);
+      if (end) {
+        queryBuilder.andWhere("record.createdAt <= :end", { end });
+      }
+    }
+
+    const [list, total] = await queryBuilder.getManyAndCount();
+    return this.attachUserDisplayToUidRows({
+      list: list.map((record) => this.decorateMonthlyCardPurchaseRecord(record)),
+      total,
+      page,
+      pageSize,
+    });
   }
 
   async getRechargeStats() {
@@ -2033,6 +2136,20 @@ export class AdminService {
     };
   }
 
+  private decorateMonthlyCardPurchaseRecord(
+    record: MonthlyCardPurchaseRecord,
+  ) {
+    return {
+      ...record,
+      cardTypeLabel:
+        record.card_type === "platinum" ? "白金月卡" : "小冰月卡",
+      statusLabel: this.getMonthlyCardPurchaseStatusLabel(record.status),
+      thirdPartyMsg: this.getRechargeThirdPartyMessage(
+        record.third_party_response,
+      ),
+    };
+  }
+
   private async getRechargeSuccessMetric(
     start?: Date,
   ): Promise<RechargeStatsMetric> {
@@ -2167,6 +2284,20 @@ export class AdminService {
     }
   }
 
+  private async readMonthlyCardConfig() {
+    const row = await this.mustSystemConfigRepository().findOne({
+      where: { key: MONTHLY_CARD_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return normalizeMonthlyCardConfig(null);
+    }
+    try {
+      return normalizeMonthlyCardConfig(JSON.parse(row.value));
+    } catch {
+      return normalizeMonthlyCardConfig(null);
+    }
+  }
+
   private async withDefaultVipFragments(
     config: GameVipConfig,
   ): Promise<GameVipConfig> {
@@ -2204,6 +2335,22 @@ export class AdminService {
         `VIP${tier}礼包不能为空`,
       );
     }
+  }
+
+  private assertMonthlyCardConfig(
+    config: ReturnType<typeof normalizeMonthlyCardConfig>,
+  ) {
+    if (!Number.isInteger(config.durationDays) || config.durationDays <= 0) {
+      throw new Error("月卡天数必须为正整数");
+    }
+    Object.values(config.plans).forEach((plan) => {
+      if (!Number.isInteger(plan.price) || plan.price < 0) {
+        throw new Error("月卡价格必须为非负整数");
+      }
+      if (plan.enabled && plan.price <= 0) {
+        throw new Error("启用月卡时价格必须大于0");
+      }
+    });
   }
 
   private async decorateDecomposeConfig(config: DecomposeConfig) {
@@ -2452,6 +2599,18 @@ export class AdminService {
     return labels[status] || "未知";
   }
 
+  private getMonthlyCardPurchaseStatusLabel(
+    status: MonthlyCardPurchaseStatus,
+  ) {
+    const labels: Record<MonthlyCardPurchaseStatus, string> = {
+      pending: "处理中",
+      success: "成功",
+      failed: "失败",
+      local_failed: "开通失败",
+    };
+    return labels[status] || "未知";
+  }
+
   private getRechargeThirdPartyMessage(response: unknown) {
     if (!response || typeof response !== "object") {
       return "-";
@@ -2500,6 +2659,13 @@ export class AdminService {
       throw new Error("充值记录仓库未初始化");
     }
     return this.rechargeRecordRepository;
+  }
+
+  private mustMonthlyCardPurchaseRecordRepository() {
+    if (!this.monthlyCardPurchaseRecordRepository) {
+      throw new Error("月卡记录仓库未初始化");
+    }
+    return this.monthlyCardPurchaseRecordRepository;
   }
 
   private mustLaunchActivityConfigRepository() {

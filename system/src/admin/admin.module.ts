@@ -26,6 +26,7 @@ import { SeasonShopItem } from "src/entity/seasonShopItem.entity";
 import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
 import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
+import { MonthlyCardPurchaseRecord } from "src/entity/monthlyCardPurchaseRecord.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { TradeConfig } from "src/entity/tradeConfig.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
@@ -62,6 +63,7 @@ import { AdminService } from "./admin.service";
       SeasonShopUsage,
       LaunchActivityConfig,
       LaunchActivityClaim,
+      MonthlyCardPurchaseRecord,
       ExchangeShopItem,
       ExchangeShopUsage,
       TradeListing,

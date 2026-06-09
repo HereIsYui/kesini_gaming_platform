@@ -6,6 +6,8 @@ import { CardItem } from "src/entity/card.entity";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { DropItem } from "src/entity/drop.entity";
+import { MonthlyCardPurchaseRecord } from "src/entity/monthlyCardPurchaseRecord.entity";
+import { MonthlyCardSubscription } from "src/entity/monthlyCardSubscription.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
 import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
@@ -25,6 +27,8 @@ import { VipController } from "./vip.controller";
       VipDailyClaim,
       DropItem,
       CardItem,
+      MonthlyCardSubscription,
+      MonthlyCardPurchaseRecord,
     ]),
     AuthModule,
     PointLedgerModule,
