@@ -137,6 +137,10 @@ describe("MonthlyCardService", () => {
       ice_price: 0,
       platinum_enabled: false,
       platinum_price: 0,
+      cards: expect.arrayContaining([
+        expect.objectContaining({ cardType: "ice", label: "星穹月卡" }),
+        expect.objectContaining({ cardType: "platinum", label: "星耀月卡" }),
+      ]),
     });
   });
 
@@ -148,7 +152,7 @@ describe("MonthlyCardService", () => {
     ).rejects.toThrow("月卡暂未开启");
   });
 
-  it("购买小冰月卡开通VIP3", async () => {
+  it("购买星穹月卡开通VIP3", async () => {
     const { service, repositories, rechargeService } = createService({
       config: {
         enabled: true,
@@ -171,7 +175,7 @@ describe("MonthlyCardService", () => {
     expect(rechargeService.deductFishpiPoints).toHaveBeenCalledWith(
       "u1",
       30,
-      "小冰月卡购买",
+      "星穹月卡购买",
     );
     expect(repositories.get(MonthlyCardSubscription).rows).toEqual([
       expect.objectContaining({
@@ -209,7 +213,36 @@ describe("MonthlyCardService", () => {
     });
   });
 
-  it("小冰白金VIP显示永久月卡", async () => {
+  it("小冰VIP只显示星穹月卡永久", async () => {
+    const { service } = createService({
+      rechargeService: {
+        getGameVipStatus: jest.fn().mockResolvedValue({
+          checked: true,
+          active: true,
+          tier: 3,
+          label: "VIP3",
+          sources: ["badge"],
+          sourceLabels: ["小冰"],
+          sourceTiers: { fishpi: 0, badge: 3, monthly_card: 0 },
+          sweepLimit: 20,
+          tradeFeeDiscount: 0.06,
+          dailyRewards: { points: 25, items: [] },
+          dailyClaimed: false,
+          dailyClaimDate: "2026-06-09",
+        }),
+      },
+    });
+
+    const result = await service.getMyStatus("u1");
+    expect(result.cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cardType: "ice", permanent: true }),
+        expect.objectContaining({ cardType: "platinum", permanent: false }),
+      ]),
+    );
+  });
+
+  it("小冰白金VIP只显示星耀月卡永久", async () => {
     const { service } = createService({
       rechargeService: {
         getGameVipStatus: jest.fn().mockResolvedValue({
@@ -232,8 +265,37 @@ describe("MonthlyCardService", () => {
     const result = await service.getMyStatus("u1");
     expect(result.cards).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ cardType: "ice", permanent: true }),
+        expect.objectContaining({ cardType: "ice", permanent: false }),
         expect.objectContaining({ cardType: "platinum", permanent: true }),
+      ]),
+    );
+  });
+
+  it("鱼排VIP不显示永久月卡", async () => {
+    const { service } = createService({
+      rechargeService: {
+        getGameVipStatus: jest.fn().mockResolvedValue({
+          checked: true,
+          active: true,
+          tier: 4,
+          label: "VIP4",
+          sources: ["fishpi"],
+          sourceLabels: ["鱼排"],
+          sourceTiers: { fishpi: 4, badge: 0, monthly_card: 0 },
+          sweepLimit: 50,
+          tradeFeeDiscount: 0.08,
+          dailyRewards: { points: 40, items: [] },
+          dailyClaimed: false,
+          dailyClaimDate: "2026-06-09",
+        }),
+      },
+    });
+
+    const result = await service.getMyStatus("u1");
+    expect(result.cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cardType: "ice", permanent: false }),
+        expect.objectContaining({ cardType: "platinum", permanent: false }),
       ]),
     );
   });

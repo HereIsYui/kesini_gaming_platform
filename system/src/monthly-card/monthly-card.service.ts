@@ -220,11 +220,13 @@ export class MonthlyCardService {
     const subscriptionMap = new Map(
       subscriptions.map((subscription) => [subscription.card_type, subscription]),
     );
-    const permanentTier = Number(gameVip.sourceTiers?.badge || 0);
+    const badgeTier = Number(gameVip.sourceTiers?.badge || 0);
     return toMonthlyCardPlanView(config).map((plan) => {
       const subscription = subscriptionMap.get(plan.cardType);
       const active = isMonthlyCardActive(subscription);
-      const permanent = permanentTier >= plan.vipLevel;
+      const permanent =
+        (plan.cardType === "ice" && badgeTier === 3) ||
+        (plan.cardType === "platinum" && badgeTier >= 4);
       return {
         ...plan,
         active,

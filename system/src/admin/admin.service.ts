@@ -2142,7 +2142,7 @@ export class AdminService {
     return {
       ...record,
       cardTypeLabel:
-        record.card_type === "platinum" ? "白金月卡" : "小冰月卡",
+        record.card_type === "platinum" ? "星耀月卡" : "星穹月卡",
       statusLabel: this.getMonthlyCardPurchaseStatusLabel(record.status),
       thirdPartyMsg: this.getRechargeThirdPartyMessage(
         record.third_party_response,

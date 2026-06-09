@@ -42,13 +42,13 @@ export const DEFAULT_MONTHLY_CARD_CONFIG: MonthlyCardConfig = {
       enabled: false,
       price: 0,
       vipLevel: 3,
-      label: "小冰月卡",
+      label: "星穹月卡",
     },
     platinum: {
       enabled: false,
       price: 0,
       vipLevel: 4,
-      label: "白金月卡",
+      label: "星耀月卡",
     },
   },
 };

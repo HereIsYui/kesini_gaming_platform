@@ -19,9 +19,6 @@ const {
 type CurrentMonthlyCardView = {
   label: string;
   expiry: string;
-  tier: number;
-  permanent: boolean;
-  sourcePriority: number;
 };
 
 const monthlyCards = computed<MonthlyCardStatusCard[]>(
@@ -31,55 +28,67 @@ const monthlyConfig = computed(() => monthlyCardStatus.value?.config || null);
 const monthlyGameVip = computed<GameVipStatus | null>(
   () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
 );
-const currentVipLabel = computed(
-  () => monthlyGameVip.value?.label || "未同步",
+const badgeVipTier = computed(() =>
+  Math.max(
+    sourceTier(monthlyCardStatus.value?.gameVip, "badge"),
+    sourceTier(fishpiPoint.value?.gameVip, "badge"),
+  ),
+);
+const fishpiVipTier = computed(() =>
+  Math.max(
+    sourceTier(monthlyCardStatus.value?.gameVip, "fishpi"),
+    sourceTier(fishpiPoint.value?.gameVip, "fishpi"),
+  ),
 );
 const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
-  const badgeTier = Math.max(
-    Number(monthlyCardStatus.value?.gameVip?.sourceTiers?.badge || 0),
-    Number(fishpiPoint.value?.gameVip?.sourceTiers?.badge || 0),
-  );
-  const candidates = monthlyCards.value
-    .filter((card) => card.active || card.permanent)
-    .map((card) => ({
-      label: card.label,
-      expiry: expiryLabel(card),
-      tier: Number(card.vipLevel || 0),
-      permanent: card.permanent === true,
-      sourcePriority: 1,
-    }));
+  const activeCard = monthlyCards.value
+    .filter((card) => card.active)
+    .sort(
+      (left, right) =>
+        Number(right.vipLevel || 0) - Number(left.vipLevel || 0),
+    )[0];
 
-  if (badgeTier >= 3) {
-    candidates.push({
-      label: badgeTier >= 4 ? "小冰白金VIP" : "小冰VIP",
-      expiry: "永久",
-      tier: badgeTier,
-      permanent: true,
-      sourcePriority: 2,
-    });
+  if (activeCard) {
+    return {
+      label: activeCard.label,
+      expiry: activeCard.expiresAt ? formatDate(activeCard.expiresAt) : "生效中",
+    };
   }
 
-  return (
-    candidates.sort((left, right) => {
-      const levelDiff = right.tier - left.tier;
-      if (levelDiff !== 0) {
-        return levelDiff;
-      }
-      const permanentDiff = Number(right.permanent) - Number(left.permanent);
-      if (permanentDiff !== 0) {
-        return permanentDiff;
-      }
-      return right.sourcePriority - left.sourcePriority;
-    })[0] || null
-  );
+  const badgeTier = badgeVipTier.value;
+  if (badgeTier >= 3) {
+    return {
+      label: badgeTier >= 4 ? "星耀月卡" : "星穹月卡",
+      expiry: "永久",
+    };
+  }
+
+  return null;
 });
 const currentMonthlyCardLabel = computed(
   () => currentMonthlyCard.value?.label || "未开通",
 );
-const monthlyCardExpiryLabel = computed(() =>
-  currentMonthlyCard.value?.expiry || "未开通",
+const monthlyCardExpiryLabel = computed(
+  () => currentMonthlyCard.value?.expiry || "未开通",
 );
-
+const legacyVipLabel = computed(() => {
+  if (badgeVipTier.value >= 4) {
+    return "小冰白金VIP";
+  }
+  if (badgeVipTier.value >= 3) {
+    return "小冰VIP";
+  }
+  return "--";
+});
+const fishpiVipLabel = computed(() => {
+  if (fishpiVipTier.value > 0) {
+    return `VIP${fishpiVipTier.value}`;
+  }
+  if (monthlyGameVip.value?.checked) {
+    return "非VIP";
+  }
+  return "未同步";
+});
 onMounted(() => {
   if (isAuthed.value && activeSection.value === "monthlyCard") {
     loadMonthlyCardStatus();
@@ -106,6 +115,13 @@ function benefitRows(card: MonthlyCardStatusCard) {
     card.vipLevel >= 4 ? "扫荡 50 次" : "扫荡 20 次",
     card.vipLevel >= 4 ? "礼包 VIP4" : "礼包 VIP3",
   ];
+}
+
+function sourceTier(
+  vip: GameVipStatus | null | undefined,
+  source: "fishpi" | "badge" | "monthly_card",
+) {
+  return Number(vip?.sourceTiers?.[source] || 0);
 }
 </script>
 
@@ -150,8 +166,20 @@ function benefitRows(card: MonthlyCardStatusCard) {
         <strong>{{ monthlyCardExpiryLabel }}</strong>
       </article>
       <article>
-        <small>当前VIP</small>
-        <strong>{{ currentVipLabel }}</strong>
+        <small>权益延续</small>
+        <strong :class="{ muted: legacyVipLabel === '--' }">
+          {{ legacyVipLabel }}
+        </strong>
+      </article>
+      <article>
+        <small>鱼排VIP</small>
+        <strong
+          :class="{
+            muted: fishpiVipLabel === '非VIP' || fishpiVipLabel === '未同步',
+          }"
+        >
+          {{ fishpiVipLabel }}
+        </strong>
       </article>
     </div>
 

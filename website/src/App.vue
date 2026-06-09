@@ -831,6 +831,39 @@ const gameVipLabel = computed(() => {
   }
   return "--";
 });
+const gameVipSourceTiers = computed(
+  () => fishpiPoint.value?.gameVip?.sourceTiers || {},
+);
+const monthlyVipLabel = computed(() => {
+  const tier = Number(gameVipSourceTiers.value.monthly_card || 0);
+  if (tier >= 4) {
+    return "星耀月卡";
+  }
+  if (tier >= 3) {
+    return "星穹月卡";
+  }
+  return "--";
+});
+const fishpiVipSourceLabel = computed(() => {
+  const tier = Number(gameVipSourceTiers.value.fishpi || 0);
+  if (tier > 0) {
+    return `VIP${tier}`;
+  }
+  if (fishpiPoint.value?.gameVip?.checked || fishpiPointError.value) {
+    return "非VIP";
+  }
+  return "--";
+});
+const legacyVipLabel = computed(() => {
+  const tier = Number(gameVipSourceTiers.value.badge || 0);
+  if (tier >= 4) {
+    return "小冰白金VIP";
+  }
+  if (tier >= 3) {
+    return "小冰VIP";
+  }
+  return "--";
+});
 const gameVipMuted = computed(() => {
   const vip = fishpiPoint.value?.gameVip;
   return !vip?.checked || !vip.active;
@@ -1602,7 +1635,8 @@ async function claimVipDailyPack() {
   }
   const confirmed = await askConfirm({
     title: "领取礼包",
-    message: vipDailyRewardLabel.value,
+    message: `${gameVipLabel.value} 礼包`,
+    details: [vipDailyRewardLabel.value],
     confirmText: "领取",
   });
   if (!confirmed) {
@@ -3626,6 +3660,9 @@ const appContext = {
   playerStatusLabel,
   fishpiPointLabel,
   gameVipLabel,
+  monthlyVipLabel,
+  fishpiVipSourceLabel,
+  legacyVipLabel,
   gameVipMuted,
   vipDailyRewardLabel,
   vipDailyCanClaim,
@@ -3964,6 +4001,9 @@ provide(APP_CONTEXT_KEY, appContext);
       :fishpi-point-label="fishpiPointLabel"
       :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
       :game-vip-label="gameVipLabel"
+      :monthly-vip-label="monthlyVipLabel"
+      :fishpi-vip-source-label="fishpiVipSourceLabel"
+      :legacy-vip-label="legacyVipLabel"
       :game-vip-muted="gameVipMuted"
       :vip-daily-can-claim="vipDailyCanClaim"
       :vip-daily-claim-busy="busy.vipDaily"
