@@ -25,7 +25,7 @@ const props = defineProps<{
   fishpiPointMuted: boolean;
   gameVipLabel: string;
   gameVipMuted: boolean;
-  vipDailyClaimed: boolean;
+  vipDailyCanClaim: boolean;
   vipDailyClaimBusy: boolean;
   userMenuOpen: boolean;
   userMenuHoverPaused: boolean;
@@ -149,21 +149,20 @@ const emit = defineEmits<{
               </div>
               <div class="user-menu-balance">
                 <span>游戏VIP</span>
-                <strong :class="{ muted: props.gameVipMuted }">
-                  {{ props.gameVipLabel }}
-                </strong>
-                <button
-                  class="user-menu-mini-action"
-                  type="button"
-                  :disabled="
-                    props.gameVipMuted ||
-                    props.vipDailyClaimed ||
-                    props.vipDailyClaimBusy
-                  "
-                  @click.stop="emit('claim-vip-daily')"
-                >
-                  {{ props.vipDailyClaimed ? "已领" : "领取" }}
-                </button>
+                <div class="user-menu-vip-line">
+                  <strong :class="{ muted: props.gameVipMuted }">
+                    {{ props.gameVipLabel }}
+                  </strong>
+                  <button
+                    v-if="props.vipDailyCanClaim"
+                    class="user-menu-mini-action"
+                    type="button"
+                    :disabled="props.vipDailyClaimBusy"
+                    @click.stop="emit('claim-vip-daily')"
+                  >
+                    领取
+                  </button>
+                </div>
               </div>
             </div>
             <nav class="user-menu-shortcuts" aria-label="快捷入口">

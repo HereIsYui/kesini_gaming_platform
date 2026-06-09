@@ -838,6 +838,19 @@ const gameVipMuted = computed(() => {
 const vipDailyClaimed = computed(
   () => fishpiPoint.value?.gameVip?.dailyClaimed === true,
 );
+const vipDailyRewardLabel = computed(() => {
+  if (busy.fishpiPoint && !fishpiPoint.value) {
+    return "同步中";
+  }
+  const vip = fishpiPoint.value?.gameVip;
+  if (!vip?.checked || !vip.active) {
+    return "--";
+  }
+  return formatRewards(vip.dailyRewards);
+});
+const vipDailyCanClaim = computed(
+  () => !gameVipMuted.value && !vipDailyClaimed.value,
+);
 const friendsSocial = useFriendsSocial({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "friends",
@@ -1587,13 +1600,21 @@ async function claimVipDailyPack() {
     notify("info", "今日已领");
     return;
   }
+  const confirmed = await askConfirm({
+    title: "领取礼包",
+    message: vipDailyRewardLabel.value,
+    confirmText: "领取",
+  });
+  if (!confirmed) {
+    return;
+  }
   busy.vipDaily = true;
   try {
     const data = await request<VipDailyClaimResponse>("/vip/daily-claim", {
       method: "POST",
     });
     syncCurrentUserPoint(data.pointAfter);
-    notify("success", "已领取");
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
     await refreshCardState({
       stats: true,
       fishpiPoint: true,
@@ -3606,6 +3627,8 @@ const appContext = {
   fishpiPointLabel,
   gameVipLabel,
   gameVipMuted,
+  vipDailyRewardLabel,
+  vipDailyCanClaim,
   vipDailyClaimed,
   profileCardCountRows,
   profileShowcase,
@@ -3942,7 +3965,7 @@ provide(APP_CONTEXT_KEY, appContext);
       :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
       :game-vip-label="gameVipLabel"
       :game-vip-muted="gameVipMuted"
-      :vip-daily-claimed="vipDailyClaimed"
+      :vip-daily-can-claim="vipDailyCanClaim"
       :vip-daily-claim-busy="busy.vipDaily"
       :user-menu-open="userMenuOpen"
       :user-menu-hover-paused="userMenuHoverPaused"

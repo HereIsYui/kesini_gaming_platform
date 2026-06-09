@@ -571,7 +571,21 @@ option {
   color: var(--text-soft);
 }
 
+.user-menu-vip-line {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.user-menu-vip-line strong {
+  min-width: 0;
+}
+
 .user-menu-mini-action {
+  flex: 0 0 auto;
   min-height: 22px;
   border: 1px solid rgba(150, 242, 255, 0.28);
   border-radius: calc(var(--radius) - 3px);
@@ -895,6 +909,7 @@ option {
 .messages-panel,
 .guild-panel,
 .points-panel,
+.monthly-card-panel,
 .leaderboard-panel,
 .task-panel,
 .season-panel,
@@ -3038,7 +3053,7 @@ h3 {
 
 .monthly-card-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -7361,6 +7376,7 @@ h3 {
   .messages-panel,
   .guild-panel,
   .settings-panel,
+  .monthly-card-panel,
   .trade-panel,
   .redeem-panel,
   .shop-panel,

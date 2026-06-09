@@ -2,25 +2,82 @@
 import { computed, onMounted } from "vue";
 import { CalendarDays, Gem, RefreshCw, ShieldCheck } from "@lucide/vue";
 import { useAppContext } from "../composables/useAppContext";
-import type { MonthlyCardStatusCard } from "../types";
+import type { GameVipStatus, MonthlyCardStatusCard } from "../types";
 
 const {
   activeSection,
   isAuthed,
   monthlyCardStatus,
   monthlyCardError,
+  fishpiPoint,
   busy,
   formatDate,
   loadMonthlyCardStatus,
   purchaseMonthlyCard,
 } = useAppContext() as Record<string, any>;
 
+type CurrentMonthlyCardView = {
+  label: string;
+  expiry: string;
+  tier: number;
+  permanent: boolean;
+  sourcePriority: number;
+};
+
 const monthlyCards = computed<MonthlyCardStatusCard[]>(
   () => monthlyCardStatus.value?.cards || [],
 );
 const monthlyConfig = computed(() => monthlyCardStatus.value?.config || null);
+const monthlyGameVip = computed<GameVipStatus | null>(
+  () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
+);
 const currentVipLabel = computed(
-  () => monthlyCardStatus.value?.gameVip?.label || "未同步",
+  () => monthlyGameVip.value?.label || "未同步",
+);
+const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
+  const badgeTier = Math.max(
+    Number(monthlyCardStatus.value?.gameVip?.sourceTiers?.badge || 0),
+    Number(fishpiPoint.value?.gameVip?.sourceTiers?.badge || 0),
+  );
+  const candidates = monthlyCards.value
+    .filter((card) => card.active || card.permanent)
+    .map((card) => ({
+      label: card.label,
+      expiry: expiryLabel(card),
+      tier: Number(card.vipLevel || 0),
+      permanent: card.permanent === true,
+      sourcePriority: 1,
+    }));
+
+  if (badgeTier >= 3) {
+    candidates.push({
+      label: badgeTier >= 4 ? "小冰白金VIP" : "小冰VIP",
+      expiry: "永久",
+      tier: badgeTier,
+      permanent: true,
+      sourcePriority: 2,
+    });
+  }
+
+  return (
+    candidates.sort((left, right) => {
+      const levelDiff = right.tier - left.tier;
+      if (levelDiff !== 0) {
+        return levelDiff;
+      }
+      const permanentDiff = Number(right.permanent) - Number(left.permanent);
+      if (permanentDiff !== 0) {
+        return permanentDiff;
+      }
+      return right.sourcePriority - left.sourcePriority;
+    })[0] || null
+  );
+});
+const currentMonthlyCardLabel = computed(
+  () => currentMonthlyCard.value?.label || "未开通",
+);
+const monthlyCardExpiryLabel = computed(() =>
+  currentMonthlyCard.value?.expiry || "未开通",
 );
 
 onMounted(() => {
@@ -85,12 +142,16 @@ function benefitRows(card: MonthlyCardStatusCard) {
   <div v-else class="monthly-card-content">
     <div class="monthly-card-summary">
       <article>
-        <small>当前VIP</small>
-        <strong>{{ currentVipLabel }}</strong>
+        <small>当前月卡</small>
+        <strong>{{ currentMonthlyCardLabel }}</strong>
       </article>
       <article>
-        <small>月卡状态</small>
-        <strong>{{ monthlyConfig?.enabled ? "已开启" : "未开启" }}</strong>
+        <small>到期时间</small>
+        <strong>{{ monthlyCardExpiryLabel }}</strong>
+      </article>
+      <article>
+        <small>当前VIP</small>
+        <strong>{{ currentVipLabel }}</strong>
       </article>
     </div>
 
