@@ -192,6 +192,140 @@ describe("RechargeService", () => {
     });
   });
 
+  it("鱼排会员state有效时缺少过期时间仍返回VIP", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { lvCode: "VIP1_MONTH", state: 1 } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      vip: {
+        checked: true,
+        active: true,
+        levelCode: "VIP1_MONTH",
+        expiresAt: null,
+      },
+    });
+  });
+
+  it("鱼排会员兼容数字过期时间", async () => {
+    const expireTime = Date.now() + 86400_000;
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { levelCode: "VIP3_YEAR", state: 1, expireTime } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      vip: {
+        checked: true,
+        active: true,
+        levelCode: "VIP3_YEAR",
+        expiresAt: new Date(expireTime).toISOString(),
+      },
+    });
+  });
+
+  it("鱼排会员直接查询非VIP时从配置列表兜底", async () => {
+    const expiresAt = new Date(Date.now() + 86400_000).toISOString();
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { lvCode: "", state: 0 } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: [
+            {
+              userId: "123456",
+              userName: "fish-user",
+              lvCode: "VIP2_MONTH",
+              expiresAt,
+            },
+          ],
+        },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      vip: {
+        checked: true,
+        active: true,
+        levelCode: "VIP2_MONTH",
+        expiresAt,
+      },
+    });
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+      3,
+      "https://fishpi.cn/api/memberships/configs?apiKey=api-key",
+      expect.any(Object),
+    );
+  });
+
   it("鱼排会员过期时返回非VIP", async () => {
     const expiresAt = new Date(Date.now() - 86400_000).toISOString();
     const userRepository = createRepository({

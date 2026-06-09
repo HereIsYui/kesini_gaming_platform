@@ -14,6 +14,8 @@ import { AchievementService } from "src/achievement/achievement.service";
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
 const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
 const FISHPI_MEMBERSHIP_ENDPOINT = "https://fishpi.cn/api/membership";
+const FISHPI_MEMBERSHIPS_CONFIGS_ENDPOINT =
+  "https://fishpi.cn/api/memberships/configs";
 const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const FISHPI_HEADERS = {
   "User-Agent": "Kesini-Gacha-Platform/1.0",
@@ -80,7 +82,7 @@ export class RechargeService {
     return {
       userName: fishpiUserName,
       point: this.extractFishpiPoint(data),
-      vip: await this.resolveFishpiVip(user.uid, config),
+      vip: await this.resolveFishpiVip(user, config),
     };
   }
 
@@ -91,7 +93,7 @@ export class RechargeService {
       throw new Error("用户不存在");
     }
     const config = await this.ensureConfig();
-    return this.resolveFishpiVip(user.uid, config);
+    return this.resolveFishpiVip(user, config);
   }
 
   async recharge(uid: string, rawAmount: number, rawRequestId?: string) {
@@ -306,19 +308,29 @@ export class RechargeService {
   }
 
   private async resolveFishpiVip(
-    userId: string,
+    user: User,
     config: RechargeConfig,
   ): Promise<FishpiVipView> {
     const apiKey = String(config.fishpi_api_key || "").trim();
     if (!apiKey) {
       return this.uncheckedFishpiVip();
     }
-    try {
-      const data = await this.callFishpiMembership(userId, apiKey);
-      return this.extractFishpiVip(data);
-    } catch {
+    const userId = String(user.uid || "").trim();
+    if (!userId) {
       return this.uncheckedFishpiVip();
     }
+    let directResult: FishpiVipView | null = null;
+    try {
+      const data = await this.callFishpiMembership(userId, apiKey);
+      directResult = this.extractFishpiVip(data);
+      if (directResult.active) {
+        return directResult;
+      }
+    } catch {
+      directResult = null;
+    }
+    const configResult = await this.resolveFishpiVipFromConfigs(user, apiKey);
+    return configResult || directResult || this.uncheckedFishpiVip();
   }
 
   private async callFishpiMembership(userId: string, apiKey: string) {
@@ -340,29 +352,175 @@ export class RechargeService {
     return response.data;
   }
 
+  private async resolveFishpiVipFromConfigs(
+    user: User,
+    apiKey: string,
+  ): Promise<FishpiVipView | null> {
+    try {
+      const data = await this.callFishpiMembershipConfigs(apiKey);
+      const entry = this.findFishpiVipConfig(data, user);
+      return entry
+        ? this.extractFishpiVip({ data: { state: 1, ...entry } })
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async callFishpiMembershipConfigs(apiKey: string) {
+    const endpoint = `${FISHPI_MEMBERSHIPS_CONFIGS_ENDPOINT}?apiKey=${encodeURIComponent(
+      apiKey,
+    )}`;
+    const response = await axios.get(endpoint, {
+      timeout: 10000,
+      headers: FISHPI_HEADERS,
+    });
+    if (
+      response.data?.code !== undefined &&
+      !this.isFishpiSuccess(response.data)
+    ) {
+      throw new Error(
+        this.getFishpiErrorMessage(response.data, "鱼排会员查询失败"),
+      );
+    }
+    return response.data;
+  }
+
+  private findFishpiVipConfig(data: any, user: User) {
+    const identifiers = new Set(
+      [user.uid, user.name]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    if (identifiers.size === 0) {
+      return null;
+    }
+    return (
+      this.toFishpiArray(data?.data ?? data).find((entry) =>
+        this.collectFishpiUserIdentifiers(entry).some((value) =>
+          identifiers.has(value),
+        ),
+      ) || null
+    );
+  }
+
+  private toFishpiArray(value: any): any[] {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    const nested =
+      value?.list ?? value?.records ?? value?.items ?? value?.configs ?? [];
+    return Array.isArray(nested) ? nested : [];
+  }
+
+  private collectFishpiUserIdentifiers(entry: any): string[] {
+    const sources = [entry, entry?.user, entry?.userInfo].filter(Boolean);
+    const keys = [
+      "oId",
+      "oid",
+      "userId",
+      "userID",
+      "uid",
+      "userName",
+      "username",
+      "name",
+      "userOId",
+      "userOid",
+      "user_oId",
+      "user_oid",
+    ];
+    return sources
+      .flatMap((source) => keys.map((key) => source?.[key]))
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+  }
+
   private extractFishpiVip(data: any): FishpiVipView {
     const payload = data?.data ?? data ?? {};
-    const expiresAt = this.normalizeFishpiVipExpiresAt(payload?.expiresAt);
-    const state = Number(payload?.state ?? 0);
+    const levelCode = String(
+      payload?.lvCode ??
+        payload?.levelCode ??
+        payload?.level_code ??
+        payload?.vipLevel ??
+        payload?.vip_level ??
+        "",
+    );
+    const expiresAt = this.normalizeFishpiVipExpiresAt(
+      payload?.expiresAt ??
+        payload?.expireAt ??
+        payload?.expiredAt ??
+        payload?.expires_at ??
+        payload?.expire_at ??
+        payload?.expired_at ??
+        payload?.expirationTime ??
+        payload?.expireTime ??
+        payload?.expiredTime ??
+        payload?.endTime ??
+        payload?.endAt ??
+        payload?.validUntil,
+    );
+    const stateActive = this.isFishpiVipStateActive(payload?.state, levelCode);
     return {
       checked: true,
-      active: state !== 0 && this.isFutureFishpiVipExpiry(expiresAt),
-      levelCode: String(payload?.lvCode || ""),
+      active: stateActive && !this.isFishpiVipExpired(expiresAt),
+      levelCode,
       expiresAt,
     };
   }
 
   private normalizeFishpiVipExpiresAt(value: unknown): string | null {
+    if (value instanceof Date) {
+      return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+    }
+    if (typeof value === "number") {
+      return this.normalizeFishpiVipTimestamp(value);
+    }
     const text = String(value || "").trim();
-    return text ? text : null;
+    if (!text) {
+      return null;
+    }
+    const timestamp = Number(text);
+    if (Number.isFinite(timestamp)) {
+      return this.normalizeFishpiVipTimestamp(timestamp);
+    }
+    const parsed = Date.parse(text);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : text;
   }
 
-  private isFutureFishpiVipExpiry(expiresAt: string | null) {
+  private normalizeFishpiVipTimestamp(value: number): string | null {
+    const timestamp = value < 10_000_000_000 ? value * 1000 : value;
+    const date = new Date(timestamp);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  }
+
+  private isFishpiVipStateActive(state: unknown, levelCode: string) {
+    if (state === undefined || state === null || state === "") {
+      return Boolean(levelCode);
+    }
+    if (typeof state === "boolean") {
+      return state;
+    }
+    if (typeof state === "number") {
+      return state !== 0;
+    }
+    const text = String(state).trim().toLowerCase();
+    if (!text) {
+      return Boolean(levelCode);
+    }
+    if (
+      ["0", "false", "inactive", "expired", "none", "normal"].includes(text)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private isFishpiVipExpired(expiresAt: string | null) {
     if (!expiresAt) {
       return false;
     }
     const time = Date.parse(expiresAt);
-    return Number.isFinite(time) && time > Date.now();
+    return Number.isFinite(time) && time <= Date.now();
   }
 
   private uncheckedFishpiVip(): FishpiVipView {
