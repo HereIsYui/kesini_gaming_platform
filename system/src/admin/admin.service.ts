@@ -64,6 +64,15 @@ import {
   DecomposeConfig,
   normalizeDecomposeConfig,
 } from "src/card/decompose-config";
+import {
+  flattenGameVipConfig,
+  GAME_VIP_CONFIG_KEY,
+  GAME_VIP_FRAGMENT_DEFAULTS,
+  GAME_VIP_TIERS,
+  GameVipConfig,
+  GameVipTierKey,
+  normalizeGameVipConfig,
+} from "src/vip/game-vip";
 
 export interface PageQuery {
   page?: number;
@@ -1343,6 +1352,29 @@ export class AdminService {
     return this.decorateDecomposeConfig(config);
   }
 
+  async getVipConfig() {
+    return flattenGameVipConfig(await this.readGameVipConfig());
+  }
+
+  async updateVipConfig(body: unknown) {
+    const repository = this.mustSystemConfigRepository();
+    const config = normalizeGameVipConfig(body);
+    await this.assertVipConfig(config);
+    let row = await repository.findOne({
+      where: { key: GAME_VIP_CONFIG_KEY },
+    });
+    if (!row) {
+      row = repository.create({
+        key: GAME_VIP_CONFIG_KEY,
+        description: "VIP游戏福利配置",
+      });
+    }
+    row.value = JSON.stringify(config);
+    row.description = "VIP游戏福利配置";
+    await repository.save(row);
+    return flattenGameVipConfig(config);
+  }
+
   async getRechargeConfig() {
     const config = await this.ensureRechargeConfig();
     return this.toRechargeConfigView(config);
@@ -2118,6 +2150,59 @@ export class AdminService {
       return normalizeDecomposeConfig(JSON.parse(row.value));
     } catch {
       return normalizeDecomposeConfig(null);
+    }
+  }
+
+  private async readGameVipConfig(): Promise<GameVipConfig> {
+    const row = await this.mustSystemConfigRepository().findOne({
+      where: { key: GAME_VIP_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return this.withDefaultVipFragments(normalizeGameVipConfig(null));
+    }
+    try {
+      return normalizeGameVipConfig(JSON.parse(row.value));
+    } catch {
+      return normalizeGameVipConfig(null);
+    }
+  }
+
+  private async withDefaultVipFragments(
+    config: GameVipConfig,
+  ): Promise<GameVipConfig> {
+    const items = await this.dropRepository.find({
+      where: { drop_type: 0, disabled: false } as any,
+    });
+    const itemMap = new Map(
+      items.map((item) => [String(item.drop_name || "").trim(), item]),
+    );
+    GAME_VIP_TIERS.forEach((tier) => {
+      const key = String(tier) as GameVipTierKey;
+      config.tiers[key].dailyRewards.items = GAME_VIP_FRAGMENT_DEFAULTS[key]
+        .map((item) => {
+          const dropItem = itemMap.get(item.name);
+          return dropItem
+            ? {
+                itemId: Number(dropItem.id),
+                num: item.num,
+              }
+            : null;
+        })
+        .filter(
+          (item): item is { itemId: number; num: number } => item !== null,
+        );
+    });
+    return config;
+  }
+
+  private async assertVipConfig(config: GameVipConfig) {
+    for (const tier of GAME_VIP_TIERS) {
+      const key = String(tier) as GameVipTierKey;
+      const benefit = config.tiers[key];
+      await this.normalizeRewards(
+        benefit.dailyRewards,
+        `VIP${tier}礼包不能为空`,
+      );
     }
   }
 

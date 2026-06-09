@@ -17,7 +17,7 @@ function createRepository(overrides: Record<string, any> = {}) {
   };
 }
 
-function createService(repositories: Map<any, any>) {
+function createService(repositories: Map<any, any>, rechargeService?: any) {
   const manager = {
     getRepository: jest.fn((entity) => repositories.get(entity)),
   };
@@ -26,7 +26,12 @@ function createService(repositories: Map<any, any>) {
     getRepository: jest.fn((entity) => repositories.get(entity)),
   };
   return {
-    service: new TradeService(dataSource as any),
+    service: new TradeService(
+      dataSource as any,
+      undefined,
+      undefined,
+      rechargeService,
+    ),
     dataSource,
   };
 }
@@ -716,6 +721,101 @@ describe("TradeService", () => {
     );
     expect(listingRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1, status: "sold", buyer_uid: "buyer" }),
+    );
+  });
+
+  it("VIP挂售会按等级减免手续费率", async () => {
+    const listingRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn(async (value) => ({ id: 1, createdAt: new Date(), ...value })),
+    });
+    const rechargeService = {
+      getGameVipStatus: jest.fn().mockResolvedValue({
+        checked: true,
+        active: true,
+        tier: 3,
+        label: "VIP3",
+        tradeFeeDiscount: 0.06,
+      }),
+    };
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          TradeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              enabled: true,
+              fee_rate: 0.1,
+              min_price: 1,
+              max_price: 999999,
+            }),
+          }),
+        ],
+        [TradeListing, listingRepository],
+        [
+          UserCard,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              uid: "seller",
+              card_uuid: "card-uuid",
+              card_id: "7",
+              card_level: "SSR",
+              can_sell: true,
+              delete_flag: false,
+            }),
+            find: jest.fn().mockResolvedValue([
+              {
+                uid: "seller",
+                card_uuid: "card-uuid",
+                card_id: "7",
+                card_level: "SSR",
+                delete_flag: false,
+              },
+              {
+                uid: "seller",
+                card_uuid: "reserve-card",
+                card_id: "7",
+                card_level: "SSR",
+                delete_flag: false,
+              },
+            ]),
+          }),
+        ],
+        [
+          CardItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 7,
+              card_name: "测试卡",
+              card_desc: "描述",
+              card_type: 0,
+              card_level: "SSR",
+              pool: 2,
+            }),
+          }),
+        ],
+        [
+          PoolInfo,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({ id: 2, pool_name: "测试池" }),
+          }),
+        ],
+      ]),
+      rechargeService,
+    );
+
+    await expect(service.createListing("seller", "card-uuid", 100)).resolves.toEqual(
+      expect.objectContaining({
+        feeRate: 0.04,
+        feeAmount: 4,
+        sellerIncome: 96,
+      }),
+    );
+    expect(listingRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fee_rate: 0.04,
+      }),
     );
   });
 

@@ -46,6 +46,7 @@ import { Announcement } from "./entity/announcement.entity";
 import { PlayerMessage } from "./entity/playerMessage.entity";
 import { PlayerMessageRead } from "./entity/playerMessageRead.entity";
 import { OpenIdNonce } from "./entity/openIdNonce.entity";
+import { VipDailyClaim } from "./entity/vipDailyClaim.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -123,6 +124,7 @@ import { PlayerMessageModule } from "./player-message/player-message.module";
       PlayerMessage,
       PlayerMessageRead,
       OpenIdNonce,
+      VipDailyClaim,
     ]),
     ConfigurationModule,
     SiteConfigModule,

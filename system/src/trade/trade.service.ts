@@ -13,6 +13,7 @@ import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
+import { RechargeService } from "src/recharge/recharge.service";
 
 const RARITY_ORDER = ["N", "R", "SR", "SSR", "UR"] as const;
 type CardRarity = (typeof RARITY_ORDER)[number];
@@ -35,6 +36,8 @@ export class TradeService {
     private readonly pointLedgerService?: PointLedgerService,
     @Optional()
     private readonly achievementService?: AchievementService,
+    @Optional()
+    private readonly rechargeService?: RechargeService,
   ) {}
 
   async listListings(uid: string, query: TradeListQuery) {
@@ -173,7 +176,7 @@ export class TradeService {
         card_id: card.id,
         card_level: rarity,
         price: normalizedPrice,
-        fee_rate: config.fee_rate,
+        fee_rate: await this.getSellerFeeRate(uid, config.fee_rate),
         status: "active",
         sold_at: null,
         cancelled_at: null,
@@ -281,7 +284,7 @@ export class TradeService {
         card_id: card.id,
         card_level: rarity,
         price: normalizedPrice,
-        fee_rate: config.fee_rate,
+        fee_rate: await this.getSellerFeeRate(uid, config.fee_rate),
         status: "active",
         sold_at: null,
         cancelled_at: null,
@@ -730,6 +733,25 @@ export class TradeService {
 
   private calculateFee(price: number, feeRate: number): number {
     return Math.floor(Number(price || 0) * Number(feeRate || 0));
+  }
+
+  private async getSellerFeeRate(uid: string, baseFeeRate: number) {
+    const normalizedBase = Math.max(0, Number(baseFeeRate || 0));
+    if (!this.rechargeService) {
+      return normalizedBase;
+    }
+    try {
+      const vip = await this.rechargeService.getGameVipStatus(uid);
+      if (!vip.checked || !vip.active) {
+        return normalizedBase;
+      }
+      return Math.round(
+        Math.max(0, normalizedBase - Number(vip.tradeFeeDiscount || 0)) *
+          10000,
+      ) / 10000;
+    } catch {
+      return normalizedBase;
+    }
   }
 
   private normalizeRarity(rarity: string): CardRarity {

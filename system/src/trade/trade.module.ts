@@ -10,6 +10,7 @@ import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
+import { RechargeModule } from "src/recharge/recharge.module";
 import { TradeController } from "./trade.controller";
 import { TradeService } from "./trade.service";
 
@@ -27,6 +28,7 @@ import { TradeService } from "./trade.service";
     AuthModule,
     PointLedgerModule,
     AchievementModule,
+    RechargeModule,
   ],
   controllers: [TradeController],
   providers: [TradeService],

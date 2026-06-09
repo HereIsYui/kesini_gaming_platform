@@ -7,12 +7,10 @@ import { PveStage } from "src/entity/pveStage.entity";
 import type { RedeemRewards } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
 import { FormationService } from "src/formation/formation.service";
-import {
-  FishpiVipView,
-  RechargeService,
-} from "src/recharge/recharge.service";
+import { RechargeService } from "src/recharge/recharge.service";
 import { RewardService } from "src/reward/reward.service";
 import { SocialActivityService } from "src/social/social-activity.service";
+import type { GameVipStatusView } from "src/vip/game-vip";
 
 export interface PvePageQuery {
   page?: number;
@@ -295,8 +293,8 @@ export class PveService {
       throw new Error("请选择关卡");
     }
     const vip = await this.getSweepVip(uid);
-    const vipLevel = this.getVipLevel(vip.levelCode);
-    const dailyLimit = this.getVipSweepLimit(vipLevel);
+    const vipLevel = vip.tier;
+    const dailyLimit = vip.sweepLimit;
 
     return this.dataSource.transaction(async (manager) => {
       const recordRepository = manager.getRepository(PveChallengeRecord);
@@ -428,7 +426,7 @@ export class PveService {
       const rewardLookup = await this.buildRewardLookup(manager, rewardSnapshots);
       return {
         vipLevel,
-        vipLabel: `VIP${vipLevel}`,
+        vipLabel: vip.label,
         dailyLimit,
         usedToday: usedToday + usedByRequest,
         remaining: Math.max(0, dailyLimit - usedToday - usedByRequest),
@@ -445,33 +443,18 @@ export class PveService {
     });
   }
 
-  private async getSweepVip(uid: string): Promise<FishpiVipView> {
+  private async getSweepVip(uid: string): Promise<GameVipStatusView> {
     if (!this.rechargeService) {
       throw new Error("VIP未同步");
     }
-    const vip = await this.rechargeService.getFishpiVipStatus(uid);
+    const vip = await this.rechargeService.getGameVipStatus(uid);
     if (!vip.checked) {
       throw new Error("VIP未同步");
     }
-    if (!vip.active) {
+    if (!vip.active || vip.tier <= 0) {
       throw new Error("非VIP");
     }
     return vip;
-  }
-
-  private getVipLevel(levelCode: string) {
-    const match = String(levelCode || "")
-      .trim()
-      .toUpperCase()
-      .match(/^VIP([1-4])(?:[_-].*)?$/);
-    return match ? Number(match[1]) : 0;
-  }
-
-  private getVipSweepLimit(level: number) {
-    if (level <= 0) {
-      throw new Error("VIP等级无效");
-    }
-    return [0, 5, 10, 20, 50][level] || 0;
   }
 
   private normalizeSweepStageIds(stageIds: number[]) {

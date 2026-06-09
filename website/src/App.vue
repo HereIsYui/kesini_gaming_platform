@@ -107,6 +107,7 @@ import type {
   UserCatalogItem,
   UserCardsResponse,
   UserGachaStats,
+  VipDailyClaimResponse,
 } from "./types";
 import { APP_CONTEXT_KEY } from "./composables/useAppContext";
 import { useAnnouncements } from "./composables/useAnnouncements";
@@ -453,6 +454,7 @@ const busy = reactive({
   auth: false,
   drawing: false,
   fishpiPoint: false,
+  vipDaily: false,
   assets: false,
   profile: false,
   profileCandidates: false,
@@ -810,23 +812,26 @@ const fishpiPointLabel = computed(() => {
   }
   return "--";
 });
-const fishpiVipLabel = computed(() => {
+const gameVipLabel = computed(() => {
   if (busy.fishpiPoint && !fishpiPoint.value) {
     return "同步中";
   }
-  const vip = fishpiPoint.value?.vip;
+  const vip = fishpiPoint.value?.gameVip;
   if (vip?.checked) {
-    return vip.active ? "VIP" : "非VIP";
+    return vip.label || (vip.active ? `VIP${vip.tier}` : "非VIP");
   }
   if (fishpiPoint.value || fishpiPointError.value) {
     return "未同步";
   }
   return "--";
 });
-const fishpiVipMuted = computed(() => {
-  const vip = fishpiPoint.value?.vip;
+const gameVipMuted = computed(() => {
+  const vip = fishpiPoint.value?.gameVip;
   return !vip?.checked || !vip.active;
 });
+const vipDailyClaimed = computed(
+  () => fishpiPoint.value?.gameVip?.dailyClaimed === true,
+);
 const friendsSocial = useFriendsSocial({
   isAuthed: () => isAuthed.value,
   isActive: () => activeSection.value === "friends",
@@ -1496,6 +1501,38 @@ async function loadFishpiPoint(showError = false) {
     }
   } finally {
     busy.fishpiPoint = false;
+  }
+}
+
+async function claimVipDailyPack() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (gameVipMuted.value) {
+    notify("info", "非VIP");
+    return;
+  }
+  if (vipDailyClaimed.value) {
+    notify("info", "今日已领");
+    return;
+  }
+  busy.vipDaily = true;
+  try {
+    const data = await request<VipDailyClaimResponse>("/vip/daily-claim", {
+      method: "POST",
+    });
+    syncCurrentUserPoint(data.pointAfter);
+    notify("success", "已领取");
+    await refreshCardState({
+      stats: true,
+      fishpiPoint: true,
+      pointRecords: true,
+    });
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.vipDaily = false;
   }
 }
 
@@ -3495,8 +3532,9 @@ const appContext = {
   playerInitial,
   playerStatusLabel,
   fishpiPointLabel,
-  fishpiVipLabel,
-  fishpiVipMuted,
+  gameVipLabel,
+  gameVipMuted,
+  vipDailyClaimed,
   profileCardCountRows,
   profileShowcase,
   profileFormation,
@@ -3621,6 +3659,7 @@ const appContext = {
   loadPrivateData,
   loadStats,
   loadFishpiPoint,
+  claimVipDailyPack,
   loadDrawHistory,
   openDrawHistory,
   closeDrawHistory,
@@ -3827,8 +3866,10 @@ provide(APP_CONTEXT_KEY, appContext);
       :account-point="stats?.point ?? currentUser?.point ?? 0"
       :fishpi-point-label="fishpiPointLabel"
       :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
-      :fishpi-vip-label="fishpiVipLabel"
-      :fishpi-vip-muted="fishpiVipMuted"
+      :game-vip-label="gameVipLabel"
+      :game-vip-muted="gameVipMuted"
+      :vip-daily-claimed="vipDailyClaimed"
+      :vip-daily-claim-busy="busy.vipDaily"
       :user-menu-open="userMenuOpen"
       :user-menu-hover-paused="userMenuHoverPaused"
       :unread-message-count="unreadMessageCount"
@@ -3839,6 +3880,7 @@ provide(APP_CONTEXT_KEY, appContext);
       @collapse-user-menu="userMenuOpen = false"
       @reset-user-menu-hover="resetUserMenuHover"
       @login="loginWithOpenId"
+      @claim-vip-daily="claimVipDailyPack"
       @logout="logout"
     />
 

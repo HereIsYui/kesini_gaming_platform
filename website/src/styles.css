@@ -571,6 +571,28 @@ option {
   color: var(--text-soft);
 }
 
+.user-menu-mini-action {
+  min-height: 22px;
+  border: 1px solid rgba(150, 242, 255, 0.28);
+  border-radius: calc(var(--radius) - 3px);
+  color: var(--primary-strong);
+  background: rgba(84, 216, 255, 0.1);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-menu-mini-action:disabled {
+  color: var(--text-soft);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+:root[data-theme="light"] .user-menu-mini-action {
+  border-color: rgba(11, 149, 208, 0.26);
+  background: rgba(11, 149, 208, 0.08);
+}
+
 .user-menu-shortcuts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

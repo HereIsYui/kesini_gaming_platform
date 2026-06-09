@@ -28,6 +28,7 @@ export type PageKey =
   | "trade-config"
   | "trade-listings"
   | "trade-records"
+  | "vip-config"
   | "recharge-config"
   | "recharge-records"
   | "shop-recycle-config"
@@ -73,6 +74,7 @@ export const pageKeys: PageKey[] = [
   "trade-config",
   "trade-listings",
   "trade-records",
+  "vip-config",
   "recharge-config",
   "recharge-records",
   "shop-recycle-config",
@@ -778,6 +780,65 @@ export const tradeConfigFields: FieldConfig[] = [
   { key: "fee_rate", label: "手续费率", type: "number", defaultValue: 0 },
   { key: "min_price", label: "最低价格", type: "number", defaultValue: 1 },
   { key: "max_price", label: "最高价格", type: "number", defaultValue: 999999 },
+];
+
+export const vipConfigFields: FieldConfig[] = [
+  { key: "vip1_sweepLimit", label: "VIP1扫荡", type: "number", defaultValue: 5 },
+  {
+    key: "vip1_tradeFeeDiscount",
+    label: "VIP1减免",
+    type: "number",
+    defaultValue: 0.02,
+    helper: "0.02 表示减免 2%。",
+  },
+  {
+    key: "vip1_dailyRewards",
+    label: "VIP1礼包",
+    type: "rewards",
+    fullWidth: true,
+  },
+  { key: "vip2_sweepLimit", label: "VIP2扫荡", type: "number", defaultValue: 10 },
+  {
+    key: "vip2_tradeFeeDiscount",
+    label: "VIP2减免",
+    type: "number",
+    defaultValue: 0.04,
+    helper: "0.04 表示减免 4%。",
+  },
+  {
+    key: "vip2_dailyRewards",
+    label: "VIP2礼包",
+    type: "rewards",
+    fullWidth: true,
+  },
+  { key: "vip3_sweepLimit", label: "VIP3扫荡", type: "number", defaultValue: 20 },
+  {
+    key: "vip3_tradeFeeDiscount",
+    label: "VIP3减免",
+    type: "number",
+    defaultValue: 0.06,
+    helper: "0.06 表示减免 6%。",
+  },
+  {
+    key: "vip3_dailyRewards",
+    label: "VIP3礼包",
+    type: "rewards",
+    fullWidth: true,
+  },
+  { key: "vip4_sweepLimit", label: "VIP4扫荡", type: "number", defaultValue: 50 },
+  {
+    key: "vip4_tradeFeeDiscount",
+    label: "VIP4减免",
+    type: "number",
+    defaultValue: 0.08,
+    helper: "0.08 表示减免 8%。",
+  },
+  {
+    key: "vip4_dailyRewards",
+    label: "VIP4礼包",
+    type: "rewards",
+    fullWidth: true,
+  },
 ];
 
 export const shopRecycleConfigFields: FieldConfig[] = [

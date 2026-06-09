@@ -269,7 +269,7 @@ function createService(
   };
   const rechargeService = vip
     ? {
-        getFishpiVipStatus: jest.fn().mockResolvedValue(vip),
+        getGameVipStatus: jest.fn().mockResolvedValue(toGameVip(vip)),
       }
     : undefined;
   return new PveService(
@@ -279,6 +279,33 @@ function createService(
     undefined,
     rechargeService as any,
   );
+}
+
+function toGameVip(vip: {
+  checked: boolean;
+  active: boolean;
+  levelCode: string;
+  expiresAt: string | null;
+}) {
+  const match = String(vip.levelCode || "")
+    .trim()
+    .toUpperCase()
+    .match(/^VIP([1-4])/);
+  const tier = vip.active && match ? Number(match[1]) : 0;
+  const sweepLimits = [0, 5, 10, 20, 50];
+  return {
+    checked: vip.checked,
+    active: vip.active && tier > 0,
+    tier,
+    label: tier > 0 ? `VIP${tier}` : "非VIP",
+    sources: tier > 0 ? ["fishpi"] : [],
+    sourceLabels: tier > 0 ? ["鱼排"] : [],
+    sweepLimit: sweepLimits[tier] || 0,
+    tradeFeeDiscount: 0,
+    dailyRewards: { points: 0, items: [] },
+    dailyClaimed: false,
+    dailyClaimDate: "2026-01-01",
+  };
 }
 
 describe("PveService 轻量关卡", () => {

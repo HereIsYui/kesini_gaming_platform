@@ -605,6 +605,7 @@ export interface FishpiPointResponse {
   userName: string;
   point: number;
   vip: FishpiVipStatus;
+  gameVip: GameVipStatus;
 }
 
 export interface FishpiVipStatus {
@@ -612,6 +613,28 @@ export interface FishpiVipStatus {
   active: boolean;
   levelCode: string;
   expiresAt: string | null;
+}
+
+export interface GameVipStatus {
+  checked: boolean;
+  active: boolean;
+  tier: 0 | 1 | 2 | 3 | 4;
+  label: string;
+  sources: Array<"fishpi" | "badge">;
+  sourceLabels: string[];
+  sweepLimit: number;
+  tradeFeeDiscount: number;
+  dailyRewards: RedeemRewards;
+  dailyClaimed: boolean;
+  dailyClaimDate: string;
+}
+
+export interface VipDailyClaimResponse {
+  claimed: boolean;
+  claimDate: string;
+  vipLevel: number;
+  rewards: RedeemRewards;
+  pointAfter: number;
 }
 
 export interface BulkDecomposeFragment {
@@ -902,7 +925,8 @@ export type PointLedgerSourceType =
   | "trade_sell"
   | "shop_recycle"
   | "season_shop"
-  | "player_message";
+  | "player_message"
+  | "vip_daily";
 
 export interface PointLedgerRecord {
   id: number;

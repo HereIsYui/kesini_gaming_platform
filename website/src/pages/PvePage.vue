@@ -28,8 +28,8 @@ const {
   pveBattleEnemyHpDraining,
   pveSweepableCount,
   sweepPveStages,
-  fishpiVipLabel,
-  fishpiVipMuted,
+  gameVipLabel,
+  gameVipMuted,
   busy,
   isAuthed,
   activeSection,
@@ -73,8 +73,8 @@ function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
     <div class="section-actions">
       <div class="pve-sweep-meta">
         <span class="pve-sweep-count">可扫 {{ pveSweepableCount }}</span>
-        <span class="pve-sweep-vip" :class="{ muted: fishpiVipMuted }">
-          {{ fishpiVipLabel }}
+        <span class="pve-sweep-vip" :class="{ muted: gameVipMuted }">
+          {{ gameVipLabel }}
         </span>
       </div>
       <button
@@ -84,7 +84,7 @@ function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
           busy.pve ||
           busy.pveChallenge ||
           pveSweepableCount <= 0 ||
-          fishpiVipMuted
+          gameVipMuted
         "
         @click="sweepPveStages"
       >

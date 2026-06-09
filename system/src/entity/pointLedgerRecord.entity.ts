@@ -21,7 +21,8 @@ export type PointLedgerSourceType =
   | "trade_sell"
   | "shop_recycle"
   | "season_shop"
-  | "player_message";
+  | "player_message"
+  | "vip_daily";
 
 @Entity()
 @Index("IDX_point_ledger_uid_created", ["uid", "createdAt"])

@@ -1848,6 +1848,22 @@ export class AdminController {
     );
   }
 
+  @Get("config/vip")
+  async getVipConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getVipConfig(),
+      "获取VIP配置成功",
+    );
+  }
+
+  @Patch("config/vip")
+  async updateVipConfig(@Body() body: Record<string, unknown>): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateVipConfig(body),
+      "更新VIP配置成功",
+    );
+  }
+
   @Get("launch-activity-claims")
   async listLaunchActivityClaims(
     @Query() query: LaunchActivityClaimQueryDto,

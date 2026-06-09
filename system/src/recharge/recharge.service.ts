@@ -8,14 +8,37 @@ import {
   RechargeRecordStatus,
 } from "src/entity/rechargeRecord.entity";
 import { User } from "src/entity/user.entity";
+import { CardItem } from "src/entity/card.entity";
+import { DropItem } from "src/entity/drop.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
+import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
+import { RewardService } from "src/reward/reward.service";
+import {
+  badgeVipTier,
+  cloneRewards,
+  DEFAULT_GAME_VIP_CONFIG,
+  fishpiVipTier,
+  GAME_VIP_CONFIG_KEY,
+  GAME_VIP_FRAGMENT_DEFAULTS,
+  GAME_VIP_TIERS,
+  GameVipConfig,
+  GameVipSource,
+  GameVipStatusView,
+  GameVipTier,
+  GameVipTierKey,
+  gameVipLabel,
+  getGameVipBenefit,
+  normalizeGameVipConfig,
+} from "src/vip/game-vip";
 
 const FISHPI_POINTS_ENDPOINT = "https://fishpi.cn/user/edit/points";
 const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
 const FISHPI_MEMBERSHIP_ENDPOINT = "https://fishpi.cn/api/membership";
 const FISHPI_MEMBERSHIPS_CONFIGS_ENDPOINT =
   "https://fishpi.cn/api/memberships/configs";
+const FISHPI_USER_INFO_ENDPOINT = "https://fishpi.cn/api/user/getInfoById";
 const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const FISHPI_HEADERS = {
   "User-Agent": "Kesini-Gacha-Platform/1.0",
@@ -34,6 +57,7 @@ export interface FishpiPointView {
   userName: string;
   point: number;
   vip: FishpiVipView;
+  gameVip: GameVipStatusView;
 }
 
 export interface FishpiVipView {
@@ -51,6 +75,8 @@ export class RechargeService {
     private readonly pointLedgerService?: PointLedgerService,
     @Optional()
     private readonly achievementService?: AchievementService,
+    @Optional()
+    private readonly rewardService?: RewardService,
   ) {}
 
   async getPublicConfig(): Promise<RechargeConfigView> {
@@ -79,10 +105,12 @@ export class RechargeService {
 
     const config = await this.ensureConfig();
     const data = await this.callFishpiPoint(fishpiUserName);
+    const vip = await this.resolveFishpiVip(user, config);
     return {
       userName: fishpiUserName,
       point: this.extractFishpiPoint(data),
-      vip: await this.resolveFishpiVip(user, config),
+      vip,
+      gameVip: await this.resolveGameVip(user, vip),
     };
   }
 
@@ -94,6 +122,85 @@ export class RechargeService {
     }
     const config = await this.ensureConfig();
     return this.resolveFishpiVip(user, config);
+  }
+
+  async getGameVipStatus(uid: string): Promise<GameVipStatusView> {
+    const userRepository = this.dataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+    return this.resolveGameVip(user);
+  }
+
+  async claimVipDailyPack(uid: string) {
+    const vip = await this.getGameVipStatus(uid);
+    if (!vip.checked) {
+      throw new Error("VIP未同步");
+    }
+    if (!vip.active || vip.tier <= 0) {
+      throw new Error("非VIP");
+    }
+    if (!this.rewardService) {
+      throw new Error("VIP礼包暂不可用");
+    }
+    const rewards = this.rewardService.normalizeRewards(
+      vip.dailyRewards,
+      "VIP礼包未配置",
+    );
+    const claimDate = this.getDateKey(new Date());
+
+    return this.dataSource.transaction(async (manager) => {
+      const claimRepository = manager.getRepository(VipDailyClaim);
+      const existing = await claimRepository.findOne({
+        where: { uid, claim_date: claimDate },
+        lock: { mode: "pessimistic_read" },
+      });
+      if (existing) {
+        throw new Error("今日已领");
+      }
+      await Promise.all([
+        this.rewardService!.assertRewardItemsAvailable(
+          manager.getRepository(DropItem),
+          rewards.items || [],
+        ),
+        this.rewardService!.assertRewardCardsAvailable(
+          manager.getRepository(CardItem),
+          rewards.cards || [],
+        ),
+      ]);
+      const user = await manager.getRepository(User).findOne({
+        where: { uid },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+      const saved = await claimRepository.save(
+        claimRepository.create({
+          uid,
+          claim_date: claimDate,
+          vip_level: vip.tier,
+          reward_snapshot: cloneRewards(rewards),
+        }),
+      );
+      await this.rewardService!.grantRewards(manager, user, rewards, {
+        sourceType: "vip_daily",
+        sourceId: claimDate,
+        title: "VIP礼包",
+        metadata: {
+          claimDate,
+          vipLevel: vip.tier,
+        },
+      });
+      return {
+        claimed: true,
+        claimDate,
+        vipLevel: vip.tier,
+        rewards: saved.reward_snapshot,
+        pointAfter: user.point || 0,
+      };
+    });
   }
 
   async recharge(uid: string, rawAmount: number, rawRequestId?: string) {
@@ -331,6 +438,125 @@ export class RechargeService {
     }
     const configResult = await this.resolveFishpiVipFromConfigs(user, apiKey);
     return configResult || directResult || this.uncheckedFishpiVip();
+  }
+
+  private async resolveGameVip(
+    user: User,
+    fishpiVip?: FishpiVipView,
+  ): Promise<GameVipStatusView> {
+    const vip = fishpiVip || (await this.getFishpiVipStatus(user.uid));
+    const fishpiTier = fishpiVipTier(vip.levelCode, vip.active);
+    const badge = await this.resolveBadgeVip(user);
+    const tier = Math.max(fishpiTier, badge.tier) as GameVipTier;
+    const sources: GameVipSource[] = [];
+    if (fishpiTier === tier && tier > 0) {
+      sources.push("fishpi");
+    }
+    if (badge.tier === tier && tier > 0) {
+      sources.push("badge");
+    }
+    const checked = vip.checked || badge.tier > 0;
+    const config = await this.readGameVipConfig();
+    const benefit = getGameVipBenefit(config, tier);
+    const claimDate = this.getDateKey(new Date());
+    const dailyClaimed =
+      tier > 0
+        ? Boolean(
+            await this.dataSource.getRepository(VipDailyClaim).findOne({
+              where: { uid: user.uid, claim_date: claimDate },
+            }),
+          )
+        : false;
+    return {
+      checked,
+      active: tier > 0,
+      tier,
+      label: checked ? gameVipLabel(tier) : "未同步",
+      sources,
+      sourceLabels: this.toGameVipSourceLabels(sources),
+      sweepLimit: benefit.sweepLimit,
+      tradeFeeDiscount: benefit.tradeFeeDiscount,
+      dailyRewards: cloneRewards(benefit.dailyRewards),
+      dailyClaimed,
+      dailyClaimDate: claimDate,
+    };
+  }
+
+  private async resolveBadgeVip(user: User): Promise<{ tier: GameVipTier }> {
+    try {
+      const data = await this.callFishpiUserInfo(user.uid);
+      return { tier: badgeVipTier(data) };
+    } catch {
+      return { tier: 0 };
+    }
+  }
+
+  private async callFishpiUserInfo(userId: string) {
+    const endpoint = `${FISHPI_USER_INFO_ENDPOINT}?userId=${encodeURIComponent(
+      userId,
+    )}`;
+    const response = await axios.get(endpoint, {
+      timeout: 10000,
+      headers: FISHPI_HEADERS,
+    });
+    if (
+      response.data?.code !== undefined &&
+      !this.isFishpiSuccess(response.data)
+    ) {
+      throw new Error(
+        this.getFishpiErrorMessage(response.data, "鱼排资料查询失败"),
+      );
+    }
+    return response.data?.data ?? response.data;
+  }
+
+  private async readGameVipConfig(): Promise<GameVipConfig> {
+    const repository = this.dataSource.getRepository(SystemConfig);
+    const row = await repository.findOne({
+      where: { key: GAME_VIP_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return this.withDefaultVipFragments(DEFAULT_GAME_VIP_CONFIG);
+    }
+    try {
+      return normalizeGameVipConfig(JSON.parse(row.value));
+    } catch {
+      return normalizeGameVipConfig(null);
+    }
+  }
+
+  private async withDefaultVipFragments(
+    config: GameVipConfig,
+  ): Promise<GameVipConfig> {
+    const normalized = normalizeGameVipConfig(config);
+    const items = await this.dataSource.getRepository(DropItem).find({
+      where: { drop_type: 0, disabled: false } as any,
+    });
+    const itemMap = new Map(
+      items.map((item) => [String(item.drop_name || "").trim(), item]),
+    );
+    GAME_VIP_TIERS.forEach((tier) => {
+      const key = String(tier) as GameVipTierKey;
+      const defaults = GAME_VIP_FRAGMENT_DEFAULTS[key];
+      normalized.tiers[key].dailyRewards.items = defaults
+        .map((item) => {
+          const dropItem = itemMap.get(item.name);
+          return dropItem
+            ? {
+                itemId: Number(dropItem.id),
+                num: item.num,
+              }
+            : null;
+        })
+        .filter(
+          (item): item is { itemId: number; num: number } => item !== null,
+        );
+    });
+    return normalized;
+  }
+
+  private toGameVipSourceLabels(sources: GameVipSource[]) {
+    return sources.map((source) => (source === "badge" ? "小冰" : "鱼排"));
   }
 
   private async callFishpiMembership(userId: string, apiKey: string) {
@@ -732,5 +958,12 @@ export class RechargeService {
 
   private getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : "操作失败";
+  }
+
+  private getDateKey(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 }

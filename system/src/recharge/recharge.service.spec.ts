@@ -1,7 +1,13 @@
 import axios from "axios";
+import { CardItem } from "src/entity/card.entity";
+import { DropItem } from "src/entity/drop.entity";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
+import { UserInventory } from "src/entity/inventory.entity";
+import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
+import { RewardService } from "src/reward/reward.service";
 import { RechargeService } from "./recharge.service";
 
 jest.mock("axios");
@@ -17,17 +23,50 @@ function createRepository(overrides: Record<string, any> = {}) {
   };
 }
 
-function createService(repositories: Map<any, any>) {
+function createService(
+  repositories: Map<any, any>,
+  deps: { rewardService?: RewardService } = {},
+) {
+  const repositoryMap = new Map<any, any>([
+    [SystemConfig, createRepository()],
+    [VipDailyClaim, createRepository()],
+    [DropItem, createRepository({ find: jest.fn().mockResolvedValue([]) })],
+    [CardItem, createRepository({ find: jest.fn().mockResolvedValue([]) })],
+    [UserInventory, createRepository()],
+    ...repositories,
+  ]);
   const manager = {
-    getRepository: jest.fn((entity) => repositories.get(entity)),
+    getRepository: jest.fn((entity) => repositoryMap.get(entity)),
   };
   const dataSource = {
-    getRepository: jest.fn((entity) => repositories.get(entity)),
+    getRepository: jest.fn((entity) => repositoryMap.get(entity)),
     transaction: jest.fn((callback) => callback(manager)),
   };
   return {
-    service: new RechargeService(dataSource as any),
+    service: new RechargeService(
+      dataSource as any,
+      undefined,
+      undefined,
+      deps.rewardService,
+    ),
     dataSource,
+  };
+}
+
+function expectedGameVip(patch: Record<string, any> = {}) {
+  return {
+    checked: false,
+    active: false,
+    tier: 0,
+    label: "未同步",
+    sources: [],
+    sourceLabels: [],
+    sweepLimit: 0,
+    tradeFeeDiscount: 0,
+    dailyRewards: { points: 0, items: [] },
+    dailyClaimed: false,
+    dailyClaimDate: expect.any(String),
+    ...patch,
   };
 }
 
@@ -83,6 +122,7 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
+      gameVip: expectedGameVip(),
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "https://fishpi.cn/user/fish-user/point",
@@ -141,6 +181,17 @@ describe("RechargeService", () => {
         levelCode: "VIP2_MONTH",
         expiresAt,
       },
+      gameVip: expectedGameVip({
+        checked: true,
+        active: true,
+        tier: 2,
+        label: "VIP2",
+        sources: ["fishpi"],
+        sourceLabels: ["鱼排"],
+        sweepLimit: 10,
+        tradeFeeDiscount: 0.04,
+        dailyRewards: { points: 15, items: [] },
+      }),
     });
     expect(mockedAxios.get).toHaveBeenNthCalledWith(
       2,
@@ -400,8 +451,147 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
+      gameVip: expectedGameVip(),
     });
-    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+  });
+
+  it("VIP每日礼包只能领取一次并发放奖励", async () => {
+    const user = {
+      id: 1,
+      uid: "123456",
+      name: "fish-user",
+      point: 20,
+    };
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+      save: jest.fn(async (value) => value),
+    });
+    const claimRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((value) => ({ id: 1, createdAt: new Date(), ...value })),
+      save: jest.fn(async (value) => value),
+    });
+    const inventoryRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((value) => ({ id: 1, ...value })),
+      save: jest.fn(async (value) => value),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: {
+            lvCode: "VIP3_MONTH",
+            state: 1,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userName: "fish-user" } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+        [
+          SystemConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              key: "game_vip_benefits",
+              value: JSON.stringify({
+                tiers: {
+                  1: {
+                    sweepLimit: 5,
+                    tradeFeeDiscount: 0.02,
+                    dailyRewards: { points: 10, items: [] },
+                  },
+                  2: {
+                    sweepLimit: 10,
+                    tradeFeeDiscount: 0.04,
+                    dailyRewards: { points: 15, items: [] },
+                  },
+                  3: {
+                    sweepLimit: 20,
+                    tradeFeeDiscount: 0.06,
+                    dailyRewards: {
+                      points: 25,
+                      items: [{ itemId: 1, num: 2 }],
+                    },
+                  },
+                  4: {
+                    sweepLimit: 50,
+                    tradeFeeDiscount: 0.08,
+                    dailyRewards: { points: 40, items: [] },
+                  },
+                },
+              }),
+            }),
+          }),
+        ],
+        [VipDailyClaim, claimRepository],
+        [
+          DropItem,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              id: 1,
+              drop_name: "SR碎片",
+              disabled: false,
+            }),
+          }),
+        ],
+        [UserInventory, inventoryRepository],
+      ]),
+      { rewardService: new RewardService() },
+    );
+
+    await expect(service.claimVipDailyPack("123456")).resolves.toMatchObject({
+      claimed: true,
+      vipLevel: 3,
+      rewards: { points: 25, items: [{ itemId: 1, num: 2 }] },
+      pointAfter: 45,
+    });
+    expect(claimRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uid: "123456",
+        vip_level: 3,
+      }),
+    );
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: "123456", point: 45 }),
+    );
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 1, item_id: 1, num: 2 }),
+    );
+
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: {
+            lvCode: "VIP3_MONTH",
+            state: 1,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userName: "fish-user" } },
+      });
+    claimRepository.findOne
+      .mockResolvedValueOnce({ id: 1 })
+      .mockResolvedValueOnce({ id: 1 });
+    await expect(service.claimVipDailyPack("123456")).rejects.toThrow(
+      "今日已领",
+    );
   });
 
   it("鱼排会员查询失败时不影响积分", async () => {
@@ -439,6 +629,7 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
+      gameVip: expectedGameVip(),
     });
   });
 

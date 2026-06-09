@@ -23,8 +23,10 @@ const props = defineProps<{
   accountPoint: number;
   fishpiPointLabel: string;
   fishpiPointMuted: boolean;
-  fishpiVipLabel: string;
-  fishpiVipMuted: boolean;
+  gameVipLabel: string;
+  gameVipMuted: boolean;
+  vipDailyClaimed: boolean;
+  vipDailyClaimBusy: boolean;
   userMenuOpen: boolean;
   userMenuHoverPaused: boolean;
   unreadMessageCount: number;
@@ -39,6 +41,7 @@ const emit = defineEmits<{
   "reset-user-menu-hover": [];
   login: [];
   logout: [];
+  "claim-vip-daily": [];
 }>();
 </script>
 
@@ -145,10 +148,22 @@ const emit = defineEmits<{
                 </strong>
               </div>
               <div class="user-menu-balance">
-                <span>鱼排VIP</span>
-                <strong :class="{ muted: props.fishpiVipMuted }">
-                  {{ props.fishpiVipLabel }}
+                <span>游戏VIP</span>
+                <strong :class="{ muted: props.gameVipMuted }">
+                  {{ props.gameVipLabel }}
                 </strong>
+                <button
+                  class="user-menu-mini-action"
+                  type="button"
+                  :disabled="
+                    props.gameVipMuted ||
+                    props.vipDailyClaimed ||
+                    props.vipDailyClaimBusy
+                  "
+                  @click.stop="emit('claim-vip-daily')"
+                >
+                  {{ props.vipDailyClaimed ? "已领" : "领取" }}
+                </button>
               </div>
             </div>
             <nav class="user-menu-shortcuts" aria-label="快捷入口">

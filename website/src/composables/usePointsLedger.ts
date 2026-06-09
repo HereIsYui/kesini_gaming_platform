@@ -126,6 +126,7 @@ export const pointSourceOptions = [
   { value: "shop_recycle", label: "商店回收" },
   { value: "season_shop", label: "赛季商店" },
   { value: "player_message", label: "消息奖励" },
+  { value: "vip_daily", label: "VIP礼包" },
 ] as const;
 
 export function pointChangeClass(amount: number) {
@@ -188,6 +189,10 @@ export function pointMetadataSummary(record: PointLedgerRecord) {
       )} 次`;
     case "player_message":
       return String(meta("title") || record.title || "消息奖励");
+    case "vip_daily":
+      return `VIP${String(meta("vipLevel") || "-")} · ${String(
+        meta("claimDate") || "-",
+      )}`;
     default:
       return record.title;
   }

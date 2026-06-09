@@ -575,6 +575,15 @@
         />
 
         <ConfigPanel
+          v-else-if="active === 'vip-config'"
+          title="VIP福利"
+          description="配置扫荡次数、手续费减免和每日礼包。"
+          endpoint="/admin/config/vip"
+          :fields="vipConfigFields"
+          :item-options="itemOptions"
+        />
+
+        <ConfigPanel
           v-else-if="active === 'shop-recycle-config'"
           title="商店回收"
           description="配置回收开关和各稀有度价格。"
@@ -792,6 +801,7 @@ import {
   tradeRecordFields,
   userAchievementFields,
   userFields,
+  vipConfigFields,
 } from "./constants";
 import type { NavGroup, PageKey } from "./constants";
 import {
@@ -1140,6 +1150,13 @@ const pageDefinitions = computed(
         description: "查看交易成交记录、手续费和买卖双方审计信息。",
         group: "交易与支付",
         icon: Files,
+      },
+      {
+        key: "vip-config",
+        label: "VIP福利",
+        description: "配置游戏VIP礼包、扫荡次数和手续费减免。",
+        group: "交易与支付",
+        icon: Medal,
       },
       {
         key: "recharge-config",
