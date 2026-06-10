@@ -1,7 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import axios from "axios";
 import { randomUUID } from "crypto";
-import { DataSource, EntityManager } from "typeorm";
+import { DataSource, EntityManager, In } from "typeorm";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import {
   RechargeRecord,
@@ -13,6 +13,7 @@ import { DropItem } from "src/entity/drop.entity";
 import { MonthlyCardSubscription } from "src/entity/monthlyCardSubscription.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
+import { RedeemRewards } from "src/entity/redeemCode.entity";
 import { monthlyCardVipTier } from "src/monthly-card/monthly-card.config";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
@@ -71,6 +72,16 @@ export interface FishpiVipView {
   expiresAt: string | null;
 }
 
+export interface GameVipBenefitView {
+  tier: 1 | 2 | 3 | 4;
+  label: string;
+  sweepLimit: number;
+  tradeFeeDiscount: number;
+  dailyRewards: RedeemRewards & {
+    items: Array<{ itemId: number; num: number; itemName?: string }>;
+  };
+}
+
 @Injectable()
 export class RechargeService {
   constructor(
@@ -120,6 +131,33 @@ export class RechargeService {
         String(config.fishpi_api_key || "").trim(),
       ),
     };
+  }
+
+  async getGameVipBenefitOverview(): Promise<GameVipBenefitView[]> {
+    const config = await this.readGameVipConfig();
+    const itemIds = Array.from(
+      new Set(
+        GAME_VIP_TIERS.flatMap((tier) =>
+          getGameVipBenefit(config, tier).dailyRewards.items.map((item) =>
+            Number(item.itemId),
+          ),
+        ).filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+      ),
+    );
+    const itemNameMap = await this.getDropItemNameMap(itemIds);
+    return GAME_VIP_TIERS.map((tier) => {
+      const benefit = getGameVipBenefit(config, tier);
+      return {
+        tier,
+        label: gameVipLabel(tier),
+        sweepLimit: benefit.sweepLimit,
+        tradeFeeDiscount: benefit.tradeFeeDiscount,
+        dailyRewards: this.decorateRewardItemNames(
+          cloneRewards(benefit.dailyRewards),
+          itemNameMap,
+        ),
+      };
+    });
   }
 
   async getFishpiVipStatus(uid: string): Promise<FishpiVipView> {
@@ -697,6 +735,29 @@ export class RechargeService {
         );
     });
     return normalized;
+  }
+
+  private async getDropItemNameMap(itemIds: number[]) {
+    if (itemIds.length === 0) {
+      return new Map<number, string>();
+    }
+    const items = await this.dataSource.getRepository(DropItem).find({
+      where: { id: In(itemIds) },
+    });
+    return new Map(items.map((item) => [Number(item.id), item.drop_name]));
+  }
+
+  private decorateRewardItemNames(
+    rewards: RedeemRewards,
+    itemNameMap: Map<number, string>,
+  ): GameVipBenefitView["dailyRewards"] {
+    return {
+      ...rewards,
+      items: rewards.items.map((item) => ({
+        ...item,
+        itemName: itemNameMap.get(Number(item.itemId)) || "",
+      })),
+    };
   }
 
   private toGameVipSourceLabels(sources: GameVipSource[]) {

@@ -3150,25 +3150,128 @@ h3 {
 }
 
 .monthly-card-benefits {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 8px;
+}
+
+.monthly-card-benefits div {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
 }
 
 .monthly-card-benefits span {
-  min-height: 28px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--chip-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
+  color: var(--muted);
   font-size: 12px;
-  line-height: 18px;
+}
+
+.monthly-card-benefits strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.monthly-benefit-panel {
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.monthly-benefit-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monthly-benefit-panel > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.monthly-benefit-panel small,
+.monthly-benefit-panel > header span,
+.monthly-benefit-grid dt {
+  color: var(--muted);
+}
+
+.monthly-benefit-panel > header strong {
+  font-size: 18px;
+}
+
+.monthly-benefit-panel > header span {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--chip-bg);
+  font-size: 12px;
   white-space: nowrap;
+}
+
+.monthly-benefit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.monthly-benefit-grid article {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.monthly-benefit-grid article.featured {
+  border-color: rgba(80, 210, 160, 0.45);
+}
+
+.monthly-benefit-grid article header {
+  display: grid;
+  gap: 2px;
+}
+
+.monthly-benefit-grid article header strong {
+  font-size: 16px;
+}
+
+.monthly-benefit-grid dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.monthly-benefit-grid dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.monthly-benefit-grid dt,
+.monthly-benefit-grid dd {
+  margin: 0;
+}
+
+.monthly-benefit-grid dd {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+:root[data-theme="light"] .monthly-benefit-grid article {
+  background: rgba(255, 255, 255, 0.76);
 }
 
 .monthly-card-skeleton span {
@@ -3177,13 +3280,18 @@ h3 {
 
 @media (max-width: 720px) {
   .monthly-card-summary,
-  .monthly-card-grid {
+  .monthly-card-grid,
+  .monthly-benefit-grid {
     grid-template-columns: 1fr;
   }
 
   .monthly-card-price {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .monthly-benefit-panel {
+    padding: 14px;
   }
 }
 

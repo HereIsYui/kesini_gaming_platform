@@ -2,7 +2,12 @@
 import { computed, onMounted } from "vue";
 import { CalendarDays, Gem, RefreshCw, ShieldCheck } from "@lucide/vue";
 import { useAppContext } from "../composables/useAppContext";
-import type { GameVipStatus, MonthlyCardStatusCard } from "../types";
+import { formatPercent, formatRewards } from "../utils/format";
+import type {
+  GameVipBenefitView,
+  GameVipStatus,
+  MonthlyCardStatusCard,
+} from "../types";
 
 const {
   activeSection,
@@ -21,10 +26,21 @@ type CurrentMonthlyCardView = {
   expiry: string;
 };
 
+type BenefitRow = {
+  label: string;
+  value: string;
+};
+
 const monthlyCards = computed<MonthlyCardStatusCard[]>(
   () => monthlyCardStatus.value?.cards || [],
 );
 const monthlyConfig = computed(() => monthlyCardStatus.value?.config || null);
+const benefitTiers = computed<GameVipBenefitView[]>(
+  () =>
+    monthlyCardStatus.value?.benefitTiers ||
+    monthlyCardStatus.value?.config?.benefitTiers ||
+    [],
+);
 const monthlyGameVip = computed<GameVipStatus | null>(
   () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
 );
@@ -104,11 +120,40 @@ function expiryLabel(card: MonthlyCardStatusCard) {
   return "未开通";
 }
 
-function benefitRows(card: MonthlyCardStatusCard) {
+function benefitRows(card: MonthlyCardStatusCard): BenefitRow[] {
+  const benefit = benefitForTier(card.vipLevel);
   return [
-    card.vipLevel >= 4 ? "扫荡 50 次" : "扫荡 20 次",
-    "每日礼包",
+    {
+      label: "礼包",
+      value: benefit ? formatRewards(benefit.dailyRewards) : "每日礼包",
+    },
+    {
+      label: "扫荡",
+      value: `${benefit?.sweepLimit || (card.vipLevel >= 4 ? 50 : 20)} 次`,
+    },
+    {
+      label: "手续费",
+      value: feeDiscountLabel(benefit?.tradeFeeDiscount || 0),
+    },
   ];
+}
+
+function benefitForTier(tier: number) {
+  return benefitTiers.value.find((item) => Number(item.tier) === Number(tier));
+}
+
+function monthlyCardNameForTier(tier: number) {
+  if (tier >= 4) {
+    return "星耀月卡";
+  }
+  if (tier >= 3) {
+    return "星穹月卡";
+  }
+  return "鱼排VIP";
+}
+
+function feeDiscountLabel(value: number) {
+  return value > 0 ? `减 ${formatPercent(value)}` : "无";
 }
 
 function sourceTier(
@@ -211,9 +256,10 @@ function sourceTier(
         </div>
 
         <div class="monthly-card-benefits">
-          <span v-for="benefit in benefitRows(card)" :key="benefit">
-            {{ benefit }}
-          </span>
+          <div v-for="benefit in benefitRows(card)" :key="benefit.label">
+            <span>{{ benefit.label }}</span>
+            <strong>{{ benefit.value }}</strong>
+          </div>
         </div>
 
         <button
@@ -232,6 +278,43 @@ function sourceTier(
         </button>
       </article>
     </div>
+
+    <section v-if="benefitTiers.length > 0" class="monthly-benefit-panel">
+      <header>
+        <div>
+          <small>福利</small>
+          <strong>权益对比</strong>
+        </div>
+        <span>每日一次</span>
+      </header>
+
+      <div class="monthly-benefit-grid">
+        <article
+          v-for="tier in benefitTiers"
+          :key="tier.tier"
+          :class="{ featured: tier.tier >= 3 }"
+        >
+          <header>
+            <strong>{{ tier.label }}</strong>
+            <small>{{ monthlyCardNameForTier(tier.tier) }}</small>
+          </header>
+          <dl>
+            <div>
+              <dt>礼包</dt>
+              <dd>{{ formatRewards(tier.dailyRewards) }}</dd>
+            </div>
+            <div>
+              <dt>扫荡</dt>
+              <dd>{{ tier.sweepLimit }} 次</dd>
+            </div>
+            <div>
+              <dt>手续费</dt>
+              <dd>{{ feeDiscountLabel(tier.tradeFeeDiscount) }}</dd>
+            </div>
+          </dl>
+        </article>
+      </div>
+    </section>
   </div>
 </section>
 </template>

@@ -660,6 +660,7 @@ export interface MonthlyCardPublicConfig {
   platinum_enabled: boolean;
   platinum_price: number;
   cards: MonthlyCardPlan[];
+  benefitTiers?: GameVipBenefitView[];
 }
 
 export interface MonthlyCardStatusCard extends MonthlyCardPlan {
@@ -674,6 +675,15 @@ export interface MonthlyCardStatusResponse {
   config: MonthlyCardPublicConfig;
   cards: MonthlyCardStatusCard[];
   gameVip: GameVipStatus;
+  benefitTiers?: GameVipBenefitView[];
+}
+
+export interface GameVipBenefitView {
+  tier: 1 | 2 | 3 | 4;
+  label: string;
+  sweepLimit: number;
+  tradeFeeDiscount: number;
+  dailyRewards: RedeemRewards;
 }
 
 export interface MonthlyCardPurchaseResponse {

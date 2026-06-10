@@ -104,6 +104,36 @@ function createService(options: {
       dailyClaimed: false,
       dailyClaimDate: "2026-06-09",
     }),
+    getGameVipBenefitOverview: jest.fn().mockResolvedValue([
+      {
+        tier: 1,
+        label: "VIP1",
+        sweepLimit: 5,
+        tradeFeeDiscount: 0.02,
+        dailyRewards: { points: 10, items: [] },
+      },
+      {
+        tier: 2,
+        label: "VIP2",
+        sweepLimit: 10,
+        tradeFeeDiscount: 0.04,
+        dailyRewards: { points: 15, items: [] },
+      },
+      {
+        tier: 3,
+        label: "VIP3",
+        sweepLimit: 20,
+        tradeFeeDiscount: 0.06,
+        dailyRewards: { points: 25, items: [] },
+      },
+      {
+        tier: 4,
+        label: "VIP4",
+        sweepLimit: 50,
+        tradeFeeDiscount: 0.08,
+        dailyRewards: { points: 40, items: [] },
+      },
+    ]),
     getThirdPartyErrorResponse: jest.fn((error) => ({
       message: error instanceof Error ? error.message : "失败",
     })),
@@ -140,6 +170,18 @@ describe("MonthlyCardService", () => {
       cards: expect.arrayContaining([
         expect.objectContaining({ cardType: "ice", label: "星穹月卡" }),
         expect.objectContaining({ cardType: "platinum", label: "星耀月卡" }),
+      ]),
+      benefitTiers: expect.arrayContaining([
+        expect.objectContaining({
+          tier: 3,
+          sweepLimit: 20,
+          dailyRewards: { points: 25, items: [] },
+        }),
+        expect.objectContaining({
+          tier: 4,
+          sweepLimit: 50,
+          dailyRewards: { points: 40, items: [] },
+        }),
       ]),
     });
   });

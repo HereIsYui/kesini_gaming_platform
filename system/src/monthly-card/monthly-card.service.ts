@@ -35,28 +35,35 @@ export class MonthlyCardService {
   ) {}
 
   async getPublicConfig() {
-    const config = await this.readConfig();
+    const [config, benefitTiers] = await Promise.all([
+      this.readConfig(),
+      this.rechargeService.getGameVipBenefitOverview(),
+    ]);
     return {
       ...flattenMonthlyCardConfig(config),
       cards: toMonthlyCardPlanView(config),
+      benefitTiers,
     };
   }
 
   async getMyStatus(uid: string) {
-    const [config, subscriptions, gameVip] = await Promise.all([
+    const [config, subscriptions, gameVip, benefitTiers] = await Promise.all([
       this.readConfig(),
       this.dataSource.getRepository(MonthlyCardSubscription).find({
         where: { uid },
       }),
       this.rechargeService.getGameVipStatus(uid),
+      this.rechargeService.getGameVipBenefitOverview(),
     ]);
     return {
       config: {
         ...flattenMonthlyCardConfig(config),
         cards: toMonthlyCardPlanView(config),
+        benefitTiers,
       },
       cards: this.toStatusCards(config, subscriptions, gameVip),
       gameVip,
+      benefitTiers,
     };
   }
 
