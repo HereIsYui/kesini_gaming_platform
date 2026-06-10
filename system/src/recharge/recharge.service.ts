@@ -1,7 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import axios from "axios";
 import { randomUUID } from "crypto";
-import { DataSource, EntityManager, In } from "typeorm";
+import { DataSource, EntityManager, In, Repository } from "typeorm";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import {
   RechargeRecord,
@@ -245,11 +245,18 @@ export class RechargeService {
           vipLevel: vip.tier,
         },
       });
+      const itemNameMap = await this.getDropItemNameMap(
+        (saved.reward_snapshot.items || []).map((item) => Number(item.itemId)),
+        manager.getRepository(DropItem),
+      );
       return {
         claimed: true,
         claimDate,
         vipLevel: vip.tier,
-        rewards: saved.reward_snapshot,
+        rewards: this.decorateRewardItemNames(
+          saved.reward_snapshot,
+          itemNameMap,
+        ),
         pointAfter: user.point || 0,
       };
     });
@@ -579,6 +586,10 @@ export class RechargeService {
     );
     const config = await this.readGameVipConfig();
     const benefit = getGameVipBenefit(config, tier);
+    const dailyRewards = cloneRewards(benefit.dailyRewards);
+    const itemNameMap = await this.getDropItemNameMap(
+      (dailyRewards.items || []).map((item) => Number(item.itemId)),
+    );
     const claimDate = this.getDateKey(new Date());
     const dailyClaimed =
       tier > 0
@@ -602,7 +613,7 @@ export class RechargeService {
       sourceTiers,
       sweepLimit: benefit.sweepLimit,
       tradeFeeDiscount: benefit.tradeFeeDiscount,
-      dailyRewards: cloneRewards(benefit.dailyRewards),
+      dailyRewards: this.decorateRewardItemNames(dailyRewards, itemNameMap),
       dailyClaimed,
       dailyClaimDate: claimDate,
     };
@@ -737,11 +748,14 @@ export class RechargeService {
     return normalized;
   }
 
-  private async getDropItemNameMap(itemIds: number[]) {
+  private async getDropItemNameMap(
+    itemIds: number[],
+    repository: Repository<DropItem> = this.dataSource.getRepository(DropItem),
+  ) {
     if (itemIds.length === 0) {
       return new Map<number, string>();
     }
-    const items = await this.dataSource.getRepository(DropItem).find({
+    const items = await repository.find({
       where: { id: In(itemIds) },
     });
     return new Map(items.map((item) => [Number(item.id), item.drop_name]));

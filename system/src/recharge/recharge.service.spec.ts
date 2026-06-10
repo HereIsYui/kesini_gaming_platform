@@ -711,6 +711,13 @@ describe("RechargeService", () => {
         [
           DropItem,
           createRepository({
+            find: jest.fn().mockResolvedValue([
+              {
+                id: 1,
+                drop_name: "SR碎片",
+                disabled: false,
+              },
+            ]),
             findOne: jest.fn().mockResolvedValue({
               id: 1,
               drop_name: "SR碎片",
@@ -726,7 +733,10 @@ describe("RechargeService", () => {
     await expect(service.claimVipDailyPack("123456")).resolves.toMatchObject({
       claimed: true,
       vipLevel: 3,
-      rewards: { points: 25, items: [{ itemId: 1, num: 2 }] },
+      rewards: {
+        points: 25,
+        items: [{ itemId: 1, itemName: "SR碎片", num: 2 }],
+      },
       pointAfter: 45,
     });
     expect(claimRepository.save).toHaveBeenCalledWith(
@@ -762,6 +772,86 @@ describe("RechargeService", () => {
     await expect(service.claimVipDailyPack("123456")).rejects.toThrow(
       "今日已领",
     );
+  });
+
+  it("鱼排积分接口返回带物品名的VIP礼包", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: {
+            lvCode: "VIP4_MONTH",
+            state: 1,
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { allMetalOwned: [] } },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+        [
+          SystemConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              key: "game_vip_benefits",
+              value: JSON.stringify({
+                vip4_sweepLimit: 50,
+                vip4_tradeFeeDiscount: 0.08,
+                vip4_dailyRewards: {
+                  points: 40,
+                  items: [
+                    { itemId: 9, num: 3 },
+                    { itemId: 10, num: 1 },
+                  ],
+                },
+              }),
+            }),
+          }),
+        ],
+        [
+          DropItem,
+          createRepository({
+            find: jest.fn().mockResolvedValue([
+              { id: 9, drop_name: "SR碎片" },
+              { id: 10, drop_name: "SSR碎片" },
+            ]),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      gameVip: {
+        tier: 4,
+        dailyRewards: {
+          points: 40,
+          items: [
+            { itemId: 9, itemName: "SR碎片", num: 3 },
+            { itemId: 10, itemName: "SSR碎片", num: 1 },
+          ],
+        },
+      },
+    });
   });
 
   it("鱼排会员查询失败时不影响积分", async () => {
