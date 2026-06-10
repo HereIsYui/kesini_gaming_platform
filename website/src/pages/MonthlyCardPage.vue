@@ -28,18 +28,16 @@ const monthlyConfig = computed(() => monthlyCardStatus.value?.config || null);
 const monthlyGameVip = computed<GameVipStatus | null>(
   () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
 );
-const badgeVipTier = computed(() =>
-  Math.max(
+const legacyVipStatus = computed(() => monthlyGameVip.value?.legacyVip || null);
+const legacyVipTier = computed(() => {
+  if (legacyVipStatus.value) {
+    return Number(legacyVipStatus.value.tier || 0);
+  }
+  return Math.max(
     sourceTier(monthlyCardStatus.value?.gameVip, "badge"),
     sourceTier(fishpiPoint.value?.gameVip, "badge"),
-  ),
-);
-const fishpiVipTier = computed(() =>
-  Math.max(
-    sourceTier(monthlyCardStatus.value?.gameVip, "fishpi"),
-    sourceTier(fishpiPoint.value?.gameVip, "fishpi"),
-  ),
-);
+  );
+});
 const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
   const activeCard = monthlyCards.value
     .filter((card) => card.active)
@@ -55,7 +53,7 @@ const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
     };
   }
 
-  const badgeTier = badgeVipTier.value;
+  const badgeTier = legacyVipTier.value;
   if (badgeTier >= 3) {
     return {
       label: badgeTier >= 4 ? "星耀月卡" : "星穹月卡",
@@ -72,22 +70,19 @@ const monthlyCardExpiryLabel = computed(
   () => currentMonthlyCard.value?.expiry || "未开通",
 );
 const legacyVipLabel = computed(() => {
-  if (badgeVipTier.value >= 4) {
+  if (legacyVipStatus.value) {
+    return legacyVipStatus.value.label;
+  }
+  if (!monthlyGameVip.value) {
+    return "未同步";
+  }
+  if (legacyVipTier.value >= 4) {
     return "小冰白金VIP";
   }
-  if (badgeVipTier.value >= 3) {
+  if (legacyVipTier.value >= 3) {
     return "小冰VIP";
   }
-  return "--";
-});
-const fishpiVipLabel = computed(() => {
-  if (fishpiVipTier.value > 0) {
-    return `VIP${fishpiVipTier.value}`;
-  }
-  if (monthlyGameVip.value?.checked) {
-    return "非VIP";
-  }
-  return "未同步";
+  return "无";
 });
 onMounted(() => {
   if (isAuthed.value && activeSection.value === "monthlyCard") {
@@ -166,19 +161,11 @@ function sourceTier(
         <strong>{{ monthlyCardExpiryLabel }}</strong>
       </article>
       <article>
-        <small>权益延续</small>
-        <strong :class="{ muted: legacyVipLabel === '--' }">
-          {{ legacyVipLabel }}
-        </strong>
-      </article>
-      <article>
-        <small>鱼排VIP</small>
+        <small>历史权益</small>
         <strong
-          :class="{
-            muted: fishpiVipLabel === '非VIP' || fishpiVipLabel === '未同步',
-          }"
+          :class="{ muted: legacyVipLabel === '无' || legacyVipLabel === '未同步' }"
         >
-          {{ fishpiVipLabel }}
+          {{ legacyVipLabel }}
         </strong>
       </article>
     </div>

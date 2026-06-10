@@ -22,6 +22,10 @@ export interface GameVipStatusView {
   active: boolean;
   tier: GameVipTier;
   label: string;
+  effectiveVip: GameVipSourceStatusView;
+  fishpiVip: GameVipSourceStatusView;
+  monthlyVip: GameVipSourceStatusView;
+  legacyVip: GameVipSourceStatusView;
   sources: GameVipSource[];
   sourceLabels: string[];
   sourceTiers: Partial<Record<GameVipSource, GameVipTier>>;
@@ -30,6 +34,13 @@ export interface GameVipStatusView {
   dailyRewards: RedeemRewards;
   dailyClaimed: boolean;
   dailyClaimDate: string;
+}
+
+export interface GameVipSourceStatusView {
+  checked: boolean;
+  active: boolean;
+  tier: GameVipTier;
+  label: string;
 }
 
 export const DEFAULT_GAME_VIP_CONFIG: GameVipConfig = {
@@ -151,6 +162,28 @@ export function gameVipLabel(tier: number) {
   return normalized > 0 ? `VIP${normalized}` : "非VIP";
 }
 
+export function monthlyVipLabel(tier: number) {
+  const normalized = normalizeGameVipTier(tier);
+  if (normalized >= 4) {
+    return "星耀月卡";
+  }
+  if (normalized >= 3) {
+    return "星穹月卡";
+  }
+  return "未开通";
+}
+
+export function legacyVipLabel(tier: number) {
+  const normalized = normalizeGameVipTier(tier);
+  if (normalized >= 4) {
+    return "小冰白金VIP";
+  }
+  if (normalized >= 3) {
+    return "小冰VIP";
+  }
+  return "无";
+}
+
 export function fishpiVipTier(levelCode: string, active: boolean): GameVipTier {
   if (!active) {
     return 0;
@@ -233,7 +266,7 @@ function normalizeDiscount(value: unknown, fallback: number) {
 }
 
 function collectMedalTexts(value: unknown, depth = 0): string[] {
-  if (!value || depth > 4) {
+  if (!value || depth > 8) {
     return [];
   }
   if (typeof value === "string" || typeof value === "number") {
@@ -246,19 +279,9 @@ function collectMedalTexts(value: unknown, depth = 0): string[] {
     return [];
   }
   const record = value as Record<string, unknown>;
-  const directKeys = [
-    "sysMetal",
-    "allMetals",
-    "metals",
-    "metal",
-    "metalName",
-    "name",
-    "title",
-    "label",
-    "description",
-    "displayName",
-  ];
-  return directKeys.flatMap((key) => collectMedalTexts(record[key], depth + 1));
+  return Object.values(record).flatMap((item) =>
+    collectMedalTexts(item, depth + 1),
+  );
 }
 
 function normalizeMedalText(value: string) {

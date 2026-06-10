@@ -27,11 +27,14 @@ import {
   GAME_VIP_TIERS,
   GameVipConfig,
   GameVipSource,
+  GameVipSourceStatusView,
   GameVipStatusView,
   GameVipTier,
   GameVipTierKey,
   gameVipLabel,
   getGameVipBenefit,
+  legacyVipLabel,
+  monthlyVipLabel,
   normalizeGameVipConfig,
 } from "src/vip/game-vip";
 
@@ -502,6 +505,30 @@ export class RechargeService {
       monthly_card: monthlyCardTier,
     };
     const checked = vip.checked || badge.tier > 0 || monthlyCardTier > 0;
+    const fishpiVipStatus = this.toGameVipSourceStatus(
+      vip.checked,
+      fishpiTier,
+      fishpiTier > 0 ? gameVipLabel(fishpiTier) : vip.checked ? "非VIP" : "未同步",
+    );
+    const monthlyVipStatus = this.toGameVipSourceStatus(
+      true,
+      monthlyCardTier,
+      monthlyCardTier > 0 ? monthlyVipLabel(monthlyCardTier) : "未开通",
+    );
+    const legacyVipStatus = this.toGameVipSourceStatus(
+      badge.checked,
+      badge.tier,
+      badge.checked ? legacyVipLabel(badge.tier) : "未同步",
+    );
+    const effectiveVip = this.toGameVipSourceStatus(
+      checked,
+      tier,
+      this.effectiveVipLabel(tier, {
+        fishpiTier,
+        monthlyCardTier,
+        legacyTier: badge.tier,
+      }),
+    );
     const config = await this.readGameVipConfig();
     const benefit = getGameVipBenefit(config, tier);
     const claimDate = this.getDateKey(new Date());
@@ -518,6 +545,10 @@ export class RechargeService {
       active: tier > 0,
       tier,
       label: checked ? gameVipLabel(tier) : "未同步",
+      effectiveVip,
+      fishpiVip: fishpiVipStatus,
+      monthlyVip: monthlyVipStatus,
+      legacyVip: legacyVipStatus,
       sources,
       sourceLabels: this.toGameVipSourceLabels(sources),
       sourceTiers,
@@ -529,13 +560,50 @@ export class RechargeService {
     };
   }
 
-  private async resolveBadgeVip(user: User): Promise<{ tier: GameVipTier }> {
+  private async resolveBadgeVip(
+    user: User,
+  ): Promise<{ checked: boolean; tier: GameVipTier }> {
     try {
       const data = await this.callFishpiUserInfo(user.uid);
-      return { tier: badgeVipTier(data) };
+      return { checked: true, tier: badgeVipTier(data) };
     } catch {
-      return { tier: 0 };
+      return { checked: false, tier: 0 };
     }
+  }
+
+  private toGameVipSourceStatus(
+    checked: boolean,
+    tier: GameVipTier,
+    label: string,
+  ): GameVipSourceStatusView {
+    return {
+      checked,
+      active: tier > 0,
+      tier,
+      label,
+    };
+  }
+
+  private effectiveVipLabel(
+    tier: GameVipTier,
+    sources: {
+      fishpiTier: GameVipTier;
+      monthlyCardTier: GameVipTier;
+      legacyTier: GameVipTier;
+    },
+  ) {
+    if (tier <= 0) {
+      return "非VIP";
+    }
+    const sourceLabel =
+      sources.legacyTier === tier
+        ? legacyVipLabel(sources.legacyTier)
+        : sources.monthlyCardTier === tier
+          ? monthlyVipLabel(sources.monthlyCardTier)
+          : sources.fishpiTier === tier
+            ? "鱼排VIP"
+            : "";
+    return sourceLabel ? `${gameVipLabel(tier)} · ${sourceLabel}` : gameVipLabel(tier);
   }
 
   private async resolveMonthlyCardVip(uid: string): Promise<GameVipTier> {

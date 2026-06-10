@@ -831,36 +831,19 @@ const gameVipLabel = computed(() => {
   }
   return "--";
 });
-const gameVipSourceTiers = computed(
-  () => fishpiPoint.value?.gameVip?.sourceTiers || {},
-);
-const monthlyVipLabel = computed(() => {
-  const tier = Number(gameVipSourceTiers.value.monthly_card || 0);
-  if (tier >= 4) {
-    return "星耀月卡";
+const gameVipDisplayLabel = computed(() => {
+  if (busy.fishpiPoint && !fishpiPoint.value) {
+    return "同步中";
   }
-  if (tier >= 3) {
-    return "星穹月卡";
+  const vip = fishpiPoint.value?.gameVip;
+  if (vip?.effectiveVip?.checked) {
+    return vip.effectiveVip.label || gameVipLabel.value;
   }
-  return "--";
-});
-const fishpiVipSourceLabel = computed(() => {
-  const tier = Number(gameVipSourceTiers.value.fishpi || 0);
-  if (tier > 0) {
-    return `VIP${tier}`;
+  if (vip?.checked) {
+    return vip.label || gameVipLabel.value;
   }
-  if (fishpiPoint.value?.gameVip?.checked || fishpiPointError.value) {
-    return "非VIP";
-  }
-  return "--";
-});
-const legacyVipLabel = computed(() => {
-  const tier = Number(gameVipSourceTiers.value.badge || 0);
-  if (tier >= 4) {
-    return "小冰白金VIP";
-  }
-  if (tier >= 3) {
-    return "小冰VIP";
+  if (fishpiPoint.value || fishpiPointError.value) {
+    return "未同步";
   }
   return "--";
 });
@@ -3660,9 +3643,7 @@ const appContext = {
   playerStatusLabel,
   fishpiPointLabel,
   gameVipLabel,
-  monthlyVipLabel,
-  fishpiVipSourceLabel,
-  legacyVipLabel,
+  gameVipDisplayLabel,
   gameVipMuted,
   vipDailyRewardLabel,
   vipDailyCanClaim,
@@ -4000,10 +3981,7 @@ provide(APP_CONTEXT_KEY, appContext);
       :account-point="stats?.point ?? currentUser?.point ?? 0"
       :fishpi-point-label="fishpiPointLabel"
       :fishpi-point-muted="Boolean(fishpiPointError && !fishpiPoint)"
-      :game-vip-label="gameVipLabel"
-      :monthly-vip-label="monthlyVipLabel"
-      :fishpi-vip-source-label="fishpiVipSourceLabel"
-      :legacy-vip-label="legacyVipLabel"
+      :game-vip-label="gameVipDisplayLabel"
       :game-vip-muted="gameVipMuted"
       :vip-daily-can-claim="vipDailyCanClaim"
       :vip-daily-claim-busy="busy.vipDaily"

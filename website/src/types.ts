@@ -620,6 +620,10 @@ export interface GameVipStatus {
   active: boolean;
   tier: 0 | 1 | 2 | 3 | 4;
   label: string;
+  effectiveVip?: GameVipSourceStatus;
+  fishpiVip?: GameVipSourceStatus;
+  monthlyVip?: GameVipSourceStatus;
+  legacyVip?: GameVipSourceStatus;
   sources: Array<"fishpi" | "badge" | "monthly_card">;
   sourceLabels: string[];
   sourceTiers?: Partial<Record<"fishpi" | "badge" | "monthly_card", 0 | 1 | 2 | 3 | 4>>;
@@ -628,6 +632,13 @@ export interface GameVipStatus {
   dailyRewards: RedeemRewards;
   dailyClaimed: boolean;
   dailyClaimDate: string;
+}
+
+export interface GameVipSourceStatus {
+  checked: boolean;
+  active: boolean;
+  tier: 0 | 1 | 2 | 3 | 4;
+  label: string;
 }
 
 export type MonthlyCardType = "ice" | "platinum";

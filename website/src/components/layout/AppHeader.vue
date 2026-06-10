@@ -24,9 +24,6 @@ const props = defineProps<{
   fishpiPointLabel: string;
   fishpiPointMuted: boolean;
   gameVipLabel: string;
-  monthlyVipLabel: string;
-  fishpiVipSourceLabel: string;
-  legacyVipLabel: string;
   gameVipMuted: boolean;
   vipDailyCanClaim: boolean;
   vipDailyClaimBusy: boolean;
@@ -151,31 +148,7 @@ const emit = defineEmits<{
                 </strong>
               </div>
               <div class="user-menu-balance">
-                <span>月卡</span>
-                <strong :class="{ muted: props.monthlyVipLabel === '--' }">
-                  {{ props.monthlyVipLabel }}
-                </strong>
-              </div>
-              <div class="user-menu-balance">
-                <span>鱼排</span>
-                <strong
-                  :class="{
-                    muted:
-                      props.fishpiVipSourceLabel === '非VIP' ||
-                      props.fishpiVipSourceLabel === '--',
-                  }"
-                >
-                  {{ props.fishpiVipSourceLabel }}
-                </strong>
-              </div>
-              <div class="user-menu-balance">
-                <span>延续</span>
-                <strong :class="{ muted: props.legacyVipLabel === '--' }">
-                  {{ props.legacyVipLabel }}
-                </strong>
-              </div>
-              <div class="user-menu-balance">
-                <span>最高</span>
+                <span>权益</span>
                 <div class="user-menu-vip-line">
                   <strong :class="{ muted: props.gameVipMuted }">
                     {{ props.gameVipLabel }}

@@ -9,11 +9,37 @@ import { User } from "src/entity/user.entity";
 import { UserInventory } from "src/entity/inventory.entity";
 import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
 import { RewardService } from "src/reward/reward.service";
+import { badgeVipTier } from "src/vip/game-vip";
 import { RechargeService } from "./recharge.service";
 
 jest.mock("axios");
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+describe("badgeVipTier", () => {
+  it("递归识别小冰白金VIP", () => {
+    expect(
+      badgeVipTier({
+        data: {
+          user: {
+            badges: [
+              { display: { text: "普通勋章" } },
+              { display: { text: "小冰白金VIP" } },
+            ],
+          },
+        },
+      }),
+    ).toBe(4);
+  });
+
+  it("小冰白金VIP优先于小冰VIP", () => {
+    expect(
+      badgeVipTier({
+        allMetals: ["小冰VIP", { name: "小冰白金VIP" }],
+      }),
+    ).toBe(4);
+  });
+});
 
 function createRepository(overrides: Record<string, any> = {}) {
   return {
@@ -61,6 +87,30 @@ function expectedGameVip(patch: Record<string, any> = {}) {
     active: false,
     tier: 0,
     label: "未同步",
+    effectiveVip: {
+      checked: false,
+      active: false,
+      tier: 0,
+      label: "非VIP",
+    },
+    fishpiVip: {
+      checked: false,
+      active: false,
+      tier: 0,
+      label: "未同步",
+    },
+    monthlyVip: {
+      checked: true,
+      active: false,
+      tier: 0,
+      label: "未开通",
+    },
+    legacyVip: {
+      checked: false,
+      active: false,
+      tier: 0,
+      label: "未同步",
+    },
     sources: [],
     sourceLabels: [],
     sourceTiers: {
@@ -129,7 +179,14 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
-      gameVip: expectedGameVip(),
+      gameVip: expectedGameVip({
+        legacyVip: {
+          checked: true,
+          active: false,
+          tier: 0,
+          label: "无",
+        },
+      }),
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "https://fishpi.cn/user/fish-user/point",
@@ -193,6 +250,24 @@ describe("RechargeService", () => {
         active: true,
         tier: 2,
         label: "VIP2",
+        effectiveVip: {
+          checked: true,
+          active: true,
+          tier: 2,
+          label: "VIP2 · 鱼排VIP",
+        },
+        fishpiVip: {
+          checked: true,
+          active: true,
+          tier: 2,
+          label: "VIP2",
+        },
+        legacyVip: {
+          checked: true,
+          active: false,
+          tier: 0,
+          label: "无",
+        },
         sources: ["fishpi"],
         sourceTiers: {
           fishpi: 2,
@@ -463,7 +538,14 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
-      gameVip: expectedGameVip(),
+      gameVip: expectedGameVip({
+        legacyVip: {
+          checked: true,
+          active: false,
+          tier: 0,
+          label: "无",
+        },
+      }),
     });
     expect(mockedAxios.get).toHaveBeenCalledTimes(2);
   });
@@ -641,7 +723,14 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
-      gameVip: expectedGameVip(),
+      gameVip: expectedGameVip({
+        legacyVip: {
+          checked: true,
+          active: false,
+          tier: 0,
+          label: "无",
+        },
+      }),
     });
   });
 
