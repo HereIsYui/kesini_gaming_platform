@@ -114,7 +114,11 @@ export class RechargeService {
       userName: fishpiUserName,
       point: this.extractFishpiPoint(data),
       vip,
-      gameVip: await this.resolveGameVip(user, vip),
+      gameVip: await this.resolveGameVip(
+        user,
+        vip,
+        String(config.fishpi_api_key || "").trim(),
+      ),
     };
   }
 
@@ -134,7 +138,13 @@ export class RechargeService {
     if (!user) {
       throw new Error("用户不存在");
     }
-    return this.resolveGameVip(user);
+    const config = await this.ensureConfig();
+    const vip = await this.resolveFishpiVip(user, config);
+    return this.resolveGameVip(
+      user,
+      vip,
+      String(config.fishpi_api_key || "").trim(),
+    );
   }
 
   async claimVipDailyPack(uid: string) {
@@ -482,10 +492,11 @@ export class RechargeService {
   private async resolveGameVip(
     user: User,
     fishpiVip?: FishpiVipView,
+    fishpiApiKey = "",
   ): Promise<GameVipStatusView> {
     const vip = fishpiVip || (await this.getFishpiVipStatus(user.uid));
     const fishpiTier = fishpiVipTier(vip.levelCode, vip.active);
-    const badge = await this.resolveBadgeVip(user);
+    const badge = await this.resolveBadgeVip(user, fishpiApiKey);
     const monthlyCardTier = await this.resolveMonthlyCardVip(user.uid);
     const tier = Math.max(fishpiTier, badge.tier, monthlyCardTier) as GameVipTier;
     const sources: GameVipSource[] = [];
@@ -561,13 +572,21 @@ export class RechargeService {
 
   private async resolveBadgeVip(
     user: User,
+    apiKey: string,
   ): Promise<{ checked: boolean; tier: GameVipTier }> {
     try {
+      const fishpiApiKey = String(apiKey || "").trim();
+      if (!fishpiApiKey) {
+        return { checked: false, tier: 0 };
+      }
       const fishpiUserName = String(user.name || "").trim();
       if (!fishpiUserName) {
         return { checked: false, tier: 0 };
       }
-      const data = await this.callFishpiUserProfile(fishpiUserName);
+      const data = await this.callFishpiUserProfile(
+        fishpiUserName,
+        fishpiApiKey,
+      );
       return { checked: true, tier: badgeVipTier(data) };
     } catch {
       return { checked: false, tier: 0 };
@@ -616,8 +635,10 @@ export class RechargeService {
     return monthlyCardVipTier(subscriptions);
   }
 
-  private async callFishpiUserProfile(userName: string) {
-    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(userName)}`;
+  private async callFishpiUserProfile(userName: string, apiKey: string) {
+    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(
+      userName,
+    )}?apiKey=${encodeURIComponent(apiKey)}`;
     const response = await axios.get(endpoint, {
       timeout: 10000,
       headers: FISHPI_HEADERS,

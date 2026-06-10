@@ -179,14 +179,7 @@ describe("RechargeService", () => {
         levelCode: "",
         expiresAt: null,
       },
-      gameVip: expectedGameVip({
-        legacyVip: {
-          checked: true,
-          active: false,
-          tier: 0,
-          label: "无",
-        },
-      }),
+      gameVip: expectedGameVip(),
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "https://fishpi.cn/user/fish-user/point",
@@ -294,7 +287,7 @@ describe("RechargeService", () => {
     );
     expect(mockedAxios.get).toHaveBeenNthCalledWith(
       3,
-      "https://fishpi.cn/user/fish-user",
+      "https://fishpi.cn/user/fish-user?apiKey=api-key",
       expect.objectContaining({
         headers: expect.objectContaining({
           "User-Agent": "Kesini-Gacha-Platform/1.0",
@@ -367,6 +360,11 @@ describe("RechargeService", () => {
         },
       },
     });
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+      4,
+      "https://fishpi.cn/user/fish-user?apiKey=api-key",
+      expect.any(Object),
+    );
   });
 
   it("鱼排会员state为0时返回非VIP", async () => {
@@ -618,14 +616,14 @@ describe("RechargeService", () => {
       },
       gameVip: expectedGameVip({
         legacyVip: {
-          checked: true,
+          checked: false,
           active: false,
           tier: 0,
-          label: "无",
+          label: "未同步",
         },
       }),
     });
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
   });
 
   it("VIP每日礼包只能领取一次并发放奖励", async () => {
