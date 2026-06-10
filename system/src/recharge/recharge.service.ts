@@ -82,6 +82,13 @@ export interface GameVipBenefitView {
   };
 }
 
+interface DeductFishpiPointsOptions {
+  config?: RechargeConfig;
+  localAmount?: number;
+  memo?: string;
+  unavailableMessage?: string;
+}
+
 @Injectable()
 export class RechargeService {
   constructor(
@@ -304,22 +311,11 @@ export class RechargeService {
 
     let thirdPartyResponse: unknown;
     try {
-      const balanceResponse = await this.callFishpiPoint(fishpiUserName);
-      const userPoint = this.extractFishpiPoint(balanceResponse);
-      this.assertFishpiBalance(userPoint, fishpiCost);
-      const deductResponse = await this.callFishpiDeduct(
+      thirdPartyResponse = await this.deductFishpiPoints(uid, fishpiCost, {
         config,
-        fishpiUserName,
-        fishpiCost,
         localAmount,
-      );
-      thirdPartyResponse = {
-        balance: {
-          userName: fishpiUserName,
-          userPoint,
-        },
-        deduct: deductResponse,
-      };
+        unavailableMessage: "充值暂不可用",
+      });
     } catch (error) {
       await this.markRecord(pending.id, "failed", {
         third_party_response: this.getThirdPartyErrorResponse(error),
@@ -349,11 +345,19 @@ export class RechargeService {
     }
   }
 
-  async deductFishpiPoints(uid: string, rawAmount: number, memo: string) {
+  async deductFishpiPoints(
+    uid: string,
+    rawAmount: number,
+    memoOrOptions?: string | DeductFishpiPointsOptions,
+  ) {
     const fishpiCost = this.normalizeAmount(rawAmount);
-    const config = await this.ensureConfig();
+    const options =
+      typeof memoOrOptions === "string"
+        ? { memo: memoOrOptions }
+        : memoOrOptions || {};
+    const config = options.config || (await this.ensureConfig());
     if (!String(config.gold_finger_key || "").trim()) {
-      throw new Error("购买暂不可用");
+      throw new Error(options.unavailableMessage || "购买暂不可用");
     }
     const user = await this.dataSource.getRepository(User).findOne({
       where: { uid },
@@ -372,8 +376,8 @@ export class RechargeService {
       config,
       fishpiUserName,
       fishpiCost,
-      fishpiCost,
-      memo,
+      options.localAmount || fishpiCost,
+      options.memo,
     );
     return {
       balance: {

@@ -261,7 +261,7 @@ describe("MonthlyCardService", () => {
     expect(rechargeService.deductFishpiPoints).toHaveBeenCalledWith(
       "u1",
       30,
-      "星穹月卡购买",
+      "星穹月卡开通",
     );
     expect(repositories.get(MonthlyCardSubscription).rows).toEqual([
       expect.objectContaining({

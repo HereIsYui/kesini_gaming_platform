@@ -124,7 +124,7 @@ export class MonthlyCardService {
       thirdPartyResponse = await this.rechargeService.deductFishpiPoints(
         uid,
         plan.price,
-        `${plan.label}购买`,
+        `${plan.label}开通`,
       );
     } catch (error) {
       await this.markRecord(pending.id, "failed", {
