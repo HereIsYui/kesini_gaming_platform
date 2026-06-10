@@ -106,9 +106,8 @@ function expiryLabel(card: MonthlyCardStatusCard) {
 
 function benefitRows(card: MonthlyCardStatusCard) {
   return [
-    `VIP${card.vipLevel}`,
     card.vipLevel >= 4 ? "扫荡 50 次" : "扫荡 20 次",
-    card.vipLevel >= 4 ? "礼包 VIP4" : "礼包 VIP3",
+    "每日礼包",
   ];
 }
 
@@ -218,6 +217,7 @@ function sourceTier(
         </div>
 
         <button
+          v-if="!card.permanent"
           class="primary-action compact"
           type="button"
           :disabled="
