@@ -3270,6 +3270,16 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.monthly-benefit-empty {
+  min-height: 56px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--chip-bg);
+}
+
 :root[data-theme="light"] .monthly-benefit-grid article {
   background: rgba(255, 255, 255, 0.76);
 }
