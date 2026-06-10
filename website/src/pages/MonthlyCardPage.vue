@@ -181,7 +181,7 @@ function benefitRows(card: MonthlyCardStatusCard): BenefitRow[] {
     },
     {
       label: "扫荡",
-      value: `${benefit?.sweepLimit || (card.vipLevel >= 4 ? 50 : 20)} 次`,
+      value: `${benefit?.sweepLimit ?? (card.vipLevel >= 4 ? 50 : 20)} 次`,
     },
     {
       label: "手续费",

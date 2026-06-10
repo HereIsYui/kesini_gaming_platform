@@ -810,6 +810,44 @@ describe("RechargeService", () => {
     });
   });
 
+  it("VIP福利概览使用后台配置的扫荡次数", async () => {
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          SystemConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue({
+              key: "game_vip_benefits",
+              value: JSON.stringify({
+                vip1_sweepLimit: 7,
+                vip1_tradeFeeDiscount: 0.02,
+                vip1_dailyRewards: { points: 10, items: [] },
+                vip2_sweepLimit: 14,
+                vip2_tradeFeeDiscount: 0.04,
+                vip2_dailyRewards: { points: 15, items: [] },
+                vip3_sweepLimit: 33,
+                vip3_tradeFeeDiscount: 0.06,
+                vip3_dailyRewards: { points: 25, items: [] },
+                vip4_sweepLimit: 66,
+                vip4_tradeFeeDiscount: 0.08,
+                vip4_dailyRewards: { points: 40, items: [] },
+              }),
+            }),
+          }),
+        ],
+      ]),
+    );
+
+    await expect(service.getGameVipBenefitOverview()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tier: 1, sweepLimit: 7 }),
+        expect.objectContaining({ tier: 2, sweepLimit: 14 }),
+        expect.objectContaining({ tier: 3, sweepLimit: 33 }),
+        expect.objectContaining({ tier: 4, sweepLimit: 66 }),
+      ]),
+    );
+  });
+
   it("鱼排积分查询缺少用户名时返回错误", async () => {
     const { service } = createService(
       new Map<any, any>([

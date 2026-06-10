@@ -186,6 +186,42 @@ describe("MonthlyCardService", () => {
     });
   });
 
+  it("月卡状态返回后台配置的VIP福利", async () => {
+    const { service } = createService({
+      rechargeService: {
+        getGameVipBenefitOverview: jest.fn().mockResolvedValue([
+          {
+            tier: 3,
+            label: "VIP3",
+            sweepLimit: 33,
+            tradeFeeDiscount: 0.06,
+            dailyRewards: { points: 25, items: [] },
+          },
+          {
+            tier: 4,
+            label: "VIP4",
+            sweepLimit: 66,
+            tradeFeeDiscount: 0.08,
+            dailyRewards: { points: 40, items: [] },
+          },
+        ]),
+      },
+    });
+
+    await expect(service.getMyStatus("u1")).resolves.toMatchObject({
+      config: {
+        benefitTiers: expect.arrayContaining([
+          expect.objectContaining({ tier: 3, sweepLimit: 33 }),
+          expect.objectContaining({ tier: 4, sweepLimit: 66 }),
+        ]),
+      },
+      benefitTiers: expect.arrayContaining([
+        expect.objectContaining({ tier: 3, sweepLimit: 33 }),
+        expect.objectContaining({ tier: 4, sweepLimit: 66 }),
+      ]),
+    });
+  });
+
   it("月卡未开启时不能购买", async () => {
     const { service } = createService();
 

@@ -1360,6 +1360,9 @@ watch(activeSection, async (section) => {
       loadPveRecords(),
     ]);
   }
+  if (section === "monthlyCard" && isAuthed.value) {
+    await loadMonthlyCardStatus();
+  }
 });
 
 watch(
