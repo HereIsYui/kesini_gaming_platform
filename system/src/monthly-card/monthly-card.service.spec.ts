@@ -5,7 +5,7 @@ import { User } from "src/entity/user.entity";
 import { MonthlyCardService } from "./monthly-card.service";
 
 function createRepository(rows: any[] = []) {
-  return {
+  const repository = {
     rows,
     create: jest.fn((value) => ({ ...value })),
     find: jest.fn(async (query?: any) => {
@@ -23,6 +23,13 @@ function createRepository(rows: any[] = []) {
       );
     }),
     save: jest.fn(async (value) => {
+      if (Array.isArray(value)) {
+        const saved = [];
+        for (const item of value) {
+          saved.push(await repository.save(item));
+        }
+        return saved;
+      }
       const next = { ...value };
       if (!next.id) {
         next.id = rows.length + 1;
@@ -38,6 +45,7 @@ function createRepository(rows: any[] = []) {
       return next;
     }),
   };
+  return repository;
 }
 
 function createService(options: {
@@ -265,8 +273,8 @@ describe("MonthlyCardService", () => {
     ]);
   });
 
-  it("同档续费从原到期时间延长", async () => {
-    const { service } = createService({
+  it("已开通同档月卡时不能重复购买", async () => {
+    const { service, rechargeService } = createService({
       config: {
         enabled: true,
         ice_enabled: true,
@@ -285,10 +293,52 @@ describe("MonthlyCardService", () => {
 
     await expect(
       service.purchase("u1", { cardType: "ice", requestId: "r2" }),
-    ).resolves.toMatchObject({
-      startsAt: "2026-06-19T00:00:00.000Z",
-      expiresAt: "2026-07-19T00:00:00.000Z",
+    ).rejects.toThrow("只能购买更高月卡");
+    expect(rechargeService.deductFishpiPoints).not.toHaveBeenCalled();
+  });
+
+  it("购买更高档月卡会结束原月卡", async () => {
+    const { service, repositories } = createService({
+      config: {
+        enabled: true,
+        ice_enabled: true,
+        ice_price: 30,
+        platinum_enabled: true,
+        platinum_price: 60,
+      },
+      subscriptions: [
+        {
+          id: 1,
+          uid: "u1",
+          card_type: "ice",
+          vip_level: 3,
+          expires_at: new Date("2026-06-19T00:00:00.000Z"),
+        },
+      ],
     });
+
+    await expect(
+      service.purchase("u1", { cardType: "platinum", requestId: "r3" }),
+    ).resolves.toMatchObject({
+      requestId: "r3",
+      cardType: "platinum",
+      vipLevel: 4,
+      startsAt: "2026-06-09T00:00:00.000Z",
+      expiresAt: "2026-07-09T00:00:00.000Z",
+    });
+    expect(repositories.get(MonthlyCardSubscription).rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          card_type: "ice",
+          expires_at: new Date("2026-06-09T00:00:00.000Z"),
+        }),
+        expect.objectContaining({
+          card_type: "platinum",
+          vip_level: 4,
+          expires_at: new Date("2026-07-09T00:00:00.000Z"),
+        }),
+      ]),
+    );
   });
 
   it("小冰VIP只显示星穹月卡永久", async () => {

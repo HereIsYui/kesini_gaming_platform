@@ -818,11 +818,14 @@ const fishpiPointLabel = computed(() => {
   }
   return "--";
 });
+const gameVipStatus = computed(
+  () => fishpiPoint.value?.gameVip || monthlyCardStatus.value?.gameVip || null,
+);
 const gameVipLabel = computed(() => {
-  if (busy.fishpiPoint && !fishpiPoint.value) {
+  if (busy.fishpiPoint && !fishpiPoint.value && !gameVipStatus.value) {
     return "同步中";
   }
-  const vip = fishpiPoint.value?.gameVip;
+  const vip = gameVipStatus.value;
   if (vip?.checked) {
     return vip.label || (vip.active ? `VIP${vip.tier}` : "非VIP");
   }
@@ -832,10 +835,10 @@ const gameVipLabel = computed(() => {
   return "--";
 });
 const gameVipDisplayLabel = computed(() => {
-  if (busy.fishpiPoint && !fishpiPoint.value) {
+  if (busy.fishpiPoint && !fishpiPoint.value && !gameVipStatus.value) {
     return "同步中";
   }
-  const vip = fishpiPoint.value?.gameVip;
+  const vip = gameVipStatus.value;
   if (vip?.effectiveVip?.checked) {
     return vip.effectiveVip.label || gameVipLabel.value;
   }
@@ -848,17 +851,17 @@ const gameVipDisplayLabel = computed(() => {
   return "--";
 });
 const gameVipMuted = computed(() => {
-  const vip = fishpiPoint.value?.gameVip;
+  const vip = gameVipStatus.value;
   return !vip?.checked || !vip.active;
 });
 const vipDailyClaimed = computed(
-  () => fishpiPoint.value?.gameVip?.dailyClaimed === true,
+  () => gameVipStatus.value?.dailyClaimed === true,
 );
 const vipDailyRewardLabel = computed(() => {
-  if (busy.fishpiPoint && !fishpiPoint.value) {
+  if (busy.fishpiPoint && !fishpiPoint.value && !gameVipStatus.value) {
     return "同步中";
   }
-  const vip = fishpiPoint.value?.gameVip;
+  const vip = gameVipStatus.value;
   if (!vip?.checked || !vip.active) {
     return "--";
   }
@@ -1640,6 +1643,7 @@ async function claimVipDailyPack() {
       fishpiPoint: true,
       pointRecords: true,
     });
+    await loadMonthlyCardStatus();
   } catch (error) {
     notify("error", getErrorMessage(error));
   } finally {

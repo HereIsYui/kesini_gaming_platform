@@ -16,9 +16,11 @@ import {
   flattenMonthlyCardConfig,
   isMonthlyCardActive,
   MONTHLY_CARD_CONFIG_KEY,
+  monthlyCardVipTier,
   MonthlyCardConfig,
   normalizeMonthlyCardConfig,
   normalizeMonthlyCardType,
+  normalizeMonthlyVipLevel,
   toMonthlyCardPlanView,
 } from "./monthly-card.config";
 
@@ -80,8 +82,14 @@ export class MonthlyCardService {
       return this.handleExistingRecord(existing);
     }
 
-    const config = await this.readConfig();
-    this.assertPurchasable(config, cardType);
+    const [config, subscriptions, gameVip] = await Promise.all([
+      this.readConfig(),
+      this.dataSource.getRepository(MonthlyCardSubscription).find({
+        where: { uid },
+      }),
+      this.rechargeService.getGameVipStatus(uid),
+    ]);
+    this.assertPurchasable(config, cardType, subscriptions, gameVip);
     const plan = config.plans[cardType];
     const user = await this.dataSource.getRepository(User).findOne({
       where: { uid },
@@ -191,14 +199,14 @@ export class MonthlyCardService {
 
     const plan = config.plans[cardType];
     const now = new Date();
+    const subscriptions = await subscriptionRepository.find({
+      where: { uid },
+    });
     const subscription = await subscriptionRepository.findOne({
       where: { uid, card_type: cardType },
       lock: { mode: "pessimistic_write" },
     });
-    const startsAt =
-      subscription && isMonthlyCardActive(subscription, now)
-        ? new Date(subscription.expires_at)
-        : now;
+    const startsAt = now;
     const expiresAt = this.addDays(startsAt, config.durationDays);
     const nextSubscription =
       subscription ||
@@ -208,7 +216,19 @@ export class MonthlyCardService {
       });
     nextSubscription.vip_level = plan.vipLevel;
     nextSubscription.expires_at = expiresAt;
-    await subscriptionRepository.save(nextSubscription);
+    const expiredSubscriptions = subscriptions
+      .filter(
+        (item) =>
+          item.card_type !== cardType && isMonthlyCardActive(item, now),
+      )
+      .map((item) => ({
+        ...item,
+        expires_at: now,
+      }));
+    await subscriptionRepository.save([
+      ...expiredSubscriptions,
+      nextSubscription,
+    ]);
 
     record.starts_at = startsAt;
     record.expires_at = expiresAt;
@@ -227,6 +247,10 @@ export class MonthlyCardService {
     const subscriptionMap = new Map(
       subscriptions.map((subscription) => [subscription.card_type, subscription]),
     );
+    const currentMonthlyTier = this.getCurrentMonthlyTier(
+      subscriptions,
+      gameVip,
+    );
     const badgeTier = Number(gameVip.sourceTiers?.badge || 0);
     return toMonthlyCardPlanView(config).map((plan) => {
       const subscription = subscriptionMap.get(plan.cardType);
@@ -234,6 +258,12 @@ export class MonthlyCardService {
       const permanent =
         (plan.cardType === "ice" && badgeTier === 3) ||
         (plan.cardType === "platinum" && badgeTier >= 4);
+      const canPurchase =
+        !permanent &&
+        config.enabled &&
+        plan.enabled &&
+        plan.price > 0 &&
+        plan.vipLevel > currentMonthlyTier;
       return {
         ...plan,
         active,
@@ -244,12 +274,21 @@ export class MonthlyCardService {
             ? new Date(subscription.expires_at).toISOString()
             : null,
         statusLabel: permanent ? "永久" : active ? "生效中" : "未开通",
-        actionLabel: active || permanent ? "续费" : "购买",
+        actionLabel: currentMonthlyTier > 0 ? "升级" : "购买",
+        canPurchase,
+        unavailableReason: canPurchase
+          ? ""
+          : this.getUnavailableReason(config, plan, currentMonthlyTier),
       };
     });
   }
 
-  private assertPurchasable(config: MonthlyCardConfig, cardType: MonthlyCardType) {
+  private assertPurchasable(
+    config: MonthlyCardConfig,
+    cardType: MonthlyCardType,
+    subscriptions: MonthlyCardSubscription[] = [],
+    gameVip: { sourceTiers?: { badge?: number } } = {},
+  ) {
     if (!config.enabled) {
       throw new Error("月卡暂未开启");
     }
@@ -260,6 +299,39 @@ export class MonthlyCardService {
     if (!Number.isInteger(plan.price) || plan.price <= 0) {
       throw new Error("月卡价格无效");
     }
+    const currentMonthlyTier = this.getCurrentMonthlyTier(
+      subscriptions,
+      gameVip,
+    );
+    if (plan.vipLevel <= currentMonthlyTier) {
+      throw new Error("只能购买更高月卡");
+    }
+  }
+
+  private getCurrentMonthlyTier(
+    subscriptions: MonthlyCardSubscription[],
+    gameVip: { sourceTiers?: { badge?: number } } = {},
+  ) {
+    const subscriptionTier = monthlyCardVipTier(subscriptions);
+    const badgeTier = normalizeMonthlyVipLevel(gameVip.sourceTiers?.badge);
+    return Math.max(subscriptionTier, badgeTier);
+  }
+
+  private getUnavailableReason(
+    config: MonthlyCardConfig,
+    plan: { enabled: boolean; price: number; vipLevel: number },
+    currentMonthlyTier: number,
+  ) {
+    if (!config.enabled || !plan.enabled) {
+      return "暂不可买";
+    }
+    if (!Number.isInteger(plan.price) || plan.price <= 0) {
+      return "未配置";
+    }
+    if (plan.vipLevel <= currentMonthlyTier) {
+      return "仅可升级";
+    }
+    return "";
   }
 
   private async markRecord(

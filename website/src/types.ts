@@ -669,6 +669,8 @@ export interface MonthlyCardStatusCard extends MonthlyCardPlan {
   expiresAt: string | null;
   statusLabel: string;
   actionLabel: string;
+  canPurchase?: boolean;
+  unavailableReason?: string;
 }
 
 export interface MonthlyCardStatusResponse {

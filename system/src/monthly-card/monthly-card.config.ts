@@ -32,6 +32,8 @@ export interface MonthlyCardStatusView extends MonthlyCardPlanView {
   expiresAt: string | null;
   statusLabel: string;
   actionLabel: string;
+  canPurchase: boolean;
+  unavailableReason: string;
 }
 
 export const DEFAULT_MONTHLY_CARD_CONFIG: MonthlyCardConfig = {

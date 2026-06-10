@@ -19,6 +19,7 @@ const {
   formatDate,
   loadMonthlyCardStatus,
   purchaseMonthlyCard,
+  claimVipDailyPack,
 } = useAppContext() as Record<string, any>;
 
 type CurrentMonthlyCardView = {
@@ -45,7 +46,7 @@ const benefitMissing = computed(
   () => Boolean(monthlyCardStatus.value) && benefitTiers.value.length === 0,
 );
 const monthlyGameVip = computed<GameVipStatus | null>(
-  () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
+  () => fishpiPoint.value?.gameVip || monthlyCardStatus.value?.gameVip || null,
 );
 const legacyVipStatus = computed(() => monthlyGameVip.value?.legacyVip || null);
 const legacyVipTier = computed(() => {
@@ -57,6 +58,15 @@ const legacyVipTier = computed(() => {
     sourceTier(fishpiPoint.value?.gameVip, "badge"),
   );
 });
+const activeMonthlyTier = computed(() =>
+  monthlyCards.value.reduce(
+    (tier, card) => (card.active ? Math.max(tier, Number(card.vipLevel)) : tier),
+    0,
+  ),
+);
+const currentMonthlyTier = computed(() =>
+  Math.max(activeMonthlyTier.value, legacyVipTier.value),
+);
 const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
   const activeCard = monthlyCards.value
     .filter((card) => card.active)
@@ -65,14 +75,14 @@ const currentMonthlyCard = computed<CurrentMonthlyCardView | null>(() => {
         Number(right.vipLevel || 0) - Number(left.vipLevel || 0),
     )[0];
 
-  if (activeCard) {
+  const badgeTier = legacyVipTier.value;
+  if (activeCard && Number(activeCard.vipLevel) >= badgeTier) {
     return {
       label: activeCard.label,
       expiry: activeCard.expiresAt ? formatDate(activeCard.expiresAt) : "生效中",
     };
   }
 
-  const badgeTier = legacyVipTier.value;
   if (badgeTier >= 3) {
     return {
       label: badgeTier >= 4 ? "星耀月卡" : "星穹月卡",
@@ -87,6 +97,15 @@ const currentMonthlyCardLabel = computed(
 );
 const monthlyCardExpiryLabel = computed(
   () => currentMonthlyCard.value?.expiry || "未开通",
+);
+const monthlyVipDailyClaimed = computed(
+  () => monthlyGameVip.value?.dailyClaimed === true,
+);
+const monthlyVipCanClaim = computed(
+  () =>
+    monthlyGameVip.value?.checked === true &&
+    monthlyGameVip.value?.active === true &&
+    !monthlyVipDailyClaimed.value,
 );
 const legacyVipLabel = computed(() => {
   if (legacyVipStatus.value) {
@@ -157,6 +176,43 @@ function monthlyCardNameForTier(tier: number) {
 
 function feeDiscountLabel(value: number) {
   return value > 0 ? `减 ${formatPercent(value)}` : "无";
+}
+
+function isCurrentMonthlyCard(card: MonthlyCardStatusCard) {
+  return (
+    (card.active || card.permanent) &&
+    Number(card.vipLevel) === currentMonthlyTier.value
+  );
+}
+
+function canPurchaseCard(card: MonthlyCardStatusCard) {
+  if (typeof card.canPurchase === "boolean") {
+    return card.canPurchase;
+  }
+  return (
+    !card.permanent &&
+    !card.active &&
+    monthlyConfig.value?.enabled === true &&
+    card.enabled &&
+    card.price > 0 &&
+    Number(card.vipLevel) > currentMonthlyTier.value
+  );
+}
+
+function unavailableReason(card: MonthlyCardStatusCard) {
+  if (card.unavailableReason) {
+    return card.unavailableReason;
+  }
+  if (!monthlyConfig.value?.enabled || !card.enabled) {
+    return "暂不可买";
+  }
+  if (card.price <= 0) {
+    return "未配置";
+  }
+  if (Number(card.vipLevel) <= currentMonthlyTier.value) {
+    return "仅可升级";
+  }
+  return "";
 }
 
 function sourceTier(
@@ -265,20 +321,32 @@ function sourceTier(
           </div>
         </div>
 
-        <button
-          v-if="!card.permanent"
-          class="primary-action compact"
-          type="button"
-          :disabled="
-            busy.monthlyCard ||
-            !monthlyConfig?.enabled ||
-            !card.enabled ||
-            card.price <= 0
-          "
-          @click="purchaseMonthlyCard(card.cardType)"
-        >
-          {{ card.actionLabel }}
-        </button>
+        <div class="monthly-card-actions">
+          <button
+            v-if="isCurrentMonthlyCard(card)"
+            class="secondary-action compact"
+            type="button"
+            :disabled="busy.vipDaily || !monthlyVipCanClaim"
+            @click="claimVipDailyPack"
+          >
+            {{ monthlyVipDailyClaimed ? "已领取" : "领取" }}
+          </button>
+          <button
+            v-if="canPurchaseCard(card)"
+            class="primary-action compact"
+            type="button"
+            :disabled="busy.monthlyCard"
+            @click="purchaseMonthlyCard(card.cardType)"
+          >
+            {{ card.actionLabel }}
+          </button>
+          <span
+            v-else-if="!isCurrentMonthlyCard(card) && unavailableReason(card)"
+            class="monthly-card-unavailable"
+          >
+            {{ unavailableReason(card) }}
+          </span>
+        </div>
       </article>
     </div>
 

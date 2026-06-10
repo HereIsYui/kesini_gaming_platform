@@ -3179,6 +3179,31 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.monthly-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.monthly-card-actions button {
+  min-width: 84px;
+}
+
+.monthly-card-unavailable {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
 .monthly-benefit-panel {
   border: 1px solid var(--border);
   background: var(--panel-soft);
