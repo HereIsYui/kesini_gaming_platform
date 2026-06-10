@@ -43,7 +43,6 @@ const FISHPI_USER_ENDPOINT = "https://fishpi.cn/user";
 const FISHPI_MEMBERSHIP_ENDPOINT = "https://fishpi.cn/api/membership";
 const FISHPI_MEMBERSHIPS_CONFIGS_ENDPOINT =
   "https://fishpi.cn/api/memberships/configs";
-const FISHPI_USER_INFO_ENDPOINT = "https://fishpi.cn/api/user/getInfoById";
 const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const FISHPI_HEADERS = {
   "User-Agent": "Kesini-Gacha-Platform/1.0",
@@ -564,7 +563,11 @@ export class RechargeService {
     user: User,
   ): Promise<{ checked: boolean; tier: GameVipTier }> {
     try {
-      const data = await this.callFishpiUserInfo(user.uid);
+      const fishpiUserName = String(user.name || "").trim();
+      if (!fishpiUserName) {
+        return { checked: false, tier: 0 };
+      }
+      const data = await this.callFishpiUserProfile(fishpiUserName);
       return { checked: true, tier: badgeVipTier(data) };
     } catch {
       return { checked: false, tier: 0 };
@@ -613,10 +616,8 @@ export class RechargeService {
     return monthlyCardVipTier(subscriptions);
   }
 
-  private async callFishpiUserInfo(userId: string) {
-    const endpoint = `${FISHPI_USER_INFO_ENDPOINT}?userId=${encodeURIComponent(
-      userId,
-    )}`;
+  private async callFishpiUserProfile(userName: string) {
+    const endpoint = `${FISHPI_USER_ENDPOINT}/${encodeURIComponent(userName)}`;
     const response = await axios.get(endpoint, {
       timeout: 10000,
       headers: FISHPI_HEADERS,

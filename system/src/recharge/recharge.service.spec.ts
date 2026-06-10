@@ -22,7 +22,7 @@ describe("badgeVipTier", () => {
       badgeVipTier({
         data: {
           user: {
-            badges: [
+            allMetalOwned: [
               { display: { text: "普通勋章" } },
               { display: { text: "小冰白金VIP" } },
             ],
@@ -35,7 +35,7 @@ describe("badgeVipTier", () => {
   it("小冰白金VIP优先于小冰VIP", () => {
     expect(
       badgeVipTier({
-        allMetals: ["小冰VIP", { name: "小冰白金VIP" }],
+        allMetalOwned: ["小冰VIP", { name: "小冰白金VIP" }],
       }),
     ).toBe(4);
   });
@@ -221,6 +221,9 @@ describe("RechargeService", () => {
             expiresAt,
           },
         },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { allMetalOwned: [] } },
       });
 
     const { service } = createService(
@@ -289,6 +292,81 @@ describe("RechargeService", () => {
         }),
       }),
     );
+    expect(mockedAxios.get).toHaveBeenNthCalledWith(
+      3,
+      "https://fishpi.cn/user/fish-user",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": "Kesini-Gacha-Platform/1.0",
+        }),
+      }),
+    );
+  });
+
+  it("从用户主页allMetalOwned识别小冰白金VIP", async () => {
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({
+        uid: "123456",
+        name: "fish-user",
+      }),
+    });
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { userPoint: 100 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: { lvCode: "", state: 0 } },
+      })
+      .mockResolvedValueOnce({
+        data: { code: 0, data: [] },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          code: 0,
+          data: {
+            allMetalOwned: [{ name: "小冰白金VIP" }],
+          },
+        },
+      });
+
+    const { service } = createService(
+      new Map<any, any>([
+        [
+          RechargeConfig,
+          createRepository({
+            findOne: jest.fn().mockResolvedValue(createEnabledConfig()),
+          }),
+        ],
+        [RechargeRecord, createRepository()],
+        [User, userRepository],
+      ]),
+    );
+
+    await expect(service.getFishpiPoint("123456")).resolves.toMatchObject({
+      gameVip: {
+        checked: true,
+        active: true,
+        tier: 4,
+        label: "VIP4",
+        effectiveVip: {
+          checked: true,
+          active: true,
+          tier: 4,
+          label: "VIP4 · 小冰白金VIP",
+        },
+        legacyVip: {
+          checked: true,
+          active: true,
+          tier: 4,
+          label: "小冰白金VIP",
+        },
+        sourceTiers: {
+          fishpi: 0,
+          badge: 4,
+          monthly_card: 0,
+        },
+      },
+    });
   });
 
   it("鱼排会员state为0时返回非VIP", async () => {
