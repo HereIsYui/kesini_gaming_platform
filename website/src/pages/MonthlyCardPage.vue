@@ -31,15 +31,67 @@ type BenefitRow = {
   value: string;
 };
 
+const fallbackBenefitTiers: GameVipBenefitView[] = [
+  {
+    tier: 1,
+    label: "VIP1",
+    sweepLimit: 5,
+    tradeFeeDiscount: 0.02,
+    dailyRewards: {
+      points: 10,
+      items: [{ itemId: 0, itemName: "R碎片", num: 2 }],
+    },
+  },
+  {
+    tier: 2,
+    label: "VIP2",
+    sweepLimit: 10,
+    tradeFeeDiscount: 0.04,
+    dailyRewards: {
+      points: 15,
+      items: [
+        { itemId: 0, itemName: "R碎片", num: 4 },
+        { itemId: 0, itemName: "SR碎片", num: 1 },
+      ],
+    },
+  },
+  {
+    tier: 3,
+    label: "VIP3",
+    sweepLimit: 20,
+    tradeFeeDiscount: 0.06,
+    dailyRewards: {
+      points: 25,
+      items: [{ itemId: 0, itemName: "SR碎片", num: 2 }],
+    },
+  },
+  {
+    tier: 4,
+    label: "VIP4",
+    sweepLimit: 50,
+    tradeFeeDiscount: 0.08,
+    dailyRewards: {
+      points: 40,
+      items: [
+        { itemId: 0, itemName: "SR碎片", num: 3 },
+        { itemId: 0, itemName: "SSR碎片", num: 1 },
+      ],
+    },
+  },
+];
+
 const monthlyCards = computed<MonthlyCardStatusCard[]>(
   () => monthlyCardStatus.value?.cards || [],
 );
 const monthlyConfig = computed(() => monthlyCardStatus.value?.config || null);
 const benefitTiers = computed<GameVipBenefitView[]>(
-  () =>
-    monthlyCardStatus.value?.benefitTiers ||
-    monthlyCardStatus.value?.config?.benefitTiers ||
-    [],
+  () => {
+    const apiTiers =
+      monthlyCardStatus.value?.benefitTiers ||
+      monthlyCardStatus.value?.config?.benefitTiers ||
+      [];
+    return apiTiers.length > 0 ? apiTiers : fallbackBenefitTiers;
+  },
 );
 const monthlyGameVip = computed<GameVipStatus | null>(
   () => monthlyCardStatus.value?.gameVip || fishpiPoint.value?.gameVip || null,
