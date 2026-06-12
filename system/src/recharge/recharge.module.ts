@@ -13,6 +13,7 @@ import { User } from "src/entity/user.entity";
 import { VipDailyClaim } from "src/entity/vipDailyClaim.entity";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 import { RewardModule } from "src/reward/reward.module";
+import { RedisUtil } from "src/utils/redis";
 import { RechargeController } from "./recharge.controller";
 import { RechargeService } from "./recharge.service";
 import { VipController } from "./vip.controller";
@@ -36,7 +37,7 @@ import { VipController } from "./vip.controller";
     RewardModule,
   ],
   controllers: [RechargeController, VipController],
-  providers: [RechargeService],
+  providers: [RechargeService, RedisUtil],
   exports: [RechargeService],
 })
 export class RechargeModule {}

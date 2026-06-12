@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import axios from "axios";
 import { OpenIdNonce } from "src/entity/openIdNonce.entity";
@@ -8,6 +8,7 @@ import { LessThan, Repository } from "typeorm";
 import { JwtUtilsService } from "src/utils/jwt";
 import { SiteConfigService } from "src/config/site-config.service";
 import { assignUserPublicId } from "src/utils/user-public-id";
+import { RechargeService } from "src/recharge/recharge.service";
 
 const NONCE_VALID_MS = 5 * 60 * 1000;
 
@@ -19,6 +20,8 @@ export class ApisService {
     private readonly openIdNonceRepository: Repository<OpenIdNonce>,
     private readonly jwtUtilsService: JwtUtilsService,
     private readonly siteConfigService: SiteConfigService,
+    @Optional()
+    private readonly rechargeService?: RechargeService,
   ) {}
 
   private logger = new Logger(ApisService.name);
@@ -135,6 +138,15 @@ export class ApisService {
 
     // 生成JWT token
     const token = this.jwtUtilsService.generateToken({ uid: user.uid });
+
+    // 登录成功后异步预热 fishpi 积分/VIP 缓存，不阻塞登录响应。
+    if (this.rechargeService) {
+      this.rechargeService.refreshFishpiCache(user.uid).catch((error) => {
+        this.logger.warn(
+          `预热 fishpi 缓存失败 uid=${user.uid}: ${error?.message || error}`,
+        );
+      });
+    }
 
     return {
       data: {

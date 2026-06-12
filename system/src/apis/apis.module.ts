@@ -7,6 +7,7 @@ import { OpenIdNonce } from "src/entity/openIdNonce.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { SiteConfigModule } from "src/config/site-config.module";
 import { AnnouncementModule } from "src/announcement/announcement.module";
+import { RechargeModule } from "src/recharge/recharge.module";
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AnnouncementModule } from "src/announcement/announcement.module";
     AuthModule,
     SiteConfigModule,
     AnnouncementModule,
+    RechargeModule,
   ],
   controllers: [ApisController],
   providers: [ApisService],
