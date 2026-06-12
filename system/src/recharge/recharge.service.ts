@@ -18,6 +18,7 @@ import { monthlyCardVipTier } from "src/monthly-card/monthly-card.config";
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
 import { RewardService } from "src/reward/reward.service";
+import { RedisUtil } from "src/utils/redis";
 import {
   badgeVipTier,
   cloneRewards,
@@ -48,6 +49,12 @@ const DEFAULT_MEMO_TEMPLATE = "抽卡平台充值，兑换星穹币 {amount}";
 const FISHPI_HEADERS = {
   "User-Agent": "Kesini-Gacha-Platform/1.0",
 };
+
+// fishpi 积分/VIP 缓存：登录与充值时刷新，其余时间读缓存，避免每次请求都打外部接口。
+const FISHPI_POINT_CACHE_PREFIX = "fishpi:point:";
+const FISHPI_VIP_CACHE_PREFIX = "fishpi:vip:";
+const FISHPI_BADGE_CACHE_PREFIX = "fishpi:badge:";
+const FISHPI_CACHE_TTL_SECONDS = 3600;
 
 export interface RechargeConfigView {
   enabled: boolean;
@@ -99,6 +106,8 @@ export class RechargeService {
     private readonly achievementService?: AchievementService,
     @Optional()
     private readonly rewardService?: RewardService,
+    @Optional()
+    private readonly redis?: RedisUtil,
   ) {}
 
   async getPublicConfig(): Promise<RechargeConfigView> {
@@ -126,11 +135,17 @@ export class RechargeService {
     }
 
     const config = await this.ensureConfig();
-    const data = await this.callFishpiPoint(fishpiUserName);
+    // 积分优先读缓存，缓存未命中再回源外部接口并写回缓存。
+    let point = await this.readCachedFishpiPoint(uid);
+    if (point === null) {
+      // 无缓存时回源；外部异常时直接抛出，由前端展示错误（不会影响抽卡）。
+      point = this.extractFishpiPoint(await this.callFishpiPoint(fishpiUserName));
+      await this.writeCachedFishpiPoint(uid, point);
+    }
     const vip = await this.resolveFishpiVip(user, config);
     return {
       userName: fishpiUserName,
-      point: this.extractFishpiPoint(data),
+      point,
       vip,
       gameVip: await this.resolveGameVip(
         user,
@@ -379,6 +394,8 @@ export class RechargeService {
       options.localAmount || fishpiCost,
       options.memo,
     );
+    // 扣款成功，积分缓存按已知扣款额同步更新，避免下次读到偏高的旧值。
+    await this.writeCachedFishpiPoint(uid, userPoint - fishpiCost);
     return {
       balance: {
         userName: fishpiUserName,
@@ -515,6 +532,7 @@ export class RechargeService {
   private async resolveFishpiVip(
     user: User,
     config: RechargeConfig,
+    options?: { forceRefresh?: boolean },
   ): Promise<FishpiVipView> {
     const apiKey = String(config.fishpi_api_key || "").trim();
     if (!apiKey) {
@@ -524,18 +542,28 @@ export class RechargeService {
     if (!userId) {
       return this.uncheckedFishpiVip();
     }
+    // 优先读缓存（预热刷新时跳过），未命中再回源外部接口。
+    if (!options?.forceRefresh) {
+      const cached = await this.readCachedFishpiVip(userId);
+      if (cached) {
+        return cached;
+      }
+    }
     let directResult: FishpiVipView | null = null;
     try {
       const data = await this.callFishpiMembership(userId, apiKey);
       directResult = this.extractFishpiVip(data);
       if (directResult.active) {
+        await this.writeCachedFishpiVip(userId, directResult);
         return directResult;
       }
     } catch {
       directResult = null;
     }
     const configResult = await this.resolveFishpiVipFromConfigs(user, apiKey);
-    return configResult || directResult || this.uncheckedFishpiVip();
+    const resolved = configResult || directResult || this.uncheckedFishpiVip();
+    await this.writeCachedFishpiVip(userId, resolved);
+    return resolved;
   }
 
   private async resolveGameVip(
@@ -636,11 +664,30 @@ export class RechargeService {
       if (!fishpiUserName) {
         return { checked: false, tier: 0 };
       }
+      const userId = String(user.uid || "").trim();
+      // 小冰 badge 等级优先读缓存，未命中再回源外部资料接口。
+      if (userId && this.redis) {
+        const cached = await this.redis.get<{
+          checked: boolean;
+          tier: GameVipTier;
+        }>(`${FISHPI_BADGE_CACHE_PREFIX}${userId}`);
+        if (cached && typeof cached === "object") {
+          return cached;
+        }
+      }
       const data = await this.callFishpiUserProfile(
         fishpiUserName,
         fishpiApiKey,
       );
-      return { checked: true, tier: badgeVipTier(data) };
+      const result = { checked: true, tier: badgeVipTier(data) };
+      if (userId && this.redis) {
+        await this.redis.set(
+          `${FISHPI_BADGE_CACHE_PREFIX}${userId}`,
+          result,
+          FISHPI_CACHE_TTL_SECONDS,
+        );
+      }
+      return result;
     } catch {
       return { checked: false, tier: 0 };
     }
@@ -984,6 +1031,114 @@ export class RechargeService {
       levelCode: "",
       expiresAt: null,
     };
+  }
+
+  // ===== fishpi 积分 / VIP 缓存 =====
+
+  private async readCachedFishpiPoint(uid: string): Promise<number | null> {
+    if (!this.redis) {
+      return null;
+    }
+    const cached = await this.redis.get<number>(
+      `${FISHPI_POINT_CACHE_PREFIX}${uid}`,
+    );
+    return typeof cached === "number" && Number.isFinite(cached)
+      ? cached
+      : null;
+  }
+
+  private async writeCachedFishpiPoint(
+    uid: string,
+    point: number,
+  ): Promise<void> {
+    if (!this.redis || !Number.isFinite(point)) {
+      return;
+    }
+    await this.redis.set(
+      `${FISHPI_POINT_CACHE_PREFIX}${uid}`,
+      point,
+      FISHPI_CACHE_TTL_SECONDS,
+    );
+  }
+
+  private async readCachedFishpiVip(
+    uid: string,
+  ): Promise<FishpiVipView | null> {
+    if (!this.redis) {
+      return null;
+    }
+    const cached = await this.redis.get<FishpiVipView>(
+      `${FISHPI_VIP_CACHE_PREFIX}${uid}`,
+    );
+    if (!cached || typeof cached !== "object") {
+      return null;
+    }
+    // 缓存里 VIP 可能已过期，按当前时间重新判定 active，避免返回陈旧的有效态。
+    return {
+      ...cached,
+      active: cached.active && !this.isFishpiVipExpired(cached.expiresAt),
+    };
+  }
+
+  private async writeCachedFishpiVip(
+    uid: string,
+    vip: FishpiVipView,
+  ): Promise<void> {
+    if (!this.redis || !vip || !vip.checked) {
+      return;
+    }
+    await this.redis.set(
+      `${FISHPI_VIP_CACHE_PREFIX}${uid}`,
+      vip,
+      FISHPI_CACHE_TTL_SECONDS,
+    );
+  }
+
+  /**
+   * 刷新某用户的 fishpi 积分与 VIP 缓存（登录时调用）。
+   * 不抛错：外部失败时保留旧缓存，不影响登录流程。
+   */
+  async refreshFishpiCache(uid: string): Promise<void> {
+    const userId = String(uid || "").trim();
+    if (!userId || !this.redis) {
+      return;
+    }
+    try {
+      const user = await this.dataSource
+        .getRepository(User)
+        .findOne({ where: { uid: userId } });
+      if (!user) {
+        return;
+      }
+      const config = await this.ensureConfig();
+      const apiKey = String(config.fishpi_api_key || "").trim();
+      const fishpiUserName = String(user.name || "").trim();
+      // 先失效 badge 缓存，确保下面回源重建为最新值。
+      await this.redis.del(`${FISHPI_BADGE_CACHE_PREFIX}${userId}`);
+      const tasks: Promise<unknown>[] = [];
+      if (fishpiUserName) {
+        tasks.push(
+          this.callFishpiPoint(fishpiUserName)
+            .then((data) =>
+              this.writeCachedFishpiPoint(userId, this.extractFishpiPoint(data)),
+            )
+            .catch(() => undefined),
+        );
+      }
+      // forceRefresh 跳过 VIP 缓存读、回源后写回缓存。
+      tasks.push(
+        this.resolveFishpiVip(user, config, { forceRefresh: true })
+          .then((vip) => this.writeCachedFishpiVip(userId, vip))
+          .catch(() => undefined),
+      );
+      // 回源 badge 等级（resolveBadgeVip 内部已失效，会写回缓存）。
+      if (apiKey && fishpiUserName) {
+        tasks.push(this.resolveBadgeVip(user, apiKey).catch(() => undefined));
+      }
+      await Promise.allSettled(tasks);
+    } catch {
+      // 预热缓存失败不影响主流程
+    }
   }
 
   private async callFishpiDeduct(
