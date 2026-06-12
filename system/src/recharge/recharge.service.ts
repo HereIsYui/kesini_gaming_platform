@@ -51,10 +51,11 @@ const FISHPI_HEADERS = {
 };
 
 // fishpi 积分/VIP 缓存：登录与充值时刷新，其余时间读缓存，避免每次请求都打外部接口。
+// 缓存为事件驱动刷新（积分=登录/充值，VIP=登录），TTL 仅作兜底防止极端情况下永久陈旧。
 const FISHPI_POINT_CACHE_PREFIX = "fishpi:point:";
 const FISHPI_VIP_CACHE_PREFIX = "fishpi:vip:";
 const FISHPI_BADGE_CACHE_PREFIX = "fishpi:badge:";
-const FISHPI_CACHE_TTL_SECONDS = 3600;
+const FISHPI_CACHE_TTL_SECONDS = 7 * 24 * 3600;
 
 export interface RechargeConfigView {
   enabled: boolean;
