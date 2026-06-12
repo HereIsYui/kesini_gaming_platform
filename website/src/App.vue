@@ -1519,6 +1519,20 @@ async function loadPrivateData() {
   }
 }
 
+// 抽卡后只刷新真正受抽卡影响的数据，避免触发 fishpi 积分 / 月卡等慢接口
+async function refreshAfterDraw() {
+  if (!isAuthed.value) {
+    return;
+  }
+  await Promise.allSettled([
+    loadStats(), // 星穹币余额 + 抽卡统计
+    loadUserCards(), // 新抽到的卡
+    loadPointRecords(), // 星穹币流水
+    loadTasks(), // 抽卡可能推进任务
+    loadAchievementNotifications(), // 抽卡可能解锁成就
+  ]);
+}
+
 async function loadStats() {
   const data = await request<UserGachaStats>("/card/stats");
   stats.value = data;
@@ -2171,7 +2185,8 @@ async function performDraw(mode: "once" | "ten") {
     await delay(360);
     resultModalOpen.value = true;
     notify("success", `${lastResults.value.length} 次抽取完成`);
-    await loadPrivateData();
+    // 后台刷新抽卡相关数据，不 await，避免阻塞下一次抽卡
+    refreshAfterDraw();
   } catch (error) {
     resultModalOpen.value = false;
     notify("error", getErrorMessage(error));
