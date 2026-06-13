@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { GachaPoolConfig } from "src/entity/gachaPoolConfig.entity";
@@ -9,9 +9,14 @@ import {
   PitySystemConfig,
 } from "../types/api";
 import { ConfigurationService } from "../config/configuration.service";
+import { RedisUtil } from "../utils/redis";
 
 const ALLOWED_RARITIES: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 export const GLOBAL_DEFAULT_POOL_ID = 0;
+// 抽卡配置缓存：写时通过递增版本号失效，旧 key 随 TTL 自然过期。
+const GACHA_CONFIG_CACHE_PREFIX = "gacha:config:";
+const GACHA_CONFIG_VERSION_KEY = "gacha:config:ver";
+const GACHA_CONFIG_CACHE_TTL_SECONDS = 24 * 3600;
 export const DEFAULT_DRAW_COSTS: DrawCosts = {
   once: 10,
   ten: 100,
@@ -45,6 +50,8 @@ export class GachaConfigService {
     private readonly configService: ConfigurationService,
     @InjectRepository(GachaPoolConfig)
     private readonly gachaPoolConfigRepository: Repository<GachaPoolConfig>,
+    @Optional()
+    private readonly redis?: RedisUtil,
   ) {}
 
   /**
@@ -126,15 +133,25 @@ export class GachaConfigService {
 
   /**
    * 根据卡池ID获取最终生效配置：单池配置 > 全局默认 > 代码/环境兜底。
+   * 抽卡与卡池列表的热路径入口，优先读 Redis 缓存（写时由版本号失效）。
    */
   async getConfigByPoolId(poolId: number): Promise<GachaConfig> {
     const normalizedPoolId = this.normalizeReadablePoolId(poolId);
-    if (normalizedPoolId === GLOBAL_DEFAULT_POOL_ID) {
-      return this.getGlobalDefaultConfigView();
+    const cacheKey = await this.buildGachaConfigCacheKey(normalizedPoolId);
+    if (cacheKey && this.redis) {
+      const cached = await this.redis.get<GachaConfig>(cacheKey);
+      if (cached) {
+        return cached;
+      }
     }
-
-    const detail = await this.getPoolConfigDetail(normalizedPoolId);
-    return detail.effective;
+    const config =
+      normalizedPoolId === GLOBAL_DEFAULT_POOL_ID
+        ? await this.getGlobalDefaultConfigView()
+        : (await this.getPoolConfigDetail(normalizedPoolId)).effective;
+    if (cacheKey && this.redis) {
+      await this.redis.set(cacheKey, config, GACHA_CONFIG_CACHE_TTL_SECONDS);
+    }
+    return config;
   }
 
   /**
@@ -317,12 +334,35 @@ export class GachaConfigService {
       ten_draw_cost: nextConfig.drawCosts!.ten,
     });
     const saved = await this.gachaPoolConfigRepository.save(entity);
+    // 配置变更后递增版本号，使所有旧缓存 key 失效（含全局默认对各池兜底的影响）。
+    await this.invalidateGachaConfigCache();
     return this.toGachaConfigView(
       saved,
       fallbackConfig,
       poolId,
       poolId === GLOBAL_DEFAULT_POOL_ID ? "global" : "pool",
     );
+  }
+
+  /**
+   * 当前抽卡配置缓存版本号；读取 key 里带版本号，写时递增即可整体失效。
+   */
+  private async buildGachaConfigCacheKey(
+    poolId: number,
+  ): Promise<string | null> {
+    if (!this.redis) {
+      return null;
+    }
+    const version = (await this.redis.get<number>(GACHA_CONFIG_VERSION_KEY)) || 0;
+    return `${GACHA_CONFIG_CACHE_PREFIX}v${version}:${poolId}`;
+  }
+
+  private async invalidateGachaConfigCache(): Promise<void> {
+    if (!this.redis) {
+      return;
+    }
+    const version = (await this.redis.get<number>(GACHA_CONFIG_VERSION_KEY)) || 0;
+    await this.redis.set(GACHA_CONFIG_VERSION_KEY, version + 1);
   }
 
   validateEditableConfig(config: EditableGachaConfig): void {

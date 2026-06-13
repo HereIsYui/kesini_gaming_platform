@@ -19,6 +19,8 @@ import {
   GachaConfigService,
 } from "src/card/gacha-config.service";
 import { ConfigurationService } from "src/config/configuration.service";
+import { RedisUtil } from "src/utils/redis";
+import { DROP_ITEM_NAME_MAP_CACHE_KEY } from "src/utils/cache-keys";
 import {
   DEFAULT_SITE_CONFIG,
   SiteConfigService,
@@ -200,6 +202,8 @@ export class AdminService {
     private readonly seasonShopUsageRepository?: Repository<SeasonShopUsage>,
     @Optional()
     private readonly siteConfigService?: SiteConfigService,
+    @Optional()
+    private readonly redis?: RedisUtil,
   ) {}
 
   async getMe(uid: string) {
@@ -617,7 +621,9 @@ export class AdminService {
       disabled,
       default_fragment: body.default_fragment === true,
     });
-    return this.dropRepository.save(item);
+    const saved = await this.dropRepository.save(item);
+    await this.invalidateDropItemNameMap();
+    return saved;
   }
 
   async updateDropItem(id: number, body: Partial<DropItem>) {
@@ -642,7 +648,9 @@ export class AdminService {
       disabled,
       default_fragment: defaultFragment,
     });
-    return this.dropRepository.save(item);
+    const saved = await this.dropRepository.save(item);
+    await this.invalidateDropItemNameMap();
+    return saved;
   }
 
   async deleteDropItem(id: number) {
@@ -650,10 +658,18 @@ export class AdminService {
     if (await this.isDropItemReferenced(id)) {
       item.disabled = true;
       await this.dropRepository.save(item);
+      await this.invalidateDropItemNameMap();
       return { deleted: false, disabled: true };
     }
     await this.dropRepository.delete(id);
+    await this.invalidateDropItemNameMap();
     return { deleted: true };
+  }
+
+  private async invalidateDropItemNameMap(): Promise<void> {
+    if (this.redis) {
+      await this.redis.del(DROP_ITEM_NAME_MAP_CACHE_KEY);
+    }
   }
 
   async listUsers(query: PageQuery) {

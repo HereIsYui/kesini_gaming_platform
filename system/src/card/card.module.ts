@@ -20,6 +20,7 @@ import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "./gacha-config.service";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 import { SocialActivityModule } from "src/social/social-activity.module";
+import { RedisUtil } from "src/utils/redis";
 
 @Module({
   imports: [
@@ -44,7 +45,7 @@ import { SocialActivityModule } from "src/social/social-activity.module";
     SocialActivityModule,
   ],
   controllers: [CardController],
-  providers: [CardService, GachaConfigService],
+  providers: [CardService, GachaConfigService, RedisUtil],
   exports: [CardService, GachaConfigService],
 })
 export class CardModule {}

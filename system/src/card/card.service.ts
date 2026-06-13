@@ -42,6 +42,7 @@ import {
   getUserPublicId,
 } from "src/utils/user-public-id";
 import { GachaConfigService } from "./gacha-config.service";
+import { RedisUtil } from "src/utils/redis";
 import {
   DECOMPOSE_CONFIG_KEY,
   isDecomposeConfigRarity,
@@ -124,6 +125,12 @@ type LeaderboardMetricKey =
   | "pveCleared";
 type LeaderboardMetrics = Record<LeaderboardMetricKey, number>;
 
+// 与 uid 无关的完整排行榜计算结果，可全局缓存；me 在读取时按 uid 现场查找。
+interface LeaderboardComputed {
+  generatedAt: string;
+  rankings: Record<LeaderboardMetricKey, LeaderboardEntry[]>;
+}
+
 @Injectable()
 export class CardService {
   constructor(
@@ -156,6 +163,8 @@ export class CardService {
     @Optional()
     @InjectRepository(PveChallengeRecord)
     private readonly pveRecordRepository?: Repository<PveChallengeRecord>,
+    @Optional()
+    private readonly redis?: RedisUtil,
   ) {}
 
   /**
@@ -381,6 +390,73 @@ export class CardService {
     limit: number = 50,
   ): Promise<LeaderboardResponse> {
     const normalizedLimit = this.normalizeLeaderboardLimit(limit);
+    // 完整排序结果与 uid 无关，可全局缓存；me(当前用户名次)在读取时按 uid 现场查找。
+    const computed = await this.getLeaderboardComputed();
+    return {
+      generatedAt: computed.generatedAt,
+      rankings: {
+        totalCards: this.sliceLeaderboardBoard(
+          computed.rankings.totalCards,
+          uid,
+          normalizedLimit,
+        ),
+        ssrCards: this.sliceLeaderboardBoard(
+          computed.rankings.ssrCards,
+          uid,
+          normalizedLimit,
+        ),
+        urCards: this.sliceLeaderboardBoard(
+          computed.rankings.urCards,
+          uid,
+          normalizedLimit,
+        ),
+        completedPools: this.sliceLeaderboardBoard(
+          computed.rankings.completedPools,
+          uid,
+          normalizedLimit,
+        ),
+        rechargeAmount: this.sliceLeaderboardBoard(
+          computed.rankings.rechargeAmount,
+          uid,
+          normalizedLimit,
+        ),
+        pveCleared: this.sliceLeaderboardBoard(
+          computed.rankings.pveCleared,
+          uid,
+          normalizedLimit,
+        ),
+      },
+    };
+  }
+
+  private readonly LEADERBOARD_CACHE_KEY = "leaderboard:card";
+  private readonly LEADERBOARD_CACHE_TTL_SECONDS = 3600;
+
+  /**
+   * 计算与 uid 无关的完整排行榜（每个维度的完整排名列表），优先读 Redis 缓存。
+   * TTL 1 小时，排行榜容忍分钟级延迟，无需精确失效。
+   */
+  private async getLeaderboardComputed(): Promise<LeaderboardComputed> {
+    if (this.redis) {
+      const cached = await this.redis.get<LeaderboardComputed>(
+        this.LEADERBOARD_CACHE_KEY,
+      );
+      if (cached?.rankings) {
+        return cached;
+      }
+    }
+    const computed = await this.computeLeaderboardRankings();
+    if (this.redis) {
+      await this.redis.set(
+        this.LEADERBOARD_CACHE_KEY,
+        computed,
+        this.LEADERBOARD_CACHE_TTL_SECONDS,
+      );
+    }
+    return computed;
+  }
+
+  private async computeLeaderboardRankings(): Promise<LeaderboardComputed> {
     const [users, cards, userCards, rechargeTotals, pveTotals] =
       await Promise.all([
         this.userRepository.find(),
@@ -398,9 +474,6 @@ export class CardService {
     users.forEach((user) => {
       metricsByUid.set(user.uid, this.createEmptyLeaderboardMetrics());
     });
-    if (uid && !metricsByUid.has(uid)) {
-      metricsByUid.set(uid, this.createEmptyLeaderboardMetrics());
-    }
 
     userCards.forEach((userCard) => {
       const card = cardMap.get(Number(userCard.card_id));
@@ -457,48 +530,20 @@ export class CardService {
     return {
       generatedAt: new Date().toISOString(),
       rankings: {
-        totalCards: this.createLeaderboardBoard(
+        totalCards: this.buildRankedEntries(metricsByUid, userMap, "totalCards"),
+        ssrCards: this.buildRankedEntries(metricsByUid, userMap, "ssrCards"),
+        urCards: this.buildRankedEntries(metricsByUid, userMap, "urCards"),
+        completedPools: this.buildRankedEntries(
           metricsByUid,
           userMap,
-          uid,
-          "totalCards",
-          normalizedLimit,
-        ),
-        ssrCards: this.createLeaderboardBoard(
-          metricsByUid,
-          userMap,
-          uid,
-          "ssrCards",
-          normalizedLimit,
-        ),
-        urCards: this.createLeaderboardBoard(
-          metricsByUid,
-          userMap,
-          uid,
-          "urCards",
-          normalizedLimit,
-        ),
-        completedPools: this.createLeaderboardBoard(
-          metricsByUid,
-          userMap,
-          uid,
           "completedPools",
-          normalizedLimit,
         ),
-        rechargeAmount: this.createLeaderboardBoard(
+        rechargeAmount: this.buildRankedEntries(
           metricsByUid,
           userMap,
-          uid,
           "rechargeAmount",
-          normalizedLimit,
         ),
-        pveCleared: this.createLeaderboardBoard(
-          metricsByUid,
-          userMap,
-          uid,
-          "pveCleared",
-          normalizedLimit,
-        ),
+        pveCleared: this.buildRankedEntries(metricsByUid, userMap, "pveCleared"),
       },
     };
   }
@@ -2489,21 +2534,25 @@ export class CardService {
     return `${cardId}:${rarity}`;
   }
 
-  private createLeaderboardBoard(
+  private buildRankedEntries(
     metricsByUid: Map<string, LeaderboardMetrics>,
     userMap: Map<string, User>,
-    currentUid: string,
     metric: LeaderboardMetricKey,
-    limit: number,
-  ): LeaderboardBoard {
+  ): LeaderboardEntry[] {
     const entries = Array.from(metricsByUid.entries())
       .map(([uid, metrics]) =>
         this.createLeaderboardEntry(uid, metrics[metric], userMap.get(uid)),
       )
       .filter((entry) => entry.value > 0)
       .sort((a, b) => b.value - a.value || a.uid.localeCompare(b.uid));
-    const rankedEntries = this.assignLeaderboardRanks(entries);
+    return this.assignLeaderboardRanks(entries);
+  }
 
+  private sliceLeaderboardBoard(
+    rankedEntries: LeaderboardEntry[],
+    currentUid: string,
+    limit: number,
+  ): LeaderboardBoard {
     return {
       list: rankedEntries.slice(0, limit),
       me: rankedEntries.find((entry) => entry.uid === currentUid) || null,
