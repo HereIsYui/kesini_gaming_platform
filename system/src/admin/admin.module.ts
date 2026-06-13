@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
 import { GachaConfigService } from "src/card/gacha-config.service";
+import { RedisUtil } from "src/utils/redis";
 import { SiteConfigModule } from "src/config/site-config.module";
 import { ShopModule } from "src/shop/shop.module";
 import { AnnouncementModule } from "src/announcement/announcement.module";
@@ -85,6 +86,6 @@ import { AdminService } from "./admin.service";
     PlayerMessageModule,
   ],
   controllers: [AdminController],
-  providers: [AdminGuard, AdminService, GachaConfigService],
+  providers: [AdminGuard, AdminService, GachaConfigService, RedisUtil],
 })
 export class AdminModule {}
