@@ -20,6 +20,10 @@ import { AchievementService } from "src/achievement/achievement.service";
 import { RewardService } from "src/reward/reward.service";
 import { RedisUtil } from "src/utils/redis";
 import {
+  DROP_ITEM_NAME_MAP_CACHE_KEY,
+  DROP_ITEM_NAME_MAP_CACHE_TTL_SECONDS,
+} from "src/utils/cache-keys";
+import {
   badgeVipTier,
   cloneRewards,
   DEFAULT_GAME_VIP_CONFIG,
@@ -807,10 +811,53 @@ export class RechargeService {
     if (itemIds.length === 0) {
       return new Map<number, string>();
     }
+    // 全表 id→name 映射缓存（写时由 admin 失效），按需过滤所需 itemIds。
+    const fullMap = await this.getDropItemNameFullMap(repository);
+    if (fullMap) {
+      return new Map(
+        itemIds
+          .map((id) => Number(id))
+          .filter((id) => fullMap.has(id))
+          .map((id) => [id, fullMap.get(id)!]),
+      );
+    }
     const items = await repository.find({
       where: { id: In(itemIds) },
     });
     return new Map(items.map((item) => [Number(item.id), item.drop_name]));
+  }
+
+  /**
+   * 读取全表 DropItem id→name 映射，优先走 Redis 缓存。
+   * 返回 null 表示无 Redis，调用方自行回退到按 id 查询。
+   */
+  private async getDropItemNameFullMap(
+    repository: Repository<DropItem>,
+  ): Promise<Map<number, string> | null> {
+    if (!this.redis) {
+      return null;
+    }
+    const cached = await this.redis.get<Record<string, string>>(
+      DROP_ITEM_NAME_MAP_CACHE_KEY,
+    );
+    if (cached && typeof cached === "object") {
+      return new Map(
+        Object.entries(cached).map(([id, name]) => [Number(id), name]),
+      );
+    }
+    const items = await repository.find();
+    const record: Record<string, string> = {};
+    items.forEach((item) => {
+      record[String(item.id)] = item.drop_name;
+    });
+    await this.redis.set(
+      DROP_ITEM_NAME_MAP_CACHE_KEY,
+      record,
+      DROP_ITEM_NAME_MAP_CACHE_TTL_SECONDS,
+    );
+    return new Map(
+      Object.entries(record).map(([id, name]) => [Number(id), name]),
+    );
   }
 
   private decorateRewardItemNames(

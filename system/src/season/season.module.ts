@@ -10,6 +10,7 @@ import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserSeasonProgress } from "src/entity/userSeasonProgress.entity";
 import { RewardModule } from "src/reward/reward.module";
+import { RedisUtil } from "src/utils/redis";
 import { SeasonController } from "./season.controller";
 import { SeasonService } from "./season.service";
 
@@ -29,7 +30,7 @@ import { SeasonService } from "./season.service";
     RewardModule,
   ],
   controllers: [SeasonController],
-  providers: [SeasonService],
+  providers: [SeasonService, RedisUtil],
   exports: [SeasonService],
 })
 export class SeasonModule {}

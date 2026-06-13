@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
@@ -13,6 +13,7 @@ import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { User } from "src/entity/user.entity";
 import { UserSeasonProgress } from "src/entity/userSeasonProgress.entity";
 import { RewardService } from "src/reward/reward.service";
+import { RedisUtil } from "src/utils/redis";
 import {
   ensureUsersPublicIds,
   getUserPublicId,
@@ -32,11 +33,22 @@ export interface SeasonTaskActivityInput {
   activityPoints: number;
 }
 
+interface SeasonLeaderboardEntry {
+  rank: number;
+  uid: string;
+  publicId: string;
+  nickname: string;
+  avatar: string;
+  value: number;
+}
+
 @Injectable()
 export class SeasonService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly rewardService: RewardService,
+    @Optional()
+    private readonly redis?: RedisUtil,
   ) {}
 
   async getOverview(uid: string) {
@@ -81,16 +93,36 @@ export class SeasonService {
       };
     }
     const normalizedLimit = this.normalizeLimit(limit);
+    // 完整排名与 uid 无关，按 season_key 全局缓存；me 在读取时按 uid 现场查找。
+    const rankedEntries = await this.getSeasonRankedEntries(season);
+    return {
+      season: this.toSeasonView(season),
+      board: {
+        list: rankedEntries.slice(0, normalizedLimit),
+        me: rankedEntries.find((entry) => entry.uid === uid) || null,
+      },
+    };
+  }
+
+  private readonly SEASON_LEADERBOARD_CACHE_PREFIX = "leaderboard:season:";
+  private readonly SEASON_LEADERBOARD_CACHE_TTL_SECONDS = 3600;
+
+  /**
+   * 计算某赛季的完整排名列表（uid 无关），优先读 Redis 缓存，TTL 1 小时。
+   */
+  private async getSeasonRankedEntries(season: SeasonConfig) {
+    const cacheKey = `${this.SEASON_LEADERBOARD_CACHE_PREFIX}${season.season_key}`;
+    if (this.redis) {
+      const cached = await this.redis.get<SeasonLeaderboardEntry[]>(cacheKey);
+      if (Array.isArray(cached)) {
+        return cached;
+      }
+    }
     const progresses = await this.dataSource
       .getRepository(UserSeasonProgress)
       .find({ where: { season_key: season.season_key } });
     const uids = [
-      ...new Set(
-        progresses
-          .map((progress) => progress.uid)
-          .concat(uid)
-          .filter(Boolean),
-      ),
+      ...new Set(progresses.map((progress) => progress.uid).filter(Boolean)),
     ];
     const userRepository = this.dataSource.getRepository(User);
     const users = uids.length
@@ -112,13 +144,14 @@ export class SeasonService {
           right.value - left.value || left.uid.localeCompare(right.uid),
       );
     const rankedEntries = this.assignRanks(entries);
-    return {
-      season: this.toSeasonView(season),
-      board: {
-        list: rankedEntries.slice(0, normalizedLimit),
-        me: rankedEntries.find((entry) => entry.uid === uid) || null,
-      },
-    };
+    if (this.redis) {
+      await this.redis.set(
+        cacheKey,
+        rankedEntries,
+        this.SEASON_LEADERBOARD_CACHE_TTL_SECONDS,
+      );
+    }
+    return rankedEntries;
   }
 
   async grantTaskActivity(
