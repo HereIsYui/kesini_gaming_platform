@@ -136,6 +136,8 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.seasonPointRecord,
     repositories.seasonShopUsage,
     repositories.siteConfig,
+    repositories.redis,
+    repositories.pointLedgerService,
   );
 }
 
@@ -574,6 +576,54 @@ describe("AdminService", () => {
         is_admin: true,
       }),
     );
+  });
+
+  it("调整星穹币时写入流水以便溯源", async () => {
+    const user = { id: 1, uid: "u1", point: 50, is_admin: false };
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const applyChange = jest.fn().mockResolvedValue({ id: 1 });
+    const pointLedgerService = { applyChange };
+    const dataSource = createDataSource({ User: userRepository });
+    const service = createService({
+      user: userRepository,
+      pointLedgerService,
+      dataSource,
+    });
+
+    await service.updateUser(1, { point: 200 } as any);
+
+    expect(applyChange).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      150,
+      expect.objectContaining({
+        sourceType: "admin_adjust",
+        title: "管理员调整星穹币",
+        metadata: expect.objectContaining({
+          pointBefore: 50,
+          pointAfter: 200,
+        }),
+      }),
+    );
+  });
+
+  it("星穹币未变化时不写入流水", async () => {
+    const user = { id: 1, uid: "u1", point: 50, is_admin: false };
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(user),
+    });
+    const applyChange = jest.fn();
+    const service = createService({
+      user: userRepository,
+      pointLedgerService: { applyChange },
+    });
+
+    await service.updateUser(1, { point: 50, nickname: "新昵称" } as any);
+
+    expect(applyChange).not.toHaveBeenCalled();
+    expect(userRepository.save).toHaveBeenCalled();
   });
 
   it("更新用户允许清空昵称和头像", async () => {

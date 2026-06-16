@@ -127,6 +127,7 @@ export const pointSourceOptions = [
   { value: "season_shop", label: "赛季商店" },
   { value: "player_message", label: "消息奖励" },
   { value: "vip_daily", label: "VIP礼包" },
+  { value: "admin_adjust", label: "管理员调整" },
 ] as const;
 
 export function pointChangeClass(amount: number) {
@@ -192,6 +193,10 @@ export function pointMetadataSummary(record: PointLedgerRecord) {
     case "vip_daily":
       return `VIP${String(meta("vipLevel") || "-")} · ${String(
         meta("claimDate") || "-",
+      )}`;
+    case "admin_adjust":
+      return `${String(meta("pointBefore") ?? "-")} → ${String(
+        meta("pointAfter") ?? "-",
       )}`;
     default:
       return record.title;

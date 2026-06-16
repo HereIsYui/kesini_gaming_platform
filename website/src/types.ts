@@ -995,7 +995,8 @@ export type PointLedgerSourceType =
   | "shop_recycle"
   | "season_shop"
   | "player_message"
-  | "vip_daily";
+  | "vip_daily"
+  | "admin_adjust";
 
 export interface PointLedgerRecord {
   id: number;

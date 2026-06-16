@@ -19,6 +19,7 @@ import {
   GachaConfigService,
 } from "src/card/gacha-config.service";
 import { ConfigurationService } from "src/config/configuration.service";
+import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { RedisUtil } from "src/utils/redis";
 import { DROP_ITEM_NAME_MAP_CACHE_KEY } from "src/utils/cache-keys";
 import {
@@ -204,6 +205,8 @@ export class AdminService {
     private readonly siteConfigService?: SiteConfigService,
     @Optional()
     private readonly redis?: RedisUtil,
+    @Optional()
+    private readonly pointLedgerService?: PointLedgerService,
   ) {}
 
   async getMe(uid: string) {
@@ -725,8 +728,9 @@ export class AdminService {
     if (body.avatar !== undefined) {
       updates.avatar = this.normalizeOptionalString(body.avatar);
     }
+    let pointTarget: number | undefined;
     if (body.point !== undefined) {
-      updates.point = this.normalizeIntegerInput(
+      pointTarget = this.normalizeIntegerInput(
         body.point,
         "星穹币必须为非负整数",
         0,
@@ -734,6 +738,44 @@ export class AdminService {
     }
     if (body.is_admin !== undefined && body.is_admin !== null) {
       updates.is_admin = body.is_admin === true;
+    }
+
+    // 星穹币调整需写入流水以便溯源；其它字段直接更新
+    const pointBefore = Number(user.point || 0);
+    const pointChanged =
+      pointTarget !== undefined && pointTarget !== pointBefore;
+
+    if (pointChanged && this.pointLedgerService) {
+      return this.dataSource.transaction(async (manager) => {
+        const userRepository = manager.getRepository(User);
+        const managedUser = await userRepository.findOne({
+          where: { id: user.id },
+        });
+        if (!managedUser) {
+          throw new Error("用户不存在");
+        }
+        Object.assign(managedUser, updates);
+        // applyChange 内部会更新 point 并保存用户、写入流水
+        await this.pointLedgerService!.applyChange(
+          manager,
+          managedUser,
+          pointTarget! - pointBefore,
+          {
+            sourceType: "admin_adjust",
+            sourceId: user.id,
+            title: "管理员调整星穹币",
+            metadata: {
+              pointBefore,
+              pointAfter: pointTarget,
+            },
+          },
+        );
+        return managedUser;
+      });
+    }
+
+    if (pointTarget !== undefined) {
+      updates.point = pointTarget;
     }
     Object.assign(user, updates);
     return this.userRepository.save(user);
