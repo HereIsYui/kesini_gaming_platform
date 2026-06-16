@@ -15,6 +15,7 @@ const {
   poolCards,
   catalogError,
   synthesisRarityFilter,
+  collectionFilter,
   busy,
   activeSection,
   selectedPool,
@@ -24,6 +25,7 @@ const {
   catalogCollectedCount,
   openCatalogCardDetail,
   synthesizeCard,
+  goToTradePage,
 } = useAppContext() as Record<string, any>;
 </script>
 
@@ -45,7 +47,7 @@ const {
         </option>
       </select>
       <select v-model="synthesisRarityFilter">
-        <option value="">全部</option>
+        <option value="">全部稀有度</option>
         <option
           v-for="rarity in rarityOrder"
           :key="rarity"
@@ -54,10 +56,18 @@ const {
           {{ rarity }}
         </option>
       </select>
+      <select v-model="collectionFilter">
+        <option value="all">全部状态</option>
+        <option value="collected">已收集</option>
+        <option value="uncollected">未收集</option>
+      </select>
       <button
         class="secondary-action"
         type="button"
-        @click="synthesisRarityFilter = ''"
+        @click="
+          synthesisRarityFilter = '';
+          collectionFilter = 'all';
+        "
       >
         重置
       </button>
@@ -160,21 +170,29 @@ const {
           </div>
         </div>
       </div>
-      <button
-        v-if="!item.collected"
-        class="secondary-action"
-        type="button"
-        :disabled="busy.catalog || !item.canSynthesize"
-        @click.stop="synthesizeCard(item)"
-      >
-        {{
-          item.canSynthesize
-            ? "合成"
-            : item.rarity === "UR"
-              ? "不可合成"
-              : "碎片不足"
-        }}
-      </button>
+      <div v-if="!item.collected" class="synthesis-actions">
+        <button
+          class="secondary-action"
+          type="button"
+          :disabled="busy.catalog || !item.canSynthesize"
+          @click.stop="synthesizeCard(item)"
+        >
+          {{
+            item.canSynthesize
+              ? "合成"
+              : item.rarity === "UR"
+                ? "不可合成"
+                : "碎片不足"
+          }}
+        </button>
+        <button
+          class="tertiary compact"
+          type="button"
+          @click.stop="goToTradePage(item)"
+        >
+          去购买
+        </button>
+      </div>
       <span v-else class="catalog-owned-label">已收集</span>
     </article>
   </div>

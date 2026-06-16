@@ -2737,6 +2737,18 @@ h3 {
   padding: 0 10px;
 }
 
+.synthesis-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.synthesis-actions button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: calc(var(--radius) - 2px);
+}
+
 .catalog-owned-label {
   display: inline-flex;
   min-height: 44px;
@@ -3498,6 +3510,10 @@ h3 {
 
 .trade-filter-row input {
   width: 128px;
+}
+
+.trade-search-input {
+  width: 200px !important;
 }
 
 .trade-grid {

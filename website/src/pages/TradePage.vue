@@ -29,6 +29,7 @@ const {
   tradeTab,
   tradeRarityFilter,
   tradePoolFilter,
+  tradeCardNameFilter,
   tradeSort,
   tradeMinPrice,
   tradeMaxPrice,
@@ -46,6 +47,17 @@ const {
   buyTradeListing,
   changeTradePage,
 } = useAppContext() as Record<string, any>;
+
+// 防抖搜索，避免频繁请求
+let debounceTimer: number | null = null;
+function debouncedLoadTradeListings() {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+  }
+  debounceTimer = window.setTimeout(() => {
+    loadTradeListings();
+  }, 300);
+}
 </script>
 
 <template>
@@ -125,6 +137,16 @@ const {
 
     <div v-if="tradeTab === 'market'" class="trade-section">
       <div class="filter-row trade-filter-row">
+        <input
+          v-model="tradeCardNameFilter"
+          type="search"
+          placeholder="搜索卡名"
+          class="trade-search-input"
+          @input="
+            tradePage = 1;
+            debouncedLoadTradeListings();
+          "
+        />
         <select
           v-model="tradeRarityFilter"
           @change="
@@ -164,6 +186,8 @@ const {
           <option value="priceAsc">价格从低到高</option>
           <option value="priceDesc">价格从高到低</option>
         </select>
+      </div>
+      <div class="filter-row trade-filter-row">
         <input
           v-model="tradeMinPrice"
           type="number"

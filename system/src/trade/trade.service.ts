@@ -26,6 +26,7 @@ export interface TradeListQuery {
   minPrice?: number;
   maxPrice?: number;
   sort?: string;
+  cardName?: string;
 }
 
 @Injectable()
@@ -47,6 +48,12 @@ export class TradeService {
       .getRepository(TradeListing)
       .createQueryBuilder("listing")
       .where("listing.status = :status", { status: "active" });
+
+    if (query.cardName) {
+      queryBuilder.andWhere("listing.card_name LIKE :cardName", {
+        cardName: `%${query.cardName}%`,
+      });
+    }
 
     if (query.rarity) {
       queryBuilder.andWhere("listing.card_level = :rarity", {

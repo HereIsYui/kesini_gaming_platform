@@ -17,6 +17,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from "class-validator";
 import { GetUser } from "src/auth/get-user.decorator";
@@ -65,6 +66,11 @@ class TradeQueryDto {
   @IsOptional()
   @IsString()
   sort?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  cardName?: string;
 }
 
 class CreateTradeListingDto {

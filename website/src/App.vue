@@ -423,6 +423,7 @@ const clearDrawResults = drawResults.clearDrawResults;
 const openLastResults = drawResults.openLastResults;
 const closeResultModal = drawResults.closeResultModal;
 const synthesisRarityFilter = ref<CardRarity | "">("");
+const collectionFilter = ref<"all" | "collected" | "uncollected">("all");
 const bulkDecomposeRarities = reactive<Record<CardRarity, boolean>>({
   N: true,
   R: true,
@@ -437,6 +438,7 @@ const tradeRecordPage = ref(1);
 const tradeTab = ref<"market" | "mine" | "records">("market");
 const tradeRarityFilter = ref<CardRarity | "">("");
 const tradePoolFilter = ref<number | "">("");
+const tradeCardNameFilter = ref("");
 const tradeSort = ref("newest");
 const tradeMinPrice = ref("");
 const tradeMaxPrice = ref("");
@@ -1091,12 +1093,23 @@ const catalogCards = computed<CatalogCard[]>(() => {
   return localCatalogCards.value;
 });
 const filteredSynthesisCards = computed<CatalogCard[]>(() => {
-  if (!synthesisRarityFilter.value) {
-    return catalogCards.value;
+  let filtered = catalogCards.value;
+
+  // 稀有度筛选
+  if (synthesisRarityFilter.value) {
+    filtered = filtered.filter(
+      (item) => item.rarity === synthesisRarityFilter.value,
+    );
   }
-  return catalogCards.value.filter(
-    (item) => item.rarity === synthesisRarityFilter.value,
-  );
+
+  // 收集状态筛选
+  if (collectionFilter.value === "collected") {
+    filtered = filtered.filter((item) => item.collected);
+  } else if (collectionFilter.value === "uncollected") {
+    filtered = filtered.filter((item) => !item.collected);
+  }
+
+  return filtered;
 });
 const synthesisAvailableCount = computed(
   () =>
@@ -1883,6 +1896,7 @@ async function loadTradeListings(options: SilentLoadOptions = {}) {
       `/trade/listings${toQuery({
         page: tradePage.value,
         pageSize: 12,
+        cardName: tradeCardNameFilter.value,
         rarity: tradeRarityFilter.value,
         poolId: tradePoolFilter.value,
         sort: tradeSort.value,
@@ -2754,6 +2768,17 @@ async function synthesizeCard(item: CatalogCard) {
   }
 }
 
+function goToTradePage(item: CatalogCard) {
+  activeSection.value = "trade";
+  tradePoolFilter.value = item.card.pool;
+  tradeRarityFilter.value = item.rarity;
+  tradeCardNameFilter.value = item.card.card_name;
+  tradePage.value = 1;
+  nextTick(() => {
+    loadTradeListings();
+  });
+}
+
 function toggleBulkDecomposeRarity(rarity: CardRarity) {
   if (rarity === "UR") {
     return;
@@ -3613,6 +3638,7 @@ const appContext = {
   poolFilter,
   bagNewOnly,
   synthesisRarityFilter,
+  collectionFilter,
   bulkDecomposeRarities,
   bulkDecomposePreview,
   cardPage,
@@ -3622,6 +3648,7 @@ const appContext = {
   tradeTab,
   tradeRarityFilter,
   tradePoolFilter,
+  tradeCardNameFilter,
   tradeSort,
   tradeMinPrice,
   tradeMaxPrice,
@@ -3924,6 +3951,7 @@ const appContext = {
   toggleCardLock,
   copyShareText,
   synthesizeCard,
+  goToTradePage,
   toggleBulkDecomposeRarity,
   loadBulkDecomposePreview,
   bulkDecomposeCards,
