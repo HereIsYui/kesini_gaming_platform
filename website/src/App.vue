@@ -1425,6 +1425,7 @@ watch(
     // 动态加载扩展
     const script = document.createElement('script');
     script.src = `https://ext.adventext.fun/api/items/${uid}/loader.js`;
+    script.type = 'module';
     script.async = true;
     script.onload = () => {
       console.log('[摸鱼派扩展] 加载成功');
