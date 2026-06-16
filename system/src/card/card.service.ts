@@ -572,7 +572,7 @@ export class CardService {
   }
 
   /**
-   * 根据卡池ID获取该卡池的所有卡片
+   * 根据卡池ID获取该卡池的所有卡片（仅上架卡片）
    */
   async getCardsByPool(poolId: number): Promise<CardItem[]> {
     const effectivePoolId = this.resolvePoolId(poolId);
@@ -584,6 +584,24 @@ export class CardService {
     }
     return this.cardRepository.find({
       where: { pool: effectivePoolId, enabled: true },
+    });
+  }
+
+  /**
+   * 根据卡池ID获取该卡池的所有卡片（含已下架，用于图鉴）
+   */
+  async getCardsByPoolForCatalog(poolId: number): Promise<CardItem[]> {
+    const effectivePoolId = this.resolvePoolId(poolId);
+    const pool = await this.poolRepository.findOne({
+      where: { id: effectivePoolId, enabled: true },
+    });
+    if (!pool) {
+      throw new Error("卡池不存在或已下线");
+    }
+    // 不过滤 enabled，返回所有卡片（含已下架）
+    return this.cardRepository.find({
+      where: { pool: effectivePoolId },
+      order: { id: "ASC" },
     });
   }
 
@@ -604,10 +622,8 @@ export class CardService {
       throw new Error("用户不存在");
     }
 
-    const cards = await this.cardRepository.find({
-      where: { pool: effectivePoolId, enabled: true },
-      order: { id: "ASC" },
-    });
+    // 图鉴显示所有卡片（含已下架），前端可读 card.enabled 判断状态
+    const cards = await this.getCardsByPoolForCatalog(effectivePoolId);
     if (cards.length === 0) {
       return { poolId: effectivePoolId, list: [], total: 0 };
     }

@@ -326,7 +326,7 @@ export class CardController {
   }
 
   /**
-   * 根据卡池ID获取该卡池的所有卡片
+   * 根据卡池ID获取该卡池的所有卡片（含已下架，用于图鉴）
    * GET /card/pool/:poolId/cards
    */
   @Get("pool/:poolId/cards")
@@ -334,7 +334,7 @@ export class CardController {
     @Param("poolId", ParseIntPipe) poolId: number,
   ): Promise<ResponseDto<any>> {
     try {
-      const cards = await this.cardService.getCardsByPool(poolId);
+      const cards = await this.cardService.getCardsByPoolForCatalog(poolId);
       return ResponseDto.success(cards, "获取卡片列表成功");
     } catch (error) {
       return ResponseDto.error(error.message || "获取卡片列表失败");
