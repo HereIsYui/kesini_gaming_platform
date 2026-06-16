@@ -1380,6 +1380,9 @@ watch(activeSection, async (section) => {
   if (section === "monthlyCard" && isAuthed.value) {
     await loadMonthlyCardStatus();
   }
+  if (section === "trade" && isAuthed.value) {
+    await loadTradeData();
+  }
 });
 
 watch(
@@ -2774,11 +2777,7 @@ function goToTradePage(item: CatalogCard) {
   tradeRarityFilter.value = item.rarity;
   tradeCardNameFilter.value = item.card.card_name;
   tradePage.value = 1;
-  router.push({ name: "trade" }).then(() => {
-    nextTick(() => {
-      loadTradeListings();
-    });
-  });
+  router.push({ name: "trade" });
 }
 
 function toggleBulkDecomposeRarity(rarity: CardRarity) {

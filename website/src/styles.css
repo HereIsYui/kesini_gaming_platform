@@ -3512,8 +3512,34 @@ h3 {
   width: 128px;
 }
 
+.search-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .trade-search-input {
   width: 200px !important;
+  flex-shrink: 0;
+}
+
+.search-button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.search-button:hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
 }
 
 .trade-grid {

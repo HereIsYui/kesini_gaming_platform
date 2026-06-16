@@ -137,16 +137,32 @@ function debouncedLoadTradeListings() {
 
     <div v-if="tradeTab === 'market'" class="trade-section">
       <div class="filter-row trade-filter-row">
-        <input
-          v-model="tradeCardNameFilter"
-          type="search"
-          placeholder="搜索卡名"
-          class="trade-search-input"
-          @input="
-            tradePage = 1;
-            debouncedLoadTradeListings();
-          "
-        />
+        <div class="search-box">
+          <input
+            v-model="tradeCardNameFilter"
+            type="search"
+            placeholder="搜索卡名"
+            class="trade-search-input"
+            @input="
+              tradePage = 1;
+              debouncedLoadTradeListings();
+            "
+            @keyup.enter="
+              tradePage = 1;
+              loadTradeListings();
+            "
+          />
+          <button
+            type="button"
+            class="search-button"
+            @click="
+              tradePage = 1;
+              loadTradeListings();
+            "
+          >
+            搜索
+          </button>
+        </div>
         <select
           v-model="tradeRarityFilter"
           @change="

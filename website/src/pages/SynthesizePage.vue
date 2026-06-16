@@ -186,7 +186,7 @@ const {
           }}
         </button>
         <button
-          class="tertiary compact"
+          class="primary-action compact"
           type="button"
           @click.stop="goToTradePage(item)"
         >
