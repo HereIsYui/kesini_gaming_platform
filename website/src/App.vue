@@ -32,7 +32,7 @@ import {
   UsersRound,
   WandSparkles,
 } from "@lucide/vue";
-import { computed, nextTick, onMounted, provide, reactive, ref, watch } from "vue";
+import { computed, onMounted, provide, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AchievementToastStack from "./components/common/AchievementToastStack.vue";
 import AnnouncementBar from "./components/common/AnnouncementBar.vue";
