@@ -785,6 +785,25 @@ describe("AdminService", () => {
     ).rejects.toThrow("物品名称不能为空");
   });
 
+  it("创建碎片时拒绝忽略空格后同名的重复碎片", async () => {
+    const existingFragment = {
+      id: 7,
+      drop_name: "N碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([existingFragment]),
+    });
+    const service = createService({ drop: dropRepository });
+
+    await expect(
+      service.createDropItem({ drop_name: "N 碎片", drop_type: 0 } as any),
+    ).rejects.toThrow("已存在同名碎片");
+    expect(dropRepository.save).not.toHaveBeenCalled();
+  });
+
   it("设置默认碎片会清除其他默认碎片", async () => {
     const oldDefault = {
       id: 1,

@@ -612,6 +612,10 @@ export class AdminService {
   async createDropItem(body: Partial<DropItem>) {
     const normalized = this.normalizeDropItemInput(body);
     const disabled = body.disabled === true;
+    // 碎片类物品（drop_type=0）校验同名，忽略名称中的空格，避免造出重复碎片
+    if (normalized.drop_type === 0) {
+      await this.assertNoDuplicateFragmentName(normalized.drop_name);
+    }
     await this.prepareDefaultFragment(
       { ...normalized, disabled },
       body.default_fragment === true,
@@ -624,6 +628,27 @@ export class AdminService {
     const saved = await this.dropRepository.save(item);
     await this.invalidateDropItemNameMap();
     return saved;
+  }
+
+  // 校验碎片名称是否与已有（未禁用）碎片重复，忽略空格差异
+  private async assertNoDuplicateFragmentName(
+    dropName: string,
+    exceptId?: number,
+  ) {
+    const normalizedName = dropName.replace(/\s+/g, "");
+    const existing = await this.dropRepository.find({
+      where: { drop_type: 0, disabled: false },
+    });
+    const duplicate = existing.find(
+      (item) =>
+        item.id !== exceptId &&
+        String(item.drop_name || "").replace(/\s+/g, "") === normalizedName,
+    );
+    if (duplicate) {
+      throw new Error(
+        `已存在同名碎片「${duplicate.drop_name}」(id=${duplicate.id})，请勿重复创建`,
+      );
+    }
   }
 
   async updateDropItem(id: number, body: Partial<DropItem>) {

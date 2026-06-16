@@ -32,12 +32,13 @@ SET @default_fragment_item_id := (
 );
 
 -- 确保普通关卡奖励能引用稀有度碎片。
+-- 注意：判断用 REPLACE 忽略名称中的空格，避免与历史数据（如 'N 碎片'）重复创建。
 INSERT INTO `drop_item`
 (`drop_name`, `drop_desc`, `drop_type`, `drop_item_type`, `drop_item_value`, `disabled`, `default_fragment`, `createdAt`)
 SELECT 'N碎片', 'N卡合成碎片', 0, 0, 0, 0, 0, NOW(6)
 WHERE NOT EXISTS (
   SELECT 1 FROM `drop_item`
-  WHERE `drop_name` = 'N碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'N碎片' AND `drop_type` = 0 AND `disabled` = 0
 );
 
 INSERT INTO `drop_item`
@@ -45,7 +46,7 @@ INSERT INTO `drop_item`
 SELECT 'R碎片', 'R卡合成碎片', 0, 0, 0, 0, 0, NOW(6)
 WHERE NOT EXISTS (
   SELECT 1 FROM `drop_item`
-  WHERE `drop_name` = 'R碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'R碎片' AND `drop_type` = 0 AND `disabled` = 0
 );
 
 INSERT INTO `drop_item`
@@ -53,7 +54,7 @@ INSERT INTO `drop_item`
 SELECT 'SR碎片', 'SR卡合成碎片', 0, 0, 0, 0, 0, NOW(6)
 WHERE NOT EXISTS (
   SELECT 1 FROM `drop_item`
-  WHERE `drop_name` = 'SR碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'SR碎片' AND `drop_type` = 0 AND `disabled` = 0
 );
 
 INSERT INTO `drop_item`
@@ -61,30 +62,30 @@ INSERT INTO `drop_item`
 SELECT 'SSR碎片', 'SSR卡合成碎片', 0, 0, 0, 0, 0, NOW(6)
 WHERE NOT EXISTS (
   SELECT 1 FROM `drop_item`
-  WHERE `drop_name` = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
 );
 
 SET @n_fragment_item_id := (
   SELECT `id` FROM `drop_item`
-  WHERE `drop_name` = 'N碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'N碎片' AND `drop_type` = 0 AND `disabled` = 0
   ORDER BY `id` ASC LIMIT 1
 );
 
 SET @r_fragment_item_id := (
   SELECT `id` FROM `drop_item`
-  WHERE `drop_name` = 'R碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'R碎片' AND `drop_type` = 0 AND `disabled` = 0
   ORDER BY `id` ASC LIMIT 1
 );
 
 SET @sr_fragment_item_id := (
   SELECT `id` FROM `drop_item`
-  WHERE `drop_name` = 'SR碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'SR碎片' AND `drop_type` = 0 AND `disabled` = 0
   ORDER BY `id` ASC LIMIT 1
 );
 
 SET @ssr_fragment_item_id := (
   SELECT `id` FROM `drop_item`
-  WHERE `drop_name` = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
+  WHERE REPLACE(`drop_name`, ' ', '') = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
   ORDER BY `id` ASC LIMIT 1
 );
 
