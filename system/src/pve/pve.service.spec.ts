@@ -260,6 +260,13 @@ function createService(
     levelCode: string;
     expiresAt: string | null;
   } | null = null,
+  redis: any = undefined,
+  riskConfig: Partial<{
+    enabled: boolean;
+    windowSeconds: number;
+    limit: number;
+    banSeconds: number;
+  }> | null = null,
 ) {
   const pointLedgerService = {
     applyChange: jest.fn(async (_manager, user: User, amount: number) => {
@@ -272,12 +279,22 @@ function createService(
         getGameVipStatus: jest.fn().mockResolvedValue(toGameVip(vip)),
       }
     : undefined;
+  const systemConfigRepository = riskConfig
+    ? {
+        findOne: jest.fn().mockResolvedValue({
+          key: "pve_risk_control",
+          value: JSON.stringify(riskConfig),
+        }),
+      }
+    : undefined;
   return new PveService(
     store as any,
     new FormationService(store as any),
     new RewardService(pointLedgerService as any),
     undefined,
     rechargeService as any,
+    redis,
+    systemConfigRepository as any,
   );
 }
 
@@ -541,7 +558,7 @@ describe("PveService 轻量关卡", () => {
     await expect(service.challenge("u1", 1)).rejects.toThrow("请先配置阵容");
   });
 
-  it("VIP1每日最多扫荡5关且只发重复奖励", async () => {
+  it("VIP扫荡不再受每日次数限制并只发重复奖励", async () => {
     service = createService(store, {
       checked: true,
       active: true,
@@ -578,16 +595,12 @@ describe("PveService 轻量关卡", () => {
 
     expect(result).toMatchObject({
       vipLevel: 1,
-      dailyLimit: 5,
-      usedToday: 5,
-      remaining: 0,
-      swept: 5,
+      unlimited: true,
+      swept: 6,
     });
-    expect(result.skipped).toEqual([
-      { stageId: 6, stageName: "测试关卡6", reason: "VIP次数已用完" },
-    ]);
+    expect(result.skipped).toEqual([]);
     const sweepRecords = store.records.filter((record) => record.mode === "sweep");
-    expect(sweepRecords).toHaveLength(5);
+    expect(sweepRecords).toHaveLength(6);
     expect(sweepRecords[0].reward_snapshot).toEqual({
       points: 0,
       items: [{ itemId: 1, num: 2 }],
@@ -596,9 +609,42 @@ describe("PveService 轻量关卡", () => {
     expect(store.inventories[0]).toMatchObject({
       user_id: 1,
       item_id: 1,
-      num: 10,
+      num: 12,
     });
     expect(store.userCards).toHaveLength(initialCardCount);
+  });
+
+  it("不指定关卡时自动扫荡全部已通关卡", async () => {
+    service = createService(store, {
+      checked: true,
+      active: true,
+      levelCode: "VIP1_MONTH",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    });
+    store.stages = [createStage(1), createStage(2), createStage(3)];
+    // 仅 1、3 通关，2 未通关
+    store.records = [1, 3].map((stageId, index) => ({
+      id: index + 1,
+      uid: "u1",
+      stage_id: stageId,
+      stage_name: `测试关卡${stageId}`,
+      formation_power: 1000,
+      enemy_power: 500,
+      success: true,
+      reward_snapshot: { points: 20, items: [] },
+      mode: "challenge",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    })) as PveChallengeRecord[];
+    store.nextRecordId = 20;
+
+    const result = await service.sweep("u1", {});
+
+    expect(result.swept).toBe(2);
+    const sweptStageIds = store.records
+      .filter((record) => record.mode === "sweep")
+      .map((record) => record.stage_id)
+      .sort();
+    expect(sweptStageIds).toEqual([1, 3]);
   });
 
   it("非VIP不能扫荡", async () => {
@@ -615,7 +661,7 @@ describe("PveService 轻量关卡", () => {
     );
   });
 
-  it("扫荡会跳过未通关和次数用完关卡", async () => {
+  it("扫荡会跳过未通关关卡但不再受次数限制", async () => {
     service = createService(store, {
       checked: true,
       active: true,
@@ -626,6 +672,7 @@ describe("PveService 轻量关卡", () => {
       createStage(1, { daily_limit: 1 }),
       createStage(2, { daily_limit: 3 }),
     ];
+    // 关卡1已通关（即使 daily_limit=1 也能继续扫荡），关卡2未通关
     store.records = [
       {
         id: 1,
@@ -643,12 +690,13 @@ describe("PveService 轻量关卡", () => {
 
     const result = await service.sweep("u1", { stageIds: [1, 2] });
 
-    expect(result.swept).toBe(0);
+    expect(result.swept).toBe(1);
     expect(result.skipped).toEqual([
-      { stageId: 1, stageName: "测试关卡1", reason: "今日次数已用完" },
       { stageId: 2, stageName: "测试关卡2", reason: "未通关" },
     ]);
-    expect(store.records.filter((record) => record.mode === "sweep")).toHaveLength(0);
+    expect(
+      store.records.filter((record) => record.mode === "sweep"),
+    ).toHaveLength(1);
   });
 
   it("挑战记录按分页返回", async () => {
@@ -674,5 +722,154 @@ describe("PveService 轻量关卡", () => {
       stageName: "测试关卡1",
       success: true,
     });
+  });
+
+  it("自动战斗顺序挑战未通关卡，遇到打不过即停止", async () => {
+    store.stages = [
+      createStage(1, { enemy_power: 100 }),
+      createStage(2, { enemy_power: 200 }),
+      createStage(3, { enemy_power: 999999 }), // 战力不足，停在这里
+      createStage(4, { enemy_power: 100 }),
+    ];
+    // 阵容战力来自 SSR 卡，足以打过关卡1、2，打不过关卡3
+    const result = await service.autoBattle("u1");
+
+    expect(result.attempted).toBe(3);
+    expect(result.cleared).toBe(2);
+    expect(result.stopReason).toContain("战力不足");
+    expect(result.list.map((item) => item.stageId)).toEqual([1, 2, 3]);
+    expect(result.list[2].success).toBe(false);
+    // 关卡4没被挑战
+    expect(
+      store.records.some(
+        (record) => record.stage_id === 4 && record.mode === "auto",
+      ),
+    ).toBe(false);
+  });
+
+  it("自动战斗跳过已通关卡", async () => {
+    store.stages = [
+      createStage(1, { enemy_power: 100 }),
+      createStage(2, { enemy_power: 100 }),
+    ];
+    store.records = [
+      {
+        id: 1,
+        uid: "u1",
+        stage_id: 1,
+        stage_name: "测试关卡1",
+        formation_power: 1000,
+        enemy_power: 100,
+        success: true,
+        reward_snapshot: { points: 20, items: [] },
+        mode: "challenge",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      } as PveChallengeRecord,
+    ];
+    store.nextRecordId = 10;
+
+    const result = await service.autoBattle("u1");
+
+    expect(result.list.map((item) => item.stageId)).toEqual([2]);
+    expect(result.cleared).toBe(1);
+  });
+
+  it("挑战超过每分钟阈值后触发临时封禁", async () => {
+    let counter = 0;
+    let banned = false;
+    const redis = {
+      exists: jest.fn(async () => banned),
+      incrWithExpire: jest.fn(async () => {
+        counter += 1;
+        return counter;
+      }),
+      set: jest.fn(async () => {
+        banned = true;
+        return true;
+      }),
+    };
+    service = createService(store, null, redis);
+    store.stages = [createStage(1, { enemy_power: 100, daily_limit: 1000 })];
+
+    // 第 51 次调用触发封禁（incr 返回 51 > 50）
+    counter = 50;
+    await expect(service.challenge("u1", 1)).rejects.toThrow(
+      "操作过于频繁",
+    );
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining("pve:ban:u1"),
+      expect.objectContaining({ uid: "u1", count: 51 }),
+      300,
+    );
+
+    // 已封禁后再次调用直接拒绝
+    await expect(service.challenge("u1", 1)).rejects.toThrow(
+      "操作过于频繁",
+    );
+  });
+
+  it("Redis 不可用时风控放行不影响正常挑战", async () => {
+    const redis = {
+      exists: jest.fn(async () => false),
+      incrWithExpire: jest.fn(async () => 0), // Redis 不可用返回 0
+      set: jest.fn(),
+    };
+    service = createService(store, null, redis);
+    store.stages = [createStage(1, { enemy_power: 100 })];
+
+    const result = await service.challenge("u1", 1);
+
+    expect(result.success).toBe(true);
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it("风控关闭时不限流不计数", async () => {
+    const redis = {
+      exists: jest.fn(async () => false),
+      incrWithExpire: jest.fn(async () => 99999),
+      set: jest.fn(),
+    };
+    service = createService(store, null, redis, { enabled: false });
+    store.stages = [createStage(1, { enemy_power: 100 })];
+
+    const result = await service.challenge("u1", 1);
+
+    expect(result.success).toBe(true);
+    expect(redis.exists).not.toHaveBeenCalled();
+    expect(redis.incrWithExpire).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it("使用后台自定义阈值触发封禁", async () => {
+    let counter = 0;
+    const redis = {
+      exists: jest.fn(async () => false),
+      incrWithExpire: jest.fn(async () => {
+        counter += 1;
+        return counter;
+      }),
+      set: jest.fn(async () => true),
+    };
+    // 自定义：窗口 30 秒，阈值 3 次，封禁 120 秒
+    service = createService(store, null, redis, {
+      enabled: true,
+      windowSeconds: 30,
+      limit: 3,
+      banSeconds: 120,
+    });
+    store.stages = [createStage(1, { enemy_power: 100, daily_limit: 1000 })];
+
+    // 第 4 次（incr 返回 4 > 3）触发封禁
+    counter = 3;
+    await expect(service.challenge("u1", 1)).rejects.toThrow("操作过于频繁");
+    expect(redis.incrWithExpire).toHaveBeenCalledWith(
+      expect.stringContaining("pve:rate:u1"),
+      30,
+    );
+    expect(redis.set).toHaveBeenCalledWith(
+      expect.stringContaining("pve:ban:u1"),
+      expect.objectContaining({ uid: "u1", count: 4 }),
+      120,
+    );
   });
 });

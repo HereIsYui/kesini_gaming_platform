@@ -1822,4 +1822,81 @@ describe("AdminService", () => {
       expect.objectContaining({ enabled: false, delete_flag: true }),
     );
   });
+
+  it("读取PVE风控配置：无记录时回退默认值", async () => {
+    const systemConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const service = createService({ systemConfig: systemConfigRepository });
+
+    const config = await service.getPveRiskConfig();
+
+    expect(config).toEqual({
+      enabled: true,
+      windowSeconds: 60,
+      limit: 50,
+      banSeconds: 300,
+    });
+  });
+
+  it("更新PVE风控配置会归一化并保存", async () => {
+    const systemConfigRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    const service = createService({ systemConfig: systemConfigRepository });
+
+    const result = await service.updatePveRiskConfig({
+      enabled: false,
+      windowSeconds: 0, // 非法 → 回退默认 60
+      limit: 5,
+      banSeconds: 120,
+    });
+
+    expect(result).toEqual({
+      enabled: false,
+      windowSeconds: 60,
+      limit: 5,
+      banSeconds: 120,
+    });
+    expect(systemConfigRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "pve_risk_control" }),
+    );
+  });
+
+  it("列出风控记录：扫描 Redis 封禁并补充剩余时长", async () => {
+    const redis = {
+      scanKeys: jest.fn().mockResolvedValue(["PVE:BAN:U1", "PVE:BAN:U2"]),
+      get: jest.fn(async (key: string) =>
+        key === "PVE:BAN:U1"
+          ? { uid: "u1", reason: "超限", count: 51, bannedAt: "2026-06-13T00:00:00.000Z" }
+          : { uid: "u2", reason: "超限", count: 60, bannedAt: "2026-06-13T00:01:00.000Z" },
+      ),
+      ttl: jest.fn(async (key: string) => (key === "PVE:BAN:U1" ? 100 : 200)),
+    };
+    const userRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+    });
+    const service = createService({ redis, user: userRepository });
+
+    const result = await service.listRiskBans({ page: 1, pageSize: 20 });
+
+    expect(redis.scanKeys).toHaveBeenCalledWith("pve:ban:*");
+    expect(result.total).toBe(2);
+    // 按剩余时长降序：u2(200) 在前
+    expect(result.list[0]).toMatchObject({ uid: "u2", remainSeconds: 200 });
+    expect(result.list[1]).toMatchObject({ uid: "u1", remainSeconds: 100 });
+  });
+
+  it("解除风控会删除封禁标记和计数窗口", async () => {
+    const redis = {
+      del: jest.fn().mockResolvedValue(true),
+    };
+    const service = createService({ redis });
+
+    const result = await service.releaseRiskBan("u1");
+
+    expect(result).toEqual({ uid: "u1", released: true });
+    expect(redis.del).toHaveBeenCalledWith("pve:ban:u1");
+    expect(redis.del).toHaveBeenCalledWith("pve:rate:u1");
+  });
 });

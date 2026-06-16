@@ -25,6 +25,8 @@ export type PageKey =
   | "season-shop-usages"
   | "pve-stages"
   | "pve-records"
+  | "pve-risk-config"
+  | "pve-risk-bans"
   | "trade-config"
   | "trade-listings"
   | "trade-records"
@@ -73,6 +75,8 @@ export const pageKeys: PageKey[] = [
   "season-shop-usages",
   "pve-stages",
   "pve-records",
+  "pve-risk-config",
+  "pve-risk-bans",
   "trade-config",
   "trade-listings",
   "trade-records",
@@ -726,6 +730,53 @@ export const pveRecordFields: FieldConfig[] = [
   { key: "enemy_power", label: "敌方战力", readonly: true },
   { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "挑战时间", readonly: true },
+];
+
+export const pveRiskConfigFields: FieldConfig[] = [
+  {
+    key: "enabled",
+    label: "风控开关",
+    type: "boolean",
+    defaultValue: true,
+    activeText: "开启",
+    inactiveText: "关闭",
+    helper: "关闭后挑战/自动战斗接口不再限流。",
+  },
+  {
+    key: "windowSeconds",
+    label: "计数窗口(秒)",
+    type: "number",
+    defaultValue: 60,
+    helper: "统计调用次数的时间窗口长度，最小 1。",
+  },
+  {
+    key: "limit",
+    label: "窗口内上限",
+    type: "number",
+    defaultValue: 50,
+    helper: "窗口内允许的最大挑战次数，超过即封禁，最小 1。",
+  },
+  {
+    key: "banSeconds",
+    label: "封禁时长(秒)",
+    type: "number",
+    defaultValue: 300,
+    helper: "触发风控后封禁该用户的时长，最小 1。",
+  },
+];
+
+export const pveRiskBanFields: FieldConfig[] = [
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
+  { key: "reason", label: "触发原因", readonly: true, minWidth: 200 },
+  { key: "triggerCount", label: "触发次数", readonly: true },
+  { key: "bannedAt", label: "封禁时间", readonly: true, minWidth: 180 },
+  { key: "remainSeconds", label: "剩余封禁", readonly: true },
 ];
 
 export const tradeListingFields: FieldConfig[] = [

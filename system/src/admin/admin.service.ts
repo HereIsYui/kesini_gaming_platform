@@ -85,6 +85,12 @@ import {
   MONTHLY_CARD_CONFIG_KEY,
   normalizeMonthlyCardConfig,
 } from "src/monthly-card/monthly-card.config";
+import {
+  DEFAULT_PVE_RISK_CONFIG,
+  normalizePveRiskConfig,
+  PVE_RISK_CONFIG_KEY,
+  type PveRiskConfig,
+} from "src/pve/pve-risk-config";
 
 export interface PageQuery {
   page?: number;
@@ -1497,6 +1503,107 @@ export class AdminService {
     row.description = "月卡配置";
     await repository.save(row);
     return flattenMonthlyCardConfig(config);
+  }
+
+  // ---- PVE 挑战风控 ----
+
+  async getPveRiskConfig(): Promise<PveRiskConfig> {
+    const row = await this.mustSystemConfigRepository().findOne({
+      where: { key: PVE_RISK_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return { ...DEFAULT_PVE_RISK_CONFIG };
+    }
+    try {
+      return normalizePveRiskConfig(JSON.parse(row.value));
+    } catch {
+      return { ...DEFAULT_PVE_RISK_CONFIG };
+    }
+  }
+
+  async updatePveRiskConfig(body: unknown): Promise<PveRiskConfig> {
+    const repository = this.mustSystemConfigRepository();
+    const config = normalizePveRiskConfig(body);
+    let row = await repository.findOne({
+      where: { key: PVE_RISK_CONFIG_KEY },
+    });
+    if (!row) {
+      row = repository.create({
+        key: PVE_RISK_CONFIG_KEY,
+        description: "PVE挑战风控配置",
+      });
+    }
+    row.value = JSON.stringify(config);
+    row.description = "PVE挑战风控配置";
+    await repository.save(row);
+    return config;
+  }
+
+  /**
+   * 列出当前生效的 PVE 挑战封禁（仅 Redis，无历史）。
+   * 扫描 ban key → 读 value（含原始 uid 及元数据）+ ttl 拿剩余秒数。
+   */
+  async listRiskBans(query: PageQuery & { uid?: string }) {
+    const { page, pageSize } = this.normalizePage(query);
+    const empty = { list: [], total: 0, page, pageSize };
+    if (!this.redis) {
+      return empty;
+    }
+    const keys = await this.redis.scanKeys("pve:ban:*");
+    const rows: Array<{
+      uid: string;
+      reason: string;
+      triggerCount: number;
+      bannedAt: string;
+      remainSeconds: number;
+    }> = [];
+    for (const key of keys) {
+      const value = await this.redis.get<any>(key);
+      const remainSeconds = await this.redis.ttl(key);
+      // 已过期或无值则跳过
+      if (remainSeconds <= 0 && remainSeconds !== -1) {
+        continue;
+      }
+      const meta = value && typeof value === "object" ? value : {};
+      const uid = String(meta.uid || "");
+      if (!uid) {
+        continue;
+      }
+      rows.push({
+        uid,
+        reason: String(meta.reason || "频率超限"),
+        triggerCount: Number(meta.count || 0),
+        bannedAt: String(meta.bannedAt || ""),
+        remainSeconds: Math.max(0, remainSeconds),
+      });
+    }
+    const keyword = String(query.uid || "").trim();
+    const filtered = keyword
+      ? rows.filter((row) => row.uid.includes(keyword))
+      : rows;
+    filtered.sort((left, right) => right.remainSeconds - left.remainSeconds);
+    return this.attachUserDisplayToUidRows({
+      list: filtered,
+      total: filtered.length,
+      page,
+      pageSize,
+    });
+  }
+
+  /**
+   * 手动解除某用户的 PVE 挑战封禁：删除封禁标记并清零计数窗口。
+   */
+  async releaseRiskBan(uid: string) {
+    const target = String(uid || "").trim();
+    if (!target) {
+      throw new Error("缺少用户标识");
+    }
+    if (!this.redis) {
+      throw new Error("Redis 不可用，无法解除风控");
+    }
+    await this.redis.del(`pve:ban:${target}`);
+    await this.redis.del(`pve:rate:${target}`);
+    return { uid: target, released: true };
   }
 
   async getRechargeConfig() {

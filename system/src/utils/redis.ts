@@ -144,6 +144,92 @@ export class RedisUtil {
   }
 
   /**
+   * 原子自增计数，并在键首次创建时设置过期时间。
+   * 用于限流：每个窗口内累加调用次数。
+   * @param key 键
+   * @param ttlSeconds 窗口过期时间（秒）
+   * @returns 当前窗口内的计数；Redis 不可用时返回 0（调用方据此放行，避免误伤）
+   */
+  async incrWithExpire(key: string, ttlSeconds: number): Promise<number> {
+    try {
+      key = key.toUpperCase();
+      const redisClient = this.ensureClient();
+      const count = await redisClient.incr(key);
+      if (count === 1) {
+        await redisClient.expire(key, ttlSeconds);
+      }
+      return count;
+    } catch (error) {
+      this.logger.error(`Redis incr error for key ${key}: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * 检查键是否存在。
+   * @param key 键
+   * @returns 存在返回 true；Redis 不可用时返回 false（放行）
+   */
+  async exists(key: string): Promise<boolean> {
+    try {
+      key = key.toUpperCase();
+      const redisClient = this.ensureClient();
+      const result = await redisClient.exists(key);
+      return result > 0;
+    } catch (error) {
+      this.logger.error(`Redis exists error for key ${key}: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 使用 SCAN 游标遍历匹配指定模式的所有键（非阻塞，生产安全）。
+   * @param pattern 匹配模式，如 "pve:ban:*"（内部统一大写）
+   * @returns 匹配到的键列表；Redis 不可用时返回空数组
+   */
+  async scanKeys(pattern: string): Promise<string[]> {
+    try {
+      const match = pattern.toUpperCase();
+      const redisClient = this.ensureClient();
+      const keys: string[] = [];
+      let cursor = "0";
+      do {
+        const [next, batch] = await redisClient.scan(
+          cursor,
+          "MATCH",
+          match,
+          "COUNT",
+          100,
+        );
+        cursor = next;
+        keys.push(...batch);
+      } while (cursor !== "0");
+      return keys;
+    } catch (error) {
+      this.logger.error(
+        `Redis scan error for pattern ${pattern}: ${error.message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * 获取键的剩余过期时间（秒）。
+   * @param key 键
+   * @returns 剩余秒数；键不存在返回 -2，无过期时间返回 -1，Redis 不可用返回 -2
+   */
+  async ttl(key: string): Promise<number> {
+    try {
+      key = key.toUpperCase();
+      const redisClient = this.ensureClient();
+      return await redisClient.ttl(key);
+    } catch (error) {
+      this.logger.error(`Redis ttl error for key ${key}: ${error.message}`);
+      return -2;
+    }
+  }
+
+  /**
    * 检查连接状态
    */
   async ping(): Promise<boolean> {

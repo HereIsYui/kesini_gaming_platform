@@ -1,16 +1,25 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { Between, DataSource, EntityManager, In } from "typeorm";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Between, DataSource, EntityManager, In, Repository } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { PveStage } from "src/entity/pveStage.entity";
 import type { RedeemRewards } from "src/entity/redeemCode.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
 import { FormationService } from "src/formation/formation.service";
 import { RechargeService } from "src/recharge/recharge.service";
 import { RewardService } from "src/reward/reward.service";
 import { SocialActivityService } from "src/social/social-activity.service";
+import { RedisUtil } from "src/utils/redis";
 import type { GameVipStatusView } from "src/vip/game-vip";
+import {
+  DEFAULT_PVE_RISK_CONFIG,
+  normalizePveRiskConfig,
+  PVE_RISK_CONFIG_KEY,
+  type PveRiskConfig,
+} from "./pve-risk-config";
 
 export interface PvePageQuery {
   page?: number;
@@ -19,7 +28,7 @@ export interface PvePageQuery {
 }
 
 export interface PveSweepInput {
-  stageIds: number[];
+  stageIds?: number[];
 }
 
 export interface PveSweepStageResult {
@@ -32,9 +41,7 @@ export interface PveSweepStageResult {
 export interface PveSweepResult {
   vipLevel: number;
   vipLabel: string;
-  dailyLimit: number;
-  usedToday: number;
-  remaining: number;
+  unlimited: boolean;
   swept: number;
   skipped: Array<{
     stageId: number;
@@ -44,6 +51,32 @@ export interface PveSweepResult {
   list: PveSweepStageResult[];
   pointAfter: number;
 }
+
+export interface PveAutoBattleStageResult {
+  stageId: number;
+  stageName: string;
+  success: boolean;
+  formationPower: number;
+  enemyPower: number;
+  rewards: RedeemRewards | null;
+}
+
+export interface PveAutoBattleResult {
+  attempted: number;
+  cleared: number;
+  stopReason: string;
+  list: PveAutoBattleStageResult[];
+  pointAfter: number;
+}
+
+type SettleChallengeResult = {
+  record: PveChallengeRecord;
+  success: boolean;
+  rewardSnapshot: RedeemRewards | null;
+  formationPower: number;
+  enemyPower: number;
+  clearedBefore: boolean;
+};
 
 type RewardLookup = {
   itemMap: Map<number, DropItem>;
@@ -60,6 +93,11 @@ export class PveService {
     private readonly socialActivityService?: SocialActivityService,
     @Optional()
     private readonly rechargeService?: RechargeService,
+    @Optional()
+    private readonly redis?: RedisUtil,
+    @Optional()
+    @InjectRepository(SystemConfig)
+    private readonly systemConfigRepository?: Repository<SystemConfig>,
   ) {}
 
   async listStages(uid: string, query: PvePageQuery = {}) {
@@ -127,6 +165,12 @@ export class PveService {
       return map;
     }, new Map<number, number>());
 
+    // 全局可扫荡关卡数：所有已通关、当前开放、在开放时间内的关卡
+    const sweepableCount = visibleStages.filter(
+      (stage) =>
+        stage.enabled === true && allClearedStageIds.has(Number(stage.id)),
+    ).length;
+
     return {
       formation: {
         slotCount: formation.slotCount,
@@ -148,6 +192,7 @@ export class PveService {
       totalPages,
       nextUnclearedStageId,
       nextUnclearedPage,
+      sweepableCount,
     };
   }
 
@@ -155,6 +200,7 @@ export class PveService {
     if (!Number.isInteger(Number(stageId)) || Number(stageId) <= 0) {
       throw new Error("关卡参数无效");
     }
+    await this.assertChallengeRateLimit(uid);
 
     return this.dataSource.transaction(async (manager) => {
       const stage = await manager.getRepository(PveStage).findOne({
@@ -194,107 +240,312 @@ export class PveService {
         throw new Error("请先配置阵容");
       }
 
-      const formationPower = Number(formation.totalPower || 0);
-      const enemyPower = this.normalizePower(stage.enemy_power);
-      const success = formationPower >= enemyPower;
-      const clearedBefore =
-        (await manager.getRepository(PveChallengeRecord).count({
-          where: {
-            uid,
-            stage_id: stage.id,
-            success: true,
-          },
-        })) > 0;
-      const firstClearRewards = success
-        ? this.rewardService.normalizeRewards(stage.rewards, "关卡奖励不能为空")
-        : null;
-      const rewardSnapshot = firstClearRewards
-        ? clearedBefore
-          ? this.toRepeatRewards(firstClearRewards)
-          : firstClearRewards
-        : null;
-
-      if (this.hasGrantableRewards(rewardSnapshot)) {
-        await this.assertRewardAvailable(manager, rewardSnapshot);
-      }
-
-      const recordRepository = manager.getRepository(PveChallengeRecord);
-      const record = await recordRepository.save(
-        recordRepository.create({
-          uid,
-          stage_id: stage.id,
-          stage_name: stage.name,
-          formation_power: formationPower,
-          enemy_power: enemyPower,
-          success,
-          reward_snapshot: rewardSnapshot,
-          mode: "challenge",
-        }),
+      const settlement = await this.settleChallenge(
+        manager,
+        uid,
+        user,
+        stage,
+        Number(formation.totalPower || 0),
+        "challenge",
       );
 
-      if (this.hasGrantableRewards(rewardSnapshot)) {
-        await this.rewardService.grantRewards(manager, user, rewardSnapshot, {
-          sourceType: "pve",
-          sourceId: stage.id,
-          title: `关卡奖励：${stage.name}`,
+      const rewardLookup = await this.buildRewardLookup(manager, [
+        stage.rewards,
+        ...(settlement.rewardSnapshot ? [settlement.rewardSnapshot] : []),
+      ]);
+
+      return {
+        record: this.toRecordView(settlement.record, rewardLookup),
+        stage: this.toStageView(
+          stage,
+          settlement.formationPower,
+          todayCount + 1,
+          rewardLookup,
+          settlement.clearedBefore || settlement.success,
+        ),
+        success: settlement.success,
+        rewards: settlement.rewardSnapshot
+          ? this.decorateRewards(settlement.rewardSnapshot, rewardLookup)
+          : null,
+        formationPower: settlement.formationPower,
+        enemyPower: settlement.enemyPower,
+        pointAfter: user.point,
+      };
+    });
+  }
+
+  /**
+   * 结算单关挑战：判定胜负、发放奖励、写入记录、记录社交动态。
+   * challenge 与 autoBattle 共用，需在事务内调用，并已锁定 user。
+   */
+  private async settleChallenge(
+    manager: EntityManager,
+    uid: string,
+    user: User,
+    stage: PveStage,
+    formationPower: number,
+    mode: "challenge" | "auto",
+  ): Promise<SettleChallengeResult> {
+    const enemyPower = this.normalizePower(stage.enemy_power);
+    const success = formationPower >= enemyPower;
+    const clearedBefore =
+      (await manager.getRepository(PveChallengeRecord).count({
+        where: {
+          uid,
+          stage_id: stage.id,
+          success: true,
+        },
+      })) > 0;
+    const firstClearRewards = success
+      ? this.rewardService.normalizeRewards(stage.rewards, "关卡奖励不能为空")
+      : null;
+    const rewardSnapshot = firstClearRewards
+      ? clearedBefore
+        ? this.toRepeatRewards(firstClearRewards)
+        : firstClearRewards
+      : null;
+
+    if (this.hasGrantableRewards(rewardSnapshot)) {
+      await this.assertRewardAvailable(manager, rewardSnapshot);
+    }
+
+    const recordRepository = manager.getRepository(PveChallengeRecord);
+    const record = await recordRepository.save(
+      recordRepository.create({
+        uid,
+        stage_id: stage.id,
+        stage_name: stage.name,
+        formation_power: formationPower,
+        enemy_power: enemyPower,
+        success,
+        reward_snapshot: rewardSnapshot,
+        mode,
+      }),
+    );
+
+    if (this.hasGrantableRewards(rewardSnapshot)) {
+      await this.rewardService.grantRewards(manager, user, rewardSnapshot, {
+        sourceType: "pve",
+        sourceId: stage.id,
+        title: `关卡奖励：${stage.name}`,
+        metadata: {
+          stageId: stage.id,
+          stageName: stage.name,
+          formationPower,
+          enemyPower,
+          mode,
+        },
+      });
+    }
+    if (success) {
+      await this.socialActivityService?.recordActivity(
+        {
+          actorUid: uid,
+          type: "pve_cleared",
+          title: "通关关卡",
+          summary: stage.name,
           metadata: {
             stageId: stage.id,
             stageName: stage.name,
             formationPower,
             enemyPower,
           },
-        });
-      }
-      if (success) {
-        await this.socialActivityService?.recordActivity(
-          {
-            actorUid: uid,
-            type: "pve_cleared",
-            title: "通关关卡",
-            summary: stage.name,
-            metadata: {
-              stageId: stage.id,
-              stageName: stage.name,
-              formationPower,
-              enemyPower,
-            },
-          },
-          manager,
-        );
-      }
-      const rewardLookup = await this.buildRewardLookup(manager, [
-        stage.rewards,
-        ...(rewardSnapshot ? [rewardSnapshot] : []),
-      ]);
+        },
+        manager,
+      );
+    }
 
-      return {
-        record: this.toRecordView(record, rewardLookup),
-        stage: this.toStageView(
+    return {
+      record,
+      success,
+      rewardSnapshot,
+      formationPower,
+      enemyPower,
+      clearedBefore,
+    };
+  }
+
+  /**
+   * 自动战斗：按关卡顺序从最近未通关的开始逐关挑战，遇到打不过或次数用完即停止。
+   * 整个连续挑战在单个事务内完成，不逐关触发风控。
+   */
+  async autoBattle(uid: string): Promise<PveAutoBattleResult> {
+    await this.assertChallengeRateLimit(uid);
+
+    return this.dataSource.transaction(async (manager) => {
+      const stageRepository = manager.getRepository(PveStage);
+      const recordRepository = manager.getRepository(PveChallengeRecord);
+      const [user, formation] = await Promise.all([
+        manager.getRepository(User).findOne({
+          where: { uid },
+          lock: { mode: "pessimistic_write" },
+        }),
+        this.formationService.getFormation(uid),
+      ]);
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+      if (!formation.slots.some((slot) => Boolean(slot.card))) {
+        throw new Error("请先配置阵容");
+      }
+      const formationPower = Number(formation.totalPower || 0);
+
+      const stages = await stageRepository.find({
+        where: { delete_flag: false, enabled: true },
+        order: { sort_order: "ASC", id: "ASC" } as any,
+      });
+      const openStages = stages.filter((stage) =>
+        this.isStageInVisibleTime(stage),
+      );
+      const stageIds = openStages.map((stage) => Number(stage.id));
+      const clearedRecords = stageIds.length
+        ? await recordRepository.find({
+            where: { uid, stage_id: In(stageIds), success: true },
+          })
+        : [];
+      const clearedStageIds = new Set(
+        clearedRecords.map((record) => Number(record.stage_id)),
+      );
+      const todayRecords = stageIds.length
+        ? await recordRepository.find({
+            where: {
+              uid,
+              stage_id: In(stageIds),
+              createdAt: Between(...this.getTodayRange()),
+            },
+          })
+        : [];
+      const todayCountMap = todayRecords.reduce((map, record) => {
+        map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
+        return map;
+      }, new Map<number, number>());
+
+      const list: PveAutoBattleStageResult[] = [];
+      const rewardSnapshots: RedeemRewards[] = [];
+      let cleared = 0;
+      let stopReason = "已全部通关";
+
+      for (const stage of openStages) {
+        if (clearedStageIds.has(Number(stage.id))) {
+          continue;
+        }
+        const dailyLimit = this.normalizeDailyLimit(stage.daily_limit);
+        const usedToday = todayCountMap.get(Number(stage.id)) || 0;
+        if (dailyLimit <= 0 || usedToday >= dailyLimit) {
+          stopReason = `「${stage.name}」今日次数已用完`;
+          break;
+        }
+
+        const settlement = await this.settleChallenge(
+          manager,
+          uid,
+          user,
           stage,
           formationPower,
-          todayCount + 1,
-          rewardLookup,
-          clearedBefore || success,
-        ),
-        success,
-        rewards: rewardSnapshot
-          ? this.decorateRewards(rewardSnapshot, rewardLookup)
-          : null,
-        formationPower,
-        enemyPower,
-        pointAfter: user.point,
+          "auto",
+        );
+        if (settlement.rewardSnapshot) {
+          rewardSnapshots.push(settlement.rewardSnapshot);
+        }
+        list.push({
+          stageId: stage.id,
+          stageName: stage.name,
+          success: settlement.success,
+          formationPower: settlement.formationPower,
+          enemyPower: settlement.enemyPower,
+          rewards: settlement.rewardSnapshot,
+        });
+        if (!settlement.success) {
+          stopReason = `「${stage.name}」战力不足，停止自动战斗`;
+          break;
+        }
+        cleared += 1;
+        clearedStageIds.add(Number(stage.id));
+      }
+
+      const rewardLookup = await this.buildRewardLookup(
+        manager,
+        rewardSnapshots,
+      );
+      return {
+        attempted: list.length,
+        cleared,
+        stopReason,
+        list: list.map((item) => ({
+          ...item,
+          rewards: item.rewards
+            ? this.decorateRewards(item.rewards, rewardLookup)
+            : null,
+        })),
+        pointAfter: user.point || 0,
       };
     });
   }
 
-  async sweep(uid: string, input: PveSweepInput): Promise<PveSweepResult> {
-    const stageIds = this.normalizeSweepStageIds(input?.stageIds || []);
-    if (stageIds.length === 0) {
-      throw new Error("请选择关卡");
+  /**
+   * 读取风控配置（来自 SystemConfig 表，key = pve_risk_control）。
+   * 无 repo 或读取失败时回退默认配置。
+   */
+  private async getRiskConfig(): Promise<PveRiskConfig> {
+    if (!this.systemConfigRepository) {
+      return DEFAULT_PVE_RISK_CONFIG;
     }
+    try {
+      const row = await this.systemConfigRepository.findOne({
+        where: { key: PVE_RISK_CONFIG_KEY },
+      });
+      if (!row?.value) {
+        return DEFAULT_PVE_RISK_CONFIG;
+      }
+      return normalizePveRiskConfig(JSON.parse(row.value));
+    } catch {
+      return DEFAULT_PVE_RISK_CONFIG;
+    }
+  }
+
+  /**
+   * 挑战接口风控：窗口内超过阈值则临时封禁该用户挑战/自动战斗接口。
+   * 封禁信息写入 ban key 的 value（含原始 uid），供后台展示与解除。
+   * 风控关闭或 Redis 不可用时放行，避免误伤正常玩家。
+   */
+  private async assertChallengeRateLimit(uid: string) {
+    if (!this.redis) {
+      return;
+    }
+    const config = await this.getRiskConfig();
+    if (!config.enabled) {
+      return;
+    }
+    const banKey = `pve:ban:${uid}`;
+    const banned = await this.redis.exists(banKey);
+    if (banned) {
+      throw new Error("操作过于频繁，请稍后再试");
+    }
+    const count = await this.redis.incrWithExpire(
+      `pve:rate:${uid}`,
+      config.windowSeconds,
+    );
+    if (count > config.limit) {
+      await this.redis.set(
+        banKey,
+        {
+          uid,
+          reason: `${config.windowSeconds}秒内挑战超过${config.limit}次`,
+          count,
+          bannedAt: new Date().toISOString(),
+        },
+        config.banSeconds,
+      );
+      throw new Error("操作过于频繁，请稍后再试");
+    }
+  }
+
+  async sweep(uid: string, input: PveSweepInput): Promise<PveSweepResult> {
+    const requestedStageIds = this.normalizeSweepStageIds(
+      input?.stageIds || [],
+    );
     const vip = await this.getSweepVip(uid);
     const vipLevel = vip.tier;
-    const dailyLimit = vip.sweepLimit;
 
     return this.dataSource.transaction(async (manager) => {
       const recordRepository = manager.getRepository(PveChallengeRecord);
@@ -307,14 +558,21 @@ export class PveService {
         throw new Error("用户不存在");
       }
 
-      const todayRange = this.getTodayRange();
-      const usedToday = await recordRepository.count({
-        where: {
-          uid,
-          mode: "sweep",
-          createdAt: Between(...todayRange),
-        },
-      });
+      // 未指定关卡时，自动收集该用户所有已通关的关卡
+      let stageIds = requestedStageIds;
+      if (stageIds.length === 0) {
+        const clearedAll = await recordRepository.find({
+          where: { uid, success: true },
+          select: ["stage_id"],
+        });
+        stageIds = [
+          ...new Set(clearedAll.map((record) => Number(record.stage_id))),
+        ];
+      }
+      if (stageIds.length === 0) {
+        throw new Error("暂无可扫荡的已通关关卡");
+      }
+
       const stages = await stageRepository.find({
         where: {
           id: In(stageIds),
@@ -323,38 +581,29 @@ export class PveService {
         order: { sort_order: "ASC", id: "ASC" } as any,
       });
       const stageMap = new Map(stages.map((stage) => [Number(stage.id), stage]));
-      const clearedRecords = stageIds.length
-        ? await recordRepository.find({
-            where: {
-              uid,
-              stage_id: In(stageIds),
-              success: true,
-            },
-          })
-        : [];
+      const clearedRecords = await recordRepository.find({
+        where: {
+          uid,
+          stage_id: In(stageIds),
+          success: true,
+        },
+      });
       const clearedStageIds = new Set(
         clearedRecords.map((record) => Number(record.stage_id)),
       );
-      const todayRecords = stageIds.length
-        ? await recordRepository.find({
-            where: {
-              uid,
-              stage_id: In(stageIds),
-              createdAt: Between(...todayRange),
-            },
-          })
-        : [];
-      const todayCountMap = todayRecords.reduce((map, record) => {
-        map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
-        return map;
-      }, new Map<number, number>());
 
       const list: PveSweepStageResult[] = [];
       const skipped: PveSweepResult["skipped"] = [];
       const rewardSnapshots: RedeemRewards[] = [];
-      let usedByRequest = 0;
 
-      for (const stageId of stageIds) {
+      // 扫荡按关卡顺序处理，已取消每日次数限制，仅校验通关与开放状态
+      const orderedStageIds = stages
+        .map((stage) => Number(stage.id))
+        .concat(
+          stageIds.filter((id) => !stageMap.has(id)), // 无效关卡也给出反馈
+        );
+
+      for (const stageId of orderedStageIds) {
         const stage = stageMap.get(stageId);
         if (!stage) {
           skipped.push({
@@ -364,13 +613,7 @@ export class PveService {
           });
           continue;
         }
-        const skipReason = this.getSweepSkipReason(
-          stage,
-          clearedStageIds,
-          todayCountMap,
-          usedToday + usedByRequest,
-          dailyLimit,
-        );
+        const skipReason = this.getSweepSkipReason(stage, clearedStageIds);
         if (skipReason) {
           skipped.push({
             stageId: stage.id,
@@ -412,8 +655,6 @@ export class PveService {
             },
           });
         }
-        todayCountMap.set(stage.id, (todayCountMap.get(stage.id) || 0) + 1);
-        usedByRequest += 1;
         rewardSnapshots.push(rewardSnapshot);
         list.push({
           stageId: record.stage_id,
@@ -427,9 +668,7 @@ export class PveService {
       return {
         vipLevel,
         vipLabel: vip.label,
-        dailyLimit,
-        usedToday: usedToday + usedByRequest,
-        remaining: Math.max(0, dailyLimit - usedToday - usedByRequest),
+        unlimited: true,
         swept: list.length,
         skipped,
         list: list.map((item) => ({
@@ -463,13 +702,7 @@ export class PveService {
       .filter((value) => Number.isInteger(value) && value > 0);
   }
 
-  private getSweepSkipReason(
-    stage: PveStage,
-    clearedStageIds: Set<number>,
-    todayCountMap: Map<number, number>,
-    usedToday: number,
-    dailyLimit: number,
-  ) {
+  private getSweepSkipReason(stage: PveStage, clearedStageIds: Set<number>) {
     if (stage.enabled !== true) {
       return "关卡暂未开放";
     }
@@ -478,15 +711,6 @@ export class PveService {
     }
     if (!clearedStageIds.has(Number(stage.id))) {
       return "未通关";
-    }
-    if (
-      (todayCountMap.get(Number(stage.id)) || 0) >=
-      this.normalizeDailyLimit(stage.daily_limit)
-    ) {
-      return "今日次数已用完";
-    }
-    if (usedToday >= dailyLimit) {
-      return "VIP次数已用完";
     }
     return "";
   }

@@ -42,11 +42,12 @@ class PvePageQueryDto {
 }
 
 class PveSweepDto {
+  @IsOptional()
   @IsArray()
   @Type(() => Number)
   @IsInt({ each: true })
   @Min(1, { each: true })
-  stageIds: number[];
+  stageIds?: number[];
 }
 
 @Controller("pve")
@@ -107,6 +108,23 @@ export class PveController {
       );
     } catch (error) {
       return ResponseDto.error(error.message || "扫荡失败");
+    }
+  }
+
+  @Post("auto-battle")
+  async autoBattle(
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.pveService.autoBattle(user.uid),
+        "自动战斗完成",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "自动战斗失败");
     }
   }
 

@@ -737,6 +737,7 @@ const pveRecords = formationPve.pveRecords;
 const pveRecordPage = formationPve.pveRecordPage;
 const pveRecordTotalPages = formationPve.pveRecordTotalPages;
 const pveSweepResult = formationPve.pveSweepResult;
+const pveAutoBattleResult = formationPve.pveAutoBattleResult;
 const pveBattleStageId = formationPve.pveBattleStageId;
 const pveBattlePhase = formationPve.pveBattlePhase;
 const pveBattleResult = formationPve.pveBattleResult;
@@ -752,6 +753,7 @@ const pveRecentRecords = formationPve.pveRecentRecords;
 const pveClearedCount = formationPve.pveClearedCount;
 const pveSweepableStages = formationPve.pveSweepableStages;
 const pveSweepableCount = formationPve.pveSweepableCount;
+const pveHasAutoBattleTarget = formationPve.pveHasAutoBattleTarget;
 const resetFormationPve = formationPve.resetFormationPve;
 const loadFormation = formationPve.loadFormation;
 const loadFormationCandidates = formationPve.loadFormationCandidates;
@@ -766,6 +768,7 @@ const loadPveStages = formationPve.loadPveStages;
 const loadPveRecords = formationPve.loadPveRecords;
 const refreshPve = formationPve.refreshPve;
 const sweepPveStages = formationPve.sweepPveStages;
+const autoBattlePve = formationPve.autoBattlePve;
 const challengePveStage = formationPve.challengePveStage;
 const changePveStagePage = formationPve.changePveStagePage;
 const changePveRecordPage = formationPve.changePveRecordPage;
@@ -3641,6 +3644,7 @@ const appContext = {
   pveRecordPage,
   pveRecordTotalPages,
   pveSweepResult,
+  pveAutoBattleResult,
   pveBattleStageId,
   pveBattlePhase,
   pveBattleResult,
@@ -3834,6 +3838,7 @@ const appContext = {
   pveClearedCount,
   pveSweepableStages,
   pveSweepableCount,
+  pveHasAutoBattleTarget,
   bestResult,
   resultSummary,
   drawPhaseText,
@@ -3913,6 +3918,7 @@ const appContext = {
   loadPveRecords,
   refreshPve,
   sweepPveStages,
+  autoBattlePve,
   challengePveStage,
   changePveStagePage,
   changePveRecordPage,

@@ -567,6 +567,43 @@
         </AdminTable>
 
         <ConfigPanel
+          v-else-if="active === 'pve-risk-config'"
+          title="挑战风控"
+          description="配置挑战/自动战斗接口的频率风控参数，超过阈值临时封禁。"
+          endpoint="/admin/config/pve-risk"
+          :fields="pveRiskConfigFields"
+        />
+
+        <AdminTable
+          v-else-if="active === 'pve-risk-bans'"
+          title="风控记录"
+          endpoint="/admin/pve-risk-bans"
+          :fields="pveRiskBanFields"
+          keyword-param="uid"
+          search-placeholder="按账号查询"
+        >
+          <template #cell="{ field, row }">
+            <span v-if="field.key === 'remainSeconds'">{{
+              formatRemainSeconds(row.remainSeconds)
+            }}</span>
+            <span v-else>{{
+              formatFieldValue(field, getValue(row, field.key))
+            }}</span>
+          </template>
+          <template #actions="{ row, reload }">
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              :loading="releasingUid === String(row.uid)"
+              @click="releaseRiskBan(row, reload)"
+            >
+              解除
+            </el-button>
+          </template>
+        </AdminTable>
+
+        <ConfigPanel
           v-else-if="active === 'trade-config'"
           title="交易配置"
           description="配置交易开关、手续费率和价格区间。"
@@ -805,6 +842,8 @@ import {
   playerMessageFields,
   poolFields,
   pveRecordFields,
+  pveRiskBanFields,
+  pveRiskConfigFields,
   pveStageFields,
   rechargeConfigFields,
   rechargeRecordFields,
@@ -914,6 +953,7 @@ const rechargeStatsError = ref("");
 const togglingPoolId = ref<number | null>(null);
 const togglingCardId = ref<number | null>(null);
 const resettingUserId = ref<number | null>(null);
+const releasingUid = ref<string | null>(null);
 const loadingPoolId = ref<number | null>(null);
 const poolGachaVisible = ref(false);
 const editingPoolGacha = ref<{
@@ -1133,6 +1173,20 @@ const pageDefinitions = computed(
         key: "pve-records",
         label: "挑战记录",
         description: "查看玩家关卡挑战结果、阵容战力和奖励。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "pve-risk-config",
+        label: "挑战风控",
+        description: "配置挑战/自动战斗接口的频率风控参数。",
+        group: "运营工具",
+        icon: Setting,
+      },
+      {
+        key: "pve-risk-bans",
+        label: "风控记录",
+        description: "查看当前被风控封禁的玩家并手动解除。",
         group: "运营工具",
         icon: Files,
       },
@@ -1528,6 +1582,48 @@ async function resetUserCardData(row: Record<string, any>, reload: () => void) {
     }
   } finally {
     resettingUserId.value = null;
+  }
+}
+
+function formatRemainSeconds(value: unknown) {
+  const total = Math.max(0, Math.floor(Number(value) || 0));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes > 0) {
+    return `${minutes} 分 ${seconds} 秒`;
+  }
+  return `${seconds} 秒`;
+}
+
+async function releaseRiskBan(row: Record<string, any>, reload: () => void) {
+  const uid = String(row.uid || "");
+  const userName = String(row.userName || uid || "该用户");
+  if (!uid) {
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `解除 ${userName} 的挑战风控封禁？解除后计数立即清零。`,
+      "解除确认",
+      {
+        type: "warning",
+        confirmButtonText: "解除",
+        cancelButtonText: "取消",
+      },
+    );
+    releasingUid.value = uid;
+    await request("/admin/pve-risk-bans/release", {
+      method: "POST",
+      body: JSON.stringify({ uid }),
+    });
+    ElMessage.success("已解除风控");
+    reload();
+  } catch (err) {
+    if (err !== "cancel" && err !== "close") {
+      ElMessage.error(err instanceof Error ? err.message : "解除失败");
+    }
+  } finally {
+    releasingUid.value = null;
   }
 }
 

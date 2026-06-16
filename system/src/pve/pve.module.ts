@@ -5,11 +5,13 @@ import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { PveStage } from "src/entity/pveStage.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
 import { FormationModule } from "src/formation/formation.module";
 import { RechargeModule } from "src/recharge/recharge.module";
 import { RewardModule } from "src/reward/reward.module";
 import { SocialActivityModule } from "src/social/social-activity.module";
+import { RedisUtil } from "src/utils/redis";
 import { PveController } from "./pve.controller";
 import { PveService } from "./pve.service";
 
@@ -21,6 +23,7 @@ import { PveService } from "./pve.service";
       User,
       DropItem,
       CardItem,
+      SystemConfig,
     ]),
     AuthModule,
     FormationModule,
@@ -29,7 +32,7 @@ import { PveService } from "./pve.service";
     SocialActivityModule,
   ],
   controllers: [PveController],
-  providers: [PveService],
+  providers: [PveService, RedisUtil],
   exports: [PveService],
 })
 export class PveModule {}

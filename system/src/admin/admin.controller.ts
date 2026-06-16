@@ -478,6 +478,17 @@ class PveRecordQueryDto extends PageDto {
   stageId?: number;
 }
 
+class PveRiskBanQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+}
+
+class PveRiskBanReleaseDto {
+  @IsString()
+  uid: string;
+}
+
 class PveStageDto {
   @IsOptional()
   @IsString()
@@ -1905,6 +1916,44 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.updateMonthlyCardConfig(body),
       "更新月卡配置成功",
+    );
+  }
+
+  @Get("config/pve-risk")
+  async getPveRiskConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getPveRiskConfig(),
+      "获取PVE风控配置成功",
+    );
+  }
+
+  @Patch("config/pve-risk")
+  async updatePveRiskConfig(
+    @Body() body: Record<string, unknown>,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updatePveRiskConfig(body),
+      "更新PVE风控配置成功",
+    );
+  }
+
+  @Get("pve-risk-bans")
+  async listPveRiskBans(
+    @Query() query: PveRiskBanQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.listRiskBans(query),
+      "获取风控记录成功",
+    );
+  }
+
+  @Post("pve-risk-bans/release")
+  async releasePveRiskBan(
+    @Body() body: PveRiskBanReleaseDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.releaseRiskBan(body.uid),
+      "已解除风控",
     );
   }
 

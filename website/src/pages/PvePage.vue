@@ -19,6 +19,7 @@ const {
   pveRecordPage,
   pveRecordTotalPages,
   pveSweepResult,
+  pveAutoBattleResult,
   pveBattleStageId,
   pveBattlePhase,
   pveBattleResult,
@@ -28,6 +29,8 @@ const {
   pveBattleEnemyHpDraining,
   pveSweepableCount,
   sweepPveStages,
+  autoBattlePve,
+  pveHasAutoBattleTarget,
   gameVipLabel,
   gameVipMuted,
   busy,
@@ -98,6 +101,20 @@ function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
       <button
         class="secondary-action compact"
         type="button"
+        :disabled="busy.pve || busy.pveChallenge || !pveHasAutoBattleTarget"
+        @click="autoBattlePve"
+      >
+        <LoaderCircle
+          v-if="busy.pveChallenge && pveHasAutoBattleTarget"
+          :size="16"
+          class="spin"
+        />
+        <Swords v-else :size="16" />
+        自动战斗
+      </button>
+      <button
+        class="secondary-action compact"
+        type="button"
         :disabled="busy.pve || busy.pveRecords"
         @click="refreshPve"
       >
@@ -144,7 +161,13 @@ function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
     <div v-if="pveSweepResult" class="pve-sweep-result">
       <strong>扫荡 {{ pveSweepResult.swept }} 关</strong>
       <span>跳过 {{ pveSweepResult.skipped.length }} 关</span>
-      <small>剩余 {{ pveSweepResult.remaining }}</small>
+      <small>不限次数</small>
+    </div>
+
+    <div v-if="pveAutoBattleResult" class="pve-sweep-result">
+      <strong>自动战斗通关 {{ pveAutoBattleResult.cleared }} 关</strong>
+      <span>挑战 {{ pveAutoBattleResult.attempted }} 关</span>
+      <small>{{ pveAutoBattleResult.stopReason }}</small>
     </div>
 
     <div v-if="pveStages.length === 0" class="empty-state">

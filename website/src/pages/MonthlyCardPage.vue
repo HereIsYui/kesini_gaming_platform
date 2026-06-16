@@ -151,7 +151,7 @@ function benefitRows(card: MonthlyCardStatusCard): BenefitRow[] {
     },
     {
       label: "扫荡",
-      value: `${benefit?.sweepLimit ?? (card.vipLevel >= 4 ? 50 : 20)} 次`,
+      value: "无限制",
     },
     {
       label: "手续费",
@@ -376,7 +376,7 @@ function sourceTier(
             </div>
             <div>
               <dt>扫荡</dt>
-              <dd>{{ tier.sweepLimit }} 次</dd>
+              <dd>无限制</dd>
             </div>
             <div>
               <dt>手续费</dt>

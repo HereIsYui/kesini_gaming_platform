@@ -3,6 +3,7 @@ import { request, toQuery } from "../api";
 import type {
   CardRarity,
   FormationOverview,
+  PveAutoBattleResult,
   PveChallengeRecord,
   PveChallengeResult,
   PveOverview,
@@ -66,6 +67,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
   const pveRecordPage = ref(1);
   const pveRecordTotalPages = ref(1);
   const pveSweepResult = ref<PveSweepResult | null>(null);
+  const pveAutoBattleResult = ref<PveAutoBattleResult | null>(null);
   const pveBattleStageId = ref<number | null>(null);
   const pveBattlePhase = ref<PveBattlePhase>("idle");
   const pveBattleResult = ref<PveBattleResult | null>(null);
@@ -167,6 +169,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
 
   function clearPveSweep() {
     pveSweepResult.value = null;
+    pveAutoBattleResult.value = null;
   }
 
   function resetFormationPve() {
@@ -470,18 +473,16 @@ export function useFormationPve(options: UseFormationPveOptions) {
       options.notify("error", "请先登录");
       return;
     }
-    const stageIds = pveStages.value
-      .filter((stage) => stage.cleared && stage.remainingAttempts > 0)
-      .map((stage) => stage.id);
-    if (stageIds.length === 0) {
+    if (pveSweepableCount.value <= 0) {
       options.notify("info", "暂无可扫荡");
       return;
     }
     options.setPveChallengeBusy(true);
     try {
+      // 不再只扫当前分页，由后端扫荡全部已通关卡
       const data = await request<PveSweepResult>("/pve/sweep", {
         method: "POST",
-        body: JSON.stringify({ stageIds }),
+        body: JSON.stringify({}),
       });
       pveSweepResult.value = data;
       options.syncChallengePoint(data.pointAfter);
@@ -491,6 +492,36 @@ export function useFormationPve(options: UseFormationPveOptions) {
       );
       await Promise.all([
         loadPveStages(pveStagePage.value),
+        loadPveRecords(1),
+        options.refreshChallengeRewards(),
+      ]);
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      options.setPveChallengeBusy(false);
+    }
+  }
+
+  async function autoBattlePve() {
+    if (!options.isAuthed()) {
+      options.notify("error", "请先登录");
+      return;
+    }
+    options.setPveChallengeBusy(true);
+    try {
+      const data = await request<PveAutoBattleResult>("/pve/auto-battle", {
+        method: "POST",
+      });
+      pveAutoBattleResult.value = data;
+      options.syncChallengePoint(data.pointAfter);
+      options.notify(
+        data.cleared > 0 ? "success" : "info",
+        data.attempted > 0
+          ? `自动战斗通关${data.cleared}关`
+          : data.stopReason || "暂无可挑战关卡",
+      );
+      await Promise.all([
+        loadPveStages(pveStagePage.value, { focus: "nextUncleared" }),
         loadPveRecords(1),
         options.refreshChallengeRewards(),
       ]);
@@ -594,7 +625,20 @@ export function useFormationPve(options: UseFormationPveOptions) {
       (stage) => stage.cleared && stage.remainingAttempts > 0,
     ),
   );
-  const pveSweepableCount = computed(() => pveSweepableStages.value.length);
+  // 优先使用后端返回的全局可扫荡数；缺省时回退到当前页统计
+  const pveSweepableCount = computed(() => {
+    const globalCount = pveOverview.value?.sweepableCount;
+    if (typeof globalCount === "number") {
+      return globalCount;
+    }
+    return pveSweepableStages.value.length;
+  });
+  // 是否存在未通关且可挑战的关卡（用于自动战斗按钮）
+  const pveHasAutoBattleTarget = computed(() =>
+    pveStages.value.some(
+      (stage) => !stage.cleared && stage.enabled && stage.dailyLimit > 0,
+    ),
+  );
 
   return {
     formation,
@@ -613,6 +657,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveRecordPage,
     pveRecordTotalPages,
     pveSweepResult,
+    pveAutoBattleResult,
     pveBattleStageId,
     pveBattlePhase,
     pveBattleResult,
@@ -628,6 +673,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     pveClearedCount,
     pveSweepableStages,
     pveSweepableCount,
+    pveHasAutoBattleTarget,
     clearPveBattle,
     clearPveSweep,
     resetFormationPve,
@@ -643,6 +689,7 @@ export function useFormationPve(options: UseFormationPveOptions) {
     loadPveRecords,
     refreshPve,
     sweepPveStages,
+    autoBattlePve,
     challengePveStage,
     changePveStagePage,
     changePveRecordPage,

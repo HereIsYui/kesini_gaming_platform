@@ -925,6 +925,7 @@ export interface PveOverview {
   totalPages: number;
   nextUnclearedStageId?: number | null;
   nextUnclearedPage?: number | null;
+  sweepableCount?: number;
 }
 
 export interface PveChallengeRecord {
@@ -961,9 +962,7 @@ export interface PveRecordsResponse {
 export interface PveSweepResult {
   vipLevel: number;
   vipLabel: string;
-  dailyLimit: number;
-  usedToday: number;
-  remaining: number;
+  unlimited: boolean;
   swept: number;
   skipped: Array<{
     stageId: number;
@@ -974,6 +973,21 @@ export interface PveSweepResult {
     stageId: number;
     stageName: string;
     success: boolean;
+    rewards: RedeemRewards | null;
+  }>;
+  pointAfter: number;
+}
+
+export interface PveAutoBattleResult {
+  attempted: number;
+  cleared: number;
+  stopReason: string;
+  list: Array<{
+    stageId: number;
+    stageName: string;
+    success: boolean;
+    formationPower: number;
+    enemyPower: number;
     rewards: RedeemRewards | null;
   }>;
   pointAfter: number;

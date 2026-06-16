@@ -8,6 +8,7 @@ export type GameVipTierKey = `${(typeof GAME_VIP_TIERS)[number]}`;
 export type GameVipSource = "fishpi" | "badge" | "monthly_card";
 
 export interface GameVipBenefit {
+  // 注意：sweepLimit 字段保留用于运营配置兼容，但 PVE 扫荡已取消每日次数限制，不再读取此值做限制。
   sweepLimit: number;
   tradeFeeDiscount: number;
   dailyRewards: RedeemRewards;

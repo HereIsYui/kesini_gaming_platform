@@ -37,7 +37,7 @@ export class PveChallengeRecord {
   reward_snapshot?: RedeemRewards | null;
 
   @Column({ length: 16, default: "challenge" })
-  mode: "challenge" | "sweep";
+  mode: "challenge" | "sweep" | "auto";
 
   @CreateDateColumn()
   createdAt: Date;
