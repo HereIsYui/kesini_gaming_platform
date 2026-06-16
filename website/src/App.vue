@@ -2995,16 +2995,15 @@ async function openUpgradeModal(card: UserCardsResponse["list"][number]) {
   upgradePreview.value = null;
   busy.upgrade = true;
   try {
-    if (Number(card.count || 1) > 1) {
-      const candidates = await loadUpgradeCandidates(card);
-      if (candidates.length > 1) {
-        upgradeCandidates.value = candidates;
-        return;
-      }
-      await loadUpgradePreview(candidates[0] || card);
+    // 总是尝试获取候选列表（不依赖 count，因为非分组模式无 count）
+    const candidates = await loadUpgradeCandidates(card);
+    if (candidates.length > 1) {
+      // 有多张同卡，显示候选列表让用户选择
+      upgradeCandidates.value = candidates;
       return;
     }
-    await loadUpgradePreview(card);
+    // 只有一张或零张，直接进入预览
+    await loadUpgradePreview(candidates[0] || card);
   } catch (error) {
     upgradeTarget.value = null;
     upgradeCandidates.value = [];
