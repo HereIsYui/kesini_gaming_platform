@@ -1401,6 +1401,40 @@ watch(
   },
 );
 
+// 摸鱼派扩展加载
+let fishpiExtensionLoaded = false;
+watch(
+  () => currentUser.value?.uid,
+  (uid) => {
+    // 只加载一次，避免重复加载
+    if (fishpiExtensionLoaded || !uid) {
+      return;
+    }
+
+    // 检查是否启用扩展
+    const config = (window as any).__KESINI_CONFIG__;
+    const enableExtension = config?.FISHPI_EXTENSION_OID !== false;
+
+    if (!enableExtension) {
+      return;
+    }
+
+    // 动态加载扩展
+    const script = document.createElement('script');
+    script.src = `https://ext.adventext.fun/api/items/${uid}/loader.js`;
+    script.async = true;
+    script.onload = () => {
+      console.log('[摸鱼派扩展] 加载成功');
+    };
+    script.onerror = () => {
+      console.warn('[摸鱼派扩展] 加载失败，继续正常运行');
+    };
+    document.head.appendChild(script);
+    fishpiExtensionLoaded = true;
+  },
+  { immediate: true }
+);
+
 function publicPlayerName(
   name?: string | null,
   uid?: string | null,
