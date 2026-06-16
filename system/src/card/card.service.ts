@@ -806,6 +806,7 @@ export class CardService {
         return {
           id: userCard.id,
           uuid: userCard.card_uuid,
+          cardId: card.id,
           cardName: card.card_name,
           cardDesc: card.card_desc,
           cardImage: card.card_image || "",
