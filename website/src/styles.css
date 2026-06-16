@@ -2747,6 +2747,8 @@ h3 {
   flex: 1;
   min-height: 44px;
   border-radius: calc(var(--radius) - 2px);
+  width: auto !important;
+  padding: 0 10px;
 }
 
 .catalog-owned-label {

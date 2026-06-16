@@ -1913,6 +1913,9 @@ async function loadTradeListings(options: SilentLoadOptions = {}) {
     if (data.config) {
       tradeConfig.value = data.config;
     }
+  } catch (error) {
+    tradeListings.value = [];
+    tradeTotalPages.value = 1;
   } finally {
     if (!options.silent) {
       busy.trade = false;
