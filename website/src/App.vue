@@ -32,8 +32,8 @@ import {
   UsersRound,
   WandSparkles,
 } from "@lucide/vue";
-import { computed, onMounted, provide, reactive, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { computed, nextTick, onMounted, provide, reactive, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import AchievementToastStack from "./components/common/AchievementToastStack.vue";
 import AnnouncementBar from "./components/common/AnnouncementBar.vue";
 import FeedbackToast from "./components/common/FeedbackToast.vue";
@@ -220,6 +220,7 @@ type CardStateRefreshOptions = {
 const appVersion = __APP_VERSION__;
 
 const route = useRoute();
+const router = useRouter();
 const feedbackState = useFeedback();
 const feedback = feedbackState.feedback;
 const notify = feedbackState.notify;
@@ -2769,13 +2770,14 @@ async function synthesizeCard(item: CatalogCard) {
 }
 
 function goToTradePage(item: CatalogCard) {
-  activeSection.value = "trade";
   tradePoolFilter.value = item.card.pool;
   tradeRarityFilter.value = item.rarity;
   tradeCardNameFilter.value = item.card.card_name;
   tradePage.value = 1;
-  nextTick(() => {
-    loadTradeListings();
+  router.push({ name: "trade" }).then(() => {
+    nextTick(() => {
+      loadTradeListings();
+    });
   });
 }
 
