@@ -538,6 +538,7 @@ const profileState = usePlayerProfile({
   getRoutePublicId: () =>
     String(route.params.publicId || route.params.uid || "").trim(),
   getCurrentUser: () => currentUser.value,
+  getPools: () => pools.value,
   setProfileBusy: (value) => {
     busy.profile = value;
   },
@@ -558,6 +559,11 @@ const playerProfile = profileState.playerProfile;
 const profileCandidates = profileState.profileCandidates;
 const profilePickerOpen = profileState.profilePickerOpen;
 const profileSelectedUuids = profileState.profileSelectedUuids;
+const profileCandidateRarity = profileState.profileCandidateRarity;
+const profileCandidatePool = profileState.profileCandidatePool;
+const profileCandidatePage = profileState.profileCandidatePage;
+const profileCandidateTotal = profileState.profileCandidateTotal;
+const profileCandidateTotalPages = profileState.profileCandidateTotalPages;
 const isPublicProfileRoute = profileState.isPublicProfileRoute;
 const profileRouteId = profileState.profileRouteId;
 const profileDisplayName = profileState.profileDisplayName;
@@ -576,6 +582,9 @@ const resetProfile = profileState.resetProfile;
 const shouldRefreshOwnProfile = profileState.shouldRefreshOwnProfile;
 const loadPlayerProfile = profileState.loadPlayerProfile;
 const loadProfileCandidates = profileState.loadProfileCandidates;
+const resetProfileCandidates = profileState.resetProfileCandidates;
+const resetProfileCandidateFilters = profileState.resetProfileCandidateFilters;
+const changeProfileCandidatePage = profileState.changeProfileCandidatePage;
 const openProfilePicker = profileState.openProfilePicker;
 const closeProfilePicker = profileState.closeProfilePicker;
 const isProfileCandidateSelected = profileState.isProfileCandidateSelected;
@@ -3612,6 +3621,11 @@ const appContext = {
   profileCandidates,
   profilePickerOpen,
   profileSelectedUuids,
+  profileCandidateRarity,
+  profileCandidatePool,
+  profileCandidatePage,
+  profileCandidateTotal,
+  profileCandidateTotalPages,
   friendsOverview,
   friendsError,
   friendFeed,
@@ -3875,6 +3889,9 @@ const appContext = {
   loadUserCards,
   loadPlayerProfile,
   loadProfileCandidates,
+  resetProfileCandidates,
+  resetProfileCandidateFilters,
+  changeProfileCandidatePage,
   openProfilePicker,
   closeProfilePicker,
   isProfileCandidateSelected,
@@ -4358,6 +4375,41 @@ provide(APP_CONTEXT_KEY, appContext);
             </button>
           </header>
           <div class="trade-listing-body profile-picker-body">
+            <div class="profile-picker-filter">
+              <select
+                v-model="profileCandidateRarity"
+                :disabled="busy.profileCandidates || busy.profileSaving"
+                @change="resetProfileCandidates"
+              >
+                <option value="">全部稀有度</option>
+                <option
+                  v-for="rarity in rarityOrder"
+                  :key="rarity"
+                  :value="rarity"
+                >
+                  {{ rarity }}
+                </option>
+              </select>
+              <select
+                v-model="profileCandidatePool"
+                :disabled="busy.profileCandidates || busy.profileSaving"
+                @change="resetProfileCandidates"
+              >
+                <option value="">全部卡池</option>
+                <option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                  {{ pool.pool_name }}
+                </option>
+              </select>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="busy.profileCandidates || busy.profileSaving"
+                @click="resetProfileCandidateFilters"
+              >
+                重置
+              </button>
+              <span>{{ profileCandidateTotal }} 张</span>
+            </div>
             <div v-if="busy.profileCandidates" class="empty-state compact">
               <LoaderCircle :size="26" class="spin" />
               <strong>正在读取背包</strong>
@@ -4369,7 +4421,7 @@ provide(APP_CONTEXT_KEY, appContext);
             >
               <Package :size="26" />
               <strong>暂无卡片</strong>
-              <span>获得卡片后可展示。</span>
+              <span>没有结果</span>
             </div>
             <div v-else class="profile-candidate-list">
               <article
@@ -4421,6 +4473,36 @@ provide(APP_CONTEXT_KEY, appContext);
                   {{ isProfileCandidateSelected(card) ? "已选" : "选择" }}
                 </button>
               </article>
+            </div>
+            <div
+              v-if="profileCandidateTotalPages > 1"
+              class="profile-picker-pager"
+            >
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="
+                  busy.profileCandidates ||
+                  profileCandidatePage <= 1 ||
+                  busy.profileSaving
+                "
+                @click="changeProfileCandidatePage(profileCandidatePage - 1)"
+              >
+                上一页
+              </button>
+              <span>{{ profileCandidatePage }}/{{ profileCandidateTotalPages }}</span>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="
+                  busy.profileCandidates ||
+                  profileCandidatePage >= profileCandidateTotalPages ||
+                  busy.profileSaving
+                "
+                @click="changeProfileCandidatePage(profileCandidatePage + 1)"
+              >
+                下一页
+              </button>
             </div>
           </div>
           <footer class="result-modal-actions">

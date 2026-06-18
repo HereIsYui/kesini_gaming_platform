@@ -16,6 +16,10 @@ const emit = defineEmits<{
   back: [];
   hide: [item: Announcement];
 }>();
+
+function announcementContent(content?: string | null) {
+  return String(content || "").replace(/\\n/g, "\n");
+}
 </script>
 
 <template>
@@ -49,7 +53,7 @@ const emit = defineEmits<{
 
         <div class="announcement-modal-body">
           <article v-if="props.selected" class="announcement-detail-card">
-            <p>{{ props.selected.content }}</p>
+            <p>{{ announcementContent(props.selected.content) }}</p>
             <dl>
               <div>
                 <dt>时间</dt>

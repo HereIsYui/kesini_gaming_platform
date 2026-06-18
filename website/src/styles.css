@@ -908,6 +908,7 @@ option {
 .friends-panel,
 .messages-panel,
 .guild-panel,
+.settings-panel,
 .points-panel,
 .monthly-card-panel,
 .leaderboard-panel,
@@ -3998,8 +3999,9 @@ h3 {
 
 .showcase-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 210px));
   gap: 14px;
+  justify-content: start;
 }
 
 .showcase-card .card-face {
@@ -4013,6 +4015,22 @@ h3 {
 .profile-picker-body {
   max-height: min(64vh, 620px);
   overflow: auto;
+}
+
+.profile-picker-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.profile-picker-filter span,
+.profile-picker-pager span {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .profile-candidate-list {
@@ -4077,6 +4095,14 @@ h3 {
 .profile-candidate-body span {
   color: var(--text-soft);
   font-size: 12px;
+}
+
+.profile-picker-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
 }
 
 .friends-panel {
@@ -7792,6 +7818,14 @@ h3 {
 
   .profile-actions {
     justify-content: flex-start;
+  }
+
+  .profile-picker-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-picker-filter span {
+    text-align: left;
   }
 
   .profile-hero {

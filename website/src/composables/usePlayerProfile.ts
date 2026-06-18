@@ -1,7 +1,9 @@
 import { computed, ref } from "vue";
 import { request, toQuery } from "../api";
 import type {
+  CardRarity,
   PlayerProfileResponse,
+  PoolInfo,
   SaveShowcaseRequest,
   UserCardsResponse,
   UserProfile,
@@ -19,12 +21,15 @@ type PublicProfileUserLike = {
   uid?: string | null;
 };
 
+const PROFILE_CANDIDATE_PAGE_SIZE = 12;
+
 type UsePlayerProfileOptions = {
   isAuthed: () => boolean;
   getActiveSection: () => string;
   getRouteName: () => unknown;
   getRoutePublicId: () => string;
   getCurrentUser: () => UserProfile | null;
+  getPools: () => PoolInfo[];
   setProfileBusy: (value: boolean) => void;
   setProfileCandidatesBusy: (value: boolean) => void;
   setProfileSavingBusy: (value: boolean) => void;
@@ -45,6 +50,11 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
   const profileCandidates = ref<UserCardsResponse["list"]>([]);
   const profilePickerOpen = ref(false);
   const profileSelectedUuids = ref<string[]>([]);
+  const profileCandidateRarity = ref<CardRarity | "">("");
+  const profileCandidatePool = ref<number | "">("");
+  const profileCandidatePage = ref(1);
+  const profileCandidateTotal = ref(0);
+  const profileCandidateTotalPages = ref(1);
 
   const isPublicProfileRoute = computed(
     () => options.getRouteName() === "publicProfile",
@@ -118,6 +128,11 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
     profileCandidates.value = [];
     profilePickerOpen.value = false;
     profileSelectedUuids.value = [];
+    profileCandidateRarity.value = "";
+    profileCandidatePool.value = "";
+    profileCandidatePage.value = 1;
+    profileCandidateTotal.value = 0;
+    profileCandidateTotalPages.value = 1;
   }
 
   function shouldRefreshOwnProfile() {
@@ -155,27 +170,77 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
     }
   }
 
-  async function loadProfileCandidates() {
+  async function loadProfileCandidates(page = profileCandidatePage.value) {
     if (!options.isAuthed()) {
       profileCandidates.value = [];
+      profileCandidatePage.value = 1;
+      profileCandidateTotal.value = 0;
+      profileCandidateTotalPages.value = 1;
       return;
     }
+    if (
+      profileCandidatePool.value &&
+      !options
+        .getPools()
+        .some((pool) => Number(pool.id) === Number(profileCandidatePool.value))
+    ) {
+      profileCandidatePool.value = "";
+    }
+    const requestedRarity = profileCandidateRarity.value;
+    const requestedPool = profileCandidatePool.value;
+    const requestedPage = Math.max(1, Number(page) || 1);
     options.setProfileCandidatesBusy(true);
     try {
       const data = await request<UserCardsResponse>(
         `/card/user/cards${toQuery({
+          rarity: requestedRarity,
+          poolId: requestedPool,
           grouped: false,
-          page: 1,
-          pageSize: 100,
+          page: requestedPage,
+          pageSize: PROFILE_CANDIDATE_PAGE_SIZE,
         })}`,
       );
+      if (
+        requestedRarity !== profileCandidateRarity.value ||
+        requestedPool !== profileCandidatePool.value
+      ) {
+        return;
+      }
       profileCandidates.value = data.list || [];
+      profileCandidatePage.value = data.page || requestedPage;
+      profileCandidateTotal.value = data.total || 0;
+      profileCandidateTotalPages.value = Math.max(1, data.totalPages || 1);
     } catch (error) {
       profileCandidates.value = [];
+      profileCandidatePage.value = 1;
+      profileCandidateTotal.value = 0;
+      profileCandidateTotalPages.value = 1;
       options.notify("error", options.getErrorMessage(error));
     } finally {
       options.setProfileCandidatesBusy(false);
     }
+  }
+
+  function resetProfileCandidates() {
+    profileCandidatePage.value = 1;
+    void loadProfileCandidates(1);
+  }
+
+  function resetProfileCandidateFilters() {
+    profileCandidateRarity.value = "";
+    profileCandidatePool.value = "";
+    resetProfileCandidates();
+  }
+
+  function changeProfileCandidatePage(page: number) {
+    const nextPage = Math.min(
+      Math.max(1, Math.trunc(Number(page) || 1)),
+      profileCandidateTotalPages.value || 1,
+    );
+    if (nextPage === profileCandidatePage.value) {
+      return;
+    }
+    void loadProfileCandidates(nextPage);
   }
 
   async function openProfilePicker() {
@@ -185,7 +250,7 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
     }
     profileSelectedUuids.value = profileShowcase.value.map((card) => card.uuid);
     profilePickerOpen.value = true;
-    await loadProfileCandidates();
+    await loadProfileCandidates(1);
   }
 
   function closeProfilePicker() {
@@ -262,6 +327,11 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
     profileCandidates,
     profilePickerOpen,
     profileSelectedUuids,
+    profileCandidateRarity,
+    profileCandidatePool,
+    profileCandidatePage,
+    profileCandidateTotal,
+    profileCandidateTotalPages,
     isPublicProfileRoute,
     profileRouteId,
     profileDisplayName,
@@ -280,6 +350,9 @@ export function usePlayerProfile(options: UsePlayerProfileOptions) {
     shouldRefreshOwnProfile,
     loadPlayerProfile,
     loadProfileCandidates,
+    resetProfileCandidates,
+    resetProfileCandidateFilters,
+    changeProfileCandidatePage,
     openProfilePicker,
     closeProfilePicker,
     isProfileCandidateSelected,
