@@ -558,7 +558,7 @@ describe("PveService 轻量关卡", () => {
     await expect(service.challenge("u1", 1)).rejects.toThrow("请先配置阵容");
   });
 
-  it("VIP扫荡不再受每日次数限制并只发重复奖励", async () => {
+  it("VIP扫荡不限制单次关卡数量并只发重复奖励", async () => {
     service = createService(store, {
       checked: true,
       active: true,
@@ -661,7 +661,7 @@ describe("PveService 轻量关卡", () => {
     );
   });
 
-  it("扫荡会跳过未通关关卡但不再受次数限制", async () => {
+  it("扫荡会跳过未通关和今日次数用完关卡", async () => {
     service = createService(store, {
       checked: true,
       active: true,
@@ -672,7 +672,7 @@ describe("PveService 轻量关卡", () => {
       createStage(1, { daily_limit: 1 }),
       createStage(2, { daily_limit: 3 }),
     ];
-    // 关卡1已通关（即使 daily_limit=1 也能继续扫荡），关卡2未通关
+    // 关卡1已用完今日次数，关卡2未通关
     store.records = [
       {
         id: 1,
@@ -690,13 +690,14 @@ describe("PveService 轻量关卡", () => {
 
     const result = await service.sweep("u1", { stageIds: [1, 2] });
 
-    expect(result.swept).toBe(1);
+    expect(result.swept).toBe(0);
     expect(result.skipped).toEqual([
+      { stageId: 1, stageName: "测试关卡1", reason: "今日次数已用完" },
       { stageId: 2, stageName: "测试关卡2", reason: "未通关" },
     ]);
     expect(
       store.records.filter((record) => record.mode === "sweep"),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
   });
 
   it("挑战记录按分页返回", async () => {

@@ -161,7 +161,7 @@ function pveRecordModeLabel(record: { mode?: string; success: boolean }) {
     <div v-if="pveSweepResult" class="pve-sweep-result">
       <strong>扫荡 {{ pveSweepResult.swept }} 关</strong>
       <span>跳过 {{ pveSweepResult.skipped.length }} 关</span>
-      <small>不限次数</small>
+      <small>批量不限</small>
     </div>
 
     <div v-if="pveAutoBattleResult" class="pve-sweep-result">

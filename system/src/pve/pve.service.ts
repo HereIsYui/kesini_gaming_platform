@@ -165,10 +165,13 @@ export class PveService {
       return map;
     }, new Map<number, number>());
 
-    // 全局可扫荡关卡数：所有已通关、当前开放、在开放时间内的关卡
+    // 全局可扫荡关卡数：所有已通关、当前开放、在开放时间内且今日还有次数的关卡
     const sweepableCount = visibleStages.filter(
       (stage) =>
-        stage.enabled === true && allClearedStageIds.has(Number(stage.id)),
+        stage.enabled === true &&
+        allClearedStageIds.has(Number(stage.id)) &&
+        (todayCountMap.get(stage.id) || 0) <
+          this.normalizeDailyLimit(stage.daily_limit),
     ).length;
 
     return {
@@ -591,12 +594,23 @@ export class PveService {
       const clearedStageIds = new Set(
         clearedRecords.map((record) => Number(record.stage_id)),
       );
+      const todayRecords = await recordRepository.find({
+        where: {
+          uid,
+          stage_id: In(stageIds),
+          createdAt: Between(...this.getTodayRange()),
+        },
+      });
+      const todayCountMap = todayRecords.reduce((map, record) => {
+        map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
+        return map;
+      }, new Map<number, number>());
 
       const list: PveSweepStageResult[] = [];
       const skipped: PveSweepResult["skipped"] = [];
       const rewardSnapshots: RedeemRewards[] = [];
 
-      // 扫荡按关卡顺序处理，已取消每日次数限制，仅校验通关与开放状态
+      // 扫荡按关卡顺序处理，不限制单次关卡数量，但仍受单关每日次数限制
       const orderedStageIds = stages
         .map((stage) => Number(stage.id))
         .concat(
@@ -613,7 +627,11 @@ export class PveService {
           });
           continue;
         }
-        const skipReason = this.getSweepSkipReason(stage, clearedStageIds);
+        const skipReason = this.getSweepSkipReason(
+          stage,
+          clearedStageIds,
+          todayCountMap,
+        );
         if (skipReason) {
           skipped.push({
             stageId: stage.id,
@@ -655,6 +673,7 @@ export class PveService {
             },
           });
         }
+        todayCountMap.set(stage.id, (todayCountMap.get(stage.id) || 0) + 1);
         rewardSnapshots.push(rewardSnapshot);
         list.push({
           stageId: record.stage_id,
@@ -702,7 +721,11 @@ export class PveService {
       .filter((value) => Number.isInteger(value) && value > 0);
   }
 
-  private getSweepSkipReason(stage: PveStage, clearedStageIds: Set<number>) {
+  private getSweepSkipReason(
+    stage: PveStage,
+    clearedStageIds: Set<number>,
+    todayCountMap: Map<number, number>,
+  ) {
     if (stage.enabled !== true) {
       return "关卡暂未开放";
     }
@@ -711,6 +734,13 @@ export class PveService {
     }
     if (!clearedStageIds.has(Number(stage.id))) {
       return "未通关";
+    }
+    const dailyLimit = this.normalizeDailyLimit(stage.daily_limit);
+    if (dailyLimit <= 0) {
+      return "今日暂不可挑战";
+    }
+    if ((todayCountMap.get(Number(stage.id)) || 0) >= dailyLimit) {
+      return "今日次数已用完";
     }
     return "";
   }
