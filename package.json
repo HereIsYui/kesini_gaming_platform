@@ -8,6 +8,7 @@
     "website"
   ],
   "scripts": {
+    "dev": "concurrently -k -n system,admin,web -c blue,magenta,green \"npm run system:dev\" \"npm run backend:dev\" \"npm run website:dev\"",
     "system:dev": "npm --workspace system run start:dev",
     "system:build": "npm --workspace system run build",
     "system:test": "npm --workspace system run test",
@@ -21,5 +22,8 @@
     "build": "npm run system:build && npm run backend:build && npm run website:build",
     "test": "npm run system:test",
     "audit:critical": "npm audit --audit-level=critical"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   }
 }
