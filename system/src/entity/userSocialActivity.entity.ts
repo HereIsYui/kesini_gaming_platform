@@ -10,6 +10,7 @@ export type UserSocialActivityType =
   | "friend_added"
   | "showcase_updated"
   | "card_upgraded"
+  | "card_starred"
   | "pve_cleared";
 
 @Entity()

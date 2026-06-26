@@ -52,6 +52,9 @@ export class UserCard {
   @Column({ type: "int", default: 0 })
   cultivation_exp: number;
 
+  @Column({ type: "int", default: 0 })
+  star_level: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

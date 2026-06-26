@@ -74,6 +74,12 @@ export class LockUserCardDto {
   locked: boolean;
 }
 
+export class StarUserCardDto {
+  @IsString()
+  @IsNotEmpty()
+  sourceUuid: string;
+}
+
 // 用户信息接口
 interface UserInfo {
   uid: string;
@@ -483,6 +489,58 @@ export class CardController {
       return ResponseDto.success(result, "养成成功");
     } catch (error) {
       return ResponseDto.error(error.message || "养成失败");
+    }
+  }
+
+  /**
+   * 获取卡片升星预览
+   * GET /card/user/cards/:uuid/star-preview
+   */
+  @Get("user/cards/:uuid/star-preview")
+  @UseGuards(JwtAuthGuard)
+  async getUserCardStarPreview(
+    @Param("uuid") uuid: string,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.getUserCardStarPreview(
+        user.uid,
+        uuid,
+      );
+      return ResponseDto.success(result, "获取升星预览成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取升星预览失败");
+    }
+  }
+
+  /**
+   * 升星玩家卡片
+   * POST /card/user/cards/:uuid/star
+   */
+  @Post("user/cards/:uuid/star")
+  @UseGuards(JwtAuthGuard)
+  async starUserCard(
+    @Param("uuid") uuid: string,
+    @Body() body: StarUserCardDto,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.starUserCard(
+        user.uid,
+        uuid,
+        body.sourceUuid,
+      );
+      return ResponseDto.success(result, "升星成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "升星失败");
     }
   }
 

@@ -1,6 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
-import { calculateCultivationPower, getCultivationLevel } from "src/card/cultivation";
+import {
+  calculateCardPower,
+  getCardStarLevel,
+  getCardStarMaxLevel,
+  getCultivationLevel,
+} from "src/card/cultivation";
 import { CardItem } from "src/entity/card.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
 import { UserCard } from "src/entity/userCard.entity";
@@ -130,6 +135,7 @@ export class FormationService {
   private toFormationCard(userCard: UserCard, card: CardItem) {
     const rarity = this.getEffectiveUserCardRarity(userCard, card);
     const level = getCultivationLevel(userCard);
+    const starLevel = getCardStarLevel(userCard);
     return {
       uuid: userCard.card_uuid,
       cardId: Number(userCard.card_id),
@@ -140,7 +146,9 @@ export class FormationService {
       cardType: card.card_type,
       poolId: card.pool,
       cultivationLevel: level,
-      power: calculateCultivationPower(rarity, level),
+      starLevel,
+      starMaxLevel: getCardStarMaxLevel(),
+      power: calculateCardPower(rarity, level, starLevel),
       locked: userCard.locked === true,
       obtainedAt: userCard.createdAt,
     };

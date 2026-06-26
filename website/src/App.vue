@@ -85,6 +85,9 @@ import type {
   BulkDecomposeResponse,
   CardUpgradePreview,
   CardUpgradeResponse,
+  CardStarCandidate,
+  CardStarPreview,
+  CardStarResponse,
   FishpiPointResponse,
   FormationCard,
   GachaResult,
@@ -448,6 +451,10 @@ const recycleTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const upgradeTarget = ref<UserCardsResponse["list"][number] | null>(null);
 const upgradeCandidates = ref<UserCardsResponse["list"]>([]);
 const upgradePreview = ref<CardUpgradePreview | null>(null);
+const starTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const starTargetCandidates = ref<UserCardsResponse["list"]>([]);
+const starPreview = ref<CardStarPreview | null>(null);
+const selectedStarSourceUuid = ref("");
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
 const shareTextTarget = ref("");
 const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
@@ -488,6 +495,7 @@ const busy = reactive({
   trade: false,
   recycle: false,
   upgrade: false,
+  star: false,
   formation: false,
   formationCandidates: false,
   pve: false,
@@ -950,6 +958,9 @@ const modalFocusKey = computed(() => {
   if (upgradeTarget.value) {
     return "upgrade";
   }
+  if (starTarget.value) {
+    return "star";
+  }
   if (listingTarget.value) {
     return "listing";
   }
@@ -1263,6 +1274,24 @@ const upgradePowerGain = computed(() => {
   }
   return Math.max(0, preview.next.power - preview.current.power);
 });
+const starPowerGain = computed(() => {
+  const preview = starPreview.value;
+  if (!preview?.next) {
+    return 0;
+  }
+  return Math.max(0, preview.next.power - preview.current.power);
+});
+const selectedStarSource = computed<CardStarCandidate | null>(
+  () =>
+    starPreview.value?.candidates.find(
+      (candidate) => candidate.uuid === selectedStarSourceUuid.value,
+    ) || null,
+);
+const canConfirmStar = computed(
+  () =>
+    Boolean(starPreview.value?.canStar) &&
+    Boolean(selectedStarSource.value?.available),
+);
 function closeTopOverlay() {
   if (confirmDialogTarget.value) {
     settleConfirmDialog(false);
@@ -1282,6 +1311,10 @@ function closeTopOverlay() {
   }
   if (upgradeTarget.value) {
     closeUpgradeModal();
+    return true;
+  }
+  if (starTarget.value) {
+    closeStarModal();
     return true;
   }
   if (listingTarget.value) {
@@ -1532,6 +1565,10 @@ function logout(message = "已退出登录") {
   upgradeTarget.value = null;
   upgradeCandidates.value = [];
   upgradePreview.value = null;
+  starTarget.value = null;
+  starTargetCandidates.value = [];
+  starPreview.value = null;
+  selectedStarSourceUuid.value = "";
   clearDrawResults();
   if (message) {
     notify("info", message);
@@ -1733,6 +1770,7 @@ function candidateUuid(card: UserCardsResponse["list"][number]) {
   return (
     card.uuid ||
     card.upgradeableUuid ||
+    card.starableUuid ||
     card.lockableUuid ||
     card.unlockableUuid ||
     ""
@@ -2366,6 +2404,15 @@ function bagCardDetailActions(
       payload: card,
     });
   }
+  if (cardStarUuid(card)) {
+    actions.push({
+      key: "star",
+      label: "升星",
+      icon: Sparkles,
+      disabled: busy.star,
+      payload: card,
+    });
+  }
   if (card.canSell && Number(card.sellableCount || 0) > 0) {
     actions.push({
       key: "trade",
@@ -2443,6 +2490,13 @@ function openCardIntro(target: CardDetailInput) {
       value: target.cultivationLevel ? `Lv.${target.cultivationLevel}` : "",
     },
     {
+      label: "星级",
+      value:
+        target.starLevel !== undefined && target.starLevel !== null
+          ? `${target.starLevel}/${target.starMaxLevel || 5}星`
+          : "",
+    },
+    {
       label: "战力",
       value:
         target.power !== undefined && target.power !== null
@@ -2513,6 +2567,8 @@ function openShowcaseCardDetail(card: ShowcaseCard) {
     poolId: card.poolId,
     obtainedAt: card.obtainedAt,
     cultivationLevel: card.cultivationLevel,
+    starLevel: card.starLevel,
+    starMaxLevel: card.starMaxLevel,
     power: card.power,
     locked: card.locked,
     source: "展示墙",
@@ -2532,6 +2588,8 @@ function openBagCardDetail(card: UserCardsResponse["list"][number]) {
     obtainedAt: card.obtainedAt,
     latestObtainedAt: card.latestObtainedAt,
     cultivationLevel: card.cultivationLevel,
+    starLevel: card.starLevel,
+    starMaxLevel: card.starMaxLevel,
     power: card.power,
     locked: Boolean(card.locked || Number(card.lockedCount || 0) > 0),
     listed: Number(card.listedCount || 0) > 0 || card.isListed === true,
@@ -2552,6 +2610,8 @@ function openFormationCardDetail(card: FormationCard) {
     poolId: card.poolId,
     obtainedAt: card.obtainedAt,
     cultivationLevel: card.cultivationLevel,
+    starLevel: card.starLevel,
+    starMaxLevel: card.starMaxLevel,
     power: card.power,
     locked: card.locked,
     source: "阵容",
@@ -2646,6 +2706,10 @@ async function handleCardDetailAction(action: CardDetailAction) {
   closeCardIntro();
   if (action.key === "upgrade") {
     await openUpgradeModal(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "star") {
+    await openStarModal(action.payload as UserCardsResponse["list"][number]);
     return;
   }
   if (action.key === "trade") {
@@ -3005,6 +3069,14 @@ function cardUpgradeUuid(card: UserCardsResponse["list"][number]) {
   return card.upgradeableUuid || (card.canUpgrade ? card.uuid : "") || "";
 }
 
+function cardStarUuid(card: UserCardsResponse["list"][number]) {
+  return card.starableUuid || (card.canStar ? card.uuid : "") || "";
+}
+
+function formatStarLevel(level?: number | null) {
+  return `${Number(level || 0)}星`;
+}
+
 function upgradeCandidateStatus(card: UserCardsResponse["list"][number]) {
   if (card.isListed) {
     return "挂售中";
@@ -3160,6 +3232,199 @@ async function upgradeCard() {
     notify("error", getErrorMessage(error));
   } finally {
     busy.upgrade = false;
+  }
+}
+
+function isStarTargetCandidateDisabled(card: UserCardsResponse["list"][number]) {
+  return Boolean(
+    card.locked ||
+      card.isListed ||
+      (Number(card.starMaxLevel || 0) > 0 &&
+        Number(card.starLevel || 0) >= Number(card.starMaxLevel || 0)),
+  );
+}
+
+function starTargetCandidateStatus(card: UserCardsResponse["list"][number]) {
+  if (card.isListed) {
+    return "挂售中";
+  }
+  if (card.locked) {
+    return "已锁定";
+  }
+  if (
+    Number(card.starMaxLevel || 0) > 0 &&
+    Number(card.starLevel || 0) >= Number(card.starMaxLevel || 0)
+  ) {
+    return "满星";
+  }
+  return "可升星";
+}
+
+function starSourceStatus(candidate: CardStarCandidate) {
+  if (!candidate.available) {
+    return candidate.unavailableReason || "不可用";
+  }
+  return candidate.uuid === selectedStarSourceUuid.value ? "已选" : "可用";
+}
+
+async function loadStarTargetCandidates(
+  card: UserCardsResponse["list"][number],
+) {
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+  const list: UserCardsResponse["list"] = [];
+  do {
+    const data = await request<UserCardsResponse>(
+      `/card/user/cards${toQuery({
+        grouped: false,
+        rarity: card.cardLevel,
+        page,
+        pageSize,
+      })}`,
+    );
+    list.push(...(data.list || []));
+    totalPages = Number(data.totalPages || 1);
+    page += 1;
+  } while (page <= totalPages);
+  const targetName = String(card.cardName || "").trim();
+  return list.filter(
+    (item) =>
+      String(item.cardName || "").trim() === targetName &&
+      item.cardLevel === card.cardLevel,
+  );
+}
+
+async function loadStarPreview(card: UserCardsResponse["list"][number]) {
+  const uuid = card.uuid || cardStarUuid(card);
+  if (!uuid) {
+    notify("info", "当前不能升星");
+    return false;
+  }
+  starTarget.value = card;
+  starPreview.value = null;
+  selectedStarSourceUuid.value = "";
+  starPreview.value = await request<CardStarPreview>(
+    `/card/user/cards/${uuid}/star-preview`,
+  );
+  selectedStarSourceUuid.value =
+    starPreview.value.candidates.find((candidate) => candidate.available)?.uuid ||
+    "";
+  return true;
+}
+
+async function openStarModal(card: UserCardsResponse["list"][number]) {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  if (!cardStarUuid(card)) {
+    notify("info", "当前不能升星");
+    return;
+  }
+  starTarget.value = card;
+  starTargetCandidates.value = [];
+  starPreview.value = null;
+  selectedStarSourceUuid.value = "";
+  busy.star = true;
+  try {
+    const candidates = await loadStarTargetCandidates(card);
+    if (candidates.length > 1) {
+      starTargetCandidates.value = candidates;
+      return;
+    }
+    await loadStarPreview(candidates[0] || card);
+  } catch (error) {
+    starTarget.value = null;
+    starTargetCandidates.value = [];
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.star = false;
+  }
+}
+
+async function selectStarTarget(card: UserCardsResponse["list"][number]) {
+  if (isStarTargetCandidateDisabled(card)) {
+    return;
+  }
+  starTargetCandidates.value = [];
+  starPreview.value = null;
+  selectedStarSourceUuid.value = "";
+  busy.star = true;
+  try {
+    await loadStarPreview(card);
+  } catch (error) {
+    starTarget.value = null;
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.star = false;
+  }
+}
+
+function selectStarSource(candidate: CardStarCandidate) {
+  if (!candidate.available || busy.star) {
+    return;
+  }
+  selectedStarSourceUuid.value = candidate.uuid;
+}
+
+function closeStarModal() {
+  if (busy.star) {
+    return;
+  }
+  starTarget.value = null;
+  starTargetCandidates.value = [];
+  starPreview.value = null;
+  selectedStarSourceUuid.value = "";
+}
+
+async function starCard() {
+  const uuid = starPreview.value?.uuid || "";
+  if (!uuid) {
+    notify("error", "卡片无效");
+    return;
+  }
+  if (!canConfirmStar.value) {
+    notify("info", starPreview.value?.unavailableReason || "请选择副卡");
+    return;
+  }
+  busy.star = true;
+  try {
+    const data = await request<CardStarResponse>(
+      `/card/user/cards/${uuid}/star`,
+      {
+        method: "POST",
+        body: JSON.stringify({ sourceUuid: selectedStarSourceUuid.value }),
+      },
+    );
+    notify("success", `升星成功，战力 +${data.powerGain}`);
+    await refreshCardState({
+      userCards: true,
+      catalog: true,
+      formation: true,
+      profile: true,
+      bulkPreview: true,
+      achievements: true,
+    });
+    if (starTarget.value) {
+      starTarget.value = findUserCardGroup(starTarget.value);
+    }
+    try {
+      starPreview.value = await request<CardStarPreview>(
+        `/card/user/cards/${uuid}/star-preview`,
+      );
+      selectedStarSourceUuid.value =
+        starPreview.value.candidates.find((candidate) => candidate.available)
+          ?.uuid || "";
+    } catch {
+      starTarget.value = null;
+      starPreview.value = null;
+      selectedStarSourceUuid.value = "";
+    }
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.star = false;
   }
 }
 
@@ -3714,6 +3979,10 @@ const appContext = {
   upgradeTarget,
   upgradeCandidates,
   upgradePreview,
+  starTarget,
+  starTargetCandidates,
+  starPreview,
+  selectedStarSourceUuid,
   cardIntroTarget,
   shareTextTarget,
   confirmDialogTarget,
@@ -3842,6 +4111,9 @@ const appContext = {
   recycleUnitPrice,
   recycleTotalPoints,
   upgradePowerGain,
+  starPowerGain,
+  selectedStarSource,
+  canConfirmStar,
   formationSlots,
   formationFilledCount,
   formationCurrentUuids,
@@ -4023,12 +4295,22 @@ const appContext = {
   openRecycleModal,
   closeRecycleModal,
   cardUpgradeUuid,
+  cardStarUuid,
+  formatStarLevel,
   upgradeCandidateStatus,
   isUpgradeCandidateDisabled,
   openUpgradeModal,
   selectUpgradeCandidate,
   closeUpgradeModal,
   upgradeCard,
+  isStarTargetCandidateDisabled,
+  starTargetCandidateStatus,
+  starSourceStatus,
+  openStarModal,
+  selectStarTarget,
+  selectStarSource,
+  closeStarModal,
+  starCard,
   recycleCards,
   createTradeListing,
   cancelTradeListing,
@@ -4966,6 +5248,195 @@ provide(APP_CONTEXT_KEY, appContext);
               <LoaderCircle v-if="busy.upgrade" :size="18" class="spin" />
               <WandSparkles v-else :size="18" />
               确认养成
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="starTarget"
+        class="result-modal-backdrop"
+        role="presentation"
+        @click.self="closeStarModal"
+      >
+        <section
+          class="trade-listing-modal upgrade-modal star-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="卡片升星"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡片升星</p>
+              <h2>{{ starTarget.cardName }}</h2>
+              <span>
+                {{ starTarget.cardLevel }} ·
+                {{
+                  formatStarLevel(
+                    starPreview?.current.starLevel ?? starTarget.starLevel,
+                  )
+                }}
+              </span>
+            </div>
+            <button
+              class="modal-close"
+              type="button"
+              :disabled="busy.star"
+              @click="closeStarModal"
+            >
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body upgrade-modal-body">
+            <div v-if="busy.star && !starPreview" class="empty-state compact">
+              <LoaderCircle :size="26" class="spin" />
+              <strong>读取升星</strong>
+              <span>副卡状态加载中。</span>
+            </div>
+            <div
+              v-else-if="starTargetCandidates.length"
+              class="upgrade-candidate-list"
+            >
+              <article
+                v-for="card in starTargetCandidates"
+                :key="candidateUuid(card) || `${card.cardId}-${card.cardName}`"
+                class="upgrade-candidate"
+                :class="{ disabled: isStarTargetCandidateDisabled(card) }"
+              >
+                <div>
+                  <strong>{{ card.cardName }}</strong>
+                  <span>
+                    {{ formatStarLevel(card.starLevel) }} · Lv.{{
+                      card.cultivationLevel || 1
+                    }}
+                    · 战力 {{ card.power || 0 }}
+                  </span>
+                  <small>{{ formatCardDetailDate(card.obtainedAt) }}</small>
+                </div>
+                <span class="upgrade-candidate-status">
+                  {{ starTargetCandidateStatus(card) }}
+                </span>
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="
+                    busy.star || isStarTargetCandidateDisabled(card)
+                  "
+                  @click="selectStarTarget(card)"
+                >
+                  选择
+                </button>
+              </article>
+            </div>
+            <template v-else-if="starPreview">
+              <div class="upgrade-compare">
+                <article>
+                  <span>当前</span>
+                  <strong>{{
+                    formatStarLevel(starPreview.current.starLevel)
+                  }}</strong>
+                  <b>战力 {{ starPreview.current.power }}</b>
+                </article>
+                <ChevronRight :size="22" />
+                <article :class="{ muted: !starPreview.next }">
+                  <span>下一星</span>
+                  <strong>
+                    {{
+                      formatStarLevel(
+                        starPreview.next?.starLevel ||
+                          starPreview.current.starLevel,
+                      )
+                    }}
+                  </strong>
+                  <b>
+                    战力
+                    {{ starPreview.next?.power || starPreview.current.power }}
+                  </b>
+                </article>
+              </div>
+              <dl>
+                <div>
+                  <dt>星级上限</dt>
+                  <dd>{{ starPreview.current.starMaxLevel }}星</dd>
+                </div>
+                <div>
+                  <dt>本次提升</dt>
+                  <dd>战力 +{{ starPowerGain }}</dd>
+                </div>
+                <div>
+                  <dt>消耗卡片</dt>
+                  <dd>{{ selectedStarSource?.cardName || "未选择" }}</dd>
+                </div>
+                <div>
+                  <dt>可用副卡</dt>
+                  <dd>
+                    {{
+                      starPreview.candidates.filter((item) => item.available)
+                        .length
+                    }}
+                  </dd>
+                </div>
+              </dl>
+              <div class="upgrade-candidate-list">
+                <article
+                  v-for="candidate in starPreview.candidates"
+                  :key="candidate.uuid"
+                  class="upgrade-candidate"
+                  :class="{
+                    disabled: !candidate.available,
+                    selected: candidate.uuid === selectedStarSourceUuid,
+                  }"
+                >
+                  <div>
+                    <strong>{{ candidate.cardName }}</strong>
+                    <span>
+                      {{ formatStarLevel(candidate.starLevel) }} · Lv.{{
+                        candidate.cultivationLevel || 1
+                      }}
+                      · 战力 {{ candidate.power || 0 }}
+                    </span>
+                    <small>
+                      {{ formatCardDetailDate(candidate.obtainedAt) }}
+                    </small>
+                  </div>
+                  <span class="upgrade-candidate-status">
+                    {{ starSourceStatus(candidate) }}
+                  </span>
+                  <button
+                    class="primary-action compact"
+                    type="button"
+                    :disabled="busy.star || !candidate.available"
+                    @click="selectStarSource(candidate)"
+                  >
+                    选择
+                  </button>
+                </article>
+              </div>
+              <p v-if="starPreview.unavailableReason" class="upgrade-warning">
+                {{ starPreview.unavailableReason }}
+              </p>
+            </template>
+          </div>
+          <footer class="result-modal-actions">
+            <button
+              class="secondary-action"
+              type="button"
+              :disabled="busy.star"
+              @click="closeStarModal"
+            >
+              取消
+            </button>
+            <button
+              class="primary-action"
+              type="button"
+              :disabled="busy.star || !canConfirmStar"
+              @click="starCard"
+            >
+              <LoaderCircle v-if="busy.star" :size="18" class="spin" />
+              <Sparkles v-else :size="18" />
+              升星
             </button>
           </footer>
         </section>

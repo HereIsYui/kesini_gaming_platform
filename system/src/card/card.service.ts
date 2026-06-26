@@ -22,6 +22,8 @@ import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
+import { UserFormationSlot } from "src/entity/userFormationSlot.entity";
+import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import {
   CardRarity,
   DrawCosts,
@@ -49,7 +51,9 @@ import {
   normalizeDecomposeConfig,
 } from "./decompose-config";
 import {
-  calculateCultivationPower,
+  calculateCardPower,
+  getCardStarLevel,
+  getCardStarMaxLevel,
   getCultivationExp,
   getCultivationLevel,
   getCultivationMaxLevel,
@@ -97,14 +101,28 @@ type UserCardGroup = {
   canSell: boolean;
   canLottery: boolean;
   canUpgrade: boolean;
+  canStar: boolean;
   lockableUuid: string | null;
   unlockableUuid: string | null;
   upgradeableUuid: string | null;
+  starableUuid: string | null;
   cultivationLevel: number;
   cultivationExp: number;
   cultivationMaxLevel: number;
+  starLevel: number;
+  starMaxLevel: number;
   power: number;
   latestObtainedAt: Date | null;
+};
+type StarProtectedSets = {
+  listed: Set<string>;
+  formation: Set<string>;
+  showcase: Set<string>;
+};
+type StarSourceContext = {
+  userCards: UserCard[];
+  cards: CardItem[];
+  protectedSets: StarProtectedSets;
 };
 type UserCatalogEntry = {
   key: string;
@@ -802,6 +820,17 @@ export class CardService {
     const activeListingMap = new Map(
       activeListings.map((listing) => [listing.card_uuid, listing]),
     );
+    const starSourceContext = await this.createStarSourceContext(
+      uid,
+      userCards,
+      cards,
+      activeListings,
+    );
+    const starSourceMap = this.buildStarSourceMap(
+      starSourceContext.userCards,
+      starSourceContext.cards,
+      starSourceContext.protectedSets,
+    );
 
     const list = userCards
       .map((userCard) => {
@@ -810,6 +839,21 @@ export class CardService {
           return null;
         }
         const activeListing = activeListingMap.get(userCard.card_uuid);
+        const rarity = this.getEffectiveUserCardRarity(userCard, card);
+        if (!rarity) {
+          return null;
+        }
+        const cultivationLevel = getCultivationLevel(userCard);
+        const cultivationExp = getCultivationExp(userCard);
+        const starLevel = getCardStarLevel(userCard);
+        const cultivationMaxLevel = getCultivationMaxLevel(rarity);
+        const canUpgrade =
+          !activeListing &&
+          userCard.locked !== true &&
+          cultivationLevel < cultivationMaxLevel;
+        const canStar =
+          this.isStarTargetAvailable(userCard, Boolean(activeListing)) &&
+          this.hasAvailableStarSource(userCard, card, rarity, starSourceMap);
 
         return {
           id: userCard.id,
@@ -818,8 +862,7 @@ export class CardService {
           cardName: card.card_name,
           cardDesc: card.card_desc,
           cardImage: card.card_image || "",
-          cardLevel:
-            userCard.card_level || this.getHighestRarity(card.card_level),
+          cardLevel: rarity,
           cardType: card.card_type,
           poolId: card.pool,
           canSell: userCard.can_sell,
@@ -828,31 +871,16 @@ export class CardService {
           isListed: Boolean(activeListing),
           tradeListingId: activeListing?.id || null,
           tradePrice: activeListing?.price || null,
-          cultivationLevel: getCultivationLevel(userCard),
-          cultivationExp: getCultivationExp(userCard),
-          cultivationMaxLevel: getCultivationMaxLevel(
-            userCard.card_level || this.getHighestRarity(card.card_level),
-          ),
-          power: calculateCultivationPower(
-            userCard.card_level || this.getHighestRarity(card.card_level),
-            getCultivationLevel(userCard),
-          ),
-          canUpgrade:
-            !activeListing &&
-            userCard.locked !== true &&
-            getCultivationLevel(userCard) <
-              getCultivationMaxLevel(
-                userCard.card_level || this.getHighestRarity(card.card_level),
-              ),
-          upgradeableUuid:
-            !activeListing &&
-            userCard.locked !== true &&
-            getCultivationLevel(userCard) <
-              getCultivationMaxLevel(
-                userCard.card_level || this.getHighestRarity(card.card_level),
-              )
-              ? userCard.card_uuid
-              : null,
+          cultivationLevel,
+          cultivationExp,
+          cultivationMaxLevel,
+          starLevel,
+          starMaxLevel: getCardStarMaxLevel(),
+          power: calculateCardPower(rarity, cultivationLevel, starLevel),
+          canUpgrade,
+          canStar,
+          upgradeableUuid: canUpgrade ? userCard.card_uuid : null,
+          starableUuid: canStar ? userCard.card_uuid : null,
           obtainedAt: userCard.createdAt,
         };
       })
@@ -1048,6 +1076,192 @@ export class CardService {
     });
   }
 
+  async getUserCardStarPreview(uid: string, cardUuid: string) {
+    const userCard = await this.userCardRepository.findOne({
+      where: { uid, card_uuid: cardUuid, delete_flag: false },
+    });
+    if (!userCard) {
+      throw new Error("用户没有这张卡片");
+    }
+    const card = await this.cardRepository.findOne({
+      where: { id: Number(userCard.card_id) },
+    });
+    if (!card) {
+      throw new Error("卡片不存在");
+    }
+    const rarity = this.getEffectiveUserCardRarity(userCard, card);
+    if (!rarity) {
+      throw new Error("未知的卡片等级");
+    }
+
+    const allUserCards = await this.userCardRepository.find({
+      where: { uid, delete_flag: false },
+    });
+    const cardIds = [
+      ...new Set(allUserCards.map((item) => Number(item.card_id))),
+    ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+    const allCards =
+      cardIds.length > 0
+        ? await this.cardRepository.find({ where: { id: In(cardIds) } })
+        : [];
+    const cardUuids = allUserCards.map((item) => item.card_uuid);
+    const activeListings = await this.findActiveListingsByCardUuids(cardUuids);
+    const protectedSets = await this.createStarProtectedSets(
+      this.dataSource,
+      cardUuids,
+      activeListings,
+      uid,
+    );
+    return this.createStarPreview(
+      userCard,
+      card,
+      rarity,
+      allUserCards,
+      allCards,
+      protectedSets,
+    );
+  }
+
+  async starUserCard(uid: string, cardUuid: string, sourceUuid: string) {
+    if (!sourceUuid || typeof sourceUuid !== "string") {
+      throw new Error("请选择消耗卡片");
+    }
+    if (cardUuid === sourceUuid) {
+      throw new Error("不能消耗同一张卡片");
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const userCardRepository = manager.getRepository(UserCard);
+      const cardRepository = manager.getRepository(CardItem);
+      const cardUuids = [cardUuid, sourceUuid].sort();
+      const userCards = await userCardRepository.find({
+        where: { uid, card_uuid: In(cardUuids), delete_flag: false },
+        lock: { mode: "pessimistic_write" },
+      });
+      const userCardMap = new Map(
+        userCards.map((item) => [item.card_uuid, item]),
+      );
+      const targetUserCard = userCardMap.get(cardUuid);
+      const sourceUserCard = userCardMap.get(sourceUuid);
+      if (!targetUserCard) {
+        throw new Error("用户没有这张卡片");
+      }
+      if (!sourceUserCard) {
+        throw new Error("消耗卡片不存在");
+      }
+
+      const cardIds = [
+        ...new Set(
+          [targetUserCard, sourceUserCard].map((item) => Number(item.card_id)),
+        ),
+      ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+      const cards =
+        cardIds.length > 0
+          ? await cardRepository.find({ where: { id: In(cardIds) } })
+          : [];
+      const cardMap = new Map(cards.map((item) => [item.id, item]));
+      const targetCard = cardMap.get(Number(targetUserCard.card_id));
+      const sourceCard = cardMap.get(Number(sourceUserCard.card_id));
+      if (!targetCard || !sourceCard) {
+        throw new Error("卡片不存在");
+      }
+
+      const targetRarity = this.getEffectiveUserCardRarity(
+        targetUserCard,
+        targetCard,
+      );
+      const sourceRarity = this.getEffectiveUserCardRarity(
+        sourceUserCard,
+        sourceCard,
+      );
+      if (!targetRarity || !sourceRarity) {
+        throw new Error("未知的卡片等级");
+      }
+      if (
+        this.normalizeStarCardName(targetCard.card_name) !==
+          this.normalizeStarCardName(sourceCard.card_name) ||
+        targetRarity !== sourceRarity
+      ) {
+        throw new Error("只能消耗同名同稀有度卡片");
+      }
+
+      const activeListings = await manager.getRepository(TradeListing).find({
+        where: { card_uuid: In(cardUuids), status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      const protectedSets = await this.createStarProtectedSets(
+        manager,
+        cardUuids,
+        activeListings,
+        uid,
+        true,
+      );
+      const targetListed = protectedSets.listed.has(cardUuid);
+      const targetUnavailableReason = this.getStarTargetUnavailableReason(
+        targetUserCard,
+        targetListed,
+      );
+      if (targetUnavailableReason) {
+        throw new Error(targetUnavailableReason);
+      }
+      const sourceUnavailableReason = this.getStarSourceUnavailableReason(
+        sourceUserCard,
+        protectedSets,
+      );
+      if (sourceUnavailableReason) {
+        throw new Error(`消耗卡片${sourceUnavailableReason}`);
+      }
+
+      const before = this.createStarSnapshot(
+        targetUserCard,
+        targetCard,
+        targetRarity,
+      );
+      targetUserCard.star_level = before.starLevel + 1;
+      sourceUserCard.delete_flag = true;
+      await userCardRepository.save([targetUserCard, sourceUserCard]);
+      const after = this.createStarSnapshot(
+        targetUserCard,
+        targetCard,
+        targetRarity,
+      );
+      const source = this.createStarSourceSnapshot(
+        sourceUserCard,
+        sourceCard,
+        sourceRarity,
+      );
+
+      await this.socialActivityService?.recordActivity(
+        {
+          actorUid: uid,
+          type: "card_starred",
+          title: "卡片升星",
+          summary: `${targetCard.card_name} ${after.starLevel}星`,
+          metadata: {
+            cardId: Number(targetUserCard.card_id),
+            cardName: targetCard.card_name,
+            rarity: targetRarity,
+            starLevel: after.starLevel,
+            power: after.power,
+            sourceUuid,
+          },
+        },
+        manager,
+      );
+
+      return {
+        uuid: targetUserCard.card_uuid,
+        cardId: Number(targetUserCard.card_id),
+        cardName: targetCard.card_name,
+        rarity: targetRarity,
+        before,
+        after,
+        source,
+        powerGain: Math.max(0, after.power - before.power),
+      };
+    });
+  }
+
   async getUserDrawHistory(uid: string, page = 1, pageSize = 10) {
     page = Math.max(1, page);
     pageSize = Math.min(50, Math.max(1, pageSize));
@@ -1107,7 +1321,21 @@ export class CardService {
     const activeListings = await this.findActiveListingsByCardUuids(
       userCards.map((userCard) => userCard.card_uuid),
     );
-    const groups = this.groupOwnedCards(userCards, cards, activeListings);
+    const ownerUid = this.extractUidFromWhereConditions(whereConditions);
+    const starSourceContext = await this.createStarSourceContext(
+      ownerUid,
+      userCards,
+      cards,
+      activeListings,
+    );
+    const groups = this.groupOwnedCards(
+      userCards,
+      cards,
+      activeListings,
+      starSourceContext.protectedSets,
+      starSourceContext.userCards,
+      starSourceContext.cards,
+    );
     const total = groups.length;
     const start = (page - 1) * pageSize;
 
@@ -1125,10 +1353,21 @@ export class CardService {
     userCards: UserCard[],
     cards: CardItem[],
     activeListings: TradeListing[],
+    starProtectedSets?: StarProtectedSets,
+    starSourceUserCards?: UserCard[],
+    starSourceCards?: CardItem[],
   ): UserCardGroup[] {
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const activeListingSet = new Set(
       activeListings.map((listing) => listing.card_uuid),
+    );
+    const protectedSets =
+      starProtectedSets ||
+      this.createStarProtectedSetsFromActiveListings(activeListings);
+    const starSourceMap = this.buildStarSourceMap(
+      starSourceUserCards || userCards,
+      starSourceCards || cards,
+      protectedSets,
     );
     const groupMap = new Map<string, UserCardGroup>();
 
@@ -1160,13 +1399,17 @@ export class CardService {
           canSell: false,
           canLottery: false,
           canUpgrade: false,
+          canStar: false,
           lockableUuid: null,
           unlockableUuid: null,
           upgradeableUuid: null,
+          starableUuid: null,
           cultivationLevel: 1,
           cultivationExp: 0,
           cultivationMaxLevel: getCultivationMaxLevel(rarity),
-          power: calculateCultivationPower(rarity, 1),
+          starLevel: 0,
+          starMaxLevel: getCardStarMaxLevel(),
+          power: calculateCardPower(rarity, 1, 0),
           latestObtainedAt: null,
         };
         groupMap.set(key, group);
@@ -1176,6 +1419,8 @@ export class CardService {
       const isLocked = userCard.locked === true;
       const cultivationLevel = getCultivationLevel(userCard);
       const cultivationExp = getCultivationExp(userCard);
+      const starLevel = getCardStarLevel(userCard);
+      const power = calculateCardPower(rarity, cultivationLevel, starLevel);
       group.count += 1;
       group.listedCount += isListed ? 1 : 0;
       group.lockedCount += isLocked ? 1 : 0;
@@ -1190,13 +1435,18 @@ export class CardService {
         group.unlockableUuid = userCard.card_uuid;
       }
       if (
-        cultivationLevel > group.cultivationLevel ||
-        (cultivationLevel === group.cultivationLevel &&
-          cultivationExp > group.cultivationExp)
+        power > group.power ||
+        (power === group.power &&
+          (starLevel > group.starLevel ||
+            (starLevel === group.starLevel &&
+              (cultivationLevel > group.cultivationLevel ||
+                (cultivationLevel === group.cultivationLevel &&
+                  cultivationExp > group.cultivationExp)))))
       ) {
         group.cultivationLevel = cultivationLevel;
         group.cultivationExp = cultivationExp;
-        group.power = calculateCultivationPower(rarity, cultivationLevel);
+        group.starLevel = starLevel;
+        group.power = power;
       }
       if (
         !isListed &&
@@ -1205,6 +1455,13 @@ export class CardService {
         !group.upgradeableUuid
       ) {
         group.upgradeableUuid = userCard.card_uuid;
+      }
+      if (
+        this.isStarTargetAvailable(userCard, isListed) &&
+        this.hasAvailableStarSource(userCard, card, rarity, starSourceMap) &&
+        !group.starableUuid
+      ) {
+        group.starableUuid = userCard.card_uuid;
       }
       group.latestObtainedAt = this.pickLatestDate(
         group.latestObtainedAt,
@@ -1223,6 +1480,7 @@ export class CardService {
           sellableCount,
           canSell: sellableCount > 0,
           canUpgrade: Boolean(group.upgradeableUuid),
+          canStar: Boolean(group.starableUuid),
         };
       })
       .sort((left, right) => {
@@ -2445,17 +2703,407 @@ export class CardService {
     }
   }
 
+  private normalizeStarCardName(name: string) {
+    return String(name || "").trim();
+  }
+
+  private extractUidFromWhereConditions(whereConditions: any[]) {
+    for (const condition of whereConditions || []) {
+      const uid = condition?.uid;
+      if (typeof uid === "string" && uid) {
+        return uid;
+      }
+    }
+    return "";
+  }
+
+  private async createStarSourceContext(
+    uid: string,
+    fallbackUserCards: UserCard[],
+    fallbackCards: CardItem[],
+    fallbackActiveListings: TradeListing[],
+  ): Promise<StarSourceContext> {
+    if (!uid) {
+      return {
+        userCards: fallbackUserCards,
+        cards: fallbackCards,
+        protectedSets: await this.createStarProtectedSets(
+          this.dataSource,
+          fallbackUserCards.map((userCard) => userCard.card_uuid),
+          fallbackActiveListings,
+        ),
+      };
+    }
+    try {
+      const userCards = await this.userCardRepository.find({
+        where: { uid, delete_flag: false },
+      });
+      const cardIds = [
+        ...new Set(userCards.map((userCard) => Number(userCard.card_id))),
+      ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+      const cards =
+        cardIds.length > 0
+          ? await this.cardRepository.find({ where: { id: In(cardIds) } })
+          : [];
+      const cardUuids = userCards.map((userCard) => userCard.card_uuid);
+      const activeListings = await this.findActiveListingsByCardUuids(cardUuids);
+      const protectedSets = await this.createStarProtectedSets(
+        this.dataSource,
+        cardUuids,
+        activeListings,
+        uid,
+      );
+      return { userCards, cards, protectedSets };
+    } catch {
+      return {
+        userCards: fallbackUserCards,
+        cards: fallbackCards,
+        protectedSets: await this.createStarProtectedSets(
+          this.dataSource,
+          fallbackUserCards.map((userCard) => userCard.card_uuid),
+          fallbackActiveListings,
+          uid,
+        ),
+      };
+    }
+  }
+
+  private createStarKey(card: CardItem, rarity: CardRarity) {
+    return `${this.normalizeStarCardName(card.card_name)}::${rarity}`;
+  }
+
+  private createStarProtectedSetsFromActiveListings(
+    activeListings: TradeListing[] = [],
+  ): StarProtectedSets {
+    return {
+      listed: new Set(activeListings.map((listing) => listing.card_uuid)),
+      formation: new Set(),
+      showcase: new Set(),
+    };
+  }
+
+  private async createStarProtectedSets(
+    manager: DataSource | EntityManager,
+    cardUuids: string[],
+    activeListings: TradeListing[] = [],
+    uid?: string,
+    lock = false,
+  ): Promise<StarProtectedSets> {
+    const uniqueCardUuids = [...new Set(cardUuids.filter(Boolean))];
+    return {
+      listed: new Set(activeListings.map((listing) => listing.card_uuid)),
+      formation: await this.findProtectedCardUuidSet(
+        manager,
+        UserFormationSlot,
+        uniqueCardUuids,
+        uid,
+        lock,
+      ),
+      showcase: await this.findProtectedCardUuidSet(
+        manager,
+        UserShowcaseCard,
+        uniqueCardUuids,
+        uid,
+        lock,
+      ),
+    };
+  }
+
+  private async findProtectedCardUuidSet(
+    manager: DataSource | EntityManager,
+    entity: typeof UserFormationSlot | typeof UserShowcaseCard,
+    cardUuids: string[],
+    uid?: string,
+    lock = false,
+  ): Promise<Set<string>> {
+    const uniqueCardUuids = [...new Set(cardUuids.filter(Boolean))];
+    if (uniqueCardUuids.length === 0) {
+      return new Set();
+    }
+    try {
+      const repository = manager.getRepository?.(entity);
+      if (!repository?.find) {
+        if (lock) {
+          throw new Error("卡片状态校验失败");
+        }
+        return new Set();
+      }
+      const where: Record<string, unknown> = {
+        card_uuid: In(uniqueCardUuids),
+      };
+      if (uid) {
+        where.uid = uid;
+      }
+      const rows = await repository.find({
+        where,
+        ...(lock ? { lock: { mode: "pessimistic_write" as const } } : {}),
+      });
+      return new Set(rows.map((row) => row.card_uuid));
+    } catch {
+      if (lock) {
+        throw new Error("卡片状态校验失败");
+      }
+      return new Set();
+    }
+  }
+
+  private buildStarSourceMap(
+    userCards: UserCard[],
+    cards: CardItem[],
+    protectedSets: StarProtectedSets,
+  ): Map<string, string[]> {
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const sourceMap = new Map<string, string[]>();
+    userCards.forEach((userCard) => {
+      const card = cardMap.get(Number(userCard.card_id));
+      if (!card || this.getStarSourceUnavailableReason(userCard, protectedSets)) {
+        return;
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        return;
+      }
+      const key = this.createStarKey(card, rarity);
+      const sourceUuids = sourceMap.get(key) || [];
+      sourceUuids.push(userCard.card_uuid);
+      sourceMap.set(key, sourceUuids);
+    });
+    return sourceMap;
+  }
+
+  private hasAvailableStarSource(
+    targetUserCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    starSourceMap: Map<string, string[]>,
+  ) {
+    const sourceUuids = starSourceMap.get(this.createStarKey(card, rarity)) || [];
+    return sourceUuids.some((uuid) => uuid !== targetUserCard.card_uuid);
+  }
+
+  private isStarTargetAvailable(userCard: UserCard, isListed: boolean) {
+    return !this.getStarTargetUnavailableReason(userCard, isListed);
+  }
+
+  private getStarTargetUnavailableReason(
+    userCard: UserCard,
+    isListed: boolean,
+  ) {
+    if (userCard.locked === true) {
+      return "已锁定";
+    }
+    if (isListed) {
+      return "挂售中";
+    }
+    if (getCardStarLevel(userCard) >= getCardStarMaxLevel()) {
+      return "满星";
+    }
+    return "";
+  }
+
+  private getStarSourceUnavailableReason(
+    userCard: UserCard,
+    protectedSets: StarProtectedSets,
+  ) {
+    if (userCard.locked === true) {
+      return "已锁定";
+    }
+    if (protectedSets.listed.has(userCard.card_uuid)) {
+      return "挂售中";
+    }
+    if (protectedSets.formation.has(userCard.card_uuid)) {
+      return "上阵中";
+    }
+    if (protectedSets.showcase.has(userCard.card_uuid)) {
+      return "展示中";
+    }
+    return "";
+  }
+
+  private compareStarSourceCandidates(
+    left: { userCard: UserCard; available: boolean },
+    right: { userCard: UserCard; available: boolean },
+  ) {
+    if (left.available !== right.available) {
+      return left.available ? -1 : 1;
+    }
+    const leftCreated = left.userCard.createdAt
+      ? new Date(left.userCard.createdAt).getTime()
+      : 0;
+    const rightCreated = right.userCard.createdAt
+      ? new Date(right.userCard.createdAt).getTime()
+      : 0;
+    return (
+      getCardStarLevel(left.userCard) - getCardStarLevel(right.userCard) ||
+      getCultivationLevel(left.userCard) - getCultivationLevel(right.userCard) ||
+      getCultivationExp(left.userCard) - getCultivationExp(right.userCard) ||
+      leftCreated - rightCreated ||
+      Number(left.userCard.id || 0) - Number(right.userCard.id || 0)
+    );
+  }
+
+  private createStarPreview(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    allUserCards: UserCard[],
+    allCards: CardItem[],
+    protectedSets: StarProtectedSets,
+  ) {
+    const cardMap = new Map(allCards.map((item) => [item.id, item]));
+    const targetListed = protectedSets.listed.has(userCard.card_uuid);
+    const targetUnavailableReason = this.getStarTargetUnavailableReason(
+      userCard,
+      targetListed,
+    );
+    const targetName = this.normalizeStarCardName(card.card_name);
+    const candidates = allUserCards
+      .map((sourceUserCard) => {
+        if (sourceUserCard.card_uuid === userCard.card_uuid) {
+          return null;
+        }
+        const sourceCard = cardMap.get(Number(sourceUserCard.card_id));
+        if (!sourceCard) {
+          return null;
+        }
+        const sourceRarity = this.getEffectiveUserCardRarity(
+          sourceUserCard,
+          sourceCard,
+        );
+        if (
+          !sourceRarity ||
+          sourceRarity !== rarity ||
+          this.normalizeStarCardName(sourceCard.card_name) !== targetName
+        ) {
+          return null;
+        }
+        const unavailableReason = this.getStarSourceUnavailableReason(
+          sourceUserCard,
+          protectedSets,
+        );
+        return {
+          userCard: sourceUserCard,
+          card: sourceCard,
+          rarity: sourceRarity,
+          available: !unavailableReason,
+          unavailableReason,
+        };
+      })
+      .filter((item): item is {
+        userCard: UserCard;
+        card: CardItem;
+        rarity: CardRarity;
+        available: boolean;
+        unavailableReason: string;
+      } => item !== null)
+      .sort((left, right) => this.compareStarSourceCandidates(left, right))
+      .map((item) =>
+        this.createStarCandidateView(
+          item.userCard,
+          item.card,
+          item.rarity,
+          item.available,
+          item.unavailableReason,
+        ),
+      );
+    const current = this.createStarSnapshot(userCard, card, rarity);
+    const next =
+      current.starLevel < current.starMaxLevel
+        ? this.createStarSnapshot(userCard, card, rarity, current.starLevel + 1)
+        : null;
+    const hasAvailableSource = candidates.some((candidate) => candidate.available);
+    const unavailableReason =
+      targetUnavailableReason ||
+      (!hasAvailableSource ? "没有可消耗卡片" : "");
+
+    return {
+      uuid: userCard.card_uuid,
+      cardId: Number(userCard.card_id),
+      cardName: card.card_name,
+      rarity,
+      current,
+      next,
+      candidates,
+      canStar: !unavailableReason,
+      unavailableReason,
+    };
+  }
+
+  private createStarSnapshot(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    overrideStarLevel?: number,
+  ) {
+    const cultivationLevel = getCultivationLevel(userCard);
+    const starLevel =
+      overrideStarLevel === undefined
+        ? getCardStarLevel(userCard)
+        : Math.min(getCardStarMaxLevel(), Math.max(0, overrideStarLevel));
+    return {
+      starLevel,
+      starMaxLevel: getCardStarMaxLevel(),
+      cultivationLevel,
+      power: calculateCardPower(rarity, cultivationLevel, starLevel),
+      cardName: card.card_name,
+      rarity,
+    };
+  }
+
+  private createStarSourceSnapshot(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+  ) {
+    return {
+      uuid: userCard.card_uuid,
+      cardId: Number(userCard.card_id),
+      cardName: card.card_name,
+      rarity,
+      cultivationLevel: getCultivationLevel(userCard),
+      starLevel: getCardStarLevel(userCard),
+      power: calculateCardPower(
+        rarity,
+        getCultivationLevel(userCard),
+        getCardStarLevel(userCard),
+      ),
+    };
+  }
+
+  private createStarCandidateView(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    available: boolean,
+    unavailableReason: string,
+  ) {
+    return {
+      ...this.createStarSourceSnapshot(userCard, card, rarity),
+      cardImage: card.card_image || "",
+      cardLevel: rarity,
+      cardType: card.card_type,
+      poolId: card.pool,
+      starMaxLevel: getCardStarMaxLevel(),
+      obtainedAt: userCard.createdAt,
+      available,
+      unavailableReason,
+    };
+  }
+
   private createCultivationSnapshot(
     userCard: UserCard,
     card: CardItem,
     rarity: CardRarity,
   ) {
     const level = getCultivationLevel(userCard);
+    const starLevel = getCardStarLevel(userCard);
     return {
       level,
       exp: getCultivationExp(userCard),
       maxLevel: getCultivationMaxLevel(rarity),
-      power: calculateCultivationPower(rarity, level),
+      starLevel,
+      starMaxLevel: getCardStarMaxLevel(),
+      power: calculateCardPower(rarity, level, starLevel),
       cardName: card.card_name,
       rarity,
     };
@@ -2482,7 +3130,9 @@ export class CardService {
       level: nextLevel,
       exp: current.exp + cost,
       maxLevel: current.maxLevel,
-      power: calculateCultivationPower(rarity, nextLevel),
+      starLevel: current.starLevel,
+      starMaxLevel: current.starMaxLevel,
+      power: calculateCardPower(rarity, nextLevel, current.starLevel),
       cardName: card.card_name,
       rarity,
     };

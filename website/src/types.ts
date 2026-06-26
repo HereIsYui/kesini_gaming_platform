@@ -165,15 +165,19 @@ export interface UserCardRecord {
   lockableUuid?: string | null;
   unlockableUuid?: string | null;
   upgradeableUuid?: string | null;
+  starableUuid?: string | null;
   canSell: boolean;
   canLottery: boolean;
   canUpgrade?: boolean;
+  canStar?: boolean;
   isListed?: boolean;
   tradeListingId?: number | null;
   tradePrice?: number | null;
   cultivationLevel?: number;
   cultivationExp?: number;
   cultivationMaxLevel?: number;
+  starLevel?: number;
+  starMaxLevel?: number;
   power?: number;
   obtainedAt?: string;
   latestObtainedAt?: string;
@@ -209,6 +213,8 @@ export interface ShowcaseCard {
   cardType: number;
   poolId?: number;
   cultivationLevel: number;
+  starLevel?: number;
+  starMaxLevel?: number;
   power: number;
   locked: boolean;
   obtainedAt?: string;
@@ -728,6 +734,8 @@ export interface CardCultivationSnapshot {
   exp: number;
   maxLevel: number;
   power: number;
+  starLevel?: number;
+  starMaxLevel?: number;
   cardName: string;
   rarity: CardRarity | string;
 }
@@ -764,6 +772,64 @@ export interface CardUpgradeResponse {
   };
 }
 
+export interface CardStarSnapshot {
+  starLevel: number;
+  starMaxLevel: number;
+  cultivationLevel: number;
+  power: number;
+  cardName: string;
+  rarity: CardRarity | string;
+}
+
+export interface CardStarCandidate {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  cardImage?: string;
+  cardLevel: CardRarity | string;
+  rarity: CardRarity | string;
+  cardType?: number;
+  poolId?: number;
+  cultivationLevel: number;
+  starLevel: number;
+  starMaxLevel: number;
+  power: number;
+  obtainedAt?: string;
+  available: boolean;
+  unavailableReason?: string;
+}
+
+export interface CardStarPreview {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  rarity: CardRarity | string;
+  current: CardStarSnapshot;
+  next: CardStarSnapshot | null;
+  candidates: CardStarCandidate[];
+  canStar: boolean;
+  unavailableReason?: string;
+}
+
+export interface CardStarResponse {
+  uuid: string;
+  cardId: number;
+  cardName: string;
+  rarity: CardRarity | string;
+  before: CardStarSnapshot;
+  after: CardStarSnapshot;
+  source: {
+    uuid: string;
+    cardId: number;
+    cardName: string;
+    rarity: CardRarity | string;
+    cultivationLevel: number;
+    starLevel: number;
+    power: number;
+  };
+  powerGain: number;
+}
+
 export interface FormationCard {
   uuid: string;
   cardId: number;
@@ -774,6 +840,8 @@ export interface FormationCard {
   cardType: number;
   poolId?: number;
   cultivationLevel: number;
+  starLevel?: number;
+  starMaxLevel?: number;
   power: number;
   locked: boolean;
   obtainedAt?: string;

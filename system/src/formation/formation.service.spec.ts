@@ -187,6 +187,25 @@ describe("FormationService 阵容编队", () => {
     });
   });
 
+  it("阵容战力包含星级加成", async () => {
+    const target = store.userCards.find((card) => card.card_uuid === "card-a");
+    if (target) {
+      target.star_level = 1;
+    }
+
+    const result = await service.saveFormation("u1", [
+      { position: 1, cardUuid: "card-a" },
+      { position: 2, cardUuid: "card-b" },
+    ]);
+
+    expect(result.totalPower).toBe(1222);
+    expect(result.slots[0].card).toMatchObject({
+      starLevel: 1,
+      starMaxLevel: 5,
+      power: 864,
+    });
+  });
+
   it("保存时会清空未传入的位置", async () => {
     await service.saveFormation("u1", [
       { position: 1, cardUuid: "card-a" },

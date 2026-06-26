@@ -298,6 +298,31 @@ describe("ProfileService 玩家主页", () => {
     expect(result.showcase.map((card) => card.uuid)).toEqual(["card-a"]);
   });
 
+  it("展示墙战力包含星级加成", async () => {
+    const target = store.userCards.find((card) => card.card_uuid === "card-a");
+    if (target) {
+      target.star_level = 2;
+    }
+    store.showcase = [
+      {
+        id: 1,
+        uid: "u1",
+        card_uuid: "card-a",
+        position: 1,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      } as UserShowcaseCard,
+    ];
+
+    const result = await service.getProfile("u1");
+
+    expect(result.showcase[0]).toMatchObject({
+      starLevel: 2,
+      starMaxLevel: 5,
+      power: 984,
+    });
+  });
+
   it("可用公开编号查询主页", async () => {
     const result = await service.getPublicProfile("pub-u1");
 

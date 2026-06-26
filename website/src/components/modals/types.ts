@@ -8,6 +8,7 @@ export type CardDetailRow = {
 export type CardDetailActionKey =
   | "lock"
   | "upgrade"
+  | "star"
   | "trade"
   | "recycle"
   | "share"
@@ -54,6 +55,8 @@ export type CardDetailInput = {
   obtainedAt?: string | null;
   latestObtainedAt?: string | null;
   cultivationLevel?: number | null;
+  starLevel?: number | null;
+  starMaxLevel?: number | null;
   power?: number | null;
   locked?: boolean;
   listed?: boolean;

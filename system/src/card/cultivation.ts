@@ -12,6 +12,16 @@ export const CULTIVATION_CONFIG: Record<
   UR: { maxLevel: 60, costBase: 50, powerBase: 1000, powerGrowth: 120 },
 };
 
+export const STAR_MAX_LEVEL = 5;
+
+export const STAR_POWER_CONFIG: Record<CardRarity, number> = {
+  N: 20,
+  R: 36,
+  SR: 64,
+  SSR: 120,
+  UR: 200,
+};
+
 const CULTIVATION_RARITIES = ["N", "R", "SR", "SSR", "UR"] as const;
 
 export function normalizeCultivationRarity(rarity: string): CardRarity {
@@ -30,6 +40,18 @@ export function getCultivationLevel(userCard: Pick<UserCard, "cultivation_level"
 export function getCultivationExp(userCard: Pick<UserCard, "cultivation_exp">) {
   const exp = Number(userCard.cultivation_exp || 0);
   return Number.isInteger(exp) && exp > 0 ? exp : 0;
+}
+
+export function getCardStarLevel(userCard: { star_level?: number | null }) {
+  const level = Number(userCard.star_level || 0);
+  if (!Number.isInteger(level) || level <= 0) {
+    return 0;
+  }
+  return Math.min(STAR_MAX_LEVEL, level);
+}
+
+export function getCardStarMaxLevel() {
+  return STAR_MAX_LEVEL;
 }
 
 export function getCultivationMaxLevel(rarity: string): number {
@@ -53,4 +75,27 @@ export function calculateCultivationPower(rarity: string, level: number): number
     Math.min(config.maxLevel, Math.floor(Number(level || 1))),
   );
   return config.powerBase + (safeLevel - 1) * config.powerGrowth;
+}
+
+export function calculateCardStarPower(
+  rarity: string,
+  starLevel: number,
+): number {
+  const normalized = normalizeCultivationRarity(rarity);
+  const safeStarLevel = Math.max(
+    0,
+    Math.min(STAR_MAX_LEVEL, Math.floor(Number(starLevel || 0))),
+  );
+  return STAR_POWER_CONFIG[normalized] * safeStarLevel;
+}
+
+export function calculateCardPower(
+  rarity: string,
+  level: number,
+  starLevel: number,
+): number {
+  return (
+    calculateCultivationPower(rarity, level) +
+    calculateCardStarPower(rarity, starLevel)
+  );
 }

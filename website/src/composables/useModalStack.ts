@@ -54,6 +54,7 @@ export function useModalStack(options: ModalStackOptions) {
       card: ".card-intro-modal",
       recycle: ".recycle-modal",
       upgrade: ".upgrade-modal",
+      star: ".star-modal",
       listing: ".trade-create-modal",
       formation: ".formation-picker-modal",
       profile: ".profile-picker-modal",

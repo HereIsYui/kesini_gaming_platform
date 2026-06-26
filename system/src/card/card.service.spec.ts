@@ -22,6 +22,8 @@ import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
+import { UserFormationSlot } from "src/entity/userFormationSlot.entity";
+import { UserShowcaseCard } from "src/entity/userShowcaseCard.entity";
 import type { CardRarity } from "src/types/api";
 
 describe("CardService 抽卡核心规则", () => {
@@ -2104,6 +2106,553 @@ describe("CardService 卡片养成", () => {
       "卡片已达到当前稀有度等级上限",
     );
     expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("CardService 卡片升星", () => {
+  function createRepository(overrides: Record<string, any> = {}) {
+    return {
+      create: jest.fn((value) => value),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn((value) => Promise.resolve(value)),
+      ...overrides,
+    };
+  }
+
+  function getFindOperatorInfo(value: any) {
+    return {
+      type: value?._type || value?.type,
+      value: value?._value ?? value?.value,
+    };
+  }
+
+  function matchesValue(actual: any, expected: any) {
+    const operator = getFindOperatorInfo(expected);
+    if (operator.type === "in") {
+      return operator.value.includes(actual);
+    }
+    return actual === expected;
+  }
+
+  function filterByWhere<T extends Record<string, any>>(
+    rows: T[],
+    where?: Record<string, any> | Array<Record<string, any>>,
+  ) {
+    if (!where) {
+      return rows;
+    }
+    const conditions = Array.isArray(where) ? where : [where];
+    return rows.filter((row) =>
+      conditions.some((condition) =>
+        Object.entries(condition).every(([key, expected]) =>
+          matchesValue(row[key], expected),
+        ),
+      ),
+    );
+  }
+
+  function createStarService(options: {
+    cards?: Partial<CardItem>[];
+    userCards?: Partial<UserCard>[];
+    activeListings?: Partial<TradeListing>[];
+    formation?: Partial<UserFormationSlot>[];
+    showcase?: Partial<UserShowcaseCard>[];
+  } = {}) {
+    const cards = (options.cards || [
+      {
+        id: 1,
+        card_name: "同名卡",
+        card_level: "SSR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 1,
+      },
+      {
+        id: 2,
+        card_name: "同名卡",
+        card_level: "SSR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 2,
+      },
+      {
+        id: 3,
+        card_name: "同名卡",
+        card_level: "SR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 1,
+      },
+      {
+        id: 4,
+        card_name: "异名卡",
+        card_level: "SSR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 1,
+      },
+      {
+        id: 5,
+        card_name: "UR卡",
+        card_level: "UR",
+        card_desc: "描述",
+        card_type: 0,
+        pool: 1,
+      },
+    ]) as CardItem[];
+    const userCards = (options.userCards || [
+      {
+        id: 1,
+        uid: "u1",
+        card_id: "1",
+        card_level: "SSR",
+        card_uuid: "target",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        locked: false,
+        cultivation_level: 2,
+        cultivation_exp: 0,
+        star_level: 0,
+        createdAt: new Date("2026-01-02"),
+      },
+      {
+        id: 2,
+        uid: "u1",
+        card_id: "2",
+        card_level: "SSR",
+        card_uuid: "source",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        locked: false,
+        cultivation_level: 1,
+        cultivation_exp: 0,
+        star_level: 0,
+        createdAt: new Date("2026-01-01"),
+      },
+    ]) as UserCard[];
+    const activeListings = (options.activeListings || []) as TradeListing[];
+    const formation = (options.formation || []) as UserFormationSlot[];
+    const showcase = (options.showcase || []) as UserShowcaseCard[];
+    const cardRepository = createRepository({
+      findOne: jest.fn(async ({ where }) =>
+        cards.find((card) => card.id === Number(where.id)) || null,
+      ),
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(cards, options?.where),
+      ),
+    });
+    const userCardRepository = createRepository({
+      findOne: jest.fn(async ({ where }) =>
+        userCards.find(
+          (card) =>
+            card.uid === where.uid &&
+            card.card_uuid === where.card_uuid &&
+            card.delete_flag === where.delete_flag,
+        ) || null,
+      ),
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(userCards, options?.where),
+      ),
+      save: jest.fn(async (value) => value),
+    });
+    const userRepository = createRepository({
+      findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
+    });
+    const dropRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+    });
+    const inventoryRepository = createRepository({
+      find: jest.fn().mockResolvedValue([]),
+    });
+    const tradeListingRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(activeListings, options?.where),
+      ),
+    });
+    const formationRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(formation, options?.where),
+      ),
+    });
+    const showcaseRepository = createRepository({
+      find: jest.fn(async (options?: any) =>
+        filterByWhere(showcase, options?.where),
+      ),
+    });
+    const repositories = new Map<any, any>([
+      [UserCard, userCardRepository],
+      [CardItem, cardRepository],
+      [TradeListing, tradeListingRepository],
+      [UserFormationSlot, formationRepository],
+      [UserShowcaseCard, showcaseRepository],
+    ]);
+    const manager = {
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+    };
+    const dataSource = {
+      manager,
+      getRepository: jest.fn((entity) => repositories.get(entity)),
+      transaction: jest.fn((callback) => callback(manager)),
+    };
+    const socialActivityService = {
+      recordActivity: jest.fn(),
+    };
+    const service = new CardService(
+      cardRepository as any,
+      createRepository() as any,
+      userRepository as any,
+      userCardRepository as any,
+      createRepository() as any,
+      dropRepository as any,
+      inventoryRepository as any,
+      createRepository() as any,
+      {} as any,
+      dataSource as any,
+      undefined,
+      undefined,
+      socialActivityService as any,
+    );
+
+    return {
+      service,
+      userCards,
+      userCardRepository,
+      socialActivityService,
+    };
+  }
+
+  it("同名同稀有度卡可消耗副卡升星并增加战力", async () => {
+    const { service, userCards, userCardRepository, socialActivityService } =
+      createStarService();
+
+    const result = await service.starUserCard("u1", "target", "source");
+
+    expect(userCards.find((card) => card.card_uuid === "target")?.star_level).toBe(
+      1,
+    );
+    expect(userCards.find((card) => card.card_uuid === "source")?.delete_flag).toBe(
+      true,
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ card_uuid: "target", star_level: 1 }),
+        expect.objectContaining({ card_uuid: "source", delete_flag: true }),
+      ]),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        before: expect.objectContaining({ starLevel: 0, power: 672 }),
+        after: expect.objectContaining({ starLevel: 1, power: 792 }),
+        source: expect.objectContaining({ uuid: "source" }),
+        powerGain: 120,
+      }),
+    );
+    expect(socialActivityService.recordActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "card_starred" }),
+      expect.anything(),
+    );
+  });
+
+  it("满星卡片不能继续升星", async () => {
+    const { service, userCardRepository } = createStarService({
+      userCards: [
+        {
+          uid: "u1",
+          card_id: "1",
+          card_level: "SSR",
+          card_uuid: "target",
+          delete_flag: false,
+          locked: false,
+          star_level: 5,
+        },
+        {
+          uid: "u1",
+          card_id: "2",
+          card_level: "SSR",
+          card_uuid: "source",
+          delete_flag: false,
+          locked: false,
+        },
+      ],
+    });
+
+    await expect(service.starUserCard("u1", "target", "source")).rejects.toThrow(
+      "满星",
+    );
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("目标卡锁定或挂售时不能升星", async () => {
+    await expect(
+      createStarService({
+        userCards: [
+          {
+            uid: "u1",
+            card_id: "1",
+            card_level: "SSR",
+            card_uuid: "target",
+            delete_flag: false,
+            locked: true,
+          },
+          {
+            uid: "u1",
+            card_id: "2",
+            card_level: "SSR",
+            card_uuid: "source",
+            delete_flag: false,
+            locked: false,
+          },
+        ],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("已锁定");
+
+    await expect(
+      createStarService({
+        activeListings: [{ card_uuid: "target", status: "active" }],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("挂售中");
+  });
+
+  it("预览无可用副卡时返回原因", async () => {
+    const { service } = createStarService({
+      userCards: [
+        {
+          uid: "u1",
+          card_id: "1",
+          card_level: "SSR",
+          card_uuid: "target",
+          delete_flag: false,
+          locked: false,
+          star_level: 0,
+        },
+      ],
+    });
+
+    const result = await service.getUserCardStarPreview("u1", "target");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        canStar: false,
+        unavailableReason: "没有可消耗卡片",
+        candidates: [],
+      }),
+    );
+  });
+
+  it("不同名或不同稀有度卡不能作为副卡", async () => {
+    const { service } = createStarService({
+      userCards: [
+        {
+          uid: "u1",
+          card_id: "1",
+          card_level: "SSR",
+          card_uuid: "target",
+          delete_flag: false,
+          locked: false,
+        },
+        {
+          uid: "u1",
+          card_id: "3",
+          card_level: "SR",
+          card_uuid: "sr-source",
+          delete_flag: false,
+          locked: false,
+        },
+        {
+          uid: "u1",
+          card_id: "4",
+          card_level: "SSR",
+          card_uuid: "name-source",
+          delete_flag: false,
+          locked: false,
+        },
+      ],
+    });
+
+    await expect(service.starUserCard("u1", "target", "sr-source")).rejects.toThrow(
+      "只能消耗同名同稀有度卡片",
+    );
+    await expect(
+      service.starUserCard("u1", "target", "name-source"),
+    ).rejects.toThrow("只能消耗同名同稀有度卡片");
+  });
+
+  it("副卡锁定、挂售、上阵或展示时不能消耗", async () => {
+    await expect(
+      createStarService({
+        userCards: [
+          {
+            uid: "u1",
+            card_id: "1",
+            card_level: "SSR",
+            card_uuid: "target",
+            delete_flag: false,
+            locked: false,
+          },
+          {
+            uid: "u1",
+            card_id: "2",
+            card_level: "SSR",
+            card_uuid: "source",
+            delete_flag: false,
+            locked: true,
+          },
+        ],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("消耗卡片已锁定");
+
+    await expect(
+      createStarService({
+        activeListings: [{ card_uuid: "source", status: "active" }],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("消耗卡片挂售中");
+
+    await expect(
+      createStarService({
+        formation: [{ uid: "u1", card_uuid: "source", position: 1 }],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("消耗卡片上阵中");
+
+    await expect(
+      createStarService({
+        showcase: [{ uid: "u1", card_uuid: "source", position: 1 }],
+      }).service.starUserCard("u1", "target", "source"),
+    ).rejects.toThrow("消耗卡片展示中");
+  });
+
+  it("UR 卡也可以升星", async () => {
+    const { service } = createStarService({
+      userCards: [
+        {
+          uid: "u1",
+          card_id: "5",
+          card_level: "UR",
+          card_uuid: "target",
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 0,
+        },
+        {
+          uid: "u1",
+          card_id: "5",
+          card_level: "UR",
+          card_uuid: "source",
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 0,
+        },
+      ],
+    });
+
+    const result = await service.starUserCard("u1", "target", "source");
+
+    expect(result.powerGain).toBe(200);
+  });
+
+  it.each([
+    ["N", 20],
+    ["R", 36],
+    ["SR", 64],
+    ["SSR", 120],
+    ["UR", 200],
+  ] as Array<[CardRarity, number]>)("%s 每星增加固定战力", async (rarity, gain) => {
+    const { service } = createStarService({
+      cards: [
+        {
+          id: 1,
+          card_name: "星卡",
+          card_level: rarity,
+          card_desc: "描述",
+          card_type: 0,
+          pool: 1,
+        },
+        {
+          id: 2,
+          card_name: "星卡",
+          card_level: rarity,
+          card_desc: "描述",
+          card_type: 0,
+          pool: 1,
+        },
+      ],
+      userCards: [
+        {
+          uid: "u1",
+          card_id: "1",
+          card_level: rarity,
+          card_uuid: "target",
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 0,
+        },
+        {
+          uid: "u1",
+          card_id: "2",
+          card_level: rarity,
+          card_uuid: "source",
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 0,
+        },
+      ],
+    });
+
+    const result = await service.starUserCard("u1", "target", "source");
+
+    expect(result.powerGain).toBe(gain);
+  });
+
+  it("背包分组会按星级战力展示并返回可升星入口", async () => {
+    const { service } = createStarService({
+      userCards: [
+        {
+          id: 1,
+          uid: "u1",
+          card_id: "1",
+          card_level: "SSR",
+          card_uuid: "target",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 1,
+          createdAt: new Date("2026-01-02"),
+        },
+        {
+          id: 2,
+          uid: "u1",
+          card_id: "2",
+          card_level: "SSR",
+          card_uuid: "source",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          locked: false,
+          cultivation_level: 1,
+          star_level: 0,
+          createdAt: new Date("2026-01-01"),
+        },
+      ],
+    });
+
+    const result = await service.getUserCards("u1", "SSR", 1, 1, 20, true);
+
+    expect(result.list[0]).toEqual(
+      expect.objectContaining({
+        starLevel: 1,
+        power: 720,
+        canStar: true,
+        starableUuid: "target",
+      }),
+    );
   });
 });
 

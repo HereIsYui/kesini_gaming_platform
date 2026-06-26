@@ -1,7 +1,9 @@
 import { Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import {
-  calculateCultivationPower,
+  calculateCardPower,
+  getCardStarLevel,
+  getCardStarMaxLevel,
   getCultivationLevel,
 } from "src/card/cultivation";
 import { CardItem } from "src/entity/card.entity";
@@ -247,6 +249,7 @@ export class ProfileService {
   ) {
     const rarity = this.getEffectiveUserCardRarity(userCard, card);
     const level = getCultivationLevel(userCard);
+    const starLevel = getCardStarLevel(userCard);
     return {
       position: showcase.position,
       uuid: userCard.card_uuid,
@@ -258,7 +261,9 @@ export class ProfileService {
       cardType: card.card_type,
       poolId: card.pool,
       cultivationLevel: level,
-      power: calculateCultivationPower(rarity, level),
+      starLevel,
+      starMaxLevel: getCardStarMaxLevel(),
+      power: calculateCardPower(rarity, level, starLevel),
       locked: userCard.locked === true,
       obtainedAt: userCard.createdAt,
     };
