@@ -55,6 +55,12 @@ export class UserCard {
   @Column({ type: "int", default: 0 })
   star_level: number;
 
+  @Column({ type: "int", default: 0 })
+  potential_bp: number;
+
+  @Column({ type: "varchar", length: 1, default: "C" })
+  potential_grade: "S" | "A" | "B" | "C";
+
   @CreateDateColumn()
   createdAt: Date;
 }

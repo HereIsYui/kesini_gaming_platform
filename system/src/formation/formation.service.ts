@@ -1,10 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource, EntityManager, In } from "typeorm";
 import {
-  calculateCardPower,
+  calculateCardPowerWithPotential,
   getCardStarLevel,
   getCardStarMaxLevel,
   getCultivationLevel,
+  normalizeBattleRole,
+  resolveUserCardPotential,
 } from "src/card/cultivation";
 import { CardItem } from "src/entity/card.entity";
 import { TradeListing } from "src/entity/tradeListing.entity";
@@ -60,7 +62,10 @@ export class FormationService {
     });
   }
 
-  private async buildFormation(manager: DataSource | EntityManager, uid: string) {
+  private async buildFormation(
+    manager: DataSource | EntityManager,
+    uid: string,
+  ) {
     const slotRepository = manager.getRepository(UserFormationSlot);
     const slots = await slotRepository.find({
       where: { uid },
@@ -85,7 +90,9 @@ export class FormationService {
     ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
     const cards =
       cardIds.length > 0
-        ? await manager.getRepository(CardItem).find({ where: { id: In(cardIds) } })
+        ? await manager
+            .getRepository(CardItem)
+            .find({ where: { id: In(cardIds) } })
         : [];
     const cardMap = new Map(cards.map((card) => [card.id, card]));
     const userCardMap = new Map(
@@ -97,7 +104,8 @@ export class FormationService {
       const slot = slots.find((item) => item.position === position);
       const userCard = slot ? userCardMap.get(slot.card_uuid) : null;
       const card = userCard ? cardMap.get(Number(userCard.card_id)) : null;
-      const view = userCard && card ? this.toFormationCard(userCard, card) : null;
+      const view =
+        userCard && card ? this.toFormationCard(userCard, card) : null;
       if (view) {
         totalPower += view.power;
       }
@@ -136,6 +144,13 @@ export class FormationService {
     const rarity = this.getEffectiveUserCardRarity(userCard, card);
     const level = getCultivationLevel(userCard);
     const starLevel = getCardStarLevel(userCard);
+    const potential = resolveUserCardPotential(userCard, rarity);
+    const powerView = calculateCardPowerWithPotential(
+      rarity,
+      level,
+      starLevel,
+      potential.potentialBp,
+    );
     return {
       uuid: userCard.card_uuid,
       cardId: Number(userCard.card_id),
@@ -144,11 +159,16 @@ export class FormationService {
       cardImage: card.card_image || "",
       cardLevel: rarity,
       cardType: card.card_type,
+      battleRole: normalizeBattleRole(card.battle_role),
       poolId: card.pool,
       cultivationLevel: level,
       starLevel,
       starMaxLevel: getCardStarMaxLevel(),
-      power: calculateCardPower(rarity, level, starLevel),
+      basePower: powerView.basePower,
+      potentialPower: powerView.potentialPower,
+      potentialGrade: potential.potentialGrade,
+      potentialPercent: potential.potentialPercent,
+      power: powerView.power,
       locked: userCard.locked === true,
       obtainedAt: userCard.createdAt,
     };
@@ -192,7 +212,8 @@ export class FormationService {
   }
 
   private getEffectiveUserCardRarity(userCard: UserCard, card: CardItem) {
-    const rarity = userCard.card_level || this.getHighestRarity(card.card_level);
+    const rarity =
+      userCard.card_level || this.getHighestRarity(card.card_level);
     return this.normalizeRarity(rarity);
   }
 
@@ -212,7 +233,9 @@ export class FormationService {
   }
 
   private normalizeRarity(rarity: string): CardRarity {
-    const normalized = String(rarity || "").trim().toUpperCase();
+    const normalized = String(rarity || "")
+      .trim()
+      .toUpperCase();
     if (!RARITY_ORDER.includes(normalized as CardRarity)) {
       throw new Error("稀有度参数无效");
     }
@@ -220,6 +243,9 @@ export class FormationService {
   }
 
   private positions() {
-    return Array.from({ length: FORMATION_SLOT_COUNT }, (_, index) => index + 1);
+    return Array.from(
+      { length: FORMATION_SLOT_COUNT },
+      (_, index) => index + 1,
+    );
   }
 }

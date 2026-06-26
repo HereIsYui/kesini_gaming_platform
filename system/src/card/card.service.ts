@@ -52,12 +52,17 @@ import {
 } from "./decompose-config";
 import {
   calculateCardPower,
+  calculateCardPowerWithPotential,
   getCardStarLevel,
   getCardStarMaxLevel,
   getCultivationExp,
   getCultivationLevel,
   getCultivationMaxLevel,
   getCultivationUpgradeCost,
+  getPotentialGrade,
+  getPotentialRange,
+  normalizeBattleRole,
+  resolveUserCardPotential,
 } from "./cultivation";
 
 const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
@@ -111,6 +116,11 @@ type UserCardGroup = {
   cultivationMaxLevel: number;
   starLevel: number;
   starMaxLevel: number;
+  battleRole: string;
+  basePower: number;
+  potentialPower: number;
+  potentialGrade: string;
+  potentialPercent: number;
   power: number;
   latestObtainedAt: Date | null;
 };
@@ -276,6 +286,7 @@ export class CardService {
           cardsByRarity[rarity],
           serverConfig.upCards,
         );
+        const potential = this.rollPotential(rarity);
 
         const userCard = userCardRepository.create({
           uid,
@@ -285,6 +296,8 @@ export class CardService {
           can_lottery: true,
           card_uuid: uuidv4(),
           delete_flag: false,
+          potential_bp: potential.potentialBp,
+          potential_grade: potential.potentialGrade,
         });
         userCards.push(userCard);
         rarityCounts[rarity] += 1;
@@ -301,6 +314,9 @@ export class CardService {
           isUp,
           isPity,
           userCardUuid: userCard.card_uuid,
+          battleRole: normalizeBattleRole(card.battle_role),
+          potentialGrade: potential.potentialGrade,
+          potentialPercent: potential.potentialBp / 100,
         });
       }
 
@@ -548,7 +564,11 @@ export class CardService {
     return {
       generatedAt: new Date().toISOString(),
       rankings: {
-        totalCards: this.buildRankedEntries(metricsByUid, userMap, "totalCards"),
+        totalCards: this.buildRankedEntries(
+          metricsByUid,
+          userMap,
+          "totalCards",
+        ),
         ssrCards: this.buildRankedEntries(metricsByUid, userMap, "ssrCards"),
         urCards: this.buildRankedEntries(metricsByUid, userMap, "urCards"),
         completedPools: this.buildRankedEntries(
@@ -561,7 +581,11 @@ export class CardService {
           userMap,
           "rechargeAmount",
         ),
-        pveCleared: this.buildRankedEntries(metricsByUid, userMap, "pveCleared"),
+        pveCleared: this.buildRankedEntries(
+          metricsByUid,
+          userMap,
+          "pveCleared",
+        ),
       },
     };
   }
@@ -847,6 +871,12 @@ export class CardService {
         const cultivationExp = getCultivationExp(userCard);
         const starLevel = getCardStarLevel(userCard);
         const cultivationMaxLevel = getCultivationMaxLevel(rarity);
+        const powerView = this.createPowerView(
+          userCard,
+          rarity,
+          cultivationLevel,
+          starLevel,
+        );
         const canUpgrade =
           !activeListing &&
           userCard.locked !== true &&
@@ -864,6 +894,7 @@ export class CardService {
           cardImage: card.card_image || "",
           cardLevel: rarity,
           cardType: card.card_type,
+          battleRole: normalizeBattleRole(card.battle_role),
           poolId: card.pool,
           canSell: userCard.can_sell,
           canLottery: userCard.can_lottery,
@@ -876,7 +907,7 @@ export class CardService {
           cultivationMaxLevel,
           starLevel,
           starMaxLevel: getCardStarMaxLevel(),
-          power: calculateCardPower(rarity, cultivationLevel, starLevel),
+          ...powerView,
           canUpgrade,
           canStar,
           upgradeableUuid: canUpgrade ? userCard.card_uuid : null,
@@ -1064,6 +1095,82 @@ export class CardService {
         cardId: Number(userCard.card_id),
         cardName: card.card_name,
         rarity,
+        before,
+        after,
+        cost: {
+          itemId: fragmentItem.id,
+          itemName: fragmentItem.drop_name,
+          num: cost,
+          remaining: inventory.num,
+        },
+      };
+    });
+  }
+
+  async rerollUserCardPotential(uid: string, cardUuid: string) {
+    if (!cardUuid) {
+      throw new Error("卡片参数无效");
+    }
+    return this.dataSource.transaction(async (manager) => {
+      const userCardRepository = manager.getRepository(UserCard);
+      const inventoryRepository = manager.getRepository(UserInventory);
+      const userCard = await userCardRepository.findOne({
+        where: { uid, card_uuid: cardUuid, delete_flag: false },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!userCard) {
+        throw new Error("用户没有这张卡片");
+      }
+      if (userCard.locked === true) {
+        throw new Error("已锁定的卡片不能洗练");
+      }
+      const activeListing = await manager.getRepository(TradeListing).findOne({
+        where: { card_uuid: cardUuid, status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (activeListing) {
+        throw new Error("挂售中的卡片不能洗练");
+      }
+
+      const card = await manager.getRepository(CardItem).findOne({
+        where: { id: Number(userCard.card_id) },
+      });
+      if (!card) {
+        throw new Error("卡片不存在");
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        throw new Error("未知的卡片等级");
+      }
+      const user = await this.getExistingUser(manager, uid);
+      const fragmentItem = await this.findCultivationFragmentItem(
+        manager,
+        rarity,
+      );
+      const cost = this.getPotentialRerollCost(rarity);
+      const inventory = await inventoryRepository.findOne({
+        where: { user_id: user.id, item_id: fragmentItem.id },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!inventory || inventory.num < cost) {
+        throw new Error(
+          `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${inventory?.num || 0}个`,
+        );
+      }
+      const before = this.createPotentialSnapshot(userCard, card, rarity);
+      const potential = this.rollPotential(rarity);
+      inventory.num -= cost;
+      userCard.potential_bp = potential.potentialBp;
+      userCard.potential_grade = potential.potentialGrade;
+      await inventoryRepository.save(inventory);
+      await userCardRepository.save(userCard);
+      const after = this.createPotentialSnapshot(userCard, card, rarity);
+      return {
+        uuid: userCard.card_uuid,
+        cardId: Number(userCard.card_id),
+        cardName: card.card_name,
+        rarity,
+        battleRole: normalizeBattleRole(card.battle_role),
         before,
         after,
         cost: {
@@ -1391,6 +1498,7 @@ export class CardService {
           cardImage: card.card_image || "",
           cardLevel: rarity,
           cardType: card.card_type,
+          battleRole: normalizeBattleRole(card.battle_role),
           poolId: card.pool,
           count: 0,
           listedCount: 0,
@@ -1409,6 +1517,10 @@ export class CardService {
           cultivationMaxLevel: getCultivationMaxLevel(rarity),
           starLevel: 0,
           starMaxLevel: getCardStarMaxLevel(),
+          basePower: calculateCardPower(rarity, 1, 0),
+          potentialPower: 0,
+          potentialGrade: "C",
+          potentialPercent: 0,
           power: calculateCardPower(rarity, 1, 0),
           latestObtainedAt: null,
         };
@@ -1420,7 +1532,13 @@ export class CardService {
       const cultivationLevel = getCultivationLevel(userCard);
       const cultivationExp = getCultivationExp(userCard);
       const starLevel = getCardStarLevel(userCard);
-      const power = calculateCardPower(rarity, cultivationLevel, starLevel);
+      const powerView = this.createPowerView(
+        userCard,
+        rarity,
+        cultivationLevel,
+        starLevel,
+      );
+      const power = powerView.power;
       group.count += 1;
       group.listedCount += isListed ? 1 : 0;
       group.lockedCount += isLocked ? 1 : 0;
@@ -1446,7 +1564,11 @@ export class CardService {
         group.cultivationLevel = cultivationLevel;
         group.cultivationExp = cultivationExp;
         group.starLevel = starLevel;
-        group.power = power;
+        group.basePower = powerView.basePower;
+        group.potentialPower = powerView.potentialPower;
+        group.potentialGrade = powerView.potentialGrade;
+        group.potentialPercent = powerView.potentialPercent;
+        group.power = powerView.power;
       }
       if (
         !isListed &&
@@ -2746,7 +2868,8 @@ export class CardService {
           ? await this.cardRepository.find({ where: { id: In(cardIds) } })
           : [];
       const cardUuids = userCards.map((userCard) => userCard.card_uuid);
-      const activeListings = await this.findActiveListingsByCardUuids(cardUuids);
+      const activeListings =
+        await this.findActiveListingsByCardUuids(cardUuids);
       const protectedSets = await this.createStarProtectedSets(
         this.dataSource,
         cardUuids,
@@ -2856,7 +2979,10 @@ export class CardService {
     const sourceMap = new Map<string, string[]>();
     userCards.forEach((userCard) => {
       const card = cardMap.get(Number(userCard.card_id));
-      if (!card || this.getStarSourceUnavailableReason(userCard, protectedSets)) {
+      if (
+        !card ||
+        this.getStarSourceUnavailableReason(userCard, protectedSets)
+      ) {
         return;
       }
       const rarity = this.getEffectiveUserCardRarity(userCard, card);
@@ -2877,7 +3003,8 @@ export class CardService {
     rarity: CardRarity,
     starSourceMap: Map<string, string[]>,
   ) {
-    const sourceUuids = starSourceMap.get(this.createStarKey(card, rarity)) || [];
+    const sourceUuids =
+      starSourceMap.get(this.createStarKey(card, rarity)) || [];
     return sourceUuids.some((uuid) => uuid !== targetUserCard.card_uuid);
   }
 
@@ -2935,7 +3062,8 @@ export class CardService {
       : 0;
     return (
       getCardStarLevel(left.userCard) - getCardStarLevel(right.userCard) ||
-      getCultivationLevel(left.userCard) - getCultivationLevel(right.userCard) ||
+      getCultivationLevel(left.userCard) -
+        getCultivationLevel(right.userCard) ||
       getCultivationExp(left.userCard) - getCultivationExp(right.userCard) ||
       leftCreated - rightCreated ||
       Number(left.userCard.id || 0) - Number(right.userCard.id || 0)
@@ -2989,13 +3117,17 @@ export class CardService {
           unavailableReason,
         };
       })
-      .filter((item): item is {
-        userCard: UserCard;
-        card: CardItem;
-        rarity: CardRarity;
-        available: boolean;
-        unavailableReason: string;
-      } => item !== null)
+      .filter(
+        (
+          item,
+        ): item is {
+          userCard: UserCard;
+          card: CardItem;
+          rarity: CardRarity;
+          available: boolean;
+          unavailableReason: string;
+        } => item !== null,
+      )
       .sort((left, right) => this.compareStarSourceCandidates(left, right))
       .map((item) =>
         this.createStarCandidateView(
@@ -3011,10 +3143,11 @@ export class CardService {
       current.starLevel < current.starMaxLevel
         ? this.createStarSnapshot(userCard, card, rarity, current.starLevel + 1)
         : null;
-    const hasAvailableSource = candidates.some((candidate) => candidate.available);
+    const hasAvailableSource = candidates.some(
+      (candidate) => candidate.available,
+    );
     const unavailableReason =
-      targetUnavailableReason ||
-      (!hasAvailableSource ? "没有可消耗卡片" : "");
+      targetUnavailableReason || (!hasAvailableSource ? "没有可消耗卡片" : "");
 
     return {
       uuid: userCard.card_uuid,
@@ -3040,11 +3173,17 @@ export class CardService {
       overrideStarLevel === undefined
         ? getCardStarLevel(userCard)
         : Math.min(getCardStarMaxLevel(), Math.max(0, overrideStarLevel));
+    const powerView = this.createPowerView(
+      userCard,
+      rarity,
+      cultivationLevel,
+      starLevel,
+    );
     return {
       starLevel,
       starMaxLevel: getCardStarMaxLevel(),
       cultivationLevel,
-      power: calculateCardPower(rarity, cultivationLevel, starLevel),
+      ...powerView,
       cardName: card.card_name,
       rarity,
     };
@@ -3062,7 +3201,8 @@ export class CardService {
       rarity,
       cultivationLevel: getCultivationLevel(userCard),
       starLevel: getCardStarLevel(userCard),
-      power: calculateCardPower(
+      ...this.createPowerView(
+        userCard,
         rarity,
         getCultivationLevel(userCard),
         getCardStarLevel(userCard),
@@ -3082,6 +3222,7 @@ export class CardService {
       cardImage: card.card_image || "",
       cardLevel: rarity,
       cardType: card.card_type,
+      battleRole: normalizeBattleRole(card.battle_role),
       poolId: card.pool,
       starMaxLevel: getCardStarMaxLevel(),
       obtainedAt: userCard.createdAt,
@@ -3097,13 +3238,14 @@ export class CardService {
   ) {
     const level = getCultivationLevel(userCard);
     const starLevel = getCardStarLevel(userCard);
+    const powerView = this.createPowerView(userCard, rarity, level, starLevel);
     return {
       level,
       exp: getCultivationExp(userCard),
       maxLevel: getCultivationMaxLevel(rarity),
       starLevel,
       starMaxLevel: getCardStarMaxLevel(),
-      power: calculateCardPower(rarity, level, starLevel),
+      ...powerView,
       cardName: card.card_name,
       rarity,
     };
@@ -3132,7 +3274,7 @@ export class CardService {
       maxLevel: current.maxLevel,
       starLevel: current.starLevel,
       starMaxLevel: current.starMaxLevel,
-      power: calculateCardPower(rarity, nextLevel, current.starLevel),
+      ...this.createPowerView(userCard, rarity, nextLevel, current.starLevel),
       cardName: card.card_name,
       rarity,
     };
@@ -3272,6 +3414,61 @@ export class CardService {
         rank: currentRank,
       };
     });
+  }
+
+  private rollPotential(rarity: CardRarity) {
+    const range = getPotentialRange(rarity);
+    const potentialBp = randomInt(range.min, range.max + 1);
+    return {
+      potentialBp,
+      potentialGrade: getPotentialGrade(potentialBp),
+    };
+  }
+
+  private createPowerView(
+    userCard: UserCard,
+    rarity: CardRarity,
+    level: number,
+    starLevel: number,
+  ) {
+    const potential = resolveUserCardPotential(userCard, rarity);
+    const power = calculateCardPowerWithPotential(
+      rarity,
+      level,
+      starLevel,
+      potential.potentialBp,
+    );
+    return {
+      ...power,
+      potentialGrade: potential.potentialGrade,
+      potentialPercent: potential.potentialPercent,
+    };
+  }
+
+  private createPotentialSnapshot(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+  ) {
+    const level = getCultivationLevel(userCard);
+    const starLevel = getCardStarLevel(userCard);
+    return {
+      rarity,
+      battleRole: normalizeBattleRole(card.battle_role),
+      level,
+      starLevel,
+      ...this.createPowerView(userCard, rarity, level, starLevel),
+    };
+  }
+
+  private getPotentialRerollCost(rarity: CardRarity) {
+    return {
+      N: 5,
+      R: 8,
+      SR: 12,
+      SSR: 20,
+      UR: 30,
+    }[rarity];
   }
 
   private normalizeRarity(rarity: string): CardRarity {
@@ -3429,7 +3626,9 @@ export class CardService {
     return fragmentItem;
   }
 
-  private async findDefaultFragmentItem(manager: EntityManager): Promise<DropItem> {
+  private async findDefaultFragmentItem(
+    manager: EntityManager,
+  ): Promise<DropItem> {
     const dropRepository = manager.getRepository(DropItem);
     const defaultFragmentItem = await dropRepository.findOne({
       where: { drop_type: 0, disabled: false, default_fragment: true },

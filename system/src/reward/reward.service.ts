@@ -1,5 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { EntityManager, In, Repository } from "typeorm";
 import { CardItem } from "src/entity/card.entity";
 import { DropItem } from "src/entity/drop.entity";
@@ -11,6 +11,7 @@ import {
 } from "src/entity/redeemCode.entity";
 import { User } from "src/entity/user.entity";
 import { UserCard } from "src/entity/userCard.entity";
+import { getPotentialGrade, getPotentialRange } from "src/card/cultivation";
 import {
   PointLedgerContext,
   PointLedgerService,
@@ -54,7 +55,9 @@ export class RewardService {
     const normalizedCards = cards
       .map((card) => ({
         cardId: Number(card.cardId),
-        rarity: String(card.rarity || "").trim().toUpperCase(),
+        rarity: String(card.rarity || "")
+          .trim()
+          .toUpperCase(),
         num: Number(card.num),
       }))
       .filter((card) => card.cardId > 0 || card.num > 0 || card.rarity);
@@ -107,9 +110,9 @@ export class RewardService {
     cardRepository: Repository<CardItem>,
     cards: RedeemRewardCard[] = [],
   ) {
-    const cardIds = [...new Set(cards.map((card) => Number(card.cardId)))].filter(
-      (cardId) => Number.isInteger(cardId) && cardId > 0,
-    );
+    const cardIds = [
+      ...new Set(cards.map((card) => Number(card.cardId))),
+    ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
     if (cardIds.length === 0) {
       return;
     }
@@ -200,6 +203,7 @@ export class RewardService {
     cards.forEach((rewardCard) => {
       const count = Number(rewardCard.num || 0);
       for (let index = 0; index < count; index += 1) {
+        const potential = this.rollPotential(rewardCard.rarity);
         userCards.push(
           userCardRepository.create({
             uid: user.uid,
@@ -209,6 +213,8 @@ export class RewardService {
             can_lottery: true,
             card_uuid: randomUUID(),
             delete_flag: false,
+            potential_bp: potential.potentialBp,
+            potential_grade: potential.potentialGrade,
           }),
         );
       }
@@ -235,10 +241,23 @@ export class RewardService {
     return String(card.card_level || "")
       .split(",")
       .map((item) => item.trim().toUpperCase())
-      .includes(String(rarity || "").trim().toUpperCase());
+      .includes(
+        String(rarity || "")
+          .trim()
+          .toUpperCase(),
+      );
   }
 
   private isRarity(value: string) {
     return ["N", "R", "SR", "SSR", "UR"].includes(value);
+  }
+
+  private rollPotential(rarity: string) {
+    const range = getPotentialRange(rarity);
+    const potentialBp = randomInt(range.min, range.max + 1);
+    return {
+      potentialBp,
+      potentialGrade: getPotentialGrade(potentialBp),
+    };
   }
 }

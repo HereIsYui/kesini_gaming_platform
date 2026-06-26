@@ -20,6 +20,12 @@ import {
   PVE_RISK_CONFIG_KEY,
   type PveRiskConfig,
 } from "./pve-risk-config";
+import {
+  normalizePveTraits,
+  PveBattleSimulator,
+  pveTraitLabels,
+  type PveBattleReport,
+} from "./pve-battle-simulator";
 
 export interface PvePageQuery {
   page?: number;
@@ -56,9 +62,11 @@ export interface PveAutoBattleStageResult {
   stageId: number;
   stageName: string;
   success: boolean;
+  stars: number;
   formationPower: number;
   enemyPower: number;
   rewards: RedeemRewards | null;
+  starRewards?: RedeemRewards | null;
 }
 
 export interface PveAutoBattleResult {
@@ -72,10 +80,14 @@ export interface PveAutoBattleResult {
 type SettleChallengeResult = {
   record: PveChallengeRecord;
   success: boolean;
+  stars: number;
   rewardSnapshot: RedeemRewards | null;
+  starRewardSnapshot: RedeemRewards | null;
+  battleReport: PveBattleReport;
   formationPower: number;
   enemyPower: number;
   clearedBefore: boolean;
+  bestStarsBefore: number;
 };
 
 type RewardLookup = {
@@ -85,6 +97,8 @@ type RewardLookup = {
 
 @Injectable()
 export class PveService {
+  private readonly battleSimulator = new PveBattleSimulator();
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly formationService: FormationService,
@@ -138,11 +152,14 @@ export class PveService {
     const allClearedStageIds = new Set(
       allClearedRecords.map((record) => Number(record.stage_id)),
     );
+    const bestStarsMap = this.buildBestStarsMap(allClearedRecords);
     const nextUnclearedIndex = visibleStages.findIndex(
       (stage) => !allClearedStageIds.has(Number(stage.id)),
     );
     const nextUnclearedStageId =
-      nextUnclearedIndex >= 0 ? Number(visibleStages[nextUnclearedIndex].id) : null;
+      nextUnclearedIndex >= 0
+        ? Number(visibleStages[nextUnclearedIndex].id)
+        : null;
     const nextUnclearedPage =
       nextUnclearedIndex >= 0
         ? Math.floor(nextUnclearedIndex / pageSize) + 1
@@ -158,7 +175,7 @@ export class PveService {
     const pageStageIds = pageStages.map((stage) => Number(stage.id));
     const rewardLookup = await this.buildRewardLookup(
       this.dataSource,
-      pageStages.map((stage) => stage.rewards),
+      pageStages.flatMap((stage) => [stage.rewards, stage.star_rewards]),
     );
     const todayCountMap = todayRecords.reduce((map, record) => {
       map.set(record.stage_id, (map.get(record.stage_id) || 0) + 1);
@@ -177,7 +194,8 @@ export class PveService {
     return {
       formation: {
         slotCount: formation.slotCount,
-        filledCount: formation.slots.filter((slot) => Boolean(slot.card)).length,
+        filledCount: formation.slots.filter((slot) => Boolean(slot.card))
+          .length,
         totalPower: formation.totalPower,
       },
       list: pageStages.map((stage) =>
@@ -187,6 +205,7 @@ export class PveService {
           todayCountMap.get(stage.id) || 0,
           rewardLookup,
           allClearedStageIds.has(Number(stage.id)),
+          bestStarsMap.get(Number(stage.id)) || 0,
         ),
       ),
       total,
@@ -215,15 +234,13 @@ export class PveService {
       }
       this.assertStageCanChallenge(stage);
 
-      const todayCount = await manager
-        .getRepository(PveChallengeRecord)
-        .count({
-          where: {
-            uid,
-            stage_id: stage.id,
-            createdAt: Between(...this.getTodayRange()),
-          },
-        });
+      const todayCount = await manager.getRepository(PveChallengeRecord).count({
+        where: {
+          uid,
+          stage_id: stage.id,
+          createdAt: Between(...this.getTodayRange()),
+        },
+      });
       const dailyLimit = this.normalizeDailyLimit(stage.daily_limit);
       if (todayCount >= dailyLimit) {
         throw new Error("今日挑战次数已用完");
@@ -248,13 +265,17 @@ export class PveService {
         uid,
         user,
         stage,
-        Number(formation.totalPower || 0),
+        formation,
         "challenge",
       );
 
       const rewardLookup = await this.buildRewardLookup(manager, [
         stage.rewards,
+        stage.star_rewards,
         ...(settlement.rewardSnapshot ? [settlement.rewardSnapshot] : []),
+        ...(settlement.starRewardSnapshot
+          ? [settlement.starRewardSnapshot]
+          : []),
       ]);
 
       return {
@@ -265,10 +286,17 @@ export class PveService {
           todayCount + 1,
           rewardLookup,
           settlement.clearedBefore || settlement.success,
+          Math.max(settlement.bestStarsBefore, settlement.stars),
         ),
         success: settlement.success,
+        stars: settlement.stars,
+        bestStars: Math.max(settlement.bestStarsBefore, settlement.stars),
+        battleReport: settlement.battleReport,
         rewards: settlement.rewardSnapshot
           ? this.decorateRewards(settlement.rewardSnapshot, rewardLookup)
+          : null,
+        starRewards: settlement.starRewardSnapshot
+          ? this.decorateRewards(settlement.starRewardSnapshot, rewardLookup)
           : null,
         formationPower: settlement.formationPower,
         enemyPower: settlement.enemyPower,
@@ -286,11 +314,17 @@ export class PveService {
     uid: string,
     user: User,
     stage: PveStage,
-    formationPower: number,
+    formation: any,
     mode: "challenge" | "auto",
   ): Promise<SettleChallengeResult> {
     const enemyPower = this.normalizePower(stage.enemy_power);
-    const success = formationPower >= enemyPower;
+    const formationPower = Number(formation.totalPower || 0);
+    const battle = this.battleSimulator.simulate({
+      cards: this.getFormationBattleCards(formation),
+      enemyPower,
+      battleConfig: stage.battle_config || null,
+    });
+    const success = battle.success;
     const clearedBefore =
       (await manager.getRepository(PveChallengeRecord).count({
         where: {
@@ -299,6 +333,7 @@ export class PveService {
           success: true,
         },
       })) > 0;
+    const bestStarsBefore = await this.getBestStars(manager, uid, stage.id);
     const firstClearRewards = success
       ? this.rewardService.normalizeRewards(stage.rewards, "关卡奖励不能为空")
       : null;
@@ -307,9 +342,19 @@ export class PveService {
         ? this.toRepeatRewards(firstClearRewards)
         : firstClearRewards
       : null;
+    const starRewardSnapshot =
+      success && battle.stars > bestStarsBefore
+        ? this.buildStarRewardSnapshot(
+            stage.star_rewards,
+            battle.stars - bestStarsBefore,
+          )
+        : null;
 
     if (this.hasGrantableRewards(rewardSnapshot)) {
       await this.assertRewardAvailable(manager, rewardSnapshot);
+    }
+    if (this.hasGrantableRewards(starRewardSnapshot)) {
+      await this.assertRewardAvailable(manager, starRewardSnapshot);
     }
 
     const recordRepository = manager.getRepository(PveChallengeRecord);
@@ -322,6 +367,9 @@ export class PveService {
         enemy_power: enemyPower,
         success,
         reward_snapshot: rewardSnapshot,
+        stars: battle.stars,
+        battle_report: battle.report,
+        formation_snapshot: battle.formationSnapshot,
         mode,
       }),
     );
@@ -336,6 +384,22 @@ export class PveService {
           stageName: stage.name,
           formationPower,
           enemyPower,
+          stars: battle.stars,
+          mode,
+        },
+      });
+    }
+    if (this.hasGrantableRewards(starRewardSnapshot)) {
+      await this.rewardService.grantRewards(manager, user, starRewardSnapshot, {
+        sourceType: "pve",
+        sourceId: stage.id,
+        title: `星级奖励：${stage.name}`,
+        metadata: {
+          stageId: stage.id,
+          stageName: stage.name,
+          formationPower,
+          enemyPower,
+          stars: battle.stars,
           mode,
         },
       });
@@ -352,6 +416,7 @@ export class PveService {
             stageName: stage.name,
             formationPower,
             enemyPower,
+            stars: battle.stars,
           },
         },
         manager,
@@ -361,10 +426,14 @@ export class PveService {
     return {
       record,
       success,
+      stars: battle.stars,
       rewardSnapshot,
+      starRewardSnapshot,
+      battleReport: battle.report,
       formationPower,
       enemyPower,
       clearedBefore,
+      bestStarsBefore,
     };
   }
 
@@ -391,7 +460,6 @@ export class PveService {
       if (!formation.slots.some((slot) => Boolean(slot.card))) {
         throw new Error("请先配置阵容");
       }
-      const formationPower = Number(formation.totalPower || 0);
 
       const stages = await stageRepository.find({
         where: { delete_flag: false, enabled: true },
@@ -438,28 +506,37 @@ export class PveService {
           stopReason = `「${stage.name}」今日次数已用完`;
           break;
         }
+        if (this.shouldStopAutoBattle(stage)) {
+          stopReason = `「${stage.name}」需要手动挑战`;
+          break;
+        }
 
         const settlement = await this.settleChallenge(
           manager,
           uid,
           user,
           stage,
-          formationPower,
+          formation,
           "auto",
         );
         if (settlement.rewardSnapshot) {
           rewardSnapshots.push(settlement.rewardSnapshot);
         }
+        if (settlement.starRewardSnapshot) {
+          rewardSnapshots.push(settlement.starRewardSnapshot);
+        }
         list.push({
           stageId: stage.id,
           stageName: stage.name,
           success: settlement.success,
+          stars: settlement.stars,
           formationPower: settlement.formationPower,
           enemyPower: settlement.enemyPower,
           rewards: settlement.rewardSnapshot,
+          starRewards: settlement.starRewardSnapshot,
         });
         if (!settlement.success) {
-          stopReason = `「${stage.name}」战力不足，停止自动战斗`;
+          stopReason = `「${stage.name}」战力不足，停止自动`;
           break;
         }
         cleared += 1;
@@ -583,7 +660,9 @@ export class PveService {
         },
         order: { sort_order: "ASC", id: "ASC" } as any,
       });
-      const stageMap = new Map(stages.map((stage) => [Number(stage.id), stage]));
+      const stageMap = new Map(
+        stages.map((stage) => [Number(stage.id), stage]),
+      );
       const clearedRecords = await recordRepository.find({
         where: {
           uid,
@@ -658,6 +737,7 @@ export class PveService {
             enemy_power: this.normalizePower(stage.enemy_power),
             success: true,
             reward_snapshot: rewardSnapshot,
+            stars: 0,
             mode: "sweep",
           }),
         );
@@ -683,7 +763,10 @@ export class PveService {
         });
       }
 
-      const rewardLookup = await this.buildRewardLookup(manager, rewardSnapshots);
+      const rewardLookup = await this.buildRewardLookup(
+        manager,
+        rewardSnapshots,
+      );
       return {
         vipLevel,
         vipLabel: vip.label,
@@ -769,6 +852,99 @@ export class PveService {
     };
   }
 
+  private getFormationBattleCards(formation: any) {
+    return (formation?.slots || [])
+      .map((slot) => slot.card)
+      .filter(Boolean)
+      .map((card) => ({
+        uuid: card.uuid,
+        cardId: card.cardId,
+        cardName: card.cardName,
+        cardLevel: card.cardLevel,
+        battleRole: card.battleRole,
+        power: Number(card.power || 0),
+        basePower: Number(card.basePower || 0),
+        potentialPower: Number(card.potentialPower || 0),
+        potentialGrade: card.potentialGrade || "C",
+      }));
+  }
+
+  private buildBestStarsMap(records: PveChallengeRecord[]) {
+    return records.reduce((map, record) => {
+      const stageId = Number(record.stage_id);
+      map.set(
+        stageId,
+        Math.max(map.get(stageId) || 0, Number(record.stars || 0)),
+      );
+      return map;
+    }, new Map<number, number>());
+  }
+
+  private async getBestStars(
+    manager: EntityManager,
+    uid: string,
+    stageId: number,
+  ) {
+    const records = await manager.getRepository(PveChallengeRecord).find({
+      where: { uid, stage_id: stageId, success: true },
+      select: ["stars"],
+    });
+    return records.reduce(
+      (max, record) => Math.max(max, Number(record.stars || 0)),
+      0,
+    );
+  }
+
+  private buildStarRewardSnapshot(
+    rewards: RedeemRewards | null | undefined,
+    count: number,
+  ): RedeemRewards | null {
+    const normalized = this.normalizeOptionalRewards(rewards);
+    const multiplier = Math.max(0, Math.min(3, Math.floor(Number(count || 0))));
+    if (!normalized || multiplier <= 0) {
+      return null;
+    }
+    return this.scaleRewards(normalized, multiplier);
+  }
+
+  private normalizeOptionalRewards(
+    rewards: RedeemRewards | null | undefined,
+  ): RedeemRewards | null {
+    if (!rewards) {
+      return null;
+    }
+    try {
+      return this.rewardService.normalizeRewards(rewards, "星级奖励不能为空");
+    } catch {
+      return null;
+    }
+  }
+
+  private scaleRewards(rewards: RedeemRewards, count: number): RedeemRewards {
+    return {
+      points: Number(rewards.points || 0) * count,
+      items: (rewards.items || []).map((item) => ({
+        ...item,
+        num: Number(item.num || 0) * count,
+      })),
+      ...(rewards.cards?.length
+        ? {
+            cards: rewards.cards.map((card) => ({
+              ...card,
+              num: Number(card.num || 0) * count,
+            })),
+          }
+        : {}),
+    };
+  }
+
+  private shouldStopAutoBattle(stage: PveStage) {
+    if ((stage.boss_type || "none") !== "none") {
+      return true;
+    }
+    return normalizePveTraits(stage.battle_config?.traits).length >= 2;
+  }
+
   private async assertRewardAvailable(
     manager: EntityManager,
     rewards: RedeemRewards,
@@ -803,6 +979,7 @@ export class PveService {
     todayCount: number,
     rewardLookup?: RewardLookup,
     cleared = false,
+    bestStars = 0,
   ) {
     const dailyLimit = this.normalizeDailyLimit(stage.daily_limit);
     const unavailableReason = this.getUnavailableReason(
@@ -815,16 +992,29 @@ export class PveService {
       "关卡奖励不能为空",
     );
     const repeatRewards = this.toRepeatRewards(firstClearRewards);
+    const starRewards = this.normalizeOptionalRewards(stage.star_rewards);
     const decoratedFirstClearRewards = rewardLookup
       ? this.decorateRewards(firstClearRewards, rewardLookup)
       : firstClearRewards;
     const decoratedRepeatRewards = rewardLookup
       ? this.decorateRewards(repeatRewards, rewardLookup)
       : repeatRewards;
+    const decoratedStarRewards =
+      starRewards && rewardLookup
+        ? this.decorateRewards(starRewards, rewardLookup)
+        : starRewards;
+    const traits = normalizePveTraits(stage.battle_config?.traits);
     return {
       id: stage.id,
       name: stage.name,
       description: stage.description || "",
+      chapter: Number(stage.chapter || 1),
+      stageNo: Number(stage.stage_no || 1),
+      bossType: stage.boss_type || "none",
+      bossName: stage.boss_name || "",
+      traits,
+      traitLabels: pveTraitLabels(traits),
+      bestStars,
       enemyPower: this.normalizePower(stage.enemy_power),
       recommendedPower: this.normalizePower(stage.recommended_power),
       dailyLimit,
@@ -836,6 +1026,7 @@ export class PveService {
       rewards: cleared ? decoratedRepeatRewards : decoratedFirstClearRewards,
       firstClearRewards: decoratedFirstClearRewards,
       repeatRewards: decoratedRepeatRewards,
+      starRewards: decoratedStarRewards,
       enabled: stage.enabled === true,
       sortOrder: Number(stage.sort_order || 0),
       startsAt: stage.starts_at || null,
@@ -909,6 +1100,9 @@ export class PveService {
       formationPower: record.formation_power,
       enemyPower: record.enemy_power,
       success: record.success === true,
+      stars: Number(record.stars || 0),
+      battleReport: record.battle_report || null,
+      formationSnapshot: record.formation_snapshot || null,
       mode: record.mode || "challenge",
       rewards:
         record.reward_snapshot && rewardLookup

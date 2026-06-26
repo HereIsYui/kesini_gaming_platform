@@ -32,6 +32,30 @@ export class PveStage {
   @Column({ type: "json" })
   rewards: RedeemRewards;
 
+  @Column({ type: "int", default: 1 })
+  chapter: number;
+
+  @Column({ type: "int", default: 1 })
+  stage_no: number;
+
+  @Column({ type: "varchar", length: 16, default: "none" })
+  boss_type: "none" | "minor" | "major" | "final";
+
+  @Column({ type: "varchar", length: 32, default: "" })
+  boss_name: string;
+
+  @Column({ type: "json", nullable: true })
+  battle_config?: {
+    traits?: string[];
+    enemyHp?: number;
+    enemyAttack?: number;
+    roundLimit?: number;
+    boss?: boolean;
+  } | null;
+
+  @Column({ type: "json", nullable: true })
+  star_rewards?: RedeemRewards | null;
+
   @Column({ default: true })
   enabled: boolean;
 

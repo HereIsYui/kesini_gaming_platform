@@ -810,10 +810,12 @@ export class AdminService {
       const rechargeResult = await manager
         .getRepository(RechargeRecord)
         .delete({ uid });
-      const listingResult = await manager.getRepository(TradeListing).update(
-        { seller_uid: uid, status: "active" },
-        { status: "cancelled", cancelled_at: now },
-      );
+      const listingResult = await manager
+        .getRepository(TradeListing)
+        .update(
+          { seller_uid: uid, status: "active" },
+          { status: "cancelled", cancelled_at: now },
+        );
       await manager.getRepository(User).update(
         { id: user.id },
         {
@@ -1772,7 +1774,9 @@ export class AdminService {
 
     const [list, total] = await queryBuilder.getManyAndCount();
     return this.attachUserDisplayToUidRows({
-      list: list.map((record) => this.decorateMonthlyCardPurchaseRecord(record)),
+      list: list.map((record) =>
+        this.decorateMonthlyCardPurchaseRecord(record),
+      ),
       total,
       page,
       pageSize,
@@ -2326,13 +2330,10 @@ export class AdminService {
     };
   }
 
-  private decorateMonthlyCardPurchaseRecord(
-    record: MonthlyCardPurchaseRecord,
-  ) {
+  private decorateMonthlyCardPurchaseRecord(record: MonthlyCardPurchaseRecord) {
     return {
       ...record,
-      cardTypeLabel:
-        record.card_type === "platinum" ? "星耀月卡" : "星穹月卡",
+      cardTypeLabel: record.card_type === "platinum" ? "星耀月卡" : "星穹月卡",
       statusLabel: this.getMonthlyCardPurchaseStatusLabel(record.status),
       thirdPartyMsg: this.getRechargeThirdPartyMessage(
         record.third_party_response,
@@ -2789,9 +2790,7 @@ export class AdminService {
     return labels[status] || "未知";
   }
 
-  private getMonthlyCardPurchaseStatusLabel(
-    status: MonthlyCardPurchaseStatus,
-  ) {
+  private getMonthlyCardPurchaseStatusLabel(status: MonthlyCardPurchaseStatus) {
     const labels: Record<MonthlyCardPurchaseStatus, string> = {
       pending: "处理中",
       success: "成功",
@@ -3196,6 +3195,21 @@ export class AdminService {
       body.rewards,
       "关卡奖励不能为空",
     );
+    const chapter = this.normalizeIntegerInput(
+      body.chapter ?? 1,
+      "章节必须为正整数",
+      1,
+    );
+    const stageNo = this.normalizeIntegerInput(
+      body.stage_no ?? 1,
+      "关卡序号必须为正整数",
+      1,
+    );
+    const bossType = ["none", "minor", "major", "final"].includes(
+      String(body.boss_type || ""),
+    )
+      ? (body.boss_type as PveStage["boss_type"])
+      : "none";
     return {
       name,
       description: this.normalizeOptionalString(body.description),
@@ -3203,6 +3217,17 @@ export class AdminService {
       recommended_power: recommendedPower,
       daily_limit: dailyLimit,
       rewards,
+      chapter,
+      stage_no: stageNo,
+      boss_type: bossType,
+      boss_name: this.normalizeOptionalString(body.boss_name),
+      battle_config:
+        body.battle_config && typeof body.battle_config === "object"
+          ? body.battle_config
+          : null,
+      star_rewards: body.star_rewards
+        ? await this.normalizeRewards(body.star_rewards, "星级奖励不能为空")
+        : null,
       enabled:
         body.enabled === undefined || body.enabled === null
           ? creating

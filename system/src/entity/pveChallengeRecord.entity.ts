@@ -36,6 +36,15 @@ export class PveChallengeRecord {
   @Column({ type: "json", nullable: true })
   reward_snapshot?: RedeemRewards | null;
 
+  @Column({ type: "int", default: 0 })
+  stars: number;
+
+  @Column({ type: "json", nullable: true })
+  battle_report?: unknown | null;
+
+  @Column({ type: "json", nullable: true })
+  formation_snapshot?: unknown | null;
+
   @Column({ length: 16, default: "challenge" })
   mode: "challenge" | "sweep" | "auto";
 

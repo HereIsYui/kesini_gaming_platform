@@ -23,16 +23,30 @@ export const STAR_POWER_CONFIG: Record<CardRarity, number> = {
 };
 
 const CULTIVATION_RARITIES = ["N", "R", "SR", "SSR", "UR"] as const;
+export const BATTLE_ROLES = ["attack", "guard", "support", "control"] as const;
+export type BattleRole = (typeof BATTLE_ROLES)[number];
+
+const POTENTIAL_RANGE_BP: Record<CardRarity, { min: number; max: number }> = {
+  N: { min: 0, max: 600 },
+  R: { min: 0, max: 800 },
+  SR: { min: 100, max: 1000 },
+  SSR: { min: 200, max: 1200 },
+  UR: { min: 300, max: 1200 },
+};
 
 export function normalizeCultivationRarity(rarity: string): CardRarity {
-  const normalized = String(rarity || "").trim().toUpperCase();
+  const normalized = String(rarity || "")
+    .trim()
+    .toUpperCase();
   if (!CULTIVATION_RARITIES.includes(normalized as CardRarity)) {
     throw new Error("稀有度参数无效");
   }
   return normalized as CardRarity;
 }
 
-export function getCultivationLevel(userCard: Pick<UserCard, "cultivation_level">) {
+export function getCultivationLevel(
+  userCard: Pick<UserCard, "cultivation_level">,
+) {
   const level = Number(userCard.cultivation_level || 1);
   return Number.isInteger(level) && level > 0 ? level : 1;
 }
@@ -67,7 +81,10 @@ export function getCultivationUpgradeCost(
   return config.costBase * Math.max(1, currentLevel);
 }
 
-export function calculateCultivationPower(rarity: string, level: number): number {
+export function calculateCultivationPower(
+  rarity: string,
+  level: number,
+): number {
   const normalized = normalizeCultivationRarity(rarity);
   const config = CULTIVATION_CONFIG[normalized];
   const safeLevel = Math.max(
@@ -98,4 +115,87 @@ export function calculateCardPower(
     calculateCultivationPower(rarity, level) +
     calculateCardStarPower(rarity, starLevel)
   );
+}
+
+export function normalizeBattleRole(value: unknown): BattleRole {
+  const normalized = String(value || "").trim();
+  return BATTLE_ROLES.includes(normalized as BattleRole)
+    ? (normalized as BattleRole)
+    : "attack";
+}
+
+export function getPotentialRange(rarity: string) {
+  return POTENTIAL_RANGE_BP[normalizeCultivationRarity(rarity)];
+}
+
+export function normalizePotentialBp(value: unknown) {
+  const number = Number(value || 0);
+  if (!Number.isInteger(number) || number < 0) {
+    return 0;
+  }
+  return Math.min(1200, number);
+}
+
+export function getPotentialGrade(potentialBp: number): "S" | "A" | "B" | "C" {
+  const normalized = normalizePotentialBp(potentialBp);
+  if (normalized >= 1000) {
+    return "S";
+  }
+  if (normalized >= 700) {
+    return "A";
+  }
+  if (normalized >= 400) {
+    return "B";
+  }
+  return "C";
+}
+
+export function calculatePotentialPower(
+  basePower: number,
+  potentialBp: number,
+) {
+  return Math.floor(
+    (Math.max(0, Number(basePower || 0)) * normalizePotentialBp(potentialBp)) /
+      10000,
+  );
+}
+
+export function calculateCardPowerWithPotential(
+  rarity: string,
+  level: number,
+  starLevel: number,
+  potentialBp: number,
+) {
+  const basePower = calculateCardPower(rarity, level, starLevel);
+  const potentialPower = calculatePotentialPower(basePower, potentialBp);
+  return {
+    basePower,
+    potentialPower,
+    power: basePower + potentialPower,
+  };
+}
+
+export function deterministicPotentialBp(seed: string, rarity: string) {
+  const range = getPotentialRange(rarity);
+  const width = range.max - range.min + 1;
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return range.min + (Math.abs(hash) % width);
+}
+
+export function resolveUserCardPotential(
+  userCard: Pick<UserCard, "card_uuid" | "card_level"> & {
+    potential_bp?: number | null;
+  },
+  rarity: string,
+) {
+  const potentialBp = normalizePotentialBp(userCard.potential_bp || 0);
+  return {
+    potentialBp,
+    potentialGrade: getPotentialGrade(potentialBp),
+    potentialPercent: potentialBp / 100,
+  };
 }

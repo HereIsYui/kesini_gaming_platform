@@ -8,6 +8,7 @@ export type CardDetailRow = {
 export type CardDetailActionKey =
   | "lock"
   | "upgrade"
+  | "reroll"
   | "star"
   | "trade"
   | "recycle"

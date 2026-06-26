@@ -445,6 +445,27 @@ export class CardController {
     }
   }
 
+  @Post("user/cards/:uuid/potential/reroll")
+  @UseGuards(JwtAuthGuard)
+  async rerollUserCardPotential(
+    @Param("uuid") uuid: string,
+    @GetUser() user: UserInfo,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const result = await this.cardService.rerollUserCardPotential(
+        user.uid,
+        uuid,
+      );
+      return ResponseDto.success(result, "洗练成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "洗练失败");
+    }
+  }
+
   /**
    * 获取卡片养成升级预览
    * GET /card/user/cards/:uuid/upgrade-preview

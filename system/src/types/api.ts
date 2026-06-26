@@ -61,7 +61,10 @@ export interface GachaResult {
   cardImage?: string;
   rarity: string;
   cardType: number; // 卡片类型
+  battleRole?: string;
   poolId: number; // 所属卡池
+  potentialGrade?: string;
+  potentialPercent?: number;
   isUp: boolean; // 是否UP卡
   isPity: boolean; // 是否触发保底
   userCardUuid: string; // 用户卡片唯一ID

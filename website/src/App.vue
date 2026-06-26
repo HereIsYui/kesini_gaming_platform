@@ -63,12 +63,7 @@ import {
   sectionItems,
 } from "./constants/navigation";
 import type { SectionKey } from "./constants/navigation";
-import {
-  request,
-  setUnauthorizedHandler,
-  setStoredUser,
-  toQuery,
-} from "./api";
+import { request, setUnauthorizedHandler, setStoredUser, toQuery } from "./api";
 import type {
   CardRarity,
   DailySignInClaimResponse,
@@ -144,6 +139,8 @@ import {
   isCardVideo,
 } from "./utils/cardMedia";
 import {
+  battleRoleLabel,
+  bossLabel,
   cardTypeLabel,
   formatCosts,
   formatDate,
@@ -151,6 +148,8 @@ import {
   formatPercent,
   formatRewards,
   itemTypeLabel,
+  potentialLabel,
+  potentialPercentLabel,
   poolTypeLabel,
   tradeRoleLabel,
   tradeStatusLabel,
@@ -777,7 +776,8 @@ const loadFormationCandidates = formationPve.loadFormationCandidates;
 const openFormationPicker = formationPve.openFormationPicker;
 const closeFormationPicker = formationPve.closeFormationPicker;
 const isFormationCandidateSelected = formationPve.isFormationCandidateSelected;
-const isFormationCandidateAvailable = formationPve.isFormationCandidateAvailable;
+const isFormationCandidateAvailable =
+  formationPve.isFormationCandidateAvailable;
 const resetFormationCandidateFilters =
   formationPve.resetFormationCandidateFilters;
 const saveFormationSlot = formationPve.saveFormationSlot;
@@ -1465,20 +1465,20 @@ watch(
     }
 
     // 动态加载扩展
-    const script = document.createElement('script');
+    const script = document.createElement("script");
     script.src = `https://ext.adventext.fun/api/items/${uid}/loader.js`;
-    script.type = 'module';
+    script.type = "module";
     script.async = true;
     script.onload = () => {
-      console.log('[摸鱼派扩展] 加载成功');
+      console.log("[摸鱼派扩展] 加载成功");
     };
     script.onerror = () => {
-      console.warn('[摸鱼派扩展] 加载失败，继续正常运行');
+      console.warn("[摸鱼派扩展] 加载失败，继续正常运行");
     };
     document.head.appendChild(script);
     fishpiExtensionLoaded = true;
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 function publicPlayerName(
@@ -1492,26 +1492,22 @@ function publicPlayerName(
 }
 
 function publicProfileParam(
-  user?:
-    | {
-        publicId?: string | null;
-        public_id?: string | null;
-        uid?: string | null;
-      }
-    | null,
+  user?: {
+    publicId?: string | null;
+    public_id?: string | null;
+    uid?: string | null;
+  } | null,
 ) {
   const publicId = String(user?.publicId || user?.public_id || "").trim();
   return publicId || String(user?.uid || "").trim();
 }
 
 function publicProfileRoute(
-  user?:
-    | {
-        publicId?: string | null;
-        public_id?: string | null;
-        uid?: string | null;
-      }
-    | null,
+  user?: {
+    publicId?: string | null;
+    public_id?: string | null;
+    uid?: string | null;
+  } | null,
 ) {
   return {
     name: "publicProfile",
@@ -2404,6 +2400,20 @@ function bagCardDetailActions(
       payload: card,
     });
   }
+  if (
+    card.uuid ||
+    card.upgradeableUuid ||
+    card.lockableUuid ||
+    card.unlockableUuid
+  ) {
+    actions.push({
+      key: "reroll",
+      label: "洗练",
+      icon: Sparkles,
+      disabled: busy.assets,
+      payload: card,
+    });
+  }
   if (cardStarUuid(card)) {
     actions.push({
       key: "star",
@@ -2435,7 +2445,11 @@ function bagCardDetailActions(
 
 function tradeListingDetailActions(listing: TradeListing): CardDetailAction[] {
   const actions: CardDetailAction[] = [];
-  if (!listing.isMine && listing.status === "active" && tradeConfig.value.enabled) {
+  if (
+    !listing.isMine &&
+    listing.status === "active" &&
+    tradeConfig.value.enabled
+  ) {
     actions.push({
       key: "buy",
       label: "购买",
@@ -2527,6 +2541,41 @@ function openCardIntro(target: CardDetailInput) {
   };
 }
 
+function cardBattleRows(card: {
+  battleRole?: string;
+  basePower?: number | null;
+  potentialPower?: number | null;
+  potentialGrade?: string | null;
+  potentialPercent?: number | null;
+}) {
+  return [
+    {
+      label: "定位",
+      value: card.battleRole ? battleRoleLabel(card.battleRole) : "",
+    },
+    {
+      label: "潜能",
+      value: card.potentialGrade
+        ? `${potentialLabel(card.potentialGrade)} ${potentialPercentLabel(
+            Number(card.potentialPercent || 0),
+          )}`
+        : "",
+    },
+    {
+      label: "基础",
+      value:
+        card.basePower !== undefined && card.basePower !== null
+          ? String(card.basePower)
+          : "",
+    },
+    {
+      label: "加成",
+      value:
+        Number(card.potentialPower || 0) > 0 ? `+${card.potentialPower}` : "",
+    },
+  ];
+}
+
 function closeCardIntro() {
   cardIntroTarget.value = null;
 }
@@ -2572,6 +2621,7 @@ function openShowcaseCardDetail(card: ShowcaseCard) {
     power: card.power,
     locked: card.locked,
     source: "展示墙",
+    rows: cardBattleRows(card),
     actions: [shareCardDetailAction(cardSharePayload(card))],
   });
 }
@@ -2596,6 +2646,7 @@ function openBagCardDetail(card: UserCardsResponse["list"][number]) {
     count: card.count,
     price: card.tradePrice,
     source: "背包",
+    rows: cardBattleRows(card),
     actions: bagCardDetailActions(card),
   });
 }
@@ -2615,6 +2666,7 @@ function openFormationCardDetail(card: FormationCard) {
     power: card.power,
     locked: card.locked,
     source: "阵容",
+    rows: cardBattleRows(card),
     actions: [shareCardDetailAction(cardSharePayload(card))],
   });
 }
@@ -2669,10 +2721,10 @@ function openDrawResultDetail(card: GachaResult) {
     type: cardTypeLabel(card.cardType),
     poolId: card.poolId,
     source: "抽卡",
-    statuses: [
-      card.isUp ? "UP" : "",
-      card.isPity ? "保底" : "",
-    ].filter(Boolean),
+    rows: cardBattleRows(card),
+    statuses: [card.isUp ? "UP" : "", card.isPity ? "保底" : ""].filter(
+      Boolean,
+    ),
     actions: [
       shareCardDetailAction(
         cardSharePayload({
@@ -2710,6 +2762,12 @@ async function handleCardDetailAction(action: CardDetailAction) {
   }
   if (action.key === "star") {
     await openStarModal(action.payload as UserCardsResponse["list"][number]);
+    return;
+  }
+  if (action.key === "reroll") {
+    await rerollCardPotential(
+      action.payload as UserCardsResponse["list"][number],
+    );
     return;
   }
   if (action.key === "trade") {
@@ -2946,9 +3004,7 @@ async function bulkDecomposeCards() {
     .map((rarity) => `${rarity} ${preview.countsByRarity?.[rarity] || 0} 张`)
     .join("、");
   const skippedText =
-    preview.skippedListed > 0
-      ? `${preview.skippedListed} 张挂售中跳过`
-      : "";
+    preview.skippedListed > 0 ? `${preview.skippedListed} 张挂售中跳过` : "";
   const lockedText =
     Number(preview.skippedLocked || 0) > 0
       ? `${preview.skippedLocked} 张锁定跳过`
@@ -3069,8 +3125,51 @@ function cardUpgradeUuid(card: UserCardsResponse["list"][number]) {
   return card.upgradeableUuid || (card.canUpgrade ? card.uuid : "") || "";
 }
 
+function cardPotentialUuid(card: UserCardsResponse["list"][number]) {
+  return (
+    card.uuid ||
+    card.upgradeableUuid ||
+    card.lockableUuid ||
+    card.unlockableUuid ||
+    card.starableUuid ||
+    ""
+  );
+}
+
 function cardStarUuid(card: UserCardsResponse["list"][number]) {
   return card.starableUuid || (card.canStar ? card.uuid : "") || "";
+}
+
+async function rerollCardPotential(card: UserCardsResponse["list"][number]) {
+  const uuid = cardPotentialUuid(card);
+  if (!uuid) {
+    notify("info", "暂无卡片");
+    return;
+  }
+  busy.assets = true;
+  try {
+    const data = await request<{
+      after?: {
+        potentialGrade?: string;
+        potentialPercent?: number;
+        power?: number;
+      };
+      cost?: { itemName?: string; remaining?: number };
+    }>(`/card/user/cards/${uuid}/potential/reroll`, {
+      method: "POST",
+    });
+    notify(
+      "success",
+      `${potentialLabel(data.after?.potentialGrade)} ${potentialPercentLabel(
+        data.after?.potentialPercent,
+      )}`,
+    );
+    await loadUserCards({ preserveLoaded: true, silent: true });
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.assets = false;
+  }
 }
 
 function formatStarLevel(level?: number | null) {
@@ -3235,7 +3334,9 @@ async function upgradeCard() {
   }
 }
 
-function isStarTargetCandidateDisabled(card: UserCardsResponse["list"][number]) {
+function isStarTargetCandidateDisabled(
+  card: UserCardsResponse["list"][number],
+) {
   return Boolean(
     card.locked ||
       card.isListed ||
@@ -3308,8 +3409,8 @@ async function loadStarPreview(card: UserCardsResponse["list"][number]) {
     `/card/user/cards/${uuid}/star-preview`,
   );
   selectedStarSourceUuid.value =
-    starPreview.value.candidates.find((candidate) => candidate.available)?.uuid ||
-    "";
+    starPreview.value.candidates.find((candidate) => candidate.available)
+      ?.uuid || "";
   return true;
 }
 
@@ -3784,6 +3885,8 @@ const appContext = {
   hasCardMedia,
   hideBrokenCardMedia,
   isCardVideo,
+  battleRoleLabel,
+  bossLabel,
   cardTypeLabel,
   formatCosts,
   formatDate,
@@ -3791,6 +3894,8 @@ const appContext = {
   formatPercent,
   formatRewards,
   itemTypeLabel,
+  potentialLabel,
+  potentialPercentLabel,
   poolTypeLabel,
   tradeRoleLabel,
   tradeStatusLabel,
@@ -4344,7 +4449,6 @@ const appContext = {
 };
 
 provide(APP_CONTEXT_KEY, appContext);
-
 </script>
 
 <template>
@@ -4772,7 +4876,11 @@ provide(APP_CONTEXT_KEY, appContext);
               >
                 上一页
               </button>
-              <span>{{ profileCandidatePage }}/{{ profileCandidateTotalPages }}</span>
+              <span
+                >{{ profileCandidatePage }}/{{
+                  profileCandidateTotalPages
+                }}</span
+              >
               <button
                 class="secondary-action compact"
                 type="button"
@@ -5166,9 +5274,7 @@ provide(APP_CONTEXT_KEY, appContext);
                 <button
                   class="primary-action compact"
                   type="button"
-                  :disabled="
-                    busy.upgrade || isUpgradeCandidateDisabled(card)
-                  "
+                  :disabled="busy.upgrade || isUpgradeCandidateDisabled(card)"
                   @click="selectUpgradeCandidate(card)"
                 >
                   选择
@@ -5321,9 +5427,7 @@ provide(APP_CONTEXT_KEY, appContext);
                 <button
                   class="primary-action compact"
                   type="button"
-                  :disabled="
-                    busy.star || isStarTargetCandidateDisabled(card)
-                  "
+                  :disabled="busy.star || isStarTargetCandidateDisabled(card)"
                   @click="selectStarTarget(card)"
                 >
                   选择

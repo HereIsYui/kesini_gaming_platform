@@ -92,6 +92,7 @@ export interface CardItem {
   card_desc: string;
   card_image?: string;
   card_type: number;
+  battle_role?: string;
   pool: number;
   enabled?: boolean;
   createdAt?: string;
@@ -104,7 +105,10 @@ export interface GachaResult {
   cardImage?: string;
   rarity: CardRarity | string;
   cardType: number;
+  battleRole?: string;
   poolId: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   isUp: boolean;
   isPity: boolean;
   userCardUuid: string;
@@ -156,6 +160,7 @@ export interface UserCardRecord {
   cardImage?: string;
   cardLevel: CardRarity | string;
   cardType: number;
+  battleRole?: string;
   poolId: number;
   count?: number;
   listedCount?: number;
@@ -178,6 +183,10 @@ export interface UserCardRecord {
   cultivationMaxLevel?: number;
   starLevel?: number;
   starMaxLevel?: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power?: number;
   obtainedAt?: string;
   latestObtainedAt?: string;
@@ -211,10 +220,15 @@ export interface ShowcaseCard {
   cardImage?: string;
   cardLevel: CardRarity | string;
   cardType: number;
+  battleRole?: string;
   poolId?: number;
   cultivationLevel: number;
   starLevel?: number;
   starMaxLevel?: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power: number;
   locked: boolean;
   obtainedAt?: string;
@@ -632,7 +646,9 @@ export interface GameVipStatus {
   legacyVip?: GameVipSourceStatus;
   sources: Array<"fishpi" | "badge" | "monthly_card">;
   sourceLabels: string[];
-  sourceTiers?: Partial<Record<"fishpi" | "badge" | "monthly_card", 0 | 1 | 2 | 3 | 4>>;
+  sourceTiers?: Partial<
+    Record<"fishpi" | "badge" | "monthly_card", 0 | 1 | 2 | 3 | 4>
+  >;
   sweepLimit: number;
   tradeFeeDiscount: number;
   dailyRewards: RedeemRewards;
@@ -733,6 +749,10 @@ export interface CardCultivationSnapshot {
   level: number;
   exp: number;
   maxLevel: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power: number;
   starLevel?: number;
   starMaxLevel?: number;
@@ -776,6 +796,10 @@ export interface CardStarSnapshot {
   starLevel: number;
   starMaxLevel: number;
   cultivationLevel: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power: number;
   cardName: string;
   rarity: CardRarity | string;
@@ -789,10 +813,15 @@ export interface CardStarCandidate {
   cardLevel: CardRarity | string;
   rarity: CardRarity | string;
   cardType?: number;
+  battleRole?: string;
   poolId?: number;
   cultivationLevel: number;
   starLevel: number;
   starMaxLevel: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power: number;
   obtainedAt?: string;
   available: boolean;
@@ -838,10 +867,15 @@ export interface FormationCard {
   cardImage?: string;
   cardLevel: CardRarity | string;
   cardType: number;
+  battleRole?: string;
   poolId?: number;
   cultivationLevel: number;
   starLevel?: number;
   starMaxLevel?: number;
+  basePower?: number;
+  potentialPower?: number;
+  potentialGrade?: string;
+  potentialPercent?: number;
   power: number;
   locked: boolean;
   obtainedAt?: string;
@@ -963,6 +997,13 @@ export interface PveStage {
   id: number;
   name: string;
   description?: string;
+  chapter?: number;
+  stageNo?: number;
+  bossType?: "none" | "minor" | "major" | "final";
+  bossName?: string;
+  traits?: string[];
+  traitLabels?: string[];
+  bestStars?: number;
   enemyPower: number;
   recommendedPower: number;
   dailyLimit: number;
@@ -974,6 +1015,7 @@ export interface PveStage {
   rewards: RedeemRewards;
   firstClearRewards: RedeemRewards;
   repeatRewards: RedeemRewards;
+  starRewards?: RedeemRewards | null;
   enabled: boolean;
   sortOrder?: number;
   startsAt?: string | null;
@@ -1004,7 +1046,10 @@ export interface PveChallengeRecord {
   formationPower: number;
   enemyPower: number;
   success: boolean;
-  mode?: "challenge" | "sweep";
+  stars?: number;
+  battleReport?: PveBattleReport | null;
+  formationSnapshot?: unknown | null;
+  mode?: "challenge" | "sweep" | "auto";
   rewards?: RedeemRewards | null;
   createdAt: string;
 }
@@ -1013,10 +1058,28 @@ export interface PveChallengeResult {
   record: PveChallengeRecord;
   stage: PveStage;
   success: boolean;
+  stars?: number;
+  bestStars?: number;
+  battleReport?: PveBattleReport | null;
   rewards?: RedeemRewards | null;
+  starRewards?: RedeemRewards | null;
   formationPower: number;
   enemyPower: number;
   pointAfter?: number;
+}
+
+export interface PveBattleReport {
+  roundLimit: number;
+  rounds: number;
+  playerMaxHp: number;
+  playerHp: number;
+  enemyMaxHp: number;
+  enemyHp: number;
+  events: Array<{
+    round: number;
+    type: "player_attack" | "enemy_attack" | "support_heal";
+    value: number;
+  }>;
 }
 
 export interface PveRecordsResponse {
@@ -1054,9 +1117,11 @@ export interface PveAutoBattleResult {
     stageId: number;
     stageName: string;
     success: boolean;
+    stars?: number;
     formationPower: number;
     enemyPower: number;
     rewards: RedeemRewards | null;
+    starRewards?: RedeemRewards | null;
   }>;
   pointAfter: number;
 }

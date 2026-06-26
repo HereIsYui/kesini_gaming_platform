@@ -771,7 +771,10 @@ option {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 0.44fr) repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: minmax(220px, 0.44fr) repeat(
+      auto-fit,
+      minmax(260px, 1fr)
+    );
   gap: 10px;
   align-items: stretch;
   width: min(1440px, 100%);
@@ -790,7 +793,11 @@ option {
   border-radius: var(--radius);
   color: var(--text);
   background:
-    linear-gradient(135deg, rgba(255, 211, 106, 0.12), rgba(84, 216, 255, 0.06)),
+    linear-gradient(
+      135deg,
+      rgba(255, 211, 106, 0.12),
+      rgba(84, 216, 255, 0.06)
+    ),
     rgba(255, 255, 255, 0.045);
   padding: 12px 14px;
 }
@@ -829,7 +836,11 @@ option {
 :root[data-theme="light"] .announcement-item {
   border-color: rgba(179, 122, 19, 0.22);
   background:
-    linear-gradient(135deg, rgba(255, 211, 106, 0.22), rgba(11, 149, 208, 0.06)),
+    linear-gradient(
+      135deg,
+      rgba(255, 211, 106, 0.22),
+      rgba(11, 149, 208, 0.06)
+    ),
     rgba(255, 255, 255, 0.9);
 }
 
@@ -5116,6 +5127,26 @@ h3 {
   line-height: 1.55;
 }
 
+.pve-trait-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.pve-trait-row span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1;
+}
+
+:root[data-theme="light"] .pve-trait-row span {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
 .pve-power-meter {
   display: grid;
   gap: 8px;
@@ -5174,7 +5205,11 @@ h3 {
 :root[data-theme="light"] .pve-battle-overlay {
   border-color: rgba(35, 66, 108, 0.16);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.86)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(247, 250, 255, 0.86)
+    ),
     rgba(255, 255, 255, 0.82);
   box-shadow: 0 18px 34px rgba(35, 66, 108, 0.16);
 }
@@ -7530,8 +7565,14 @@ h3 {
   transition-duration: 0ms !important;
 }
 
-:root[data-motion="full"] .pve-battle-board.success .pve-battle-side.enemy .pve-battle-hp,
-:root[data-motion="full"] .pve-battle-board.failure .pve-battle-side.player .pve-battle-hp {
+:root[data-motion="full"]
+  .pve-battle-board.success
+  .pve-battle-side.enemy
+  .pve-battle-hp,
+:root[data-motion="full"]
+  .pve-battle-board.failure
+  .pve-battle-side.player
+  .pve-battle-hp {
   animation-duration: 1.25s !important;
   animation-iteration-count: 1 !important;
 }

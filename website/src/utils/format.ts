@@ -6,6 +6,35 @@ export function cardTypeLabel(type?: number) {
   return ["普通", "限定", "纪念", "活动", "隐藏"][Number(type || 0)] || "卡片";
 }
 
+export function battleRoleLabel(role?: string) {
+  const labels: Record<string, string> = {
+    attack: "攻击",
+    guard: "防护",
+    support: "支援",
+    control: "控制",
+  };
+  return labels[String(role || "")] || "攻击";
+}
+
+export function bossLabel(type?: string, name?: string) {
+  const labels: Record<string, string> = {
+    minor: "小Boss",
+    major: "大Boss",
+    final: "最终",
+  };
+  const label = labels[String(type || "none")];
+  return label ? `${label}${name ? ` · ${name}` : ""}` : "";
+}
+
+export function potentialLabel(grade?: string) {
+  return `潜能 ${String(grade || "C").toUpperCase()}`;
+}
+
+export function potentialPercentLabel(value?: number) {
+  const number = Number(value || 0);
+  return `+${Number.isInteger(number) ? number : number.toFixed(1)}%`;
+}
+
 export function itemTypeLabel(type?: number) {
   return (
     ["卡片碎片", "虚拟星穹币", "普通道具", "其他"][Number(type || 0)] || "物品"

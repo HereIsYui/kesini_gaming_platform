@@ -23,7 +23,10 @@ type PveBattlePhase = "idle" | "fighting" | "result";
 type PveBattleResult = {
   stageId: number;
   success: boolean;
+  stars?: number;
   rewards: PveChallengeResult["rewards"];
+  starRewards?: PveChallengeResult["starRewards"];
+  battleReport?: PveChallengeResult["battleReport"];
   formationPower: number;
   enemyPower: number;
 };
@@ -113,7 +116,9 @@ export function useFormationPve(options: UseFormationPveOptions) {
     return formationCandidates.value.filter((card) => {
       if (
         keyword &&
-        !String(card.cardName || "").toLowerCase().includes(keyword)
+        !String(card.cardName || "")
+          .toLowerCase()
+          .includes(keyword)
       ) {
         return false;
       }
@@ -431,7 +436,10 @@ export function useFormationPve(options: UseFormationPveOptions) {
       const result = {
         stageId: Number(stage.id),
         success: data.success,
+        stars: data.stars || 0,
         rewards: data.rewards || null,
+        starRewards: data.starRewards || null,
+        battleReport: data.battleReport || null,
         formationPower: data.formationPower,
         enemyPower: data.enemyPower,
       };

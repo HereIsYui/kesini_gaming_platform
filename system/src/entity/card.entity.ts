@@ -34,6 +34,9 @@ export class CardItem {
   @Column()
   card_type: number;
 
+  @Column({ type: "varchar", length: 16, default: "attack" })
+  battle_role: "attack" | "guard" | "support" | "control";
+
   // 卡片所属卡池id
   @Column()
   pool: number;
