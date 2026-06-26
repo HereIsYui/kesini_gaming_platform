@@ -524,6 +524,14 @@
         </AdminTable>
 
         <ConfigPanel
+          v-else-if="active === 'guild-config'"
+          title="公会配置"
+          description="配置公会参数。"
+          endpoint="/admin/config/guild"
+          :fields="guildConfigFields"
+        />
+
+        <ConfigPanel
           v-else-if="active === 'trade-config'"
           title="交易配置"
           description="配置交易开关、手续费率和价格区间。"
@@ -749,6 +757,7 @@ import {
   dropFields,
   exchangeItemFields,
   exchangeUsageFields,
+  guildConfigFields,
   historyFields,
   inventoryFields,
   launchActivityClaimFields,
@@ -1070,6 +1079,13 @@ const pageDefinitions = computed(
         description: "查看当前被风控封禁的玩家并手动解除。",
         group: "运营工具",
         icon: Files,
+      },
+      {
+        key: "guild-config",
+        label: "公会配置",
+        description: "配置公会参数。",
+        group: "运营工具",
+        icon: Setting,
       },
       {
         key: "trade-config",

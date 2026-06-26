@@ -634,11 +634,22 @@ const guildMessageText = guildSocial.guildMessageText;
 const guildName = guildSocial.guildName;
 const guildDescription = guildSocial.guildDescription;
 const guildAnnouncement = guildSocial.guildAnnouncement;
+const guildSettingsDescription = guildSocial.guildSettingsDescription;
+const guildJoinMode = guildSocial.guildJoinMode;
+const guildDonateAmount = guildSocial.guildDonateAmount;
+const guildActiveTab = guildSocial.guildActiveTab;
 const guildActionBusy = guildSocial.guildActionBusy;
 const currentGuild = guildSocial.currentGuild;
 const guildMembers = guildSocial.guildMembers;
 const guildRows = guildSocial.guildRows;
 const guildRoleLabel = guildSocial.guildRoleLabel;
+const guildCanManage = guildSocial.guildCanManage;
+const guildCanEditSettings = guildSocial.guildCanEditSettings;
+const guildTabs = guildSocial.guildTabs;
+const guildDailyStatus = guildSocial.guildDailyStatus;
+const guildActivityChests = guildSocial.guildActivityChests;
+const guildBoss = guildSocial.guildBoss;
+const guildRequests = guildSocial.guildRequests;
 const guildMessageRows = guildSocial.guildMessageRows;
 const resetGuild = guildSocial.resetGuild;
 const guildRoleName = guildSocial.guildRoleName;
@@ -653,6 +664,19 @@ const createGuild = guildSocial.createGuild;
 const joinGuild = guildSocial.joinGuild;
 const leaveGuild = guildSocial.leaveGuild;
 const saveGuildAnnouncement = guildSocial.saveGuildAnnouncement;
+const saveGuildSettings = guildSocial.saveGuildSettings;
+const checkInGuild = guildSocial.checkInGuild;
+const donateGuild = guildSocial.donateGuild;
+const claimGuildChest = guildSocial.claimGuildChest;
+const challengeGuildBoss = guildSocial.challengeGuildBoss;
+const claimGuildBossReward = guildSocial.claimGuildBossReward;
+const cancelGuildRequest = guildSocial.cancelGuildRequest;
+const approveGuildRequest = guildSocial.approveGuildRequest;
+const rejectGuildRequest = guildSocial.rejectGuildRequest;
+const promoteGuildMember = guildSocial.promoteGuildMember;
+const demoteGuildMember = guildSocial.demoteGuildMember;
+const kickGuildMember = guildSocial.kickGuildMember;
+const transferGuildLeader = guildSocial.transferGuildLeader;
 const sendGuildMessage = guildSocial.sendGuildMessage;
 const pointsLedger = usePointsLedger({
   isAuthed: () => isAuthed.value,
@@ -3903,6 +3927,10 @@ const appContext = {
   guildName,
   guildDescription,
   guildAnnouncement,
+  guildSettingsDescription,
+  guildJoinMode,
+  guildDonateAmount,
+  guildActiveTab,
   guildActionBusy,
   formation,
   formationCandidates,
@@ -4035,6 +4063,13 @@ const appContext = {
   guildMembers,
   guildRows,
   guildRoleLabel,
+  guildCanManage,
+  guildCanEditSettings,
+  guildTabs,
+  guildDailyStatus,
+  guildActivityChests,
+  guildBoss,
+  guildRequests,
   guildMessageRows,
   modalFocusKey,
   toggleUserMenu,
@@ -4181,6 +4216,19 @@ const appContext = {
   joinGuild,
   leaveGuild,
   saveGuildAnnouncement,
+  saveGuildSettings,
+  checkInGuild,
+  donateGuild,
+  claimGuildChest,
+  challengeGuildBoss,
+  claimGuildBossReward,
+  cancelGuildRequest,
+  approveGuildRequest,
+  rejectGuildRequest,
+  promoteGuildMember,
+  demoteGuildMember,
+  kickGuildMember,
+  transferGuildLeader,
   sendGuildMessage,
   loadFormation,
   loadFormationCandidates,

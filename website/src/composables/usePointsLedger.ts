@@ -125,6 +125,10 @@ export const pointSourceOptions = [
   { value: "shop_recycle", label: "商店回收" },
   { value: "player_message", label: "消息奖励" },
   { value: "vip_daily", label: "VIP礼包" },
+  { value: "guild_check_in", label: "公会签到" },
+  { value: "guild_donate", label: "公会捐献" },
+  { value: "guild_boss", label: "公会首领" },
+  { value: "guild_chest", label: "公会活跃箱" },
   { value: "admin_adjust", label: "管理员调整" },
 ] as const;
 
@@ -179,6 +183,14 @@ export function pointMetadataSummary(record: PointLedgerRecord) {
       return `VIP${String(meta("vipLevel") || "-")} · ${String(
         meta("claimDate") || "-",
       )}`;
+    case "guild_check_in":
+      return String(meta("dateKey") || "-");
+    case "guild_donate":
+      return `捐献 ${String(meta("amount") || "-")}`;
+    case "guild_boss":
+      return String(meta("dateKey") || "首领");
+    case "guild_chest":
+      return `活跃 ${String(meta("threshold") || "-")}`;
     case "admin_adjust":
       return `${String(meta("pointBefore") ?? "-")} → ${String(
         meta("pointAfter") ?? "-",

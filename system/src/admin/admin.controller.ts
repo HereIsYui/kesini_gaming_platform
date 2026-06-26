@@ -1687,6 +1687,24 @@ export class AdminController {
     );
   }
 
+  @Get("config/guild")
+  async getGuildConfig(): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.getGuildConfig(),
+      "获取公会配置成功",
+    );
+  }
+
+  @Patch("config/guild")
+  async updateGuildConfig(
+    @Body() body: Record<string, unknown>,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.adminService.updateGuildConfig(body),
+      "更新公会配置成功",
+    );
+  }
+
   @Get("config/pve-risk")
   async getPveRiskConfig(): Promise<ResponseDto<any>> {
     return ResponseDto.success(

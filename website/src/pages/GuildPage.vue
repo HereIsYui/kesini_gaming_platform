@@ -14,6 +14,10 @@ const {
   guildName,
   guildDescription,
   guildAnnouncement,
+  guildSettingsDescription,
+  guildJoinMode,
+  guildDonateAmount,
+  guildActiveTab,
   guildActionBusy,
   busy,
   isAuthed,
@@ -22,6 +26,11 @@ const {
   guildMembers,
   guildRows,
   guildRoleLabel,
+  guildTabs,
+  guildDailyStatus,
+  guildActivityChests,
+  guildBoss,
+  guildRequests,
   guildMessageRows,
   publicProfileRoute,
   guildRoleName,
@@ -34,9 +43,47 @@ const {
   createGuild,
   joinGuild,
   leaveGuild,
-  saveGuildAnnouncement,
+  saveGuildSettings,
+  checkInGuild,
+  donateGuild,
+  claimGuildChest,
+  challengeGuildBoss,
+  claimGuildBossReward,
+  cancelGuildRequest,
+  approveGuildRequest,
+  rejectGuildRequest,
+  promoteGuildMember,
+  demoteGuildMember,
+  kickGuildMember,
+  transferGuildLeader,
   sendGuildMessage,
 } = useAppContext() as Record<string, any>;
+
+const donateOptions = [100, 500, 1000];
+
+function guildExpPercent(guild: any) {
+  const next = Number(guild?.nextLevelExp || 0);
+  if (next <= 0) {
+    return 100;
+  }
+  return Math.max(0, Math.min(100, (Number(guild?.exp || 0) / next) * 100));
+}
+
+function bossHpPercent(boss: any) {
+  const maxHp = Number(boss?.maxHp || 0);
+  if (maxHp <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, (Number(boss?.hp || 0) / maxHp) * 100));
+}
+
+function pendingRequestId(guildId: number) {
+  return (
+    (guildOverview?.pendingRequests || []).find(
+      (request: any) => Number(request.guildId) === Number(guildId),
+    )?.id || 0
+  );
+}
 </script>
 
 <template>
@@ -61,6 +108,15 @@ const {
         <RefreshCw :size="16" :class="{ spin: busy.guild }" />
         刷新
       </button>
+      <button
+        v-if="currentGuild"
+        class="danger-action compact"
+        type="button"
+        :disabled="guildActionBusy === 'leave'"
+        @click="leaveGuild"
+      >
+        退出
+      </button>
     </div>
   </div>
 
@@ -81,72 +137,281 @@ const {
     </button>
   </div>
   <template v-else>
-    <div class="guild-layout">
+    <div v-if="currentGuild" class="guild-layout guild-play-layout">
       <section class="guild-block guild-current">
-        <div class="section-title-row">
+        <div class="guild-hero">
           <div>
-            <p class="eyebrow">我的</p>
-            <h3>{{ currentGuild?.name || "未加入" }}</h3>
+            <strong>{{ currentGuild.name }}</strong>
+            <span>{{ currentGuild.description || "暂无简介" }}</span>
           </div>
-          <button
-            v-if="currentGuild"
-            class="danger-action compact"
-            type="button"
-            :disabled="guildActionBusy === 'leave'"
-            @click="leaveGuild"
-          >
-            退出
-          </button>
+          <small>{{ guildRoleLabel }}</small>
         </div>
 
-        <template v-if="currentGuild">
-          <div class="guild-hero">
-            <div>
-              <strong>{{ currentGuild.name }}</strong>
-              <span>{{ currentGuild.description || "暂无简介" }}</span>
-            </div>
-            <small>{{ guildRoleLabel }}</small>
+        <nav class="guild-tabs" aria-label="公会页签">
+          <button
+            v-for="tab in guildTabs"
+            :key="tab"
+            type="button"
+            :class="{ active: guildActiveTab === tab }"
+            @click="guildActiveTab = tab"
+          >
+            {{ tab }}
+          </button>
+        </nav>
+
+        <section v-if="guildActiveTab === '总览'" class="guild-tab-panel">
+          <div class="guild-stats wide">
+            <article>
+              <small>等级</small>
+              <strong>Lv.{{ currentGuild.level }}</strong>
+            </article>
+            <article>
+              <small>资金</small>
+              <strong>{{ currentGuild.fund }}</strong>
+            </article>
+            <article>
+              <small>成员</small>
+              <strong>{{ currentGuild.memberCount }}/{{ currentGuild.memberLimit }}</strong>
+            </article>
+            <article>
+              <small>今日</small>
+              <strong>{{ guildDailyStatus?.guildActivity || 0 }}</strong>
+            </article>
+            <article>
+              <small>我的</small>
+              <strong>{{ guildDailyStatus?.myContributionToday || 0 }}</strong>
+            </article>
           </div>
+
+          <div class="guild-progress">
+            <span>经验</span>
+            <div>
+              <i :style="{ width: `${guildExpPercent(currentGuild)}%` }"></i>
+            </div>
+            <strong>
+              {{
+                currentGuild.nextLevelExp > 0
+                  ? `${currentGuild.exp}/${currentGuild.nextLevelExp}`
+                  : "已满"
+              }}
+            </strong>
+          </div>
+
           <section class="guild-announcement">
             <div>
               <p class="eyebrow">公告</p>
-              <h3>公会公告</h3>
+              <h3>公告</h3>
             </div>
-            <form
-              v-if="currentGuild.role === 'leader'"
-              class="guild-announcement-form"
-              @submit.prevent="saveGuildAnnouncement"
-            >
-              <textarea
-                v-model="guildAnnouncement"
-                maxlength="160"
-                placeholder="公告"
-              ></textarea>
+            <p>{{ currentGuild.announcement || "暂无公告" }}</p>
+          </section>
+
+          <div class="guild-action-grid">
+            <article>
+              <strong>签到</strong>
+              <span>贡献 +10</span>
               <button
                 class="primary-action compact"
-                type="submit"
-                :disabled="guildActionBusy === 'announcement'"
+                type="button"
+                :disabled="
+                  guildDailyStatus?.checkedIn ||
+                  guildActionBusy === 'check-in'
+                "
+                @click="checkInGuild"
               >
-                保存
+                {{ guildDailyStatus?.checkedIn ? "已签" : "签到" }}
               </button>
-            </form>
-            <p v-else>{{ currentGuild.announcement || "暂无公告" }}</p>
-          </section>
-          <div class="guild-stats">
-            <article>
-              <small>成员</small>
-              <strong>{{ currentGuild.memberCount }}</strong>
             </article>
             <article>
-              <small>身份</small>
-              <strong>{{ guildRoleLabel }}</strong>
+              <strong>捐献</strong>
+              <span>
+                {{ guildDailyStatus?.donateCount || 0 }}/{{
+                  guildDailyStatus?.donateLimit || 3
+                }}
+              </span>
+              <div class="guild-donate-row">
+                <select v-model="guildDonateAmount">
+                  <option
+                    v-for="amount in donateOptions"
+                    :key="amount"
+                    :value="amount"
+                  >
+                    {{ amount }}
+                  </option>
+                </select>
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="
+                    guildActionBusy === 'donate' ||
+                    (guildDailyStatus?.donateCount || 0) >=
+                      (guildDailyStatus?.donateLimit || 3)
+                  "
+                  @click="donateGuild(guildDonateAmount)"
+                >
+                  捐献
+                </button>
+              </div>
             </article>
           </div>
+
+          <div class="guild-chest-list">
+            <article
+              v-for="chest in guildActivityChests"
+              :key="chest.threshold"
+              class="guild-chest"
+            >
+              <div>
+                <strong>{{ chest.threshold }}</strong>
+                <span>星穹币 {{ chest.reward?.points || 0 }}</span>
+              </div>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="
+                  !chest.available ||
+                  chest.claimed ||
+                  guildActionBusy === `chest:${chest.threshold}`
+                "
+                @click="claimGuildChest(chest.threshold)"
+              >
+                {{ chest.claimed ? "已领" : "领取" }}
+              </button>
+            </article>
+          </div>
+        </section>
+
+        <section v-else-if="guildActiveTab === '成员'" class="guild-tab-panel">
+          <div class="guild-member-list">
+            <article
+              v-for="member in guildMembers"
+              :key="member.uid"
+              class="guild-member-row rich"
+            >
+              <span class="friend-avatar">
+                <img
+                  v-if="member.avatar"
+                  :src="member.avatar"
+                  :alt="guildMemberName(member)"
+                />
+                <span v-else>{{ guildMemberInitial(member) }}</span>
+              </span>
+              <div class="friend-info">
+                <strong>{{ guildMemberName(member) }}</strong>
+                <span>
+                  {{ guildRoleName(member.role) }} · 贡献
+                  {{ member.totalContribution || 0 }}
+                </span>
+                <small>{{ formatDate(member.joinedAt) }}</small>
+              </div>
+              <div class="guild-member-actions">
+                <RouterLink
+                  class="secondary-action compact"
+                  :to="publicProfileRoute(member)"
+                >
+                  主页
+                </RouterLink>
+                <button
+                  v-if="currentGuild.role === 'leader' && member.role === 'member'"
+                  class="secondary-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === 'promote'"
+                  @click="promoteGuildMember(member.uid)"
+                >
+                  任命
+                </button>
+                <button
+                  v-if="currentGuild.role === 'leader' && member.role === 'officer'"
+                  class="secondary-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === 'demote'"
+                  @click="demoteGuildMember(member.uid)"
+                >
+                  降职
+                </button>
+                <button
+                  v-if="currentGuild.role === 'leader' && member.role !== 'leader'"
+                  class="secondary-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === 'transfer'"
+                  @click="transferGuildLeader(member.uid)"
+                >
+                  转让
+                </button>
+                <button
+                  v-if="member.canManage"
+                  class="danger-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === 'kick'"
+                  @click="kickGuildMember(member.uid)"
+                >
+                  移出
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section v-else-if="guildActiveTab === '首领'" class="guild-tab-panel">
+          <article v-if="guildBoss" class="guild-boss-card">
+            <header>
+              <div>
+                <p class="eyebrow">首领</p>
+                <h3>{{ guildBoss.name }}</h3>
+              </div>
+              <strong>Lv.{{ guildBoss.level }}</strong>
+            </header>
+            <div class="guild-progress boss">
+              <span>血量</span>
+              <div>
+                <i :style="{ width: `${bossHpPercent(guildBoss)}%` }"></i>
+              </div>
+              <strong>{{ guildBoss.hp }}/{{ guildBoss.maxHp }}</strong>
+            </div>
+            <div class="guild-stats">
+              <article>
+                <small>次数</small>
+                <strong>{{ guildBoss.attempts }}/{{ guildBoss.attemptLimit }}</strong>
+              </article>
+              <article>
+                <small>伤害</small>
+                <strong>{{ guildBoss.myDamage }}</strong>
+              </article>
+            </div>
+            <div class="guild-boss-actions">
+              <button
+                class="primary-action compact"
+                type="button"
+                :disabled="
+                  guildBoss.defeated ||
+                  guildBoss.attempts >= guildBoss.attemptLimit ||
+                  guildActionBusy === 'boss'
+                "
+                @click="challengeGuildBoss"
+              >
+                挑战
+              </button>
+              <button
+                class="secondary-action compact"
+                type="button"
+                :disabled="
+                  !guildBoss.canClaim ||
+                  guildBoss.rewardClaimed ||
+                  guildActionBusy === 'boss-claim'
+                "
+                @click="claimGuildBossReward"
+              >
+                {{ guildBoss.rewardClaimed ? "已领" : "领奖" }}
+              </button>
+            </div>
+          </article>
+        </section>
+
+        <section v-else-if="guildActiveTab === '消息'" class="guild-tab-panel">
           <section class="guild-chat">
             <div class="section-title-row">
               <div>
-                <p class="eyebrow">频道</p>
-                <h3>公会消息</h3>
+                <p class="eyebrow">消息</p>
+                <h3>消息</h3>
               </div>
               <button
                 class="secondary-action compact"
@@ -217,56 +482,87 @@ const {
               </button>
             </form>
           </section>
-          <div class="section-title-row compact-title">
-            <div>
-              <p class="eyebrow">成员</p>
-              <h3>成员</h3>
-            </div>
+        </section>
+
+        <section v-else-if="guildActiveTab === '申请'" class="guild-tab-panel">
+          <div v-if="guildRequests.length === 0" class="empty-mini">
+            暂无申请
           </div>
-          <div class="guild-member-list">
+          <div v-else class="guild-member-list">
             <article
-              v-for="member in guildMembers"
-              :key="member.uid"
-              class="guild-member-row"
+              v-for="request in guildRequests"
+              :key="request.id"
+              class="guild-request-row"
             >
-              <span class="friend-avatar">
-                <img
-                  v-if="member.avatar"
-                  :src="member.avatar"
-                  :alt="guildMemberName(member)"
-                />
-                <span v-else>{{ guildMemberInitial(member) }}</span>
-              </span>
               <div class="friend-info">
-                <strong>{{ guildMemberName(member) }}</strong>
-                <span>{{ guildRoleName(member.role) }}</span>
+                <strong>{{ request.user?.nickname || "玩家" }}</strong>
+                <span>{{ formatDate(request.createdAt) }}</span>
               </div>
-              <RouterLink
-                class="secondary-action compact"
-                :to="publicProfileRoute(member)"
-              >
-                主页
-              </RouterLink>
+              <div class="guild-member-actions">
+                <button
+                  class="primary-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === `approve:${request.id}`"
+                  @click="approveGuildRequest(request.id)"
+                >
+                  批准
+                </button>
+                <button
+                  class="secondary-action compact"
+                  type="button"
+                  :disabled="guildActionBusy === `reject:${request.id}`"
+                  @click="rejectGuildRequest(request.id)"
+                >
+                  拒绝
+                </button>
+              </div>
             </article>
           </div>
-        </template>
+        </section>
 
-        <form
-          v-else
-          class="guild-create-form"
-          @submit.prevent="createGuild"
-        >
+        <section v-else-if="guildActiveTab === '设置'" class="guild-tab-panel">
+          <form class="guild-settings-form" @submit.prevent="saveGuildSettings">
+            <label>
+              <span>简介</span>
+              <input
+                v-model="guildSettingsDescription"
+                maxlength="80"
+                placeholder="简介"
+              />
+            </label>
+            <label>
+              <span>公告</span>
+              <textarea
+                v-model="guildAnnouncement"
+                maxlength="160"
+                placeholder="公告"
+              ></textarea>
+            </label>
+            <label>
+              <span>加入</span>
+              <select v-model="guildJoinMode">
+                <option value="open">自由</option>
+                <option value="approval">审批</option>
+              </select>
+            </label>
+            <button
+              class="primary-action compact"
+              type="submit"
+              :disabled="guildActionBusy === 'settings'"
+            >
+              保存
+            </button>
+          </form>
+        </section>
+      </section>
+    </div>
+
+    <div v-else class="guild-layout">
+      <section class="guild-block guild-current">
+        <form class="guild-create-form" @submit.prevent="createGuild">
           <div class="empty-mini">尚未加入</div>
-          <input
-            v-model="guildName"
-            maxlength="16"
-            placeholder="公会名"
-          />
-          <input
-            v-model="guildDescription"
-            maxlength="60"
-            placeholder="简介"
-          />
+          <input v-model="guildName" maxlength="16" placeholder="公会名" />
+          <input v-model="guildDescription" maxlength="80" placeholder="简介" />
           <button
             class="primary-action"
             type="submit"
@@ -295,26 +591,31 @@ const {
           >
             <div class="guild-row-main">
               <strong>{{ guild.name }}</strong>
-              <span>{{ guild.description || "暂无简介" }}</span>
+              <span>
+                Lv.{{ guild.level }} · {{ guild.memberCount }}/{{
+                  guild.memberLimit
+                }}
+              </span>
             </div>
             <div class="guild-row-meta">
-              <span>{{ guild.memberCount }} 人</span>
+              <span>{{ guild.joinMode === "approval" ? "审批" : "自由" }}</span>
               <button
-                v-if="!currentGuild"
+                v-if="pendingRequestId(guild.id)"
+                class="secondary-action compact"
+                type="button"
+                :disabled="guildActionBusy === `cancel:${pendingRequestId(guild.id)}`"
+                @click="cancelGuildRequest(pendingRequestId(guild.id))"
+              >
+                取消
+              </button>
+              <button
+                v-else
                 class="primary-action compact"
                 type="button"
                 :disabled="guildActionBusy === `join:${guild.id}`"
                 @click="joinGuild(guild.id)"
               >
-                加入
-              </button>
-              <button
-                v-else
-                class="secondary-action compact"
-                type="button"
-                disabled
-              >
-                {{ guild.joined ? "当前" : "已入会" }}
+                {{ guild.joinMode === "approval" ? "申请" : "加入" }}
               </button>
             </div>
           </article>

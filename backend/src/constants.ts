@@ -23,6 +23,7 @@ export type PageKey =
   | "pve-records"
   | "pve-risk-config"
   | "pve-risk-bans"
+  | "guild-config"
   | "trade-config"
   | "trade-listings"
   | "trade-records"
@@ -69,6 +70,7 @@ export const pageKeys: PageKey[] = [
   "pve-records",
   "pve-risk-config",
   "pve-risk-bans",
+  "guild-config",
   "trade-config",
   "trade-listings",
   "trade-records",
@@ -669,6 +671,68 @@ export const pveRiskBanFields: FieldConfig[] = [
   { key: "triggerCount", label: "触发次数", readonly: true },
   { key: "bannedAt", label: "封禁时间", readonly: true, minWidth: 180 },
   { key: "remainSeconds", label: "剩余封禁", readonly: true },
+];
+
+export const guildConfigFields: FieldConfig[] = [
+  { key: "enabled", label: "公会状态", type: "boolean", defaultValue: true },
+  { key: "maxLevel", label: "最高等级", type: "number", defaultValue: 10 },
+  {
+    key: "baseMemberLimit",
+    label: "初始人数",
+    type: "number",
+    defaultValue: 20,
+  },
+  {
+    key: "memberLimitPerLevel",
+    label: "升级扩容",
+    type: "number",
+    defaultValue: 2,
+  },
+  {
+    key: "checkInReward",
+    label: "签到奖励",
+    type: "json",
+    fullWidth: true,
+    defaultValue: { points: 10 },
+  },
+  {
+    key: "donateOptions",
+    label: "捐献档位",
+    type: "json",
+    fullWidth: true,
+    defaultValue: [100, 500, 1000],
+  },
+  {
+    key: "dailyDonateLimit",
+    label: "每日捐献",
+    type: "number",
+    defaultValue: 3,
+  },
+  {
+    key: "bossAttempts",
+    label: "首领次数",
+    type: "number",
+    defaultValue: 3,
+  },
+  {
+    key: "bossHpBase",
+    label: "首领基础",
+    type: "number",
+    defaultValue: 50000,
+  },
+  {
+    key: "bossHpPerLevel",
+    label: "首领成长",
+    type: "number",
+    defaultValue: 20000,
+  },
+  {
+    key: "activeChestThresholds",
+    label: "宝箱门槛",
+    type: "json",
+    fullWidth: true,
+    defaultValue: [100, 300, 600],
+  },
 ];
 
 export const tradeListingFields: FieldConfig[] = [

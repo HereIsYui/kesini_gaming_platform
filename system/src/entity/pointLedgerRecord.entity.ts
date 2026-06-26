@@ -22,6 +22,10 @@ export type PointLedgerSourceType =
   | "shop_recycle"
   | "player_message"
   | "vip_daily"
+  | "guild_check_in"
+  | "guild_donate"
+  | "guild_boss"
+  | "guild_chest"
   | "admin_adjust";
 
 @Entity()

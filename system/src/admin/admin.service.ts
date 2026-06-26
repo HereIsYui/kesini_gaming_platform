@@ -87,6 +87,12 @@ import {
   PVE_RISK_CONFIG_KEY,
   type PveRiskConfig,
 } from "src/pve/pve-risk-config";
+import {
+  DEFAULT_GUILD_CONFIG,
+  GUILD_CONFIG_KEY,
+  GuildConfig,
+  normalizeGuildConfig,
+} from "src/guilds/guild.config";
 
 export interface PageQuery {
   page?: number;
@@ -1478,6 +1484,39 @@ export class AdminService {
     row.description = "月卡配置";
     await repository.save(row);
     return flattenMonthlyCardConfig(config);
+  }
+
+  async getGuildConfig(): Promise<GuildConfig> {
+    const row = await this.mustSystemConfigRepository().findOne({
+      where: { key: GUILD_CONFIG_KEY },
+    });
+    if (!row?.value) {
+      return { ...DEFAULT_GUILD_CONFIG };
+    }
+    try {
+      return normalizeGuildConfig(JSON.parse(row.value));
+    } catch {
+      return { ...DEFAULT_GUILD_CONFIG };
+    }
+  }
+
+  async updateGuildConfig(body: unknown): Promise<GuildConfig> {
+    const repository = this.mustSystemConfigRepository();
+    const config = normalizeGuildConfig(body);
+    let row = await repository.findOne({
+      where: { key: GUILD_CONFIG_KEY },
+    });
+    if (!row) {
+      row = repository.create({
+        key: GUILD_CONFIG_KEY,
+        description: "公会配置",
+        value: "",
+      });
+    }
+    row.value = JSON.stringify(config);
+    row.description = "公会配置";
+    await repository.save(row);
+    return config;
   }
 
   // ---- PVE 挑战风控 ----

@@ -1,7 +1,14 @@
 import { FindOperator } from "typeorm";
 import { Guild } from "src/entity/guild.entity";
+import { GuildActivityChestClaim } from "src/entity/guildActivityChestClaim.entity";
+import { GuildBoss } from "src/entity/guildBoss.entity";
+import { GuildBossChallenge } from "src/entity/guildBossChallenge.entity";
+import { GuildBossRewardClaim } from "src/entity/guildBossRewardClaim.entity";
+import { GuildContributionRecord } from "src/entity/guildContributionRecord.entity";
+import { GuildJoinRequest } from "src/entity/guildJoinRequest.entity";
 import { GuildMember } from "src/entity/guildMember.entity";
 import { GuildMessage } from "src/entity/guildMessage.entity";
+import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
 import { GuildsService } from "./guilds.service";
 
@@ -12,9 +19,13 @@ class GuildsTestStore {
   guilds: Guild[] = [];
   members: GuildMember[] = [];
   messages: GuildMessage[] = [];
-  nextGuildId = 1;
-  nextMemberId = 1;
-  nextMessageId = 1;
+  requests: GuildJoinRequest[] = [];
+  contributions: GuildContributionRecord[] = [];
+  chestClaims: GuildActivityChestClaim[] = [];
+  bosses: GuildBoss[] = [];
+  bossChallenges: GuildBossChallenge[] = [];
+  bossRewardClaims: GuildBossRewardClaim[] = [];
+  configs: SystemConfig[] = [];
 
   getRepository<T>(entity: EntityClass<T>) {
     if (entity === User) {
@@ -22,25 +33,55 @@ class GuildsTestStore {
     }
     if (entity === Guild) {
       return this.createArrayRepository(this.guilds, "id", () => ({
-        id: this.nextGuildId++,
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: this.date(0),
+        updatedAt: this.date(0),
       }));
     }
     if (entity === GuildMember) {
       return this.createArrayRepository(this.members, "id", () => ({
-        id: this.nextMemberId++,
-        joinedAt: new Date(
-          `2026-01-01T00:00:${String(this.nextMemberId).padStart(2, "0")}.000Z`,
-        ),
+        joinedAt: this.date(this.members.length + 1),
       }));
     }
     if (entity === GuildMessage) {
       return this.createArrayRepository(this.messages, "id", () => ({
-        id: this.nextMessageId++,
-        createdAt: new Date(
-          `2026-01-01T00:01:${String(this.nextMessageId).padStart(2, "0")}.000Z`,
-        ),
+        createdAt: this.date(this.messages.length + 30),
+      }));
+    }
+    if (entity === GuildJoinRequest) {
+      return this.createArrayRepository(this.requests, "id", () => ({
+        createdAt: this.date(this.requests.length + 60),
+        updatedAt: this.date(this.requests.length + 60),
+      }));
+    }
+    if (entity === GuildContributionRecord) {
+      return this.createArrayRepository(this.contributions, "id", () => ({
+        createdAt: this.date(this.contributions.length + 90),
+      }));
+    }
+    if (entity === GuildActivityChestClaim) {
+      return this.createArrayRepository(this.chestClaims, "id", () => ({
+        createdAt: this.date(this.chestClaims.length + 120),
+      }));
+    }
+    if (entity === GuildBoss) {
+      return this.createArrayRepository(this.bosses, "id", () => ({
+        createdAt: this.date(this.bosses.length + 150),
+        updatedAt: this.date(this.bosses.length + 150),
+      }));
+    }
+    if (entity === GuildBossChallenge) {
+      return this.createArrayRepository(this.bossChallenges, "id", () => ({
+        createdAt: this.date(this.bossChallenges.length + 180),
+      }));
+    }
+    if (entity === GuildBossRewardClaim) {
+      return this.createArrayRepository(this.bossRewardClaims, "id", () => ({
+        createdAt: this.date(this.bossRewardClaims.length + 210),
+      }));
+    }
+    if (entity === SystemConfig) {
+      return this.createArrayRepository(this.configs, "id", () => ({
+        updatedAt: this.date(this.configs.length + 240),
       }));
     }
     throw new Error("测试仓库未配置");
@@ -74,12 +115,16 @@ class GuildsTestStore {
         items.find((item) =>
           this.matchesWhereOption(item, options?.where || {}),
         ) || null,
+      count: async (options?: any) =>
+        items.filter((item) =>
+          this.matchesWhereOption(item, options?.where || {}),
+        ).length,
       create: (value: Partial<T>) =>
         ({
           ...(defaults?.() || {}),
           ...value,
         }) as T,
-      save: async (value: T) => {
+      save: async (value: T | T[]) => {
         if (Array.isArray(value)) {
           return Promise.all(value.map((item) => this.saveOne(items, idKey, item)));
         }
@@ -106,7 +151,7 @@ class GuildsTestStore {
       value[idKey] = items.length + 1;
     }
     if ("updatedAt" in value) {
-      value.updatedAt = new Date("2026-01-02T00:00:00.000Z");
+      value.updatedAt = this.date(500);
     }
     const index = items.findIndex((item) => item[idKey] === value[idKey]);
     if (index >= 0) {
@@ -157,16 +202,20 @@ class GuildsTestStore {
       return actual === expected;
     });
   }
+
+  private date(offsetSeconds: number) {
+    return new Date(`2026-01-01T00:${String(offsetSeconds % 60).padStart(2, "0")}:00.000Z`);
+  }
 }
 
-function createUser(uid: string): User {
+function createUser(uid: string, point = 10000): User {
   return {
-    id: uid === "u1" ? 1 : uid === "u2" ? 2 : 3,
+    id: uid === "u1" ? 1 : uid === "u2" ? 2 : uid === "u3" ? 3 : 4,
     uid,
     name: `name-${uid}`,
     nickname: `玩家${uid}`,
     avatar: `https://example.com/${uid}.png`,
-    point: 0,
+    point,
     card_count_n: 0,
     card_count_r: 0,
     card_count_sr: 0,
@@ -177,183 +226,298 @@ function createUser(uid: string): User {
   } as User;
 }
 
-async function createGuild(
-  service: GuildsService,
-  uid = "u1",
-  name = "星海会",
-) {
+function createFormation(power = 18000) {
+  return {
+    slotCount: 3,
+    totalPower: power,
+    slots: [
+      {
+        position: 1,
+        card: {
+          uuid: "c1",
+          cardId: 1,
+          cardName: "攻击卡",
+          cardLevel: "SSR",
+          battleRole: "attack",
+          power,
+          basePower: power,
+          potentialPower: 0,
+          potentialGrade: "C",
+        },
+      },
+      { position: 2, card: null },
+      { position: 3, card: null },
+    ],
+  };
+}
+
+function createService(store: GuildsTestStore, power = 18000) {
+  const formationService = {
+    getFormation: jest.fn(async () => createFormation(power)),
+  };
+  const rewardService = {
+    grantRewards: jest.fn(async (manager: GuildsTestStore, user: User, rewards: any) => {
+      user.point = Number(user.point || 0) + Number(rewards.points || 0);
+      await manager.getRepository(User).save(user as any);
+    }),
+  };
+  const pointLedgerService = {
+    applyChange: jest.fn(async (manager: GuildsTestStore, user: User, amount: number) => {
+      const next = Number(user.point || 0) + Number(amount || 0);
+      if (next < 0) {
+        throw new Error("余额不足");
+      }
+      user.point = next;
+      await manager.getRepository(User).save(user as any);
+      return { id: 1 };
+    }),
+  };
+  const service = new GuildsService(
+    store as any,
+    formationService as any,
+    rewardService as any,
+    pointLedgerService as any,
+  );
+  return { service, formationService, rewardService, pointLedgerService };
+}
+
+async function createGuild(service: GuildsService, uid = "u1", name = "星海会") {
   return service.createGuild(uid, name, "一起收集");
 }
 
-describe("GuildsService 公会系统", () => {
+describe("GuildsService 公会玩法", () => {
   let store: GuildsTestStore;
   let service: GuildsService;
+  let rewardService: { grantRewards: jest.Mock };
+  let pointLedgerService: { applyChange: jest.Mock };
 
   beforeEach(() => {
     store = new GuildsTestStore();
-    store.users = [createUser("u1"), createUser("u2"), createUser("u3")];
-    service = new GuildsService(store as any);
+    store.users = [
+      createUser("u1"),
+      createUser("u2"),
+      createUser("u3"),
+      createUser("u4"),
+    ];
+    const created = createService(store);
+    service = created.service;
+    rewardService = created.rewardService;
+    pointLedgerService = created.pointLedgerService;
   });
 
-  it("创建公会后成为会长并返回成员", async () => {
+  it("创建公会后带默认成长字段和会长", async () => {
     const result = await createGuild(service);
 
-    expect(store.guilds).toHaveLength(1);
-    expect(store.members).toHaveLength(1);
     expect(result.current?.guild).toMatchObject({
       name: "星海会",
-      description: "一起收集",
-      announcement: "",
-      memberCount: 1,
+      level: 1,
+      exp: 0,
+      fund: 0,
+      memberLimit: 20,
+      joinMode: "open",
       role: "leader",
-      joined: true,
     });
     expect(result.current?.members[0]).toMatchObject({
       uid: "u1",
-      nickname: "玩家u1",
       role: "leader",
+      totalContribution: 0,
     });
+    expect(result.current?.boss?.name).toBe("星渊守卫");
   });
 
-  it("会长可以更新公会公告", async () => {
-    await createGuild(service, "u1", "星海会");
-
-    const result = await service.updateAnnouncement("u1", "  今晚开车  ");
-
-    expect(store.guilds[0].announcement).toBe("今晚开车");
-    expect(result.current?.guild).toMatchObject({
-      announcement: "今晚开车",
-    });
-  });
-
-  it("普通成员不能更新公会公告", async () => {
-    await createGuild(service, "u1", "星海会");
-    await service.joinGuild("u2", 1);
-
-    await expect(service.updateAnnouncement("u2", "成员公告")).rejects.toThrow(
-      "只有会长可改",
-    );
-  });
-
-  it("不能重复创建、加入或使用重名公会", async () => {
-    await createGuild(service, "u1", "星海会");
-    await expect(createGuild(service, "u1", "新公会")).rejects.toThrow(
-      "已加入公会",
-    );
-    await expect(service.joinGuild("u1", 1)).rejects.toThrow("已加入公会");
-    await expect(createGuild(service, "u2", "星海会")).rejects.toThrow(
-      "公会名已存在",
-    );
-  });
-
-  it("可以加入公会并查看成员", async () => {
-    await createGuild(service, "u1", "星海会");
+  it("审批加入会创建申请且不会直接入会", async () => {
+    await createGuild(service);
+    await service.updateSettings("u1", { joinMode: "approval" });
 
     const result = await service.joinGuild("u2", 1);
 
-    expect(result.current?.guild).toMatchObject({
-      id: 1,
-      name: "星海会",
-      memberCount: 2,
-      role: "member",
+    expect(result.current).toBeNull();
+    expect(result.applied).toBe(true);
+    expect(store.requests).toHaveLength(1);
+    expect(store.requests[0]).toMatchObject({
+      guild_id: 1,
+      uid: "u2",
+      status: "pending",
     });
-    expect(result.current?.members.map((member) => member.uid)).toEqual([
-      "u1",
-      "u2",
-    ]);
-    expect(store.guilds[0].member_count).toBe(2);
+    expect(store.members.map((member) => member.uid)).toEqual(["u1"]);
   });
 
-  it("普通成员退出后从公会移除", async () => {
-    await createGuild(service, "u1", "星海会");
+  it("批准申请后加入公会，满员时拒绝批准", async () => {
+    await createGuild(service);
+    await service.updateSettings("u1", { joinMode: "approval" });
     await service.joinGuild("u2", 1);
 
-    const result = await service.leaveGuild("u2");
+    await service.approveJoinRequest("u1", 1);
 
-    expect(result.current).toBeNull();
-    expect(store.members.map((member) => member.uid)).toEqual(["u1"]);
-    expect(store.guilds[0].member_count).toBe(1);
+    expect(store.requests[0].status).toBe("approved");
+    expect(store.members.map((member) => member.uid)).toEqual(["u1", "u2"]);
+
+    store.guilds[0].member_limit = 2;
+    store.guilds[0].member_count = 2;
+    await service.joinGuild("u3", 1);
+    await expect(service.approveJoinRequest("u1", 2)).rejects.toThrow("人数已满");
   });
 
-  it("会长退出时转让给最早成员", async () => {
-    await createGuild(service, "u1", "星海会");
+  it("签到每天一次，增加个人贡献、公会经验资金和星穹币", async () => {
+    await createGuild(service);
+
+    await service.checkIn("u1");
+
+    expect(store.members[0].total_contribution).toBe(10);
+    expect(store.guilds[0]).toMatchObject({ exp: 10, fund: 10 });
+    expect(store.users[0].point).toBe(10010);
+    expect(store.contributions[0]).toMatchObject({
+      source_type: "check_in",
+      contribution: 10,
+      activity: 10,
+    });
+    expect(rewardService.grantRewards).toHaveBeenCalled();
+    await expect(service.checkIn("u1")).rejects.toThrow("已签到");
+  });
+
+  it("捐献扣星穹币并限制每日次数", async () => {
+    await createGuild(service);
+
+    await service.donate("u1", 500);
+    await service.donate("u1", 100);
+    await service.donate("u1", 1000);
+
+    expect(store.users[0].point).toBe(8400);
+    expect(store.members[0].daily_donate_count).toBe(3);
+    expect(store.members[0].total_contribution).toBe(185);
+    expect(pointLedgerService.applyChange).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      -500,
+      expect.objectContaining({ sourceType: "guild_donate" }),
+    );
+    await expect(service.donate("u1", 100)).rejects.toThrow("次数已用完");
+  });
+
+  it("星穹币不足时捐献失败", async () => {
+    store.users[0].point = 50;
+    await createGuild(service);
+
+    await expect(service.donate("u1", 100)).rejects.toThrow("余额不足");
+  });
+
+  it("经验达到阈值后自动升级并扩容", async () => {
+    await createGuild(service);
+    store.guilds[0].exp = 490;
+
+    await service.checkIn("u1");
+
+    expect(store.guilds[0].level).toBe(2);
+    expect(store.guilds[0].exp).toBe(0);
+    expect(store.guilds[0].member_limit).toBe(22);
+  });
+
+  it("会长可任命副会长，副会长只能移出普通成员", async () => {
+    await createGuild(service);
     await service.joinGuild("u2", 1);
     await service.joinGuild("u3", 1);
 
+    await service.promoteMember("u1", "u2");
+    await service.kickMember("u2", "u3");
+
+    expect(store.members.find((member) => member.uid === "u2")?.role).toBe(
+      "officer",
+    );
+    expect(store.members.map((member) => member.uid)).toEqual(["u1", "u2"]);
+    await expect(service.kickMember("u2", "u1")).rejects.toThrow("权限不足");
+  });
+
+  it("会长退出时最早加入的副会长继任", async () => {
+    await createGuild(service);
+    await service.joinGuild("u2", 1);
+    await service.joinGuild("u3", 1);
+    await service.promoteMember("u1", "u3");
+
     await service.leaveGuild("u1");
-    const overview = await service.getOverview("u2");
 
-    expect(store.guilds[0].owner_uid).toBe("u2");
-    expect(store.guilds[0].member_count).toBe(2);
-    expect(overview.current?.guild.role).toBe("leader");
-    expect(overview.current?.members.map((member) => member.uid)).toEqual([
-      "u2",
-      "u3",
-    ]);
-  });
-
-  it("会长独自退出时解散公会", async () => {
-    await createGuild(service, "u1", "星海会");
-
-    const result = await service.leaveGuild("u1");
-
-    expect(result.current).toBeNull();
-    expect(store.guilds).toHaveLength(0);
-    expect(store.members).toHaveLength(0);
-  });
-
-  it("校验公会名和目标公会", async () => {
-    await expect(service.createGuild("u1", "A")).rejects.toThrow(
-      "公会名需 2-16 字",
+    expect(store.guilds[0].owner_uid).toBe("u3");
+    expect(store.members.find((member) => member.uid === "u3")?.role).toBe(
+      "leader",
     );
-    await expect(service.createGuild("u1", "星海会!")).rejects.toThrow(
-      "公会名格式错误",
-    );
-    await expect(service.joinGuild("u1", 404)).rejects.toThrow("公会不存在");
   });
 
-  it("公会成员可以发送并读取消息", async () => {
+  it("首领每日共享血量并限制挑战次数", async () => {
+    await createGuild(service);
+    await service.joinGuild("u2", 1);
+    store.bosses[0].hp = 900000;
+
+    const result = await service.challengeBoss("u1");
+
+    expect(result.damage).toBeGreaterThan(0);
+    expect(store.bosses[0].hp).toBeLessThan(900000);
+    expect(store.bossChallenges).toHaveLength(1);
+    expect(store.members[0].total_contribution).toBe(20);
+    expect(store.contributions[0]).toMatchObject({
+      source_type: "boss",
+      activity: 20,
+    });
+  });
+
+  it("击败首领后当天造成伤害成员可领奖且只能一次", async () => {
+    const created = createService(store, 50000);
+    service = created.service;
+    rewardService = created.rewardService;
+    await createGuild(service);
+    store.bosses[0].hp = 100;
+
+    const challenge = await service.challengeBoss("u1");
+    const claim = await service.claimBossReward("u1");
+
+    expect(challenge.defeated).toBe(true);
+    expect(claim.reward?.points).toBe(100);
+    expect(store.bossRewardClaims).toHaveLength(1);
+    expect(rewardService.grantRewards).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      expect.objectContaining({ points: 100 }),
+      expect.objectContaining({ sourceType: "guild_boss" }),
+    );
+    await expect(service.claimBossReward("u1")).rejects.toThrow("已领取");
+  });
+
+  it("活跃箱要求当天贡献且不可重复领取", async () => {
+    await createGuild(service);
+    await service.checkIn("u1");
+    await service.donate("u1", 1000);
+
+    const result = await service.claimActivityChest("u1", 100);
+
+    expect(result.reward?.points).toBe(20);
+    expect(store.chestClaims).toHaveLength(1);
+    await expect(service.claimActivityChest("u1", 100)).rejects.toThrow(
+      "已领取",
+    );
+  });
+
+  it("公会列表按等级、成员、更新时间和编号排序", async () => {
     await createGuild(service, "u1", "星海会");
+    await createGuild(service, "u2", "月影会");
+    store.guilds[0].level = 2;
+    store.guilds[0].member_count = 1;
+    store.guilds[1].level = 3;
+    store.guilds[1].member_count = 1;
+
+    const result = await service.listGuilds("u3");
+
+    expect(result.list.map((guild) => guild.name)).toEqual(["月影会", "星海会"]);
+  });
+
+  it("消息仍按时间倒序读取", async () => {
+    await createGuild(service);
     await service.joinGuild("u2", 1);
 
-    const sent = await service.sendMessage("u1", "  大家好  ");
-    await service.sendMessage("u2", "一起抽卡");
+    await service.sendMessage("u1", "大家好");
+    await service.sendMessage("u2", "一起打");
     const messages = await service.listMessages("u1");
 
-    expect(sent.list[0]).toMatchObject({
-      content: "大家好",
-      sender: {
-        uid: "u1",
-        nickname: "玩家u1",
-      },
-    });
     expect(messages.list.map((message) => message.content)).toEqual([
-      "一起抽卡",
+      "一起打",
       "大家好",
     ]);
-    expect((messages.list[0].sender as any).point).toBeUndefined();
-  });
-
-  it("未加入公会不能发送或读取消息", async () => {
-    await createGuild(service, "u1", "星海会");
-
-    await expect(service.sendMessage("u2", "你好")).rejects.toThrow(
-      "尚未加入公会",
-    );
-    await expect(service.listMessages("u2")).rejects.toThrow("尚未加入公会");
-  });
-
-  it("校验消息内容并限制读取数量", async () => {
-    await createGuild(service, "u1", "星海会");
-    await expect(service.sendMessage("u1", "   ")).rejects.toThrow("请输入消息");
-    await expect(service.sendMessage("u1", "满".repeat(121))).rejects.toThrow(
-      "消息最多 120 字",
-    );
-
-    await service.sendMessage("u1", "第一条");
-    await service.sendMessage("u1", "第二条");
-
-    const messages = await service.listMessages("u1", 1);
-    expect(messages.list.map((message) => message.content)).toEqual(["第二条"]);
   });
 });

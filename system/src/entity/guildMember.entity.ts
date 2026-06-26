@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
 } from "typeorm";
 
-export type GuildMemberRole = "leader" | "member";
+export type GuildMemberRole = "leader" | "officer" | "member";
 
 @Entity()
 @Index("IDX_guild_member_uid", ["uid"], { unique: true })
@@ -24,6 +24,21 @@ export class GuildMember {
 
   @Column({ type: "varchar", length: 20, default: "member" })
   role: GuildMemberRole;
+
+  @Column({ type: "int", default: 0 })
+  total_contribution: number;
+
+  @Column({ type: "int", default: 0 })
+  weekly_contribution: number;
+
+  @Column({ type: "varchar", length: 10, nullable: true })
+  last_check_in_date?: string | null;
+
+  @Column({ type: "varchar", length: 10, nullable: true })
+  last_donate_date?: string | null;
+
+  @Column({ type: "int", default: 0 })
+  daily_donate_count: number;
 
   @CreateDateColumn()
   joinedAt: Date;

@@ -3,12 +3,16 @@ import { computed, ref, type Component } from "vue";
 import { request } from "../api";
 import type {
   CreateGuildRequest,
+  GuildBossChallengeResult,
+  GuildJoinMode,
   GuildMember,
   GuildMessage,
   GuildMessagesResponse,
   GuildOverviewResponse,
+  GuildRewardResult,
   GuildSummary,
   SaveGuildAnnouncementRequest,
+  SaveGuildSettingsRequest,
   SendGuildMessageRequest,
 } from "../types";
 import type { FeedbackType } from "./useFeedback";
@@ -50,6 +54,10 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
   const guildName = ref("");
   const guildDescription = ref("");
   const guildAnnouncement = ref("");
+  const guildSettingsDescription = ref("");
+  const guildJoinMode = ref<GuildJoinMode>("open");
+  const guildDonateAmount = ref<100 | 500 | 1000>(100);
+  const guildActiveTab = ref("总览");
   const guildActionBusy = ref("");
 
   const currentGuild = computed(
@@ -62,7 +70,33 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     () => guildOverview.value?.guilds || [],
   );
   const guildRoleLabel = computed(() =>
-    currentGuild.value?.role === "leader" ? "会长" : "成员",
+    guildRoleName(currentGuild.value?.role),
+  );
+  const guildCanManage = computed(() =>
+    ["leader", "officer"].includes(String(currentGuild.value?.role || "")),
+  );
+  const guildCanEditSettings = computed(
+    () => currentGuild.value?.role === "leader",
+  );
+  const guildTabs = computed(() => {
+    const tabs = ["总览", "成员", "首领", "消息"];
+    if (guildCanManage.value) {
+      tabs.push("申请");
+    }
+    if (guildCanEditSettings.value) {
+      tabs.push("设置");
+    }
+    return tabs;
+  });
+  const guildDailyStatus = computed(
+    () => guildOverview.value?.current?.dailyStatus || null,
+  );
+  const guildActivityChests = computed(
+    () => guildOverview.value?.current?.activityChests || [],
+  );
+  const guildBoss = computed(() => guildOverview.value?.current?.boss || null);
+  const guildRequests = computed(
+    () => guildOverview.value?.current?.requests || [],
   );
   const guildMessageRows = computed(() =>
     guildMessages.value
@@ -85,11 +119,21 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildName.value = "";
     guildDescription.value = "";
     guildAnnouncement.value = "";
+    guildSettingsDescription.value = "";
+    guildJoinMode.value = "open";
+    guildDonateAmount.value = 100;
+    guildActiveTab.value = "总览";
     guildActionBusy.value = "";
   }
 
   function guildRoleName(role?: string | null) {
-    return role === "leader" ? "会长" : "成员";
+    if (role === "leader") {
+      return "会长";
+    }
+    if (role === "officer") {
+      return "副会长";
+    }
+    return "成员";
   }
 
   function guildMemberName(member: GuildMember) {
@@ -120,8 +164,10 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildError.value = "";
     try {
       guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
-      guildAnnouncement.value =
-        guildOverview.value.current?.guild.announcement || "";
+      syncGuildForms();
+      if (!guildTabs.value.includes(guildActiveTab.value)) {
+        guildActiveTab.value = "总览";
+      }
       if (!guildOverview.value.current) {
         guildMessages.value = [];
         guildMessageError.value = "";
@@ -130,6 +176,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       guildOverview.value = null;
       guildError.value = options.getErrorMessage(error);
       guildAnnouncement.value = "";
+      guildSettingsDescription.value = "";
       if (showError) {
         options.notify("error", guildError.value);
       }
@@ -189,8 +236,8 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       });
       guildName.value = "";
       guildDescription.value = "";
-      guildAnnouncement.value =
-        guildOverview.value.current?.guild.announcement || "";
+      syncGuildForms();
+      guildActiveTab.value = "总览";
       options.notify("success", "已创建");
       await loadGuildMessages(false);
     } catch (error) {
@@ -207,9 +254,8 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
         `/guilds/${guildId}/join`,
         { method: "POST" },
       );
-      guildAnnouncement.value =
-        guildOverview.value.current?.guild.announcement || "";
-      options.notify("success", "已加入");
+      syncGuildForms();
+      options.notify("success", guildOverview.value.current ? "已加入" : "已申请");
       await loadGuildMessages(false);
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -241,6 +287,9 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       guildMessageError.value = "";
       guildMessageText.value = "";
       guildAnnouncement.value = "";
+      guildSettingsDescription.value = "";
+      guildJoinMode.value = "open";
+      guildActiveTab.value = "总览";
       options.notify("success", "已退出");
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -265,8 +314,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
           body: JSON.stringify(payload),
         },
       );
-      guildAnnouncement.value =
-        guildOverview.value.current?.guild.announcement || "";
+      syncGuildForms();
       options.notify("success", "已保存");
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -298,6 +346,204 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     }
   }
 
+  async function saveGuildSettings() {
+    if (!currentGuild.value) {
+      return;
+    }
+    guildActionBusy.value = "settings";
+    try {
+      const payload: SaveGuildSettingsRequest = {
+        description: guildSettingsDescription.value.trim(),
+        announcement: guildAnnouncement.value.trim(),
+        joinMode: guildJoinMode.value,
+      };
+      guildOverview.value = await request<GuildOverviewResponse>(
+        "/guilds/me/settings",
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        },
+      );
+      syncGuildForms();
+      options.notify("success", "已保存");
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function checkInGuild() {
+    await runOverviewAction("check-in", "/guilds/me/check-in", "已签到");
+  }
+
+  async function donateGuild(amount = guildDonateAmount.value) {
+    guildActionBusy.value = "donate";
+    try {
+      guildOverview.value = await request<GuildOverviewResponse>(
+        "/guilds/me/donate",
+        {
+          method: "POST",
+          body: JSON.stringify({ amount }),
+        },
+      );
+      syncGuildForms();
+      options.notify("success", "已捐献");
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function claimGuildChest(threshold: number) {
+    guildActionBusy.value = `chest:${threshold}`;
+    try {
+      const data = await request<GuildRewardResult>(
+        `/guilds/me/chests/${threshold}/claim`,
+        { method: "POST" },
+      );
+      guildOverview.value = data.overview;
+      syncGuildForms();
+      options.notify("success", "已领取");
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function challengeGuildBoss() {
+    guildActionBusy.value = "boss";
+    try {
+      const data = await request<GuildBossChallengeResult>(
+        "/guilds/me/boss/challenge",
+        { method: "POST" },
+      );
+      guildOverview.value = data.overview;
+      syncGuildForms();
+      options.notify("success", `伤害 ${data.damage || 0}`);
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function claimGuildBossReward() {
+    guildActionBusy.value = "boss-claim";
+    try {
+      const data = await request<GuildRewardResult>("/guilds/me/boss/claim", {
+        method: "POST",
+      });
+      guildOverview.value = data.overview;
+      syncGuildForms();
+      options.notify("success", "已领取");
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function cancelGuildRequest(requestId: number) {
+    guildActionBusy.value = `cancel:${requestId}`;
+    try {
+      guildOverview.value = await request<GuildOverviewResponse>(
+        `/guilds/requests/${requestId}`,
+        { method: "DELETE" },
+      );
+      syncGuildForms();
+      options.notify("success", "已取消");
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  async function approveGuildRequest(requestId: number) {
+    await runOverviewAction(
+      `approve:${requestId}`,
+      `/guilds/requests/${requestId}/approve`,
+      "已批准",
+    );
+  }
+
+  async function rejectGuildRequest(requestId: number) {
+    await runOverviewAction(
+      `reject:${requestId}`,
+      `/guilds/requests/${requestId}/reject`,
+      "已拒绝",
+    );
+  }
+
+  async function promoteGuildMember(uid: string) {
+    await runOverviewAction("promote", `/guilds/members/${uid}/promote`, "已任命");
+  }
+
+  async function demoteGuildMember(uid: string) {
+    await runOverviewAction("demote", `/guilds/members/${uid}/demote`, "已降职");
+  }
+
+  async function kickGuildMember(uid: string) {
+    const confirmed = await options.askConfirm({
+      title: "移出成员",
+      message: "成员将离开公会",
+      confirmText: "移出",
+      variant: "danger",
+      icon: LogOut,
+    });
+    if (!confirmed) {
+      return;
+    }
+    await runOverviewAction("kick", `/guilds/members/${uid}/kick`, "已移出");
+  }
+
+  async function transferGuildLeader(uid: string) {
+    const confirmed = await options.askConfirm({
+      title: "转让会长",
+      message: "会长身份将转移",
+      confirmText: "转让",
+      variant: "danger",
+      icon: LogOut,
+    });
+    if (!confirmed) {
+      return;
+    }
+    await runOverviewAction(
+      "transfer",
+      `/guilds/members/${uid}/transfer`,
+      "已转让",
+    );
+  }
+
+  async function runOverviewAction(
+    busyKey: string,
+    endpoint: string,
+    successText: string,
+  ) {
+    guildActionBusy.value = busyKey;
+    try {
+      guildOverview.value = await request<GuildOverviewResponse>(endpoint, {
+        method: "POST",
+      });
+      syncGuildForms();
+      options.notify("success", successText);
+    } catch (error) {
+      options.notify("error", options.getErrorMessage(error));
+    } finally {
+      guildActionBusy.value = "";
+    }
+  }
+
+  function syncGuildForms() {
+    const guild = guildOverview.value?.current?.guild || null;
+    guildAnnouncement.value = guild?.announcement || "";
+    guildSettingsDescription.value = guild?.description || "";
+    guildJoinMode.value = guild?.joinMode || "open";
+  }
+
   return {
     guildOverview,
     guildError,
@@ -307,11 +553,22 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildName,
     guildDescription,
     guildAnnouncement,
+    guildSettingsDescription,
+    guildJoinMode,
+    guildDonateAmount,
+    guildActiveTab,
     guildActionBusy,
     currentGuild,
     guildMembers,
     guildRows,
     guildRoleLabel,
+    guildCanManage,
+    guildCanEditSettings,
+    guildTabs,
+    guildDailyStatus,
+    guildActivityChests,
+    guildBoss,
+    guildRequests,
     guildMessageRows,
     resetGuild,
     guildRoleName,
@@ -326,6 +583,19 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     joinGuild,
     leaveGuild,
     saveGuildAnnouncement,
+    saveGuildSettings,
+    checkInGuild,
+    donateGuild,
+    claimGuildChest,
+    challengeGuildBoss,
+    claimGuildBossReward,
+    cancelGuildRequest,
+    approveGuildRequest,
+    rejectGuildRequest,
+    promoteGuildMember,
+    demoteGuildMember,
+    kickGuildMember,
+    transferGuildLeader,
     sendGuildMessage,
   };
 }

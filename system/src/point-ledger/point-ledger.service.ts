@@ -36,6 +36,10 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   shop_recycle: "商店回收",
   player_message: "消息奖励",
   vip_daily: "VIP礼包",
+  guild_check_in: "公会签到",
+  guild_donate: "公会捐献",
+  guild_boss: "公会首领",
+  guild_chest: "公会活跃箱",
   admin_adjust: "管理员调整",
 };
 

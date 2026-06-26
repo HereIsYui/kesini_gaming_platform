@@ -313,7 +313,8 @@ export interface SendFriendRequestRequest {
   uid: string;
 }
 
-export type GuildMemberRole = "leader" | "member";
+export type GuildMemberRole = "leader" | "officer" | "member";
+export type GuildJoinMode = "open" | "approval";
 
 export interface GuildSummary {
   id: number;
@@ -321,8 +322,15 @@ export interface GuildSummary {
   description?: string;
   announcement?: string;
   memberCount: number;
+  level: number;
+  exp: number;
+  nextLevelExp: number;
+  fund: number;
+  memberLimit: number;
+  joinMode: GuildJoinMode;
   role?: GuildMemberRole | null;
   joined?: boolean;
+  applied?: boolean;
   createdAt?: string | null;
 }
 
@@ -332,12 +340,89 @@ export interface GuildMember {
   nickname: string;
   avatar: string;
   role: GuildMemberRole;
+  totalContribution: number;
+  weeklyContribution: number;
+  canManage?: boolean;
   joinedAt?: string;
+}
+
+export interface GuildDailyStatus {
+  dateKey: string;
+  checkedIn: boolean;
+  donateCount: number;
+  donateLimit: number;
+  bossAttempts: number;
+  bossAttemptLimit: number;
+  myContributionToday: number;
+  guildActivity: number;
+  contributedToday: boolean;
+}
+
+export interface GuildActivityChest {
+  threshold: number;
+  reward: RedeemRewards;
+  unlocked: boolean;
+  claimed: boolean;
+  available: boolean;
+}
+
+export interface GuildJoinRequest {
+  id: number;
+  guildId: number;
+  status: "pending" | "approved" | "rejected" | "canceled";
+  createdAt?: string;
+  user?: FriendUser;
+}
+
+export interface GuildBoss {
+  id: number;
+  name: string;
+  dateKey: string;
+  level: number;
+  maxHp: number;
+  hp: number;
+  defeated: boolean;
+  defeatedAt?: string | null;
+  attempts: number;
+  attemptLimit: number;
+  myDamage: number;
+  reward: RedeemRewards;
+  rewardClaimed: boolean;
+  canClaim: boolean;
+}
+
+export interface GuildBossChallengeResult {
+  battleReport: PveBattleReport;
+  damage: number;
+  reward?: RedeemRewards | null;
+  defeated: boolean;
+  boss: GuildBoss;
+  overview: GuildOverviewResponse;
+}
+
+export interface GuildRewardResult {
+  reward?: RedeemRewards | null;
+  overview: GuildOverviewResponse;
+}
+
+export interface GuildContributionRecord {
+  id: number;
+  guildId: number;
+  uid: string;
+  dateKey: string;
+  sourceType: string;
+  contribution: number;
+  activity: number;
+  createdAt?: string;
 }
 
 export interface GuildCurrent {
   guild: GuildSummary;
   members: GuildMember[];
+  dailyStatus?: GuildDailyStatus;
+  activityChests?: GuildActivityChest[];
+  boss?: GuildBoss | null;
+  requests?: GuildJoinRequest[];
 }
 
 export interface GuildMessage {
@@ -350,6 +435,7 @@ export interface GuildMessage {
 export interface GuildOverviewResponse {
   current: GuildCurrent | null;
   guilds: GuildSummary[];
+  pendingRequests?: GuildJoinRequest[];
 }
 
 export interface GuildMessagesResponse {
@@ -371,6 +457,12 @@ export interface SendGuildMessageRequest {
 
 export interface SaveGuildAnnouncementRequest {
   announcement: string;
+}
+
+export interface SaveGuildSettingsRequest {
+  description?: string;
+  announcement?: string;
+  joinMode?: GuildJoinMode;
 }
 
 export interface UserCatalogItem {
@@ -1077,6 +1169,10 @@ export type PointLedgerSourceType =
   | "shop_recycle"
   | "player_message"
   | "vip_daily"
+  | "guild_check_in"
+  | "guild_donate"
+  | "guild_boss"
+  | "guild_chest"
   | "admin_adjust";
 
 export interface PointLedgerRecord {

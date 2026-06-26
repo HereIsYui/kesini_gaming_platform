@@ -29,6 +29,21 @@ export class Guild {
   @Column({ default: 1 })
   member_count: number;
 
+  @Column({ type: "int", default: 1 })
+  level: number;
+
+  @Column({ type: "int", default: 0 })
+  exp: number;
+
+  @Column({ type: "int", default: 0 })
+  fund: number;
+
+  @Column({ type: "varchar", length: 16, default: "open" })
+  join_mode: "open" | "approval";
+
+  @Column({ type: "int", default: 20 })
+  member_limit: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

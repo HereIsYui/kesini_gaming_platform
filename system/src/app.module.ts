@@ -35,6 +35,12 @@ import { UserShowcaseCard } from "./entity/userShowcaseCard.entity";
 import { UserFriend } from "./entity/userFriend.entity";
 import { UserSocialActivity } from "./entity/userSocialActivity.entity";
 import { Guild } from "./entity/guild.entity";
+import { GuildActivityChestClaim } from "./entity/guildActivityChestClaim.entity";
+import { GuildBoss } from "./entity/guildBoss.entity";
+import { GuildBossChallenge } from "./entity/guildBossChallenge.entity";
+import { GuildBossRewardClaim } from "./entity/guildBossRewardClaim.entity";
+import { GuildContributionRecord } from "./entity/guildContributionRecord.entity";
+import { GuildJoinRequest } from "./entity/guildJoinRequest.entity";
 import { GuildMember } from "./entity/guildMember.entity";
 import { GuildMessage } from "./entity/guildMessage.entity";
 import { Announcement } from "./entity/announcement.entity";
@@ -110,6 +116,12 @@ import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
       UserFriend,
       UserSocialActivity,
       Guild,
+      GuildActivityChestClaim,
+      GuildBoss,
+      GuildBossChallenge,
+      GuildBossRewardClaim,
+      GuildContributionRecord,
+      GuildJoinRequest,
       GuildMember,
       GuildMessage,
       Announcement,
