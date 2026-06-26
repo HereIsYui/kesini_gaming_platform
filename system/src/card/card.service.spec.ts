@@ -22,6 +22,7 @@ import { TradeListing } from "src/entity/tradeListing.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
+import type { CardRarity } from "src/types/api";
 
 describe("CardService 抽卡核心规则", () => {
   let service: CardService;
@@ -146,7 +147,7 @@ describe("CardService 抽卡核心规则", () => {
     expect((service as any).getRequiredFragments("SSR")).toBe(1000);
   });
 
-  it("未配置卡片碎片时优先使用全局默认碎片", async () => {
+  it("分解未配置卡片碎片时优先使用全局默认碎片", async () => {
     const defaultFragment = {
       id: 2,
       drop_name: "默认碎片",
@@ -165,13 +166,13 @@ describe("CardService 抽卡核心规则", () => {
     };
 
     await expect(
-      (service as any).findFragmentItem(manager, {
+      (service as any).findCardDecomposeFragmentItem(manager, {
         drop_item: "",
       } as CardItem),
     ).resolves.toBe(defaultFragment);
   });
 
-  it("卡片单独配置碎片时优先使用卡片配置", async () => {
+  it("分解时卡片单独配置碎片优先使用卡片配置", async () => {
     const configuredFragment = {
       id: 9,
       drop_name: "专属碎片",
@@ -188,14 +189,14 @@ describe("CardService 抽卡核心规则", () => {
     };
 
     await expect(
-      (service as any).findFragmentItem(manager, {
+      (service as any).findCardDecomposeFragmentItem(manager, {
         drop_item: "9",
       } as CardItem),
     ).resolves.toBe(configuredFragment);
     expect(dropRepository.findOne).not.toHaveBeenCalled();
   });
 
-  it("禁用的默认碎片不会作为默认配置使用", async () => {
+  it("分解时禁用的默认碎片不会作为默认配置使用", async () => {
     const fallbackFragment = {
       id: 3,
       drop_name: "备用碎片",
@@ -214,10 +215,37 @@ describe("CardService 抽卡核心规则", () => {
     };
 
     await expect(
-      (service as any).findFragmentItem(manager, {
+      (service as any).findCardDecomposeFragmentItem(manager, {
         drop_item: "",
       } as CardItem),
     ).resolves.toBe(fallbackFragment);
+  });
+
+  it("按稀有度找碎片时兼容旧名称并优先标准名称", async () => {
+    const spacedFragment = {
+      id: 1,
+      drop_name: "R 碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const standardFragment = {
+      id: 9,
+      drop_name: "R碎片",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    };
+    const dropRepository = {
+      find: jest.fn().mockResolvedValue([spacedFragment, standardFragment]),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(dropRepository),
+    };
+
+    await expect(
+      (service as any).findRarityFragmentItem(manager, "R"),
+    ).resolves.toBe(standardFragment);
   });
 });
 
@@ -1121,6 +1149,7 @@ describe("CardService 玩家图鉴", () => {
       cards?: Partial<CardItem>[];
       userCards?: Partial<UserCard>[];
       fragmentCount?: number;
+      fragmentCounts?: Partial<Record<CardRarity, number>>;
     } = {},
   ) {
     const cards = (
@@ -1149,13 +1178,49 @@ describe("CardService 玩家图鉴", () => {
         },
       ]
     ) as CardItem[];
-    const fragment = {
+    const defaultFragment = {
       id: 5,
       drop_name: "通用碎片",
       drop_type: 0,
       disabled: false,
       default_fragment: true,
     } as DropItem;
+    const rarityFragments = [
+      {
+        id: 11,
+        drop_name: "N碎片",
+        drop_type: 0,
+        disabled: false,
+        default_fragment: false,
+      },
+      {
+        id: 12,
+        drop_name: "R碎片",
+        drop_type: 0,
+        disabled: false,
+        default_fragment: false,
+      },
+      {
+        id: 13,
+        drop_name: "SR碎片",
+        drop_type: 0,
+        disabled: false,
+        default_fragment: false,
+      },
+      {
+        id: 14,
+        drop_name: "SSR碎片",
+        drop_type: 0,
+        disabled: false,
+        default_fragment: false,
+      },
+    ] as DropItem[];
+    const fragmentRarityByItemId = new Map<number, CardRarity>([
+      [11, "N"],
+      [12, "R"],
+      [13, "SR"],
+      [14, "SSR"],
+    ]);
     const cardRepository = createRepository({
       find: jest.fn(async (options?: any) => {
         const where = options?.where || {};
@@ -1180,16 +1245,31 @@ describe("CardService 玩家图鉴", () => {
       find: jest.fn().mockResolvedValue(options.userCards || []),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([]),
+      find: jest.fn(async ({ where }) =>
+        rarityFragments.filter((item) => {
+          if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
+            return false;
+          }
+          if (where?.disabled !== undefined && item.disabled !== where.disabled) {
+            return false;
+          }
+          return true;
+        }),
+      ),
       findOne: jest.fn(async ({ where }) =>
-        where.default_fragment === true ? fragment : null,
+        where.default_fragment === true ? defaultFragment : null,
       ),
     });
     const inventoryRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue({
-        user_id: 10,
-        item_id: 5,
-        num: options.fragmentCount ?? 200,
+      findOne: jest.fn(async ({ where }) => {
+        const rarity = fragmentRarityByItemId.get(Number(where.item_id));
+        return {
+          user_id: 10,
+          item_id: where.item_id,
+          num: rarity
+            ? options.fragmentCounts?.[rarity] ?? options.fragmentCount ?? 200
+            : options.fragmentCount ?? 200,
+        };
       }),
     });
     const manager = {
@@ -1218,6 +1298,7 @@ describe("CardService 玩家图鉴", () => {
 
   it("按卡片和稀有度返回当前卡池图鉴状态", async () => {
     const { service } = createCatalogService({
+      fragmentCounts: { N: 200, R: 0, SSR: 999 },
       userCards: [
         { uid: "u1", card_id: "1", card_level: "R", delete_flag: false },
         { uid: "u1", card_id: "1", card_level: "R", delete_flag: false },
@@ -1245,6 +1326,14 @@ describe("CardService 玩家图鉴", () => {
         canSynthesize: false,
       }),
     );
+    expect(result.list.find((item) => item.key === "1:SSR")).toEqual(
+      expect.objectContaining({
+        collected: false,
+        requiredFragments: 1000,
+        fragmentCount: 999,
+        canSynthesize: false,
+      }),
+    );
     expect(result.list.find((item) => item.key === "2:UR")).toEqual(
       expect.objectContaining({
         collected: true,
@@ -1261,12 +1350,13 @@ describe("CardService 玩家图鉴", () => {
 
     expect(cardRepository.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { pool: 2, enabled: true },
+        where: { pool: 2 },
+        order: { id: "ASC" },
       }),
     );
   });
 
-  it("图鉴不展示下架卡片", async () => {
+  it("图鉴展示当前卡池下架卡片", async () => {
     const { service } = createCatalogService({
       cards: [
         {
@@ -1296,11 +1386,17 @@ describe("CardService 玩家图鉴", () => {
 
     const result = await service.getUserCatalog("u1", 2);
 
-    expect(result.total).toBe(1);
+    expect(result.total).toBe(2);
     expect(result.list[0]).toEqual(
       expect.objectContaining({
         key: "1:N",
         card: expect.objectContaining({ card_name: "上架卡" }),
+      }),
+    );
+    expect(result.list[1]).toEqual(
+      expect.objectContaining({
+        key: "2:UR",
+        card: expect.objectContaining({ card_name: "下架卡" }),
       }),
     );
   });
@@ -1320,6 +1416,7 @@ describe("CardService 碎片合成", () => {
   function createSynthesisService(
     cardPatch: Partial<CardItem> = {},
     inventoryPatch: Partial<UserInventory> = {},
+    inventoryCounts: Partial<Record<CardRarity | "default", number>> = {},
   ) {
     const card = {
       id: 1,
@@ -1331,34 +1428,69 @@ describe("CardService 碎片合成", () => {
       pool: 1,
       ...cardPatch,
     } as CardItem;
-    const fragment = {
+    const rarityFragments = [
+      { id: 11, drop_name: "N碎片", rarity: "N" },
+      { id: 12, drop_name: "R碎片", rarity: "R" },
+      { id: 13, drop_name: "SR碎片", rarity: "SR" },
+      { id: 14, drop_name: "SSR碎片", rarity: "SSR" },
+    ].map(
+      (item) =>
+        ({
+          id: item.id,
+          drop_name: item.drop_name,
+          drop_type: 0,
+          disabled: false,
+          default_fragment: false,
+          rarity: item.rarity,
+        }) as DropItem & { rarity: CardRarity },
+    );
+    const defaultFragment = {
       id: 5,
       drop_name: "通用碎片",
       drop_type: 0,
       disabled: false,
       default_fragment: true,
     } as DropItem;
-    const inventory = {
-      id: 1,
-      user_id: 1,
-      item_id: 5,
-      num: 1000,
-      ...inventoryPatch,
-    } as UserInventory;
+    const inventoryCountForItem = (item: DropItem & { rarity?: CardRarity }) =>
+      item.id === defaultFragment.id
+        ? inventoryCounts.default ?? inventoryPatch.num ?? 1000
+        : inventoryCounts[item.rarity as CardRarity] ?? inventoryPatch.num ?? 1000;
+    const inventories = new Map<number, UserInventory>(
+      [defaultFragment, ...rarityFragments].map((item, index) => [
+        item.id,
+        {
+          id: index + 1,
+          user_id: 1,
+          item_id: item.id,
+          ...inventoryPatch,
+          num: inventoryCountForItem(item),
+        } as UserInventory,
+      ]),
+    );
     const cardRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(card),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([]),
+      find: jest.fn(async ({ where }) =>
+        rarityFragments.filter((item) => {
+          if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
+            return false;
+          }
+          if (where?.disabled !== undefined && item.disabled !== where.disabled) {
+            return false;
+          }
+          return true;
+        }),
+      ),
       findOne: jest.fn(async ({ where }) =>
-        where.default_fragment === true ? fragment : null,
+        where.default_fragment === true ? defaultFragment : null,
       ),
     });
     const userRepository = createRepository({
       findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
     });
     const inventoryRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue(inventory),
+      findOne: jest.fn(async ({ where }) => inventories.get(Number(where.item_id)) || null),
     });
     const userCardRepository = createRepository();
     const repositories = new Map<any, any>([
@@ -1389,17 +1521,19 @@ describe("CardService 碎片合成", () => {
 
     return {
       service,
+      inventories,
       inventoryRepository,
       userCardRepository,
     };
   }
 
   it("指定 N 合成时扣 80 碎片并发 N 卡", async () => {
-    const { service, inventoryRepository, userCardRepository } =
+    const { service, inventories, inventoryRepository, userCardRepository } =
       createSynthesisService();
 
     const result = await service.synthesizeCard("u1", 1, "N");
 
+    expect(inventories.get(11)?.num).toBe(920);
     expect(inventoryRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ num: 920 }),
     );
@@ -1414,12 +1548,37 @@ describe("CardService 碎片合成", () => {
     );
   });
 
-  it("指定 SR 合成时扣 320 碎片并发 SR 卡", async () => {
+  it("通用碎片足够但 N 碎片不足时不能合成", async () => {
     const { service, inventoryRepository, userCardRepository } =
+      createSynthesisService({}, {}, { default: 1000, N: 79 });
+
+    await expect(service.synthesizeCard("u1", 1, "N")).rejects.toThrow(
+      "碎片不足，需要80个碎片，当前拥有79个",
+    );
+    expect(inventoryRepository.save).not.toHaveBeenCalled();
+    expect(userCardRepository.save).not.toHaveBeenCalled();
+  });
+
+  it("卡片配置分解碎片时合成仍扣稀有度碎片", async () => {
+    const { service, inventories } = createSynthesisService(
+      { drop_item: "5" },
+      {},
+      { default: 1000, N: 80 },
+    );
+
+    await service.synthesizeCard("u1", 1, "N");
+
+    expect(inventories.get(11)?.num).toBe(0);
+    expect(inventories.get(5)?.num).toBe(1000);
+  });
+
+  it("指定 SR 合成时扣 320 碎片并发 SR 卡", async () => {
+    const { service, inventories, inventoryRepository, userCardRepository } =
       createSynthesisService();
 
     const result = await service.synthesizeCard("u1", 1, "SR");
 
+    expect(inventories.get(13)?.num).toBe(680);
     expect(inventoryRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({ num: 680 }),
     );
@@ -1430,6 +1589,27 @@ describe("CardService 碎片合成", () => {
       expect.objectContaining({
         card_level: "SR",
         fragments_used: 320,
+      }),
+    );
+  });
+
+  it("指定 SSR 合成时扣 1000 碎片并发 SSR 卡", async () => {
+    const { service, inventories, inventoryRepository, userCardRepository } =
+      createSynthesisService();
+
+    const result = await service.synthesizeCard("u1", 1, "SSR");
+
+    expect(inventories.get(14)?.num).toBe(0);
+    expect(inventoryRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ item_id: 14, num: 0 }),
+    );
+    expect(userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_id: "1", card_level: "SSR" }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        card_level: "SSR",
+        fragments_used: 1000,
       }),
     );
   });
@@ -1619,7 +1799,9 @@ describe("CardService 卡片养成", () => {
 
   function createUpgradeService(options: {
     userCard?: Partial<UserCard> | null;
+    card?: Partial<CardItem>;
     inventory?: Partial<UserInventory> | null;
+    inventoryCounts?: Partial<Record<CardRarity | "default", number>>;
     activeListing?: Partial<TradeListing> | null;
   } = {}) {
     const userCard = options.userCard === null
@@ -1645,23 +1827,62 @@ describe("CardService 卡片养成", () => {
       card_type: 0,
       pool: 1,
       drop_item: "",
+      ...options.card,
     } as CardItem;
-    const fragment = {
+    const defaultFragment = {
       id: 5,
       drop_name: "通用碎片",
       drop_type: 0,
       disabled: false,
       default_fragment: true,
     } as DropItem;
-    const inventory = options.inventory === null
-      ? null
-      : ({
-          id: 1,
+    const rarityFragments = [
+      { id: 11, drop_name: "N碎片", rarity: "N" },
+      { id: 12, drop_name: "R碎片", rarity: "R" },
+      { id: 13, drop_name: "SR碎片", rarity: "SR" },
+      { id: 14, drop_name: "SSR碎片", rarity: "SSR" },
+    ].map(
+      (item) =>
+        ({
+          id: item.id,
+          drop_name: item.drop_name,
+          drop_type: 0,
+          disabled: false,
+          default_fragment: false,
+          rarity: item.rarity,
+        }) as DropItem & { rarity: CardRarity },
+    );
+    const inventoryCountForItem = (item: DropItem & { rarity?: CardRarity }) =>
+      item.id === defaultFragment.id
+        ? options.inventoryCounts?.default ?? options.inventory?.num ?? 100
+        : options.inventoryCounts?.[item.rarity as CardRarity] ??
+          options.inventory?.num ??
+          100;
+    const inventories = new Map<number, UserInventory>(
+      [defaultFragment, ...rarityFragments].map((item, index) => [
+        item.id,
+        {
+          id: index + 1,
           user_id: 1,
-          item_id: 5,
-          num: 100,
-          ...options.inventory,
-        } as UserInventory);
+          item_id: item.id,
+          ...(options.inventory || {}),
+          num: inventoryCountForItem(item),
+        } as UserInventory,
+      ]),
+    );
+    const effectiveRarity = (userCard?.card_level || card.card_level || "R") as CardRarity;
+    const rarityFragmentIds: Record<Exclude<CardRarity, "UR">, number> = {
+      N: 11,
+      R: 12,
+      SR: 13,
+      SSR: 14,
+    };
+    const inventoryItemId =
+      effectiveRarity === "UR" ? 5 : rarityFragmentIds[effectiveRarity];
+    const inventory =
+      options.inventory === null
+        ? null
+        : inventories.get(inventoryItemId);
     const userCardRepository = createRepository({
       findOne: jest.fn().mockResolvedValue(userCard),
     });
@@ -1672,13 +1893,27 @@ describe("CardService 卡片养成", () => {
       findOne: jest.fn().mockResolvedValue({ id: 1, uid: "u1" }),
     });
     const dropRepository = createRepository({
-      find: jest.fn().mockResolvedValue([]),
+      find: jest.fn(async ({ where }) =>
+        rarityFragments.filter((item) => {
+          if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
+            return false;
+          }
+          if (where?.disabled !== undefined && item.disabled !== where.disabled) {
+            return false;
+          }
+          return true;
+        }),
+      ),
       findOne: jest.fn(async ({ where }) =>
-        where.default_fragment === true ? fragment : null,
+        where.default_fragment === true ? defaultFragment : null,
       ),
     });
     const inventoryRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue(inventory),
+      findOne: jest.fn(async ({ where }) =>
+        options.inventory === null
+          ? null
+          : inventories.get(Number(where.item_id)) || null,
+      ),
     });
     const listingRepository = createRepository({
       find: jest
@@ -1719,6 +1954,7 @@ describe("CardService 卡片养成", () => {
       service,
       userCard,
       inventory,
+      inventories,
       userCardRepository,
       inventoryRepository,
     };
@@ -1746,7 +1982,7 @@ describe("CardService 卡片养成", () => {
         before: expect.objectContaining({ level: 2, power: 202 }),
         after: expect.objectContaining({ level: 3, power: 224 }),
         cost: expect.objectContaining({
-          itemName: "通用碎片",
+          itemName: "R碎片",
           num: 16,
           remaining: 84,
         }),
@@ -1764,8 +2000,71 @@ describe("CardService 卡片养成", () => {
     expect(result).toEqual(
       expect.objectContaining({
         canUpgrade: false,
-        unavailableReason: "碎片不足，需要16个通用碎片，当前拥有1个",
+        unavailableReason: "碎片不足，需要16个R碎片，当前拥有1个",
         cost: expect.objectContaining({ owned: 1, num: 16 }),
+      }),
+    );
+  });
+
+  it("卡片配置分解碎片时养成仍扣稀有度碎片", async () => {
+    const { service, inventories } = createUpgradeService({
+      card: { drop_item: "5" },
+      inventoryCounts: { default: 100, R: 16 },
+    });
+
+    await service.upgradeUserCard("u1", "card-uuid");
+
+    expect(inventories.get(12)?.num).toBe(0);
+    expect(inventories.get(5)?.num).toBe(100);
+  });
+
+  it.each([
+    ["N", 11, 8],
+    ["SR", 13, 32],
+    ["SSR", 14, 60],
+  ] as Array<[CardRarity, number, number]>)(
+    "%s 养成消耗对应稀有度碎片",
+    async (rarity, itemId, cost) => {
+      const { service, inventories, inventoryRepository } = createUpgradeService({
+        userCard: { card_level: rarity, cultivation_level: 2, cultivation_exp: 0 },
+        card: { card_level: rarity },
+        inventoryCounts: { [rarity]: cost },
+      });
+
+      const result = await service.upgradeUserCard("u1", "card-uuid");
+
+      expect(inventories.get(itemId)?.num).toBe(0);
+      expect(inventoryRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ item_id: itemId, num: 0 }),
+      );
+      expect(result.cost).toEqual(
+        expect.objectContaining({
+          itemName: `${rarity}碎片`,
+          num: cost,
+          remaining: 0,
+        }),
+      );
+    },
+  );
+
+  it("UR 养成消耗默认碎片", async () => {
+    const { service, inventories } = createUpgradeService({
+      userCard: { card_level: "UR", cultivation_level: 2, cultivation_exp: 50 },
+      card: { card_level: "UR" },
+      inventoryCounts: { default: 100 },
+    });
+
+    const result = await service.upgradeUserCard("u1", "card-uuid");
+
+    expect(inventories.get(5)?.num).toBe(0);
+    expect(result).toEqual(
+      expect.objectContaining({
+        rarity: "UR",
+        cost: expect.objectContaining({
+          itemName: "通用碎片",
+          num: 100,
+          remaining: 0,
+        }),
       }),
     );
   });

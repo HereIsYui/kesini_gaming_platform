@@ -13,7 +13,7 @@
               <el-select
                 :model-value="drop.itemId"
                 filterable
-                placeholder="沿用卡片或默认碎片"
+                placeholder="按卡片产出"
                 class="drop-item-select"
                 @update:model-value="
                   updateDrop(toRarity(row.rarity), Number(index), {
@@ -21,7 +21,7 @@
                   })
                 "
               >
-                <el-option label="沿用卡片配置 / 默认碎片" :value="0" />
+                <el-option label="按卡片产出" :value="0" />
                 <el-option
                   v-for="item in fragmentOptions"
                   :key="String(item.value)"
@@ -79,7 +79,7 @@
       </el-table-column>
     </el-table>
     <small class="form-help">
-      未选择碎片时，分解会优先使用卡片自身的分解产出；没有卡片配置时使用默认碎片。
+      未选碎片时按卡片产出。
     </small>
   </div>
 </template>

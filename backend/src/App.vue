@@ -988,11 +988,8 @@ const cardFields = computed(() => {
   if (dropItemField) {
     dropItemField.options = [
       {
-        label: adminOptions.value?.defaultFragmentItem
-          ? `使用默认碎片：${adminOptions.value.defaultFragmentItem.label}`
-          : "使用默认碎片（未配置）",
+        label: "按分解配置",
         value: "",
-        disabled: !adminOptions.value?.defaultFragmentItem,
       },
       ...(adminOptions.value?.dropItems || [])
         .filter((item) => item.type === 0 && item.disabled !== true)

@@ -250,7 +250,7 @@ export function createCardFields(poolOptions: SelectOption[]): FieldConfig[] {
       label: "分解产出碎片",
       type: "select",
       options: [],
-      helper: "留空时使用全局默认碎片。",
+      helper: "留空走分解配置。",
     },
   ];
 }

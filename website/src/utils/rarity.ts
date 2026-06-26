@@ -49,5 +49,5 @@ export function requiredFragmentsForRarity(rarity?: string) {
 export function synthesisCostLabel(rarity?: string) {
   const normalized = normalizeRarity(rarity);
   const cost = requiredFragmentsForRarity(normalized);
-  return normalized === "UR" ? "UR 不可合成" : `${cost} 碎片`;
+  return normalized === "UR" ? "UR 不可合成" : `${cost} ${normalized}碎片`;
 }

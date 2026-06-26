@@ -650,26 +650,34 @@ export class CardService {
       ownedMap.set(key, (ownedMap.get(key) || 0) + 1);
     });
 
-    const fragmentCountMap = new Map<number, number>();
-    for (const card of cards) {
-      const fragmentItem = await this.findFragmentItem(
+    const synthesisRarities = [
+      ...new Set(
+        cards
+          .flatMap((card) => this.parseCardLevels(card.card_level))
+          .filter((rarity) => rarity !== "UR"),
+      ),
+    ];
+    const fragmentCountMap = new Map<CardRarity, number>();
+    for (const rarity of synthesisRarities) {
+      const fragmentItem = await this.findRarityFragmentItem(
         this.dataSource.manager,
-        card,
+        rarity,
       );
       const inventory = await this.inventoryRepository.findOne({
         where: { user_id: user.id, item_id: fragmentItem.id },
       });
-      fragmentCountMap.set(card.id, inventory?.num || 0);
+      fragmentCountMap.set(rarity, inventory?.num || 0);
     }
 
     const list = cards.flatMap((card) => {
-      const fragmentCount = fragmentCountMap.get(card.id) || 0;
       return this.parseCardLevels(card.card_level).map((rarity) => {
         const key = this.createPoolVersionKey(card.id, rarity);
         const ownedCount = ownedMap.get(key) || 0;
         const collected = ownedCount > 0;
         const requiredFragments =
           rarity === "UR" ? 0 : this.getRequiredFragments(rarity);
+        const fragmentCount =
+          rarity === "UR" ? 0 : fragmentCountMap.get(rarity) || 0;
         return {
           key,
           card,
@@ -922,9 +930,13 @@ export class CardService {
     if (!user) {
       throw new Error("用户不存在");
     }
-    const fragmentItem = await this.findFragmentItem(
+    const rarity = this.getEffectiveUserCardRarity(userCard, card);
+    if (!rarity) {
+      throw new Error("未知的卡片等级");
+    }
+    const fragmentItem = await this.findCultivationFragmentItem(
       this.dataSource.manager,
-      card,
+      rarity,
     );
     const inventory = await this.inventoryRepository.findOne({
       where: { user_id: user.id, item_id: fragmentItem.id },
@@ -980,7 +992,10 @@ export class CardService {
       }
 
       const user = await this.getExistingUser(manager, uid);
-      const fragmentItem = await this.findFragmentItem(manager, card);
+      const fragmentItem = await this.findCultivationFragmentItem(
+        manager,
+        rarity,
+      );
       const inventory = await inventoryRepository.findOne({
         where: { user_id: user.id, item_id: fragmentItem.id },
         lock: { mode: "pessimistic_write" },
@@ -1253,7 +1268,7 @@ export class CardService {
       }
 
       const requiredFragments = this.getRequiredFragments(rarity);
-      const fragmentItem = await this.findFragmentItem(manager, card);
+      const fragmentItem = await this.findRarityFragmentItem(manager, rarity);
       const user = await this.getExistingUser(manager, uid);
       const userInventory = await inventoryRepository.findOne({
         where: { user_id: user.id, item_id: fragmentItem.id },
@@ -1682,7 +1697,7 @@ export class CardService {
                 manager,
                 dropRule.itemId,
               )
-            : await this.findFragmentItem(manager, card);
+            : await this.findCardDecomposeFragmentItem(manager, card);
         return {
           rarity,
           fragmentCount,
@@ -2704,7 +2719,7 @@ export class CardService {
     return fragmentItem;
   }
 
-  private async findFragmentItem(
+  private async findCardDecomposeFragmentItem(
     manager: EntityManager,
     card: CardItem,
   ): Promise<DropItem> {
@@ -2719,6 +2734,53 @@ export class CardService {
       }
     }
 
+    return this.findDefaultFragmentItem(manager);
+  }
+
+  private async findCultivationFragmentItem(
+    manager: EntityManager,
+    rarity: CardRarity,
+  ): Promise<DropItem> {
+    if (rarity === "UR") {
+      return this.findDefaultFragmentItem(manager);
+    }
+    return this.findRarityFragmentItem(manager, rarity);
+  }
+
+  private async findRarityFragmentItem(
+    manager: EntityManager,
+    rarity: CardRarity,
+  ): Promise<DropItem> {
+    if (rarity === "UR") {
+      throw new Error("UR卡片没有合成碎片");
+    }
+    const targetName = `${rarity}碎片`;
+    const fragmentItems = await manager.getRepository(DropItem).find({
+      where: { drop_type: 0, disabled: false },
+    });
+    const candidates = fragmentItems
+      .filter(
+        (item) =>
+          this.normalizeFragmentName(item.drop_name) ===
+          this.normalizeFragmentName(targetName),
+      )
+      .sort((a, b) => {
+        const aExact = String(a.drop_name || "").trim() === targetName;
+        const bExact = String(b.drop_name || "").trim() === targetName;
+        if (aExact !== bExact) {
+          return aExact ? -1 : 1;
+        }
+        return Number(a.id || 0) - Number(b.id || 0);
+      });
+    const fragmentItem = candidates[0];
+    if (!fragmentItem) {
+      throw new Error(`${targetName}不存在或已禁用`);
+    }
+    return fragmentItem;
+  }
+
+  private async findDefaultFragmentItem(manager: EntityManager): Promise<DropItem> {
+    const dropRepository = manager.getRepository(DropItem);
     const defaultFragmentItem = await dropRepository.findOne({
       where: { drop_type: 0, disabled: false, default_fragment: true },
     });
@@ -2733,6 +2795,10 @@ export class CardService {
       throw new Error("卡片碎片物品不存在");
     }
     return fragmentItem;
+  }
+
+  private normalizeFragmentName(name: string): string {
+    return String(name || "").replace(/\s+/g, "");
   }
 
   private parseDropItemIds(dropItem: string): number[] {
