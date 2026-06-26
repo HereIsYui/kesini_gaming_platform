@@ -1,4 +1,4 @@
-import { Injectable, Optional } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import {
   Between,
   DataSource,
@@ -15,7 +15,6 @@ import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { TaskScope, UserTaskClaim } from "src/entity/userTaskClaim.entity";
 import { RewardService } from "src/reward/reward.service";
-import { SeasonService } from "src/season/season.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TASK_OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -203,8 +202,6 @@ export class TasksService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly rewardService: RewardService,
-    @Optional()
-    private readonly seasonService?: SeasonService,
   ) {}
 
   async getOverview(uid: string) {
@@ -274,28 +271,11 @@ export class TasksService {
             activityPoints: task.activityPoints,
           },
         });
-        const seasonPointRecord = await this.seasonService?.grantTaskActivity(
-          manager,
-          uid,
-          {
-            periodKey: period.periodKey,
-            taskId: task.key,
-            taskName: task.name,
-            activityPoints: task.activityPoints,
-          },
-        );
-
         return {
           scope: period.scope,
           periodKey: period.periodKey,
           task: this.toTaskView(task, progress, true),
           rewards,
-          seasonPoints: seasonPointRecord
-            ? {
-                gained: task.activityPoints,
-                title: seasonPointRecord.title,
-              }
-            : null,
         };
       });
     } catch (error) {

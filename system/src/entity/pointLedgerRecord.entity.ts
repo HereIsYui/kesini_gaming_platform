@@ -20,7 +20,6 @@ export type PointLedgerSourceType =
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle"
-  | "season_shop"
   | "player_message"
   | "vip_daily"
   | "admin_adjust";

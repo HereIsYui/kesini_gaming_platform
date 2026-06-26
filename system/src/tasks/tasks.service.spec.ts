@@ -29,7 +29,7 @@ function createRepository(overrides: Record<string, any> = {}) {
   };
 }
 
-function createService(repositories: Map<any, any>, seasonService?: any) {
+function createService(repositories: Map<any, any>) {
   const manager = {
     getRepository: jest.fn((entity) => repositories.get(entity)),
   };
@@ -41,15 +41,10 @@ function createService(repositories: Map<any, any>, seasonService?: any) {
     grantRewards: jest.fn().mockResolvedValue(undefined),
   };
   return {
-    service: new TasksService(
-      dataSource as any,
-      rewardService as any,
-      seasonService,
-    ),
+    service: new TasksService(dataSource as any, rewardService as any),
     dataSource,
     manager,
     rewardService,
-    seasonService,
   };
 }
 
@@ -138,54 +133,6 @@ describe("TasksService", () => {
         periodKey: "2026-05-07",
       }),
     ).rejects.toThrow("任务奖励已领取");
-  });
-
-  it("领取任务奖励后同步获得赛季积分", async () => {
-    const claimRepository = createRepository();
-    const user = { uid: "u1", point: 0 } as User;
-    const userRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue(user),
-    });
-    const historyRepository = createRepository({
-      createQueryBuilder: jest.fn(() => createQueryBuilder({ total: 1 })),
-    });
-    const seasonService = {
-      grantTaskActivity: jest.fn().mockResolvedValue({
-        title: "赛季积分：星轨初响",
-      }),
-    };
-    const { service, manager } = createService(
-      baseRepositories([
-        [UserTaskClaim, claimRepository],
-        [User, userRepository],
-        [UserHistory, historyRepository],
-      ]),
-      seasonService,
-    );
-
-    await expect(
-      service.claimTask("u1", {
-        taskId: "daily_draw_1",
-        periodKey: "2026-05-07",
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        seasonPoints: {
-          gained: 20,
-          title: "赛季积分：星轨初响",
-        },
-      }),
-    );
-    expect(seasonService.grantTaskActivity).toHaveBeenCalledWith(
-      manager,
-      "u1",
-      {
-        periodKey: "2026-05-07",
-        taskId: "daily_draw_1",
-        taskName: "星轨初响",
-        activityPoints: 20,
-      },
-    );
   });
 
   it("未达到目标时不会发放任务奖励", async () => {

@@ -131,10 +131,6 @@ function createService(repositories: Record<string, any> = {}) {
     repositories.launchActivityClaim,
     repositories.pveStage,
     repositories.pveRecord,
-    repositories.season,
-    repositories.seasonShopItem,
-    repositories.seasonPointRecord,
-    repositories.seasonShopUsage,
     repositories.siteConfig,
     repositories.redis,
     repositories.pointLedgerService,
@@ -730,7 +726,6 @@ describe("AdminService", () => {
         },
       ],
       defaultFragmentItem: null,
-      seasons: [],
     });
     expect(poolRepository.find).toHaveBeenCalledWith({
       order: { sort_order: "ASC", id: "ASC" },
@@ -1118,91 +1113,6 @@ describe("AdminService", () => {
     expect(gachaService.savePoolConfig).toHaveBeenCalledWith(2, {
       rarityProbabilities: { N: 1 },
     });
-  });
-
-  it("创建赛季会校验赛季编号和时间范围", async () => {
-    const seasonRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue(null),
-      save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
-    });
-    const service = createService({ season: seasonRepository });
-
-    await expect(
-      service.createSeason({
-        season_key: "season-2026-s1",
-        name: "第一赛季",
-        starts_at: "2026-05-01T00:00:00Z" as any,
-        ends_at: "2026-06-01T00:00:00Z" as any,
-      } as any),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        season_key: "season-2026-s1",
-        name: "第一赛季",
-        enabled: true,
-        shop_enabled: true,
-        leaderboard_enabled: true,
-      }),
-    );
-
-    await expect(
-      service.createSeason({
-        season_key: "bad key",
-        name: "异常赛季",
-      } as any),
-    ).rejects.toThrow("赛季编号只能包含");
-    await expect(
-      service.createSeason({
-        season_key: "season-2026-s2",
-        name: "异常赛季",
-        starts_at: "2026-06-01T00:00:00Z" as any,
-        ends_at: "2026-05-01T00:00:00Z" as any,
-      } as any),
-    ).rejects.toThrow("赛季结束时间必须晚于开始时间");
-  });
-
-  it("创建赛季商店兑换项会校验赛季和奖励", async () => {
-    const seasonRepository = createRepository({
-      findOne: jest.fn().mockResolvedValue({
-        id: 1,
-        season_key: "season-2026-s1",
-        delete_flag: false,
-      }),
-    });
-    const shopRepository = createRepository({
-      save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
-    });
-    const service = createService({
-      season: seasonRepository,
-      seasonShopItem: shopRepository,
-      drop: createRepository(),
-      card: createRepository(),
-    });
-
-    await expect(
-      service.createSeasonShopItem({
-        season_key: "season-2026-s1",
-        name: "星尘补给",
-        cost_points: 100,
-        rewards: { points: 20, items: [] },
-      } as any),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        season_key: "season-2026-s1",
-        name: "星尘补给",
-        cost_points: 100,
-      }),
-    );
-    expect(seasonRepository.findOne).toHaveBeenCalledWith({
-      where: { season_key: "season-2026-s1", delete_flag: false },
-    });
-
-    await expect(
-      service.createSeasonShopItem({
-        season_key: "season-2026-s1",
-        name: "空奖励",
-        rewards: { points: 0, items: [] },
-      } as any),
-    ).rejects.toThrow("赛季商店奖励不能为空");
   });
 
   it("获取抽卡配置只返回全局默认配置和代码兜底", async () => {

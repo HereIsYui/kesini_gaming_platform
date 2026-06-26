@@ -440,86 +440,6 @@
         />
 
         <AdminTable
-          v-else-if="active === 'seasons'"
-          title="赛季配置"
-          endpoint="/admin/seasons"
-          :fields="seasonFields"
-          editable
-          creatable
-          deletable
-          detail-fetchable
-          search-placeholder="搜索赛季名称或编号"
-        >
-          <template #cell="{ field, row }">
-            <el-tag
-              v-if="field.key === 'enabled'"
-              :type="row.enabled !== false ? 'success' : 'info'"
-            >
-              {{ row.enabled !== false ? "上线" : "下线" }}
-            </el-tag>
-            <el-tag
-              v-else-if="field.key === 'shop_enabled'"
-              :type="row.shop_enabled !== false ? 'success' : 'info'"
-            >
-              {{ row.shop_enabled !== false ? "商店开启" : "商店关闭" }}
-            </el-tag>
-            <el-tag
-              v-else-if="field.key === 'leaderboard_enabled'"
-              :type="row.leaderboard_enabled !== false ? 'success' : 'info'"
-            >
-              {{ row.leaderboard_enabled !== false ? "排行开启" : "排行关闭" }}
-            </el-tag>
-            <span v-else>{{
-              formatFieldValue(field, getValue(row, field.key))
-            }}</span>
-          </template>
-        </AdminTable>
-
-        <AdminTable
-          v-else-if="active === 'season-shop-items'"
-          title="赛季商店"
-          endpoint="/admin/season-shop-items"
-          :fields="seasonShopItemFields"
-          :item-options="itemOptions"
-          :card-options="adminOptions?.cards || []"
-          editable
-          creatable
-          deletable
-          detail-fetchable
-          search-placeholder="搜索兑换项或赛季编号"
-        >
-          <template #cell="{ field, row }">
-            <el-tag
-              v-if="field.key === 'enabled'"
-              :type="row.enabled !== false ? 'success' : 'info'"
-            >
-              {{ row.enabled !== false ? "上架" : "下架" }}
-            </el-tag>
-            <span v-else>{{
-              formatFieldValue(field, getValue(row, field.key))
-            }}</span>
-          </template>
-        </AdminTable>
-
-        <AdminTable
-          v-else-if="active === 'season-point-records'"
-          title="赛季积分记录"
-          endpoint="/admin/season-point-records"
-          :fields="seasonPointRecordFields"
-          keyword-param="uid"
-          search-placeholder="按账号查询"
-        />
-
-        <AdminTable
-          v-else-if="active === 'season-shop-usages'"
-          title="赛季兑换记录"
-          endpoint="/admin/season-shop-usages"
-          :fields="seasonShopUsageFields"
-          keyword-param="uid"
-          search-placeholder="按账号查询"
-        />
-
-        <AdminTable
           v-else-if="active === 'pve-stages'"
           title="关卡管理"
           endpoint="/admin/pve-stages"
@@ -824,7 +744,6 @@ import {
   achievementFields,
   announcementFields,
   createCardFields,
-  createSeasonShopItemFields,
   decomposeConfigFields,
   defaultPageKey,
   dropFields,
@@ -850,9 +769,6 @@ import {
   redeemCodeFields,
   redeemUsageFields,
   routeAliases,
-  seasonFields,
-  seasonPointRecordFields,
-  seasonShopUsageFields,
   shopRecycleConfigFields,
   siteConfigFields,
   tradeConfigFields,
@@ -998,10 +914,6 @@ const cardFields = computed(() => {
   }
   return fields;
 });
-const seasonShopItemFields = computed(() =>
-  createSeasonShopItemFields(adminOptions.value?.seasons || []),
-);
-
 const pageDefinitions = computed(
   () =>
     [
@@ -1128,34 +1040,6 @@ const pageDefinitions = computed(
         key: "user-achievements",
         label: "成就记录",
         description: "查看玩家成就进度、达成时间和通知状态。",
-        group: "运营工具",
-        icon: Files,
-      },
-      {
-        key: "seasons",
-        label: "赛季配置",
-        description: "配置赛季周期、商店和活动排行开关。",
-        group: "运营工具",
-        icon: Medal,
-      },
-      {
-        key: "season-shop-items",
-        label: "赛季商店",
-        description: "配置赛季积分兑换项、库存、限兑和奖励。",
-        group: "运营工具",
-        icon: Shop,
-      },
-      {
-        key: "season-point-records",
-        label: "赛季积分记录",
-        description: "查看玩家赛季积分获取与消耗流水。",
-        group: "运营工具",
-        icon: Files,
-      },
-      {
-        key: "season-shop-usages",
-        label: "赛季兑换记录",
-        description: "查看赛季商店兑换数量和奖励。",
         group: "运营工具",
         icon: Files,
       },

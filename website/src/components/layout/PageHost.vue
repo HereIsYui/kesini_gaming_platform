@@ -13,7 +13,6 @@ import PointsPage from "../../pages/PointsPage.vue";
 import ProfilePage from "../../pages/ProfilePage.vue";
 import PvePage from "../../pages/PvePage.vue";
 import RedeemPage from "../../pages/RedeemPage.vue";
-import SeasonPage from "../../pages/SeasonPage.vue";
 import SettingsPage from "../../pages/SettingsPage.vue";
 import SynthesizePage from "../../pages/SynthesizePage.vue";
 import TasksPage from "../../pages/TasksPage.vue";
@@ -41,7 +40,6 @@ const props = defineProps<{
     <TradePage v-if="props.activeSection === 'trade'" />
     <LeaderboardPage v-if="props.activeSection === 'leaderboard'" />
     <TasksPage v-if="props.activeSection === 'tasks'" />
-    <SeasonPage v-if="props.activeSection === 'season'" />
     <AchievementsPage v-if="props.activeSection === 'achievements'" />
     <RedeemPage v-if="props.activeSection === 'redeem'" />
   </main>

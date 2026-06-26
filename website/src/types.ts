@@ -505,71 +505,6 @@ export interface TaskClaimResponse {
   milestone?: TaskActivityMilestone;
   activity?: number;
   rewards: RedeemRewards;
-  seasonPoints?: {
-    gained: number;
-    title: string;
-  } | null;
-}
-
-export interface SeasonInfo {
-  id: number;
-  seasonKey: string;
-  name: string;
-  description?: string;
-  shopEnabled: boolean;
-  leaderboardEnabled: boolean;
-  startsAt?: string | null;
-  endsAt?: string | null;
-}
-
-export interface SeasonPoints {
-  earned: number;
-  balance: number;
-}
-
-export interface SeasonShopItem {
-  id: number;
-  seasonKey: string;
-  name: string;
-  description?: string;
-  costPoints: number;
-  rewards: RedeemRewards;
-  remaining?: number | null;
-  usedByUser?: number;
-  userLimit?: number | null;
-  canBuy: boolean;
-  unavailableReason?: string;
-  startsAt?: string | null;
-  endsAt?: string | null;
-}
-
-export interface SeasonPointRecord {
-  id: number;
-  seasonKey: string;
-  changeAmount: number;
-  pointBefore: number;
-  pointAfter: number;
-  sourceType: string;
-  title: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface SeasonOverview {
-  season: SeasonInfo | null;
-  points: SeasonPoints;
-  leaderboard: LeaderboardBoard;
-  shopItems: SeasonShopItem[];
-  records: SeasonPointRecord[];
-}
-
-export interface SeasonShopBuyResponse {
-  season: SeasonInfo;
-  itemId: number;
-  count: number;
-  costPoints: number;
-  rewards: RedeemRewards;
-  points: SeasonPoints;
 }
 
 export interface ExchangeCostItem {
@@ -1140,7 +1075,6 @@ export type PointLedgerSourceType =
   | "trade_buy"
   | "trade_sell"
   | "shop_recycle"
-  | "season_shop"
   | "player_message"
   | "vip_daily"
   | "admin_adjust";

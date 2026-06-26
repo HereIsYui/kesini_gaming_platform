@@ -104,7 +104,6 @@ export function usePointsLedger(options: PointsLedgerOptions) {
     resetPointRecords,
     pointChangeClass,
     formatPointChange,
-    seasonPointSourceLabel,
     pointMetadataSummary,
   };
 }
@@ -124,7 +123,6 @@ export const pointSourceOptions = [
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
   { value: "shop_recycle", label: "商店回收" },
-  { value: "season_shop", label: "赛季商店" },
   { value: "player_message", label: "消息奖励" },
   { value: "vip_daily", label: "VIP礼包" },
   { value: "admin_adjust", label: "管理员调整" },
@@ -136,15 +134,6 @@ export function pointChangeClass(amount: number) {
 
 export function formatPointChange(amount: number) {
   return `${amount > 0 ? "+" : ""}${amount}`;
-}
-
-export function seasonPointSourceLabel(sourceType: string) {
-  const labels: Record<string, string> = {
-    task_activity: "任务活跃",
-    shop_spend: "赛季商店",
-    admin_adjust: "运营调整",
-  };
-  return labels[sourceType] || sourceType;
 }
 
 export function pointMetadataSummary(record: PointLedgerRecord) {
@@ -184,10 +173,6 @@ export function pointMetadataSummary(record: PointLedgerRecord) {
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
     case "shop_recycle":
       return `${String(meta("cardName") || "卡片")} · ${String(meta("count") || 1)} 张`;
-    case "season_shop":
-      return `赛季商店 ${String(meta("shopItemName") || meta("shopItemId") || "-")} · ${String(
-        meta("count") || 1,
-      )} 次`;
     case "player_message":
       return String(meta("title") || record.title || "消息奖励");
     case "vip_daily":

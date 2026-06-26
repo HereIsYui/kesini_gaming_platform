@@ -2,7 +2,6 @@
 import {
   Boxes,
   CalendarCheck,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -96,10 +95,6 @@ import type {
   MonthlyCardType,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
-  SeasonOverview,
-  SeasonPointRecord,
-  SeasonShopBuyResponse,
-  SeasonShopItem,
   ShowcaseCard,
   TradeConfig,
   TradeListing,
@@ -384,7 +379,6 @@ const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
 const taskScope = ref<TaskScope>("daily");
-const seasonOverview = ref<SeasonOverview | null>(null);
 const launchActivityModalOpen = ref(false);
 const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
@@ -394,7 +388,6 @@ const achievements = ref<AchievementRecord[]>([]);
 const achievementStatusFilter = ref<"all" | "achieved" | "progressing">("all");
 const achievementCategoryFilter = ref("");
 const achievementKeyword = ref("");
-const seasonShopCounts = reactive<Record<number, number>>({});
 const tradeListings = ref<TradeListing[]>([]);
 const myTradeListings = ref<TradeListing[]>([]);
 const tradeRecords = ref<TradeRecord[]>([]);
@@ -488,8 +481,6 @@ const busy = reactive({
   redeem: false,
   tasks: false,
   claimTask: false,
-  season: false,
-  seasonShop: false,
   achievements: false,
   trade: false,
   recycle: false,
@@ -693,7 +684,6 @@ const changePointPage = pointsLedger.changePointPage;
 const resetPointRecords = pointsLedger.resetPointRecords;
 const pointChangeClass = pointsLedger.pointChangeClass;
 const formatPointChange = pointsLedger.formatPointChange;
-const seasonPointSourceLabel = pointsLedger.seasonPointSourceLabel;
 const pointMetadataSummary = pointsLedger.pointMetadataSummary;
 const formationPve = useFormationPve({
   isAuthed: () => isAuthed.value,
@@ -1039,27 +1029,6 @@ const taskActivityPercent = computed(() => {
     Math.min(100, Math.round((overview.activity / overview.maxActivity) * 100)),
   );
 });
-const activeSeason = computed(() => seasonOverview.value?.season || null);
-const seasonPoints = computed(
-  () => seasonOverview.value?.points || { earned: 0, balance: 0 },
-);
-const seasonShopItems = computed<SeasonShopItem[]>(
-  () => seasonOverview.value?.shopItems || [],
-);
-const seasonPointRecords = computed<SeasonPointRecord[]>(
-  () => seasonOverview.value?.records || [],
-);
-const seasonLeaderboard = computed(
-  () => seasonOverview.value?.leaderboard || { list: [], me: null },
-);
-const seasonLeaderboardRows = computed<LeaderboardEntry[]>(
-  () => seasonLeaderboard.value.list || [],
-);
-const seasonRankText = computed(() =>
-  seasonLeaderboard.value.me?.rank
-    ? `第 ${seasonLeaderboard.value.me.rank} 名`
-    : "暂未上榜",
-);
 const selectedPoolPity = computed(() => getPityForPool(activePoolId.value));
 const selectedHardPity = computed(
   () => selectedPoolPity.value?.hard || selectedPoolPity.value?.soft || null,
@@ -1410,9 +1379,6 @@ watch(activeSection, async (section) => {
   if (section === "tasks" && isAuthed.value) {
     await loadTasks();
   }
-  if (section === "season" && isAuthed.value) {
-    await loadSeasonOverview();
-  }
   if (section === "formation" && isAuthed.value) {
     await loadFormation();
   }
@@ -1543,7 +1509,6 @@ function logout(message = "已退出登录") {
   dailySignIn.value = null;
   tasksOverview.value = null;
   taskScope.value = "daily";
-  seasonOverview.value = null;
   launchActivityModalOpen.value = false;
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
@@ -1552,9 +1517,6 @@ function logout(message = "已退出登录") {
   clearAchievementToasts();
   resetPointRecords();
   clearExchangeItems();
-  Object.keys(seasonShopCounts).forEach((key) => {
-    delete seasonShopCounts[Number(key)];
-  });
   tradeListings.value = [];
   myTradeListings.value = [];
   tradeRecords.value = [];
@@ -1596,7 +1558,6 @@ async function loadPrivateData() {
     loadLaunchActivity(),
     loadDailySignIn(),
     loadTasks(),
-    loadSeasonOverview(),
     loadLeaderboard(),
     loadAchievements(),
     loadAchievementNotifications(),
@@ -1815,28 +1776,6 @@ async function loadTasks() {
     }
   } finally {
     busy.tasks = false;
-  }
-}
-
-async function loadSeasonOverview() {
-  if (!isAuthed.value) {
-    return;
-  }
-  busy.season = true;
-  try {
-    const data = await request<SeasonOverview>("/season/overview");
-    seasonOverview.value = data;
-    (data.shopItems || []).forEach((item) => {
-      if (!seasonShopCounts[item.id]) {
-        seasonShopCounts[item.id] = 1;
-      }
-    });
-  } catch (error) {
-    if (activeSection.value === "season") {
-      notify("error", getErrorMessage(error));
-    }
-  } finally {
-    busy.season = false;
   }
 }
 
@@ -2218,10 +2157,7 @@ async function claimTaskReward(task: TaskItem) {
         periodKey: overview.periodKey,
       }),
     });
-    const seasonText = data.seasonPoints?.gained
-      ? `，赛季积分 +${data.seasonPoints.gained}`
-      : "";
-    notify("success", `领取成功：${formatRewards(data.rewards)}${seasonText}`);
+    notify("success", `领取成功：${formatRewards(data.rewards)}`);
     await loadPrivateData();
   } catch (error) {
     notify("error", getErrorMessage(error));
@@ -3694,50 +3630,6 @@ async function buyTradeListing(listing: TradeListing) {
   }
 }
 
-async function buySeasonShopItem(item: SeasonShopItem) {
-  if (!isAuthed.value) {
-    notify("error", "请先登录");
-    return;
-  }
-  const count = Math.max(
-    1,
-    Math.min(99, Number(seasonShopCounts[item.id] || 1)),
-  );
-  seasonShopCounts[item.id] = count;
-  busy.seasonShop = true;
-  try {
-    const data = await request<SeasonShopBuyResponse>(
-      `/season/shop/items/${item.id}/buy`,
-      {
-        method: "POST",
-        body: JSON.stringify({ count }),
-      },
-    );
-    notify("success", `兑换成功：${formatRewards(data.rewards)}`);
-    seasonOverview.value = {
-      ...(seasonOverview.value || {
-        season: data.season,
-        leaderboard: { list: [], me: null },
-        shopItems: [],
-        records: [],
-      }),
-      season: data.season,
-      points: data.points,
-    };
-    await Promise.all([
-      loadSeasonOverview(),
-      loadStats(),
-      loadUserCards(),
-      loadUserCatalog(),
-      pointRecords.value ? loadPointRecords() : Promise.resolve(),
-    ]);
-  } catch (error) {
-    notify("error", getErrorMessage(error));
-  } finally {
-    busy.seasonShop = false;
-  }
-}
-
 function changeTradePage(kind: "market" | "mine" | "records", delta: number) {
   if (kind === "market") {
     const next = Math.min(
@@ -3851,7 +3743,6 @@ function leaderboardRankLabel(rank?: number) {
 const appContext = {
   Boxes,
   CalendarCheck,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -4038,7 +3929,6 @@ const appContext = {
   dailySignIn,
   tasksOverview,
   taskScope,
-  seasonOverview,
   launchActivityModalOpen,
   launchActivityDismissedKey,
   leaderboard,
@@ -4054,7 +3944,6 @@ const appContext = {
   pointRecordSourceFilter,
   pointRecordTotalPages,
   exchangeItems,
-  seasonShopCounts,
   tradeListings,
   myTradeListings,
   tradeRecords,
@@ -4162,13 +4051,6 @@ const appContext = {
   taskCompletedCount,
   taskClaimedCount,
   taskActivityPercent,
-  activeSeason,
-  seasonPoints,
-  seasonShopItems,
-  seasonPointRecords,
-  seasonLeaderboard,
-  seasonLeaderboardRows,
-  seasonRankText,
   selectedPoolPity,
   selectedHardPity,
   selectedPityPercent,
@@ -4323,7 +4205,6 @@ const appContext = {
   loadLaunchActivity,
   loadDailySignIn,
   loadTasks,
-  loadSeasonOverview,
   loadLeaderboard,
   loadAchievements,
   loadAchievementNotifications,
@@ -4422,10 +4303,8 @@ const appContext = {
   buyTradeListing,
   claimRedeemCode,
   claimExchange,
-  buySeasonShopItem,
   pointChangeClass,
   formatPointChange,
-  seasonPointSourceLabel,
   pointMetadataSummary,
   changeTradePage,
   isNewCard,

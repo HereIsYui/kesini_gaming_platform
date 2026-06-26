@@ -65,7 +65,6 @@ export interface AdminOptions {
     }
   >;
   defaultFragmentItem?: SelectOption | null;
-  seasons?: Array<SelectOption & { enabled?: boolean }>;
 }
 
 export interface GachaPoolConfig {

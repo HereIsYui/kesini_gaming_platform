@@ -34,7 +34,6 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   trade_buy: "交易购买",
   trade_sell: "交易出售",
   shop_recycle: "商店回收",
-  season_shop: "赛季商店",
   player_message: "消息奖励",
   vip_daily: "VIP礼包",
   admin_adjust: "管理员调整",

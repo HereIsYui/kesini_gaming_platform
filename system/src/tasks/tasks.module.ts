@@ -9,7 +9,6 @@ import { TradeRecord } from "src/entity/tradeRecord.entity";
 import { User } from "src/entity/user.entity";
 import { UserTaskClaim } from "src/entity/userTaskClaim.entity";
 import { RewardModule } from "src/reward/reward.module";
-import { SeasonModule } from "src/season/season.module";
 import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 
@@ -26,7 +25,6 @@ import { TasksService } from "./tasks.service";
     ]),
     AuthModule,
     RewardModule,
-    SeasonModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],

@@ -1,6 +1,5 @@
 import {
   Boxes,
-  CalendarDays,
   Coins,
   Gift,
   Gem,
@@ -32,7 +31,6 @@ export const sectionItems = [
   { key: "monthlyCard", label: "月卡", icon: Gem },
   { key: "leaderboard", label: "排行", icon: Trophy },
   { key: "tasks", label: "任务", icon: ListChecks },
-  { key: "season", label: "赛季", icon: CalendarDays },
   { key: "achievements", label: "成就", icon: ShieldCheck },
   { key: "trade", label: "交易", icon: Store },
   { key: "redeem", label: "兑换", icon: Gift },
@@ -49,7 +47,6 @@ export const primaryNavSectionKeys = [
   "draw",
   "pve",
   "synthesize",
-  "season",
   "leaderboard",
   "guild",
 ] as const satisfies readonly SectionKey[];

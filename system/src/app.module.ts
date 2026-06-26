@@ -31,11 +31,6 @@ import { UserTaskClaim } from "./entity/userTaskClaim.entity";
 import { UserFormationSlot } from "./entity/userFormationSlot.entity";
 import { PveStage } from "./entity/pveStage.entity";
 import { PveChallengeRecord } from "./entity/pveChallengeRecord.entity";
-import { SeasonConfig } from "./entity/seasonConfig.entity";
-import { SeasonPointRecord } from "./entity/seasonPointRecord.entity";
-import { SeasonShopItem } from "./entity/seasonShopItem.entity";
-import { SeasonShopUsage } from "./entity/seasonShopUsage.entity";
-import { UserSeasonProgress } from "./entity/userSeasonProgress.entity";
 import { UserShowcaseCard } from "./entity/userShowcaseCard.entity";
 import { UserFriend } from "./entity/userFriend.entity";
 import { UserSocialActivity } from "./entity/userSocialActivity.entity";
@@ -67,7 +62,6 @@ import { ShopModule } from "./shop/shop.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { FormationModule } from "./formation/formation.module";
 import { PveModule } from "./pve/pve.module";
-import { SeasonModule } from "./season/season.module";
 import { ProfileModule } from "./profile/profile.module";
 import { FriendsModule } from "./friends/friends.module";
 import { SocialActivityModule } from "./social/social-activity.module";
@@ -112,11 +106,6 @@ import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
       UserFormationSlot,
       PveStage,
       PveChallengeRecord,
-      SeasonConfig,
-      SeasonPointRecord,
-      SeasonShopItem,
-      SeasonShopUsage,
-      UserSeasonProgress,
       UserShowcaseCard,
       UserFriend,
       UserSocialActivity,
@@ -148,7 +137,6 @@ import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
     TasksModule,
     FormationModule,
     PveModule,
-    SeasonModule,
     ProfileModule,
     FriendsModule,
     SocialActivityModule,

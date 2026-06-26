@@ -19,10 +19,6 @@ export type PageKey =
   | "launch-activity-claims"
   | "achievements"
   | "user-achievements"
-  | "seasons"
-  | "season-shop-items"
-  | "season-point-records"
-  | "season-shop-usages"
   | "pve-stages"
   | "pve-records"
   | "pve-risk-config"
@@ -69,10 +65,6 @@ export const pageKeys: PageKey[] = [
   "launch-activity-claims",
   "achievements",
   "user-achievements",
-  "seasons",
-  "season-shop-items",
-  "season-point-records",
-  "season-shop-usages",
   "pve-stages",
   "pve-records",
   "pve-risk-config",
@@ -578,106 +570,6 @@ export const userAchievementFields: FieldConfig[] = [
   { key: "achieved", label: "状态", readonly: true },
   { key: "rewards", label: "奖励", readonly: true },
   { key: "achievedAt", label: "达成时间", readonly: true },
-];
-
-export const seasonFields: FieldConfig[] = [
-  { key: "id", label: "编号", readonly: true },
-  {
-    key: "season_key",
-    label: "赛季编号",
-    placeholder: "例如：season-2026-s1",
-    helper: "字母、数字、下划线或中划线。",
-  },
-  { key: "name", label: "赛季名称", placeholder: "例如：星穹远征 S1" },
-  { key: "enabled", label: "赛季状态", type: "boolean", defaultValue: true },
-  {
-    key: "shop_enabled",
-    label: "商店状态",
-    type: "boolean",
-    defaultValue: true,
-  },
-  {
-    key: "leaderboard_enabled",
-    label: "排行状态",
-    type: "boolean",
-    defaultValue: true,
-  },
-  { key: "starts_at", label: "开始时间", type: "datetime" },
-  { key: "ends_at", label: "结束时间", type: "datetime" },
-  { key: "description", label: "赛季说明", type: "textarea", fullWidth: true },
-];
-
-export function createSeasonShopItemFields(
-  seasonOptions: SelectOption[],
-): FieldConfig[] {
-  return [
-    { key: "id", label: "编号", readonly: true },
-    {
-      key: "season_key",
-      label: "所属赛季",
-      type: "select",
-      options: seasonOptions,
-      placeholder: "选择赛季",
-    },
-    { key: "name", label: "兑换项名称" },
-    { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
-    {
-      key: "cost_points",
-      label: "赛季积分价格",
-      type: "number",
-      defaultValue: 100,
-    },
-    { key: "total_limit", label: "总库存", type: "number" },
-    { key: "user_limit", label: "单用户限兑", type: "number" },
-    { key: "starts_at", label: "开始时间", type: "datetime" },
-    { key: "ends_at", label: "结束时间", type: "datetime" },
-    { key: "sort_order", label: "排序", type: "number", defaultValue: 0 },
-    { key: "description", label: "说明", type: "textarea", fullWidth: true },
-    {
-      key: "rewards",
-      label: "奖励",
-      type: "rewards",
-      fullWidth: true,
-      allowCardRewards: true,
-    },
-    { key: "used_count", label: "已兑换", readonly: true },
-  ];
-}
-
-export const seasonPointRecordFields: FieldConfig[] = [
-  { key: "id", label: "编号", readonly: true },
-  { key: "season_key", label: "赛季", readonly: true },
-  {
-    key: "uid",
-    label: "玩家",
-    readonly: true,
-    minWidth: 180,
-    identity: { uidKey: "uid", nameKey: "userName" },
-  },
-  { key: "change_amount", label: "变动", readonly: true },
-  { key: "point_before", label: "变动前", readonly: true },
-  { key: "point_after", label: "变动后", readonly: true },
-  { key: "source_type", label: "来源", readonly: true },
-  { key: "title", label: "标题", readonly: true },
-  { key: "metadata", label: "详情", readonly: true, tableHidden: true },
-  { key: "createdAt", label: "时间", readonly: true },
-];
-
-export const seasonShopUsageFields: FieldConfig[] = [
-  { key: "id", label: "编号", readonly: true },
-  { key: "season_key", label: "赛季", readonly: true },
-  { key: "shop_item_name", label: "兑换项", readonly: true },
-  {
-    key: "uid",
-    label: "玩家",
-    readonly: true,
-    minWidth: 180,
-    identity: { uidKey: "uid", nameKey: "userName" },
-  },
-  { key: "count", label: "数量", readonly: true },
-  { key: "cost_points", label: "消耗赛季积分", readonly: true },
-  { key: "reward_snapshot", label: "奖励", readonly: true },
-  { key: "createdAt", label: "兑换时间", readonly: true },
 ];
 
 export const pveStageFields: FieldConfig[] = [

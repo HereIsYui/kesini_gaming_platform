@@ -22,10 +22,6 @@ import { RedeemCode } from "src/entity/redeemCode.entity";
 import { RedeemCodeUsage } from "src/entity/redeemCodeUsage.entity";
 import { RechargeConfig } from "src/entity/rechargeConfig.entity";
 import { RechargeRecord } from "src/entity/rechargeRecord.entity";
-import { SeasonConfig } from "src/entity/seasonConfig.entity";
-import { SeasonPointRecord } from "src/entity/seasonPointRecord.entity";
-import { SeasonShopItem } from "src/entity/seasonShopItem.entity";
-import { SeasonShopUsage } from "src/entity/seasonShopUsage.entity";
 import { LaunchActivityClaim } from "src/entity/launchActivityClaim.entity";
 import { LaunchActivityConfig } from "src/entity/launchActivityConfig.entity";
 import { MonthlyCardPurchaseRecord } from "src/entity/monthlyCardPurchaseRecord.entity";
@@ -59,10 +55,6 @@ import { AdminService } from "./admin.service";
       RedeemCodeUsage,
       RechargeConfig,
       RechargeRecord,
-      SeasonConfig,
-      SeasonPointRecord,
-      SeasonShopItem,
-      SeasonShopUsage,
       LaunchActivityConfig,
       LaunchActivityClaim,
       MonthlyCardPurchaseRecord,
