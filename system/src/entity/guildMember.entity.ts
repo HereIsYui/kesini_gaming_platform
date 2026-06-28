@@ -31,6 +31,9 @@ export class GuildMember {
   @Column({ type: "int", default: 0 })
   weekly_contribution: number;
 
+  @Column({ type: "varchar", length: 8, nullable: true })
+  weekly_contribution_key?: string | null;
+
   @Column({ type: "varchar", length: 10, nullable: true })
   last_check_in_date?: string | null;
 

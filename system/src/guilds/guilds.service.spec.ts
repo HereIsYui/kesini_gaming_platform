@@ -26,6 +26,8 @@ class GuildsTestStore {
   bossChallenges: GuildBossChallenge[] = [];
   bossRewardClaims: GuildBossRewardClaim[] = [];
   configs: SystemConfig[] = [];
+  failNextBossSaveWithDuplicate = false;
+  failNextRequestSaveWithDuplicate = false;
 
   getRepository<T>(entity: EntityClass<T>) {
     if (entity === User) {
@@ -48,10 +50,24 @@ class GuildsTestStore {
       }));
     }
     if (entity === GuildJoinRequest) {
-      return this.createArrayRepository(this.requests, "id", () => ({
+      const repository = this.createArrayRepository(this.requests, "id", () => ({
         createdAt: this.date(this.requests.length + 60),
         updatedAt: this.date(this.requests.length + 60),
       }));
+      const originalSave = repository.save;
+      repository.save = async (value: GuildJoinRequest | GuildJoinRequest[]) => {
+        if (this.failNextRequestSaveWithDuplicate && !Array.isArray(value)) {
+          this.failNextRequestSaveWithDuplicate = false;
+          this.requests.push({
+            ...value,
+            id: this.requests.length + 1,
+            pending_key: "pending",
+          });
+          throw { code: "ER_DUP_ENTRY" };
+        }
+        return originalSave(value as any);
+      };
+      return repository;
     }
     if (entity === GuildContributionRecord) {
       return this.createArrayRepository(this.contributions, "id", () => ({
@@ -64,10 +80,23 @@ class GuildsTestStore {
       }));
     }
     if (entity === GuildBoss) {
-      return this.createArrayRepository(this.bosses, "id", () => ({
+      const repository = this.createArrayRepository(this.bosses, "id", () => ({
         createdAt: this.date(this.bosses.length + 150),
         updatedAt: this.date(this.bosses.length + 150),
       }));
+      const originalSave = repository.save;
+      repository.save = async (value: GuildBoss | GuildBoss[]) => {
+        if (this.failNextBossSaveWithDuplicate && !Array.isArray(value)) {
+          this.failNextBossSaveWithDuplicate = false;
+          this.bosses.push({
+            ...value,
+            id: this.bosses.length + 1,
+          });
+          throw { code: "ER_DUP_ENTRY" };
+        }
+        return originalSave(value as any);
+      };
+      return repository;
     }
     if (entity === GuildBossChallenge) {
       return this.createArrayRepository(this.bossChallenges, "id", () => ({
@@ -338,8 +367,35 @@ describe("GuildsService 公会玩法", () => {
       guild_id: 1,
       uid: "u2",
       status: "pending",
+      pending_key: "pending",
     });
     expect(store.members.map((member) => member.uid)).toEqual(["u1"]);
+  });
+
+  it("重复申请只保留一个待处理申请", async () => {
+    await createGuild(service);
+    await service.updateSettings("u1", { joinMode: "approval" });
+
+    await service.joinGuild("u2", 1);
+    await expect(service.joinGuild("u2", 1)).rejects.toThrow("已申请");
+
+    const pendingRequests = store.requests.filter(
+      (request) => request.status === "pending",
+    );
+    expect(pendingRequests).toHaveLength(1);
+    expect(pendingRequests[0].pending_key).toBe("pending");
+  });
+
+  it("申请唯一键冲突后返回已申请", async () => {
+    await createGuild(service);
+    await service.updateSettings("u1", { joinMode: "approval" });
+    store.failNextRequestSaveWithDuplicate = true;
+
+    await expect(service.joinGuild("u2", 1)).rejects.toThrow("已申请");
+
+    expect(
+      store.requests.filter((request) => request.status === "pending"),
+    ).toHaveLength(1);
   });
 
   it("批准申请后加入公会，满员时拒绝批准", async () => {
@@ -350,12 +406,58 @@ describe("GuildsService 公会玩法", () => {
     await service.approveJoinRequest("u1", 1);
 
     expect(store.requests[0].status).toBe("approved");
+    expect(store.requests[0].pending_key).toBeNull();
     expect(store.members.map((member) => member.uid)).toEqual(["u1", "u2"]);
 
     store.guilds[0].member_limit = 2;
     store.guilds[0].member_count = 2;
     await service.joinGuild("u3", 1);
     await expect(service.approveJoinRequest("u1", 2)).rejects.toThrow("人数已满");
+  });
+
+  it("加入公会后取消其他待处理申请", async () => {
+    await createGuild(service, "u1", "星海会");
+    await service.updateSettings("u1", { joinMode: "approval" });
+    await createGuild(service, "u3", "月影会");
+    await service.updateSettings("u3", { joinMode: "approval" });
+    await createGuild(service, "u4", "晨星会");
+
+    await service.joinGuild("u2", 1);
+    await service.joinGuild("u2", 2);
+    await service.joinGuild("u2", 3);
+
+    expect(store.members.some((member) => member.uid === "u2")).toBe(true);
+    expect(store.requests.map((request) => request.status)).toEqual([
+      "canceled",
+      "canceled",
+    ]);
+    expect(store.requests.every((request) => request.pending_key === null)).toBe(
+      true,
+    );
+  });
+
+  it("申请人已加入其他公会时审批会取消申请", async () => {
+    await createGuild(service);
+    await service.updateSettings("u1", { joinMode: "approval" });
+    await service.joinGuild("u2", 1);
+    store.members.push({
+      id: 10,
+      guild_id: 99,
+      uid: "u2",
+      role: "member",
+      total_contribution: 0,
+      weekly_contribution: 0,
+      weekly_contribution_key: "2026-W01",
+      daily_donate_count: 0,
+      joinedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } as GuildMember);
+
+    await expect(service.approveJoinRequest("u1", 1)).rejects.toThrow(
+      "已加入公会",
+    );
+
+    expect(store.requests[0].status).toBe("canceled");
+    expect(store.requests[0].pending_key).toBeNull();
   });
 
   it("签到每天一次，增加个人贡献、公会经验资金和星穹币", async () => {
@@ -458,6 +560,17 @@ describe("GuildsService 公会玩法", () => {
     });
   });
 
+  it("每日首领创建遇到唯一键冲突时重新读取", async () => {
+    await createGuild(service);
+    store.bosses = [];
+    store.failNextBossSaveWithDuplicate = true;
+
+    const result = await service.getOverview("u1");
+
+    expect(result.current?.boss?.name).toBe("星渊守卫");
+    expect(store.bosses).toHaveLength(1);
+  });
+
   it("击败首领后当天造成伤害成员可领奖且只能一次", async () => {
     const created = createService(store, 50000);
     service = created.service;
@@ -469,6 +582,8 @@ describe("GuildsService 公会玩法", () => {
     const claim = await service.claimBossReward("u1");
 
     expect(challenge.defeated).toBe(true);
+    expect(store.guilds[0].fund).toBe(100);
+    expect(store.members[0].total_contribution).toBe(50);
     expect(claim.reward?.points).toBe(100);
     expect(store.bossRewardClaims).toHaveLength(1);
     expect(rewardService.grantRewards).toHaveBeenCalledWith(
@@ -492,6 +607,50 @@ describe("GuildsService 公会玩法", () => {
     await expect(service.claimActivityChest("u1", 100)).rejects.toThrow(
       "已领取",
     );
+  });
+
+  it("跨周后本周贡献重置并重新累加", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-01-05T00:00:00.000Z"));
+    try {
+      await createGuild(service);
+      store.members[0].weekly_contribution = 999;
+      store.members[0].weekly_contribution_key = "2025-W52";
+
+      await service.donate("u1", 100);
+
+      expect(store.members[0].weekly_contribution).toBe(10);
+      expect(store.members[0].weekly_contribution_key).toBe("2026-W02");
+      expect(store.members[0].total_contribution).toBe(10);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("最后一名成员退出后清理公会关联数据", async () => {
+    const created = createService(store, 50000);
+    service = created.service;
+    rewardService = created.rewardService;
+    await createGuild(service);
+    await service.sendMessage("u1", "大家好");
+    await service.checkIn("u1");
+    await service.donate("u1", 1000);
+    store.bosses[0].hp = 100;
+    await service.challengeBoss("u1");
+    await service.claimBossReward("u1");
+    await service.claimActivityChest("u1", 100);
+
+    await service.leaveGuild("u1");
+
+    expect(store.guilds).toHaveLength(0);
+    expect(store.members).toHaveLength(0);
+    expect(store.messages).toHaveLength(0);
+    expect(store.requests).toHaveLength(0);
+    expect(store.contributions).toHaveLength(0);
+    expect(store.chestClaims).toHaveLength(0);
+    expect(store.bosses).toHaveLength(0);
+    expect(store.bossChallenges).toHaveLength(0);
+    expect(store.bossRewardClaims).toHaveLength(0);
   });
 
   it("公会列表按等级、成员、更新时间和编号排序", async () => {

@@ -696,13 +696,6 @@ export const guildConfigFields: FieldConfig[] = [
     defaultValue: { points: 10 },
   },
   {
-    key: "donateOptions",
-    label: "捐献档位",
-    type: "json",
-    fullWidth: true,
-    defaultValue: [100, 500, 1000],
-  },
-  {
     key: "dailyDonateLimit",
     label: "每日捐献",
     type: "number",

@@ -556,6 +556,9 @@ export class PveService {
           rewards: item.rewards
             ? this.decorateRewards(item.rewards, rewardLookup)
             : null,
+          starRewards: item.starRewards
+            ? this.decorateRewards(item.starRewards, rewardLookup)
+            : null,
         })),
         pointAfter: user.point || 0,
       };

@@ -6,7 +6,10 @@ import { GuildBoss } from "src/entity/guildBoss.entity";
 import { GuildBossChallenge } from "src/entity/guildBossChallenge.entity";
 import { GuildBossRewardClaim } from "src/entity/guildBossRewardClaim.entity";
 import { GuildContributionRecord } from "src/entity/guildContributionRecord.entity";
-import { GuildJoinRequest } from "src/entity/guildJoinRequest.entity";
+import {
+  GuildJoinRequest,
+  type GuildJoinRequestStatus,
+} from "src/entity/guildJoinRequest.entity";
 import { GuildMember, GuildMemberRole } from "src/entity/guildMember.entity";
 import { GuildMessage } from "src/entity/guildMessage.entity";
 import { RedeemRewards } from "src/entity/redeemCode.entity";
@@ -228,9 +231,11 @@ export class GuildsService {
           role: "leader",
           total_contribution: 0,
           weekly_contribution: 0,
+          weekly_contribution_key: this.currentWeekKey(),
           daily_donate_count: 0,
         }),
       );
+      await this.cancelOtherPendingRequests(manager, normalizedUid);
     });
 
     return this.getOverview(normalizedUid);
@@ -318,8 +323,7 @@ export class GuildsService {
       ) {
         throw new Error("申请不存在");
       }
-      request.status = "canceled";
-      await manager.getRepository(GuildJoinRequest).save(request);
+      await this.setJoinRequestStatus(manager, request, "canceled");
     });
 
     return this.getOverview(normalizedUid);
@@ -328,6 +332,7 @@ export class GuildsService {
   async approveJoinRequest(uid: string, requestId: number) {
     const reviewerUid = this.normalizeUid(uid);
     const normalizedRequestId = this.normalizeId(requestId, "申请不存在");
+    let applicantAlreadyJoined = false;
 
     await this.dataSource.transaction(async (manager) => {
       const config = await this.readConfig(manager);
@@ -344,13 +349,30 @@ export class GuildsService {
       if (!request) {
         throw new Error("申请不存在");
       }
-      await this.assertNotInGuild(manager, request.uid);
+      const applicantMembership = await this.findMembership(manager, request.uid);
+      if (applicantMembership) {
+        request.reviewer_uid = reviewerUid;
+        await this.setJoinRequestStatus(manager, request, "canceled");
+        applicantAlreadyJoined = true;
+        return;
+      }
       const guild = await this.lockGuild(manager, request.guild_id);
-      await this.addMember(manager, guild, request.uid, "member", config);
-      request.status = "approved";
+      await this.addMember(
+        manager,
+        guild,
+        request.uid,
+        "member",
+        config,
+        request.id,
+      );
       request.reviewer_uid = reviewerUid;
-      await manager.getRepository(GuildJoinRequest).save(request);
+      await this.setJoinRequestStatus(manager, request, "approved");
+      await this.cancelOtherPendingRequests(manager, request.uid, request.id);
     });
+
+    if (applicantAlreadyJoined) {
+      throw new Error("已加入公会");
+    }
 
     return this.getOverview(reviewerUid);
   }
@@ -373,9 +395,8 @@ export class GuildsService {
       if (!request) {
         throw new Error("申请不存在");
       }
-      request.status = "rejected";
       request.reviewer_uid = reviewerUid;
-      await manager.getRepository(GuildJoinRequest).save(request);
+      await this.setJoinRequestStatus(manager, request, "rejected");
     });
 
     return this.getOverview(reviewerUid);
@@ -741,8 +762,6 @@ export class GuildsService {
       });
       if (defeated) {
         await this.applyGuildGrowth(manager, guild, member, 30, 100, config);
-        guild.fund = Number(guild.fund || 0) + 100;
-        await manager.getRepository(Guild).save(guild);
         await this.addContributionRecord(manager, {
           guildId: guild.id,
           uid: normalizedUid,
@@ -1085,13 +1104,58 @@ export class GuildsService {
     if (existing) {
       throw new Error("已申请");
     }
-    await requestRepository.save(
-      requestRepository.create({
-        guild_id: guild.id,
-        uid,
-        status: "pending",
-      }),
-    );
+    try {
+      await requestRepository.save(
+        requestRepository.create({
+          guild_id: guild.id,
+          uid,
+          status: "pending",
+          pending_key: "pending",
+        }),
+      );
+    } catch (error) {
+      if (!this.isUniqueConstraintError(error)) {
+        throw error;
+      }
+      const duplicated = await requestRepository.findOne({
+        where: { guild_id: guild.id, uid, status: "pending" },
+      });
+      if (duplicated) {
+        throw new Error("已申请");
+      }
+      throw error;
+    }
+  }
+
+  private async setJoinRequestStatus(
+    manager: EntityManager,
+    request: GuildJoinRequest,
+    status: GuildJoinRequestStatus,
+  ) {
+    request.status = status;
+    request.pending_key = status === "pending" ? "pending" : null;
+    await manager.getRepository(GuildJoinRequest).save(request);
+  }
+
+  private async cancelOtherPendingRequests(
+    manager: EntityManager,
+    uid: string,
+    keepRequestId = 0,
+  ) {
+    const requestRepository = manager.getRepository(GuildJoinRequest);
+    const requests = await requestRepository.find({
+      where: { uid, status: "pending" },
+    });
+    const updates = requests
+      .filter((request) => Number(request.id || 0) !== Number(keepRequestId || 0))
+      .map((request) => {
+        request.status = "canceled";
+        request.pending_key = null;
+        return request;
+      });
+    if (updates.length > 0) {
+      await requestRepository.save(updates);
+    }
   }
 
   private async addMember(
@@ -1100,6 +1164,7 @@ export class GuildsService {
     uid: string,
     role: GuildMemberRole,
     config: GuildConfig,
+    keepPendingRequestId = 0,
   ) {
     const limit =
       Number(guild.member_limit || 0) > 0
@@ -1116,12 +1181,14 @@ export class GuildsService {
         role,
         total_contribution: 0,
         weekly_contribution: 0,
+        weekly_contribution_key: this.currentWeekKey(),
         daily_donate_count: 0,
       }),
     );
     guild.member_count = Number(guild.member_count || 0) + 1;
     guild.member_limit = limit;
     await manager.getRepository(Guild).save(guild);
+    await this.cancelOtherPendingRequests(manager, uid, keepPendingRequestId);
   }
 
   private async requireGuildContext(manager: EntityManager, uid: string) {
@@ -1180,6 +1247,14 @@ export class GuildsService {
     const normalizedContribution = Math.max(0, Math.round(contribution || 0));
     const normalizedFund = Math.max(0, Math.round(fund || 0));
     if (normalizedContribution > 0) {
+      const weekKey = this.currentWeekKey();
+      if (
+        member.weekly_contribution_key &&
+        member.weekly_contribution_key !== weekKey
+      ) {
+        member.weekly_contribution = 0;
+      }
+      member.weekly_contribution_key = weekKey;
       member.total_contribution =
         Number(member.total_contribution || 0) + normalizedContribution;
       member.weekly_contribution =
@@ -1323,19 +1398,32 @@ export class GuildsService {
       return boss;
     }
     const maxHp = this.getBossMaxHp(guild, config);
-    boss = await repository.save(
-      repository.create({
-        guild_id: guild.id,
-        date_key: dateKey,
-        name: GUILD_BOSS_NAME,
-        level: Math.max(1, Number(guild.level || 1)),
-        max_hp: maxHp,
-        hp: maxHp,
-        defeated: false,
-        defeated_at: null,
-      }),
-    );
-    return boss;
+    try {
+      boss = await repository.save(
+        repository.create({
+          guild_id: guild.id,
+          date_key: dateKey,
+          name: GUILD_BOSS_NAME,
+          level: Math.max(1, Number(guild.level || 1)),
+          max_hp: maxHp,
+          hp: maxHp,
+          defeated: false,
+          defeated_at: null,
+        }),
+      );
+      return boss;
+    } catch (error) {
+      if (!this.isUniqueConstraintError(error)) {
+        throw error;
+      }
+      const existing = await repository.findOne({
+        where: { guild_id: guild.id, date_key: dateKey },
+      });
+      if (existing) {
+        return existing;
+      }
+      throw error;
+    }
   }
 
   private getBossMaxHp(guild: Guild, config: GuildConfig) {
@@ -1466,11 +1554,23 @@ export class GuildsService {
   }
 
   private async deleteGuildCascade(manager: EntityManager, guildId: number) {
-    await manager.getRepository(Guild).delete({ id: guildId });
-    await manager.getRepository(GuildMember).delete({ guild_id: guildId });
+    await manager
+      .getRepository(GuildActivityChestClaim)
+      .delete({ guild_id: guildId });
+    await manager
+      .getRepository(GuildBossRewardClaim)
+      .delete({ guild_id: guildId });
+    await manager
+      .getRepository(GuildBossChallenge)
+      .delete({ guild_id: guildId });
+    await manager
+      .getRepository(GuildContributionRecord)
+      .delete({ guild_id: guildId });
     await manager.getRepository(GuildMessage).delete({ guild_id: guildId });
     await manager.getRepository(GuildJoinRequest).delete({ guild_id: guildId });
     await manager.getRepository(GuildBoss).delete({ guild_id: guildId });
+    await manager.getRepository(GuildMember).delete({ guild_id: guildId });
+    await manager.getRepository(Guild).delete({ id: guildId });
   }
 
   private async readConfig(manager: GuildManager): Promise<GuildConfig> {
@@ -1613,6 +1713,43 @@ export class GuildsService {
     return new Date(now.getTime() + 8 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);
+  }
+
+  private currentWeekKey(now = new Date()) {
+    const shifted = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const date = new Date(
+      Date.UTC(
+        shifted.getUTCFullYear(),
+        shifted.getUTCMonth(),
+        shifted.getUTCDate(),
+      ),
+    );
+    const day = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(
+      ((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
+    return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    const source = error as {
+      code?: string;
+      errno?: number;
+      driverError?: { code?: string; errno?: number };
+      message?: string;
+    };
+    const code = source?.code || source?.driverError?.code || "";
+    const errno = source?.errno || source?.driverError?.errno || 0;
+    const message = String(source?.message || "").toLowerCase();
+    return (
+      code === "ER_DUP_ENTRY" ||
+      code === "SQLITE_CONSTRAINT" ||
+      errno === 1062 ||
+      message.includes("duplicate") ||
+      message.includes("unique")
+    );
   }
 
   private normalizeUid(uid: string) {

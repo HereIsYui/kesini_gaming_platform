@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { unref } from "vue";
 import { useAppContext } from "../composables/useAppContext";
 
 const {
@@ -78,8 +79,9 @@ function bossHpPercent(boss: any) {
 }
 
 function pendingRequestId(guildId: number) {
+  const overview = unref(guildOverview);
   return (
-    (guildOverview?.pendingRequests || []).find(
+    (overview?.pendingRequests || []).find(
       (request: any) => Number(request.guildId) === Number(guildId),
     )?.id || 0
   );

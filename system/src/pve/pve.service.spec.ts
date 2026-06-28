@@ -775,6 +775,22 @@ describe("PveService 轻量关卡", () => {
     expect(result.cleared).toBe(1);
   });
 
+  it("自动战斗返回装饰后的星级奖励", async () => {
+    store.stages = [
+      createStage(1, {
+        enemy_power: 100,
+        star_rewards: { points: 5, items: [{ itemId: 1, num: 1 }] },
+      }),
+    ];
+
+    const result = await service.autoBattle("u1");
+
+    expect(result.list[0].starRewards).toMatchObject({
+      points: 15,
+      items: [{ itemId: 1, itemName: "测试碎片", num: 3 }],
+    });
+  });
+
   it("挑战超过每分钟阈值后触发临时封禁", async () => {
     let counter = 0;
     let banned = false;
