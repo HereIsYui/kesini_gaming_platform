@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import {
   cardMediaUrl,
   hasCardMedia,
@@ -6,15 +7,21 @@ import {
   isCardVideo,
 } from "../../utils/cardMedia";
 import { rarityClass } from "../../utils/rarity";
-import type { CardDetailAction, CardIntroTarget } from "./types";
+import type {
+  CardDetailAction,
+  CardDetailNavigation,
+  CardIntroTarget,
+} from "./types";
 
 const props = defineProps<{
   target: CardIntroTarget | null;
+  navigation?: CardDetailNavigation | null;
 }>();
 
 const emit = defineEmits<{
   close: [];
   action: [action: CardDetailAction];
+  navigate: [direction: "prev" | "next"];
 }>();
 
 function actionClass(action: CardDetailAction) {
@@ -98,6 +105,31 @@ function actionClass(action: CardDetailAction) {
               </div>
             </dl>
           </div>
+        </div>
+        <div
+          v-if="props.navigation?.visible"
+          class="card-detail-nav"
+          aria-label="卡片切换"
+        >
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="!props.navigation.canPrev"
+            @click="emit('navigate', 'prev')"
+          >
+            <ChevronLeft :size="16" />
+            上一张
+          </button>
+          <span>{{ props.navigation.label }}</span>
+          <button
+            class="secondary-action"
+            type="button"
+            :disabled="!props.navigation.canNext"
+            @click="emit('navigate', 'next')"
+          >
+            下一张
+            <ChevronRight :size="16" />
+          </button>
         </div>
         <footer
           v-if="props.target.actions.length"

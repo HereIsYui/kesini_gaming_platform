@@ -44,6 +44,13 @@ export type CardIntroTarget = {
   actions: CardDetailAction[];
 };
 
+export type CardDetailNavigation = {
+  visible: boolean;
+  canPrev: boolean;
+  canNext: boolean;
+  label: string;
+};
+
 export type CardDetailInput = {
   name: string;
   desc?: string | null;

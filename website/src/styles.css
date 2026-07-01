@@ -3848,6 +3848,36 @@ h3 {
   line-height: 1.35;
 }
 
+.card-detail-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px 0;
+}
+
+.card-detail-nav button {
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.card-detail-nav button:first-child {
+  justify-self: start;
+}
+
+.card-detail-nav button:last-child {
+  justify-self: end;
+}
+
+.card-detail-nav span {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .card-detail-actions {
   justify-content: flex-end;
 }
@@ -7648,6 +7678,16 @@ h3 {
 
   .card-detail-meta {
     grid-template-columns: 1fr;
+  }
+
+  .card-detail-nav {
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .card-detail-nav button {
+    padding-inline: 10px;
   }
 
   .announcement-strip,

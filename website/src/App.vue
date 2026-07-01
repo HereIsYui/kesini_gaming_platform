@@ -49,6 +49,7 @@ import ShareTextModal from "./components/modals/ShareTextModal.vue";
 import type {
   CardDetailAction,
   CardDetailInput,
+  CardDetailNavigation,
   CardDetailRow,
   CardIntroTarget,
   CardSharePayload,
@@ -453,6 +454,7 @@ const starTargetCandidates = ref<UserCardsResponse["list"]>([]);
 const starPreview = ref<CardStarPreview | null>(null);
 const selectedStarSourceUuid = ref("");
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
+const bagCardDetailKey = ref("");
 const shareTextTarget = ref("");
 const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
 const listingPrice = ref("");
@@ -1087,6 +1089,27 @@ const selectedPityText = computed(() => {
 const poolDetailPity = computed(() =>
   getPityForPool(poolDetailPool.value?.id || activePoolId.value),
 );
+const bagCardDetailIndex = computed(() => {
+  const key = bagCardDetailKey.value;
+  const list = userCards.value?.list || [];
+  if (!key || list.length === 0) {
+    return -1;
+  }
+  return list.findIndex((card) => createBagCardGroupKey(card) === key);
+});
+const bagCardDetailNavigation = computed<CardDetailNavigation | null>(() => {
+  const list = userCards.value?.list || [];
+  const index = bagCardDetailIndex.value;
+  if (!cardIntroTarget.value || index < 0 || list.length <= 1) {
+    return null;
+  }
+  return {
+    visible: true,
+    canPrev: index > 0,
+    canNext: index < list.length - 1,
+    label: `${index + 1}/${list.length}`,
+  };
+});
 const localCatalogCards = computed<CatalogCard[]>(() =>
   poolCards.value.flatMap((card) =>
     parseCardRarities(card.card_level).map((rarity) => ({
@@ -2525,7 +2548,19 @@ function catalogCardDetailActions(item: CatalogCard): CardDetailAction[] {
   ];
 }
 
-function openCardIntro(target: CardDetailInput) {
+function createBagCardGroupKey(card: UserCardsResponse["list"][number]) {
+  return [card.cardId || card.id || "", card.cardLevel || "", card.poolId || ""]
+    .map((value) => String(value))
+    .join(":");
+}
+
+function openCardIntro(
+  target: CardDetailInput,
+  options: { preserveBagNavigation?: boolean } = {},
+) {
+  if (!options.preserveBagNavigation) {
+    bagCardDetailKey.value = "";
+  }
   const rarity = compactCardDetailValue(target.rarity);
   const type = compactCardDetailValue(target.type);
   const poolName = compactCardDetailValue(
@@ -2625,6 +2660,7 @@ function cardBattleRows(card: {
 
 function closeCardIntro() {
   cardIntroTarget.value = null;
+  bagCardDetailKey.value = "";
 }
 
 function askConfirm(target: ConfirmDialogTarget) {
@@ -2675,27 +2711,47 @@ function openShowcaseCardDetail(card: ShowcaseCard) {
 
 function openBagCardDetail(card: UserCardsResponse["list"][number]) {
   markNewCardSeen(card);
-  openCardIntro({
-    name: card.cardName,
-    desc: card.cardDesc,
-    cardImage: card.cardImage,
-    rarity: card.cardLevel,
-    type: cardTypeLabel(card.cardType),
-    poolId: card.poolId,
-    obtainedAt: card.obtainedAt,
-    latestObtainedAt: card.latestObtainedAt,
-    cultivationLevel: card.cultivationLevel,
-    starLevel: card.starLevel,
-    starMaxLevel: card.starMaxLevel,
-    power: card.power,
-    locked: Boolean(card.locked || Number(card.lockedCount || 0) > 0),
-    listed: Number(card.listedCount || 0) > 0 || card.isListed === true,
-    count: card.count,
-    price: card.tradePrice,
-    source: "背包",
-    rows: cardBattleRows(card),
-    actions: bagCardDetailActions(card),
-  });
+  openCardIntro(
+    {
+      name: card.cardName,
+      desc: card.cardDesc,
+      cardImage: card.cardImage,
+      rarity: card.cardLevel,
+      type: cardTypeLabel(card.cardType),
+      poolId: card.poolId,
+      obtainedAt: card.obtainedAt,
+      latestObtainedAt: card.latestObtainedAt,
+      cultivationLevel: card.cultivationLevel,
+      starLevel: card.starLevel,
+      starMaxLevel: card.starMaxLevel,
+      power: card.power,
+      locked: Boolean(card.locked || Number(card.lockedCount || 0) > 0),
+      listed: Number(card.listedCount || 0) > 0 || card.isListed === true,
+      count: card.count,
+      price: card.tradePrice,
+      source: "背包",
+      rows: cardBattleRows(card),
+      actions: bagCardDetailActions(card),
+    },
+    {
+      preserveBagNavigation: true,
+    },
+  );
+  bagCardDetailKey.value = createBagCardGroupKey(card);
+}
+
+function navigateBagCardDetail(direction: "prev" | "next") {
+  const list = userCards.value?.list || [];
+  const index = bagCardDetailIndex.value;
+  if (index < 0 || list.length <= 1) {
+    return;
+  }
+  const nextIndex = direction === "prev" ? index - 1 : index + 1;
+  const nextCard = list[nextIndex];
+  if (!nextCard) {
+    return;
+  }
+  openBagCardDetail(nextCard);
 }
 
 function openFormationCardDetail(card: FormationCard) {
@@ -5645,8 +5701,10 @@ provide(APP_CONTEXT_KEY, appContext);
 
     <CardDetailModal
       :target="cardIntroTarget"
+      :navigation="bagCardDetailNavigation"
       @close="closeCardIntro"
       @action="handleCardDetailAction"
+      @navigate="navigateBagCardDetail"
     />
 
     <ShareTextModal
