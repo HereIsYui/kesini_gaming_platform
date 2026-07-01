@@ -929,6 +929,7 @@ option {
 .pve-panel,
 .trade-panel,
 .redeem-panel,
+.shop-page-panel,
 .shop-panel,
 .recent-panel {
   padding: 20px;
@@ -2943,7 +2944,6 @@ h3 {
 .shop-page-panel {
   display: grid;
   gap: 18px;
-  margin-top: 18px;
 }
 
 .shop-grid {
@@ -7783,6 +7783,7 @@ h3 {
   .monthly-card-panel,
   .trade-panel,
   .redeem-panel,
+  .shop-page-panel,
   .shop-panel,
   .recent-panel {
     padding: 14px;
