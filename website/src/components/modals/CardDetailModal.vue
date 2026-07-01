@@ -33,123 +33,128 @@ function actionClass(action: CardDetailAction) {
   <Teleport to="body">
     <div
       v-if="props.target"
-      class="result-modal-backdrop"
+      class="result-modal-backdrop card-detail-backdrop"
       role="presentation"
       @click.self="emit('close')"
     >
-      <section
-        class="trade-listing-modal card-intro-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="卡片详情"
-      >
-        <header class="result-modal-head">
-          <div>
-            <p class="eyebrow">卡片详情</p>
-            <h2>{{ props.target.name }}</h2>
-            <span>
-              {{
-                [props.target.rarity, props.target.type, props.target.extra]
-                  .filter(Boolean)
-                  .join(" · ")
-              }}
-            </span>
-          </div>
-          <button class="modal-close" type="button" @click="emit('close')">
-            关闭
-          </button>
-        </header>
-        <div class="trade-listing-body card-intro-body card-detail-body">
-          <div
-            class="card-detail-preview"
-            :class="rarityClass(props.target.rarity || '')"
-          >
-            <div class="card-detail-preview-stage">
-              <button
-                v-if="props.navigation?.visible"
-                class="card-detail-nav-button"
-                type="button"
-                :disabled="!props.navigation.canPrev"
-                aria-label="上一张"
-                @click="emit('navigate', 'prev')"
-              >
-                <ChevronLeft :size="16" />
-                上一张
-              </button>
-              <div
-                class="card-media-frame"
-                :class="{ 'has-media': hasCardMedia(props.target.cardImage) }"
-              >
-                <video
-                  v-if="isCardVideo(props.target.cardImage)"
-                  class="card-art-media"
-                  :src="cardMediaUrl(props.target.cardImage)"
-                  muted
-                  loop
-                  autoplay
-                  playsinline
-                  @error="hideBrokenCardMedia"
-                />
-                <img
-                  v-else-if="cardMediaUrl(props.target.cardImage)"
-                  class="card-art-media"
-                  :src="cardMediaUrl(props.target.cardImage)"
-                  :alt="props.target.name"
-                  @error="hideBrokenCardMedia"
-                />
-                <div class="card-sigil"></div>
-                <div class="result-card-top">
-                  <span v-if="props.target.rarity" class="rarity-badge">
-                    {{ props.target.rarity }}
-                  </span>
-                  <span v-if="props.target.type" class="card-type-pill">
-                    {{ props.target.type }}
-                  </span>
+      <div class="card-detail-modal-shell">
+        <button
+          v-if="props.navigation?.visible"
+          class="card-detail-nav-button card-detail-nav-button-prev"
+          type="button"
+          :disabled="!props.navigation.canPrev"
+          aria-label="上一张"
+          @click="emit('navigate', 'prev')"
+        >
+          <ChevronLeft :size="16" />
+          上一张
+        </button>
+        <section
+          class="trade-listing-modal card-intro-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="卡片详情"
+        >
+          <header class="result-modal-head">
+            <div>
+              <p class="eyebrow">卡片详情</p>
+              <h2>{{ props.target.name }}</h2>
+              <span>
+                {{
+                  [props.target.rarity, props.target.type, props.target.extra]
+                    .filter(Boolean)
+                    .join(" · ")
+                }}
+              </span>
+            </div>
+            <button class="modal-close" type="button" @click="emit('close')">
+              关闭
+            </button>
+          </header>
+          <div class="trade-listing-body card-intro-body card-detail-body">
+            <div
+              class="card-detail-preview"
+              :class="rarityClass(props.target.rarity || '')"
+            >
+              <div class="card-detail-preview-stage">
+                <div
+                  class="card-media-frame"
+                  :class="{ 'has-media': hasCardMedia(props.target.cardImage) }"
+                >
+                  <video
+                    v-if="isCardVideo(props.target.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(props.target.cardImage)"
+                    muted
+                    loop
+                    autoplay
+                    playsinline
+                    @error="hideBrokenCardMedia"
+                  />
+                  <img
+                    v-else-if="cardMediaUrl(props.target.cardImage)"
+                    class="card-art-media"
+                    :src="cardMediaUrl(props.target.cardImage)"
+                    :alt="props.target.name"
+                    @error="hideBrokenCardMedia"
+                  />
+                  <div class="card-sigil"></div>
+                  <div class="result-card-top">
+                    <span v-if="props.target.rarity" class="rarity-badge">
+                      {{ props.target.rarity }}
+                    </span>
+                    <span v-if="props.target.type" class="card-type-pill">
+                      {{ props.target.type }}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button
-                v-if="props.navigation?.visible"
-                class="card-detail-nav-button"
-                type="button"
-                :disabled="!props.navigation.canNext"
-                aria-label="下一张"
-                @click="emit('navigate', 'next')"
-              >
-                下一张
-                <ChevronRight :size="16" />
-              </button>
             </div>
-            <span v-if="props.navigation?.visible" class="card-detail-nav-label">
-              {{ props.navigation.label }}
-            </span>
+            <div class="card-detail-info">
+              <p>{{ props.target.desc }}</p>
+              <dl v-if="props.target.rows.length" class="card-detail-meta">
+                <div v-for="row in props.target.rows" :key="row.label">
+                  <dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
-          <div class="card-detail-info">
-            <p>{{ props.target.desc }}</p>
-            <dl v-if="props.target.rows.length" class="card-detail-meta">
-              <div v-for="row in props.target.rows" :key="row.label">
-                <dt>{{ row.label }}</dt>
-                <dd>{{ row.value }}</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-        <footer
-          v-if="props.target.actions.length"
-          class="result-modal-actions card-detail-actions"
-        >
-          <button
-            v-for="action in props.target.actions"
-            :key="action.key"
-            :class="actionClass(action)"
-            type="button"
-            :disabled="action.disabled"
-            @click="emit('action', action)"
+          <span
+            v-if="props.navigation?.visible"
+            class="card-detail-nav-label"
           >
-            <component :is="action.icon" :size="16" />
-            {{ action.label }}
-          </button>
-        </footer>
-      </section>
+            {{ props.navigation.label }}
+          </span>
+          <footer
+            v-if="props.target.actions.length"
+            class="result-modal-actions card-detail-actions"
+          >
+            <button
+              v-for="action in props.target.actions"
+              :key="action.key"
+              :class="actionClass(action)"
+              type="button"
+              :disabled="action.disabled"
+              @click="emit('action', action)"
+            >
+              <component :is="action.icon" :size="16" />
+              {{ action.label }}
+            </button>
+          </footer>
+        </section>
+        <button
+          v-if="props.navigation?.visible"
+          class="card-detail-nav-button card-detail-nav-button-next"
+          type="button"
+          :disabled="!props.navigation.canNext"
+          aria-label="下一张"
+          @click="emit('navigate', 'next')"
+        >
+          下一张
+          <ChevronRight :size="16" />
+        </button>
+      </div>
     </div>
   </Teleport>
 </template>
