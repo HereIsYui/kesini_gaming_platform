@@ -20,7 +20,11 @@ describe("PVE 200 关导入脚本", () => {
   it("脚本包含章节数量和 Boss 规则", () => {
     const sql = readFileSync(scriptPath, "utf8");
 
-    expect(sql).toContain("SELECT n + 1 FROM seq WHERE n < 200");
+    expect(sql).not.toContain("WITH RECURSIVE");
+    expect(sql).toContain("CREATE TEMPORARY TABLE `_kesini_pve_stage_seq`");
+    expect(sql).toContain(
+      "WHERE ones.n + tens.n * 10 + hundreds.n * 100 + 1 <= 200",
+    );
     expect(sql).toContain("CEIL(n / 10) AS chapter");
     expect(sql).toContain("((n - 1) % 10) + 1 AS stage_no");
     expect(sql).toContain("WHEN n = 200 THEN 'final'");

@@ -1,5 +1,27 @@
 -- Kesini 星域远征 200 关导入脚本
 -- 20 章，每章 10 关；每章第 10 关为小 Boss；60/120/180 为大 Boss；200 为最终 Boss。
+-- 兼容 MySQL 5.7/8.x：不使用递归 CTE。
+
+DROP TEMPORARY TABLE IF EXISTS `_kesini_pve_stage_seq`;
+CREATE TEMPORARY TABLE `_kesini_pve_stage_seq` (
+  `n` INT NOT NULL PRIMARY KEY
+) ENGINE=MEMORY;
+
+INSERT INTO `_kesini_pve_stage_seq` (`n`)
+SELECT ones.n + tens.n * 10 + hundreds.n * 100 + 1 AS n
+FROM (
+  SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+  UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9
+) AS ones
+CROSS JOIN (
+  SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+  UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9
+) AS tens
+CROSS JOIN (
+  SELECT 0 AS n UNION ALL SELECT 1
+) AS hundreds
+WHERE ones.n + tens.n * 10 + hundreds.n * 100 + 1 <= 200;
+
 START TRANSACTION;
 
 INSERT INTO `drop_item`
@@ -76,65 +98,6 @@ INSERT INTO `pve_stage`
 (`name`, `description`, `enemy_power`, `recommended_power`, `daily_limit`, `rewards`,
  `chapter`, `stage_no`, `boss_type`, `boss_name`, `battle_config`, `star_rewards`,
  `enabled`, `sort_order`, `starts_at`, `ends_at`, `delete_flag`, `createdAt`, `updatedAt`)
-WITH RECURSIVE seq AS (
-  SELECT 1 AS n
-  UNION ALL
-  SELECT n + 1 FROM seq WHERE n < 200
-),
-base AS (
-  SELECT
-    n,
-    CEIL(n / 10) AS chapter,
-    ((n - 1) % 10) + 1 AS stage_no,
-    ROUND(260 + POW((n - 1) / 199, 1.35) * (24000 - 260)) AS base_power
-  FROM seq
-),
-staged AS (
-  SELECT
-    n,
-    chapter,
-    stage_no,
-    CASE
-      WHEN n = 200 THEN 'final'
-      WHEN n IN (60, 120, 180) THEN 'major'
-      WHEN stage_no = 10 THEN 'minor'
-      ELSE 'none'
-    END AS boss_type,
-    CASE
-      WHEN n = 200 THEN 'Yui'
-      WHEN n IN (60, 120, 180) OR stage_no = 10 THEN ELT(MOD(n * 7 + 3, 11) + 1, '阿达', '老王', '午安', '勾月', 'Yui', '跳跳', '墨夏', '哀酱', '白猫', 'ipwz', '涛之雨')
-      ELSE ''
-    END AS boss_name,
-    CASE
-      WHEN n = 200 THEN 26000
-      WHEN n IN (60, 120, 180) THEN ROUND(base_power * 1.35)
-      WHEN stage_no = 10 THEN ROUND(base_power * 1.18)
-      ELSE base_power
-    END AS enemy_power,
-    CASE
-      WHEN chapter = 1 THEN JSON_ARRAY()
-      WHEN chapter = 2 THEN JSON_ARRAY('high_attack')
-      WHEN chapter = 3 THEN JSON_ARRAY('thick_hp')
-      WHEN chapter = 4 THEN JSON_ARRAY('dodge')
-      WHEN chapter = 5 THEN JSON_ARRAY('shield')
-      WHEN chapter = 6 THEN JSON_ARRAY('berserk')
-      WHEN chapter = 7 THEN JSON_ARRAY('lockdown')
-      WHEN chapter = 8 THEN JSON_ARRAY('high_attack', 'thick_hp')
-      WHEN chapter = 9 THEN JSON_ARRAY('dodge')
-      WHEN chapter = 10 THEN JSON_ARRAY('shield', 'berserk')
-      WHEN chapter = 11 THEN JSON_ARRAY('high_attack', 'lockdown')
-      WHEN chapter = 12 THEN JSON_ARRAY('thick_hp', 'shield')
-      WHEN chapter = 13 THEN JSON_ARRAY('dodge', 'berserk')
-      WHEN chapter = 14 THEN JSON_ARRAY('high_attack', 'shield')
-      WHEN chapter = 15 THEN JSON_ARRAY('thick_hp', 'lockdown')
-      WHEN chapter = 16 THEN JSON_ARRAY('dodge', 'high_attack')
-      WHEN chapter = 17 THEN JSON_ARRAY('berserk', 'lockdown')
-      WHEN chapter = 18 THEN JSON_ARRAY('thick_hp', 'dodge')
-      WHEN chapter = 19 THEN JSON_ARRAY('high_attack', 'berserk', 'shield')
-      ELSE JSON_ARRAY('high_attack', 'thick_hp', 'dodge')
-    END AS traits
-  FROM base
-)
 SELECT
   CONCAT('星域远征 ', LPAD(n, 3, '0')) AS name,
   CONCAT('第', chapter, '章-', LPAD(stage_no, 2, '0')) AS description,
@@ -202,9 +165,72 @@ SELECT
   0,
   NOW(6),
   NOW(6)
-FROM staged;
+FROM (
+  SELECT
+    n,
+    CEIL(n / 10) AS chapter,
+    ((n - 1) % 10) + 1 AS stage_no,
+    CASE
+      WHEN n = 200 THEN 26000
+      WHEN n IN (60, 120, 180) THEN ROUND(base_power * 1.35)
+      WHEN stage_no = 10 THEN ROUND(base_power * 1.18)
+      ELSE base_power
+    END AS enemy_power,
+    CASE
+      WHEN n = 200 THEN 'final'
+      WHEN n IN (60, 120, 180) THEN 'major'
+      WHEN stage_no = 10 THEN 'minor'
+      ELSE 'none'
+    END AS boss_type,
+    CASE
+      WHEN n = 200 THEN 'Yui'
+      WHEN n IN (60, 120, 180) OR stage_no = 10 THEN ELT(MOD(n * 7 + 3, 11) + 1, '阿达', '老王', '午安', '勾月', 'Yui', '跳跳', '墨夏', '哀酱', '白猫', 'ipwz', '涛之雨')
+      ELSE ''
+    END AS boss_name,
+    traits
+  FROM (
+    SELECT
+      n,
+      chapter,
+      stage_no,
+      ROUND(260 + POW((n - 1) / 199, 1.35) * (24000 - 260)) AS base_power,
+      traits
+    FROM (
+      SELECT
+        n,
+        CEIL(n / 10) AS chapter,
+        ((n - 1) % 10) + 1 AS stage_no,
+        CASE
+          WHEN CEIL(n / 10) = 1 THEN JSON_ARRAY()
+          WHEN CEIL(n / 10) = 2 THEN JSON_ARRAY('high_attack')
+          WHEN CEIL(n / 10) = 3 THEN JSON_ARRAY('thick_hp')
+          WHEN CEIL(n / 10) = 4 THEN JSON_ARRAY('dodge')
+          WHEN CEIL(n / 10) = 5 THEN JSON_ARRAY('shield')
+          WHEN CEIL(n / 10) = 6 THEN JSON_ARRAY('berserk')
+          WHEN CEIL(n / 10) = 7 THEN JSON_ARRAY('lockdown')
+          WHEN CEIL(n / 10) = 8 THEN JSON_ARRAY('high_attack', 'thick_hp')
+          WHEN CEIL(n / 10) = 9 THEN JSON_ARRAY('dodge')
+          WHEN CEIL(n / 10) = 10 THEN JSON_ARRAY('shield', 'berserk')
+          WHEN CEIL(n / 10) = 11 THEN JSON_ARRAY('high_attack', 'lockdown')
+          WHEN CEIL(n / 10) = 12 THEN JSON_ARRAY('thick_hp', 'shield')
+          WHEN CEIL(n / 10) = 13 THEN JSON_ARRAY('dodge', 'berserk')
+          WHEN CEIL(n / 10) = 14 THEN JSON_ARRAY('high_attack', 'shield')
+          WHEN CEIL(n / 10) = 15 THEN JSON_ARRAY('thick_hp', 'lockdown')
+          WHEN CEIL(n / 10) = 16 THEN JSON_ARRAY('dodge', 'high_attack')
+          WHEN CEIL(n / 10) = 17 THEN JSON_ARRAY('berserk', 'lockdown')
+          WHEN CEIL(n / 10) = 18 THEN JSON_ARRAY('thick_hp', 'dodge')
+          WHEN CEIL(n / 10) = 19 THEN JSON_ARRAY('high_attack', 'berserk', 'shield')
+          ELSE JSON_ARRAY('high_attack', 'thick_hp', 'dodge')
+        END AS traits
+      FROM `_kesini_pve_stage_seq`
+    ) AS numbered
+  ) AS base
+) AS staged
+ORDER BY n;
 
 COMMIT;
+
+DROP TEMPORARY TABLE IF EXISTS `_kesini_pve_stage_seq`;
 
 SELECT COUNT(*) AS imported_pve_stages
 FROM `pve_stage`
