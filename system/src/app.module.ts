@@ -17,6 +17,8 @@ import { RechargeConfig } from "./entity/rechargeConfig.entity";
 import { RechargeRecord } from "./entity/rechargeRecord.entity";
 import { ExchangeShopItem } from "./entity/exchangeShopItem.entity";
 import { ExchangeShopUsage } from "./entity/exchangeShopUsage.entity";
+import { ShopProduct } from "./entity/shopProduct.entity";
+import { ShopPurchaseRecord } from "./entity/shopPurchaseRecord.entity";
 import { TradeConfig } from "./entity/tradeConfig.entity";
 import { TradeListing } from "./entity/tradeListing.entity";
 import { TradeRecord } from "./entity/tradeRecord.entity";
@@ -100,6 +102,8 @@ import { CompensationModule } from "./compensation/compensation.module";
       RechargeRecord,
       ExchangeShopItem,
       ExchangeShopUsage,
+      ShopProduct,
+      ShopPurchaseRecord,
       TradeListing,
       TradeRecord,
       TradeConfig,

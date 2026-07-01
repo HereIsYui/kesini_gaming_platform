@@ -122,6 +122,8 @@ export const pointSourceOptions = [
   { value: "pve", label: "关卡奖励" },
   { value: "trade_buy", label: "交易购买" },
   { value: "trade_sell", label: "交易出售" },
+  { value: "shop_buy", label: "商城购买" },
+  { value: "shop_reward", label: "商城奖励" },
   { value: "shop_recycle", label: "商店回收" },
   { value: "player_message", label: "消息奖励" },
   { value: "vip_daily", label: "VIP礼包" },
@@ -175,6 +177,11 @@ export function pointMetadataSummary(record: PointLedgerRecord) {
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 购买`;
     case "trade_sell":
       return `订单 #${String(meta("listingId") || record.sourceId || "-")} · 出售`;
+    case "shop_buy":
+    case "shop_reward":
+      return `${String(meta("productName") || "商城")} · ${String(
+        meta("count") || 1,
+      )} 次`;
     case "shop_recycle":
       return `${String(meta("cardName") || "卡片")} · ${String(meta("count") || 1)} 张`;
     case "player_message":

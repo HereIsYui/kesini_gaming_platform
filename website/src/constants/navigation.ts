@@ -18,6 +18,7 @@ import {
 
 export const sectionItems = [
   { key: "draw", label: "抽卡", icon: Sparkles },
+  { key: "shop", label: "商城", icon: Store },
   { key: "profile", label: "主页", icon: UserRound },
   { key: "messages", label: "消息", icon: Mail },
   { key: "settings", label: "设置", icon: Settings },
@@ -45,6 +46,7 @@ export const sectionItemMap = new Map<SectionKey, SectionItem>(
 
 export const primaryNavSectionKeys = [
   "draw",
+  "shop",
   "pve",
   "synthesize",
   "leaderboard",

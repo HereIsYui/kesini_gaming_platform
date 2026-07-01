@@ -2,18 +2,28 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   UseFilters,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { Type } from "class-transformer";
-import { IsInt, IsNotEmpty, IsString, Min } from "class-validator";
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from "class-validator";
 import { GetUser } from "src/auth/get-user.decorator";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { ResponseDto } from "src/common/dto/response.dto";
 import { HttpExceptionFilter } from "src/common/filters/http-exception.filter";
 import { TransformInterceptor } from "src/common/interceptors/transform.interceptor";
+import { ShopMallService } from "./shop-mall.service";
 import { ShopRecycleService } from "./shop-recycle.service";
 
 class RecycleCardsDto {
@@ -42,6 +52,19 @@ class RecycleCardDto {
   cardUuid: string;
 }
 
+class BuyShopProductDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  count?: number;
+
+  @IsOptional()
+  @IsString()
+  requestId?: string;
+}
+
 interface UserInfo {
   uid: string;
 }
@@ -51,7 +74,44 @@ interface UserInfo {
 @UseInterceptors(TransformInterceptor)
 @UseFilters(HttpExceptionFilter)
 export class ShopController {
-  constructor(private readonly shopRecycleService: ShopRecycleService) {}
+  constructor(
+    private readonly shopRecycleService: ShopRecycleService,
+    private readonly shopMallService: ShopMallService,
+  ) {}
+
+  @Get("products")
+  async listProducts(@GetUser() user: UserInfo): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.shopMallService.listProducts(user.uid),
+        "获取商城成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取商城失败");
+    }
+  }
+
+  @Post("products/:id/buy")
+  async buyProduct(
+    @GetUser() user: UserInfo,
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: BuyShopProductDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.shopMallService.buy(user.uid, id, body),
+        "购买成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "购买失败");
+    }
+  }
 
   @Get("recycle/config")
   async getRecycleConfig(): Promise<ResponseDto<any>> {

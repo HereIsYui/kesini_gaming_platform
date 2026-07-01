@@ -39,6 +39,7 @@ import {
 } from "src/achievement/achievement.service";
 import type { AchievementTargetType } from "src/entity/achievementConfig.entity";
 import { ShopRecycleService } from "src/shop/shop-recycle.service";
+import { ShopMallService } from "src/shop/shop-mall.service";
 import { AnnouncementService } from "src/announcement/announcement.service";
 import { PlayerMessageService } from "src/player-message/player-message.service";
 import { AdminGuard } from "./admin.guard";
@@ -199,6 +200,22 @@ class ExchangeUsageQueryDto extends PageDto {
   @IsInt()
   @Min(1)
   itemId?: number;
+}
+
+class ShopPurchaseQueryDto extends PageDto {
+  @IsOptional()
+  @IsString()
+  uid?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  productId?: number;
+
+  @IsOptional()
+  @IsIn(["pending", "success", "failed", "local_failed"])
+  status?: "pending" | "success" | "failed" | "local_failed";
 }
 
 class TradeListingQueryDto extends PageDto {
@@ -887,6 +904,72 @@ class ExchangeShopItemDto {
   sort_order?: number;
 }
 
+class ShopProductDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @IsIn(["star_coin", "fishpi_point"])
+  currency_type?: "star_coin" | "fishpi_point";
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  price?: number;
+
+  @IsOptional()
+  @IsObject()
+  rewards?: {
+    points: number;
+    items: Array<{ itemId: number; num: number }>;
+    cards?: Array<{ cardId: number; rarity: string; num: number }>;
+  };
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  total_limit?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  user_limit?: number | null;
+
+  @IsOptional()
+  @IsDateString()
+  starts_at?: string;
+
+  @IsOptional()
+  @IsDateString()
+  ends_at?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sort_order?: number;
+}
+
 interface UserInfo {
   uid: string;
 }
@@ -900,6 +983,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly achievementService: AchievementService,
     private readonly shopRecycleService: ShopRecycleService,
+    private readonly shopMallService: ShopMallService,
     private readonly announcementService: AnnouncementService,
     private readonly playerMessageService: PlayerMessageService,
   ) {}
@@ -1394,6 +1478,75 @@ export class AdminController {
     return ResponseDto.success(
       await this.adminService.listExchangeUsages(query),
       "获取兑换商店记录成功",
+    );
+  }
+
+  @Get("shop-products")
+  async listShopProducts(@Query() query: PageDto): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.listAdminProducts(query),
+      "获取商城商品成功",
+    );
+  }
+
+  @Get("shop-products/:id")
+  async getShopProduct(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.getAdminProduct(id),
+      "获取商城商品成功",
+    );
+  }
+
+  @Post("shop-products")
+  async createShopProduct(
+    @Body() body: ShopProductDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.createAdminProduct(body as any),
+      "创建商城商品成功",
+    );
+  }
+
+  @Patch("shop-products/:id")
+  async updateShopProduct(
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: ShopProductDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.updateAdminProduct(id, body as any),
+      "更新商城商品成功",
+    );
+  }
+
+  @Delete("shop-products/:id")
+  async deleteShopProduct(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.deleteAdminProduct(id),
+      "删除商城商品成功",
+    );
+  }
+
+  @Get("shop-purchases")
+  async listShopPurchases(
+    @Query() query: ShopPurchaseQueryDto,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.listAdminPurchases(query),
+      "获取购买记录成功",
+    );
+  }
+
+  @Get("shop-purchases/:id")
+  async getShopPurchase(
+    @Param("id", ParseIntPipe) id: number,
+  ): Promise<ResponseDto<any>> {
+    return ResponseDto.success(
+      await this.shopMallService.getAdminPurchase(id),
+      "获取购买记录成功",
     );
   }
 

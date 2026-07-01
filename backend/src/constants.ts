@@ -13,6 +13,8 @@ export type PageKey =
   | "redeem-usages"
   | "exchange-shop"
   | "exchange-usages"
+  | "shop-products"
+  | "shop-purchases"
   | "announcements"
   | "player-messages"
   | "launch-activity-config"
@@ -60,6 +62,8 @@ export const pageKeys: PageKey[] = [
   "redeem-usages",
   "exchange-shop",
   "exchange-usages",
+  "shop-products",
+  "shop-purchases",
   "announcements",
   "player-messages",
   "launch-activity-config",
@@ -96,6 +100,7 @@ export const navGroups: NavGroup[] = [
 
 export const routeAliases: Record<string, PageKey> = {
   config: "gacha-config",
+  shop: "shop-products",
   trade: "trade-listings",
   recharge: "recharge-records",
   monthly: "monthly-card-records",
@@ -118,6 +123,18 @@ export const booleanOptions: SelectOption[] = [
 export const enabledOptions: SelectOption[] = [
   { label: "启用", value: true },
   { label: "停用", value: false },
+];
+
+export const shopCurrencyOptions: SelectOption[] = [
+  { label: "星穹币", value: "star_coin" },
+  { label: "鱼排积分", value: "fishpi_point" },
+];
+
+export const shopPurchaseStatusOptions: SelectOption[] = [
+  { label: "处理中", value: "pending" },
+  { label: "成功", value: "success" },
+  { label: "失败", value: "failed" },
+  { label: "异常", value: "local_failed" },
 ];
 
 export const cardPublishOptions: SelectOption[] = [
@@ -438,6 +455,65 @@ export const exchangeUsageFields: FieldConfig[] = [
   { key: "cost_snapshot", label: "消耗", readonly: true },
   { key: "reward_snapshot", label: "奖励", readonly: true },
   { key: "createdAt", label: "兑换时间", readonly: true },
+];
+
+export const shopProductFields: FieldConfig[] = [
+  { key: "id", label: "编号", readonly: true },
+  { key: "name", label: "名称" },
+  { key: "enabled", label: "状态", type: "boolean", defaultValue: true },
+  {
+    key: "currency_type",
+    label: "支付",
+    type: "select",
+    options: shopCurrencyOptions,
+    defaultValue: "star_coin",
+  },
+  { key: "price", label: "价格", type: "number", defaultValue: 1 },
+  { key: "total_limit", label: "总库存", type: "number" },
+  { key: "user_limit", label: "单人限购", type: "number" },
+  { key: "starts_at", label: "开始时间", type: "datetime" },
+  { key: "ends_at", label: "结束时间", type: "datetime" },
+  { key: "sort_order", label: "排序", type: "number", defaultValue: 0 },
+  { key: "description", label: "说明", type: "textarea", fullWidth: true },
+  {
+    key: "rewards",
+    label: "奖励",
+    type: "rewards",
+    fullWidth: true,
+    allowCardRewards: true,
+  },
+  { key: "used_count", label: "已售", readonly: true },
+];
+
+export const shopPurchaseFields: FieldConfig[] = [
+  { key: "id", label: "编号", readonly: true },
+  { key: "product_name", label: "商品", readonly: true },
+  {
+    key: "uid",
+    label: "玩家",
+    readonly: true,
+    minWidth: 180,
+    identity: { uidKey: "uid", nameKey: "userName" },
+  },
+  { key: "count", label: "数量", readonly: true },
+  {
+    key: "currency_type",
+    label: "支付",
+    type: "select",
+    options: shopCurrencyOptions,
+    readonly: true,
+  },
+  { key: "cost_amount", label: "消耗", readonly: true },
+  { key: "reward_snapshot", label: "奖励", readonly: true },
+  {
+    key: "status",
+    label: "状态",
+    type: "select",
+    options: shopPurchaseStatusOptions,
+    readonly: true,
+  },
+  { key: "failure_reason", label: "失败原因", readonly: true },
+  { key: "createdAt", label: "时间", readonly: true },
 ];
 
 export const launchActivityFields: FieldConfig[] = [

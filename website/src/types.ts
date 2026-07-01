@@ -651,6 +651,36 @@ export interface ExchangeClaimResponse {
   rewards: RedeemRewards;
 }
 
+export type ShopCurrencyType = "star_coin" | "fishpi_point";
+
+export interface ShopProduct {
+  id: number;
+  name: string;
+  description?: string;
+  currencyType: ShopCurrencyType;
+  currencyLabel: string;
+  price: number;
+  rewards: RedeemRewards;
+  remaining: number | null;
+  usedByUser: number;
+  userLimit?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  canBuy: boolean;
+  unavailableReason?: string;
+}
+
+export interface ShopBuyResponse {
+  purchaseId: number;
+  productId: number;
+  count: number;
+  currencyType: ShopCurrencyType;
+  costAmount: number;
+  rewards: RedeemRewards;
+  pointAfter?: number;
+  fishpiPointAfter?: number;
+}
+
 export interface RechargeConfig {
   enabled: boolean;
   minAmount: number;
@@ -1186,6 +1216,8 @@ export type PointLedgerSourceType =
   | "pve"
   | "trade_buy"
   | "trade_sell"
+  | "shop_buy"
+  | "shop_reward"
   | "shop_recycle"
   | "player_message"
   | "vip_daily"

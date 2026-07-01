@@ -97,6 +97,7 @@ import type {
   MonthlyCardPurchaseResponse,
   MonthlyCardStatusResponse,
   MonthlyCardType,
+  ShopBuyResponse,
   ShopRecycleCardsResponse,
   ShopRecycleConfig,
   ShowcaseCard,
@@ -131,6 +132,7 @@ import { usePlayerPreferences } from "./composables/usePlayerPreferences";
 import { usePointsLedger } from "./composables/usePointsLedger";
 import { usePublicData } from "./composables/usePublicData";
 import { useRedeemShop } from "./composables/useRedeemShop";
+import { useShopMall } from "./composables/useShopMall";
 import { useRechargeFlow } from "./composables/useRechargeFlow";
 import {
   cardMediaUrl,
@@ -498,6 +500,7 @@ const busy = reactive({
   points: false,
   catalog: false,
   shop: false,
+  mall: false,
   redeem: false,
   tasks: false,
   claimTask: false,
@@ -852,6 +855,21 @@ const loadExchangeItems = redeemShop.loadExchangeItems;
 const claimRedeemCode = redeemShop.claimRedeemCode;
 const claimExchange = redeemShop.claimExchange;
 const clearExchangeItems = redeemShop.clearExchangeItems;
+const shopMall = useShopMall({
+  isAuthed: () => isAuthed.value,
+  setBusy: (value) => {
+    busy.mall = value;
+  },
+  notify,
+  getErrorMessage,
+  syncCurrentPoint: (point) => syncCurrentUserPoint(point),
+  refreshAfterBuy: (data) => refreshAfterShopBuy(data),
+});
+const shopProducts = shopMall.shopProducts;
+const shopCounts = shopMall.shopCounts;
+const loadShopProducts = shopMall.loadShopProducts;
+const buyShopProduct = shopMall.buyShopProduct;
+const clearShopProducts = shopMall.clearShopProducts;
 const playerDisplayName = computed(() => {
   const uid = currentUser.value?.uid;
   return publicPlayerName(
@@ -1482,6 +1500,9 @@ watch(activeSection, async (section) => {
   if (section === "trade" && isAuthed.value) {
     await loadTradeData();
   }
+  if (section === "shop" && isAuthed.value) {
+    await loadShopProducts();
+  }
 });
 
 watch(
@@ -1610,6 +1631,7 @@ function logout(message = "已退出登录") {
   clearAchievementToasts();
   resetPointRecords();
   clearExchangeItems();
+  clearShopProducts();
   tradeListings.value = [];
   myTradeListings.value = [];
   tradeRecords.value = [];
@@ -1657,6 +1679,7 @@ async function loadPrivateData() {
     loadCompensation(),
     loadPointRecords(),
     loadExchangeItems(),
+    loadShopProducts(),
     loadShopRecycleConfig(),
     loadTradeData(),
   ]);
@@ -1682,6 +1705,21 @@ async function refreshAfterDraw() {
     loadPointRecords(), // 星穹币流水
     loadTasks(), // 抽卡可能推进任务
     loadAchievementNotifications(), // 抽卡可能解锁成就
+  ]);
+}
+
+async function refreshAfterShopBuy(_data: ShopBuyResponse) {
+  if (!isAuthed.value) {
+    return;
+  }
+  await Promise.allSettled([
+    loadShopProducts(),
+    loadStats(),
+    loadFishpiPoint(),
+    loadUserCards({ preserveLoaded: true, silent: true }),
+    loadUserCatalog({ silent: true }),
+    loadPointRecords(),
+    loadAchievementNotifications(),
   ]);
 }
 
@@ -4296,6 +4334,7 @@ const appContext = {
   pointRecordSourceFilter,
   pointRecordTotalPages,
   exchangeItems,
+  shopProducts,
   tradeListings,
   myTradeListings,
   tradeRecords,
@@ -4338,6 +4377,7 @@ const appContext = {
   rechargeModalOpen,
   rechargeAmount,
   exchangeCounts,
+  shopCounts,
   achievementToasts,
   achievementToastQueue,
   callbackBusy,
@@ -4590,6 +4630,8 @@ const appContext = {
   dismissAchievementToast,
   loadPointRecords,
   loadExchangeItems,
+  loadShopProducts,
+  buyShopProduct,
   loadShopRecycleConfig,
   loadTradeData,
   loadTradeListings,

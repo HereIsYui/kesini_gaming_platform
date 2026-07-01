@@ -14,6 +14,7 @@ import ProfilePage from "../../pages/ProfilePage.vue";
 import PvePage from "../../pages/PvePage.vue";
 import RedeemPage from "../../pages/RedeemPage.vue";
 import SettingsPage from "../../pages/SettingsPage.vue";
+import ShopPage from "../../pages/ShopPage.vue";
 import SynthesizePage from "../../pages/SynthesizePage.vue";
 import TasksPage from "../../pages/TasksPage.vue";
 import TradePage from "../../pages/TradePage.vue";
@@ -26,6 +27,7 @@ const props = defineProps<{
 <template>
   <main class="page">
     <DrawPage v-if="props.activeSection === 'draw'" />
+    <ShopPage v-if="props.activeSection === 'shop'" />
     <ProfilePage v-if="props.activeSection === 'profile'" />
     <FriendsPage v-if="props.activeSection === 'friends'" />
     <MessagesPage v-if="props.activeSection === 'messages'" />

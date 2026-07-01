@@ -19,6 +19,8 @@ export type PointLedgerSourceType =
   | "pve"
   | "trade_buy"
   | "trade_sell"
+  | "shop_buy"
+  | "shop_reward"
   | "shop_recycle"
   | "player_message"
   | "vip_daily"

@@ -376,6 +376,32 @@
         />
 
         <AdminTable
+          v-else-if="active === 'shop-products'"
+          title="商城商品"
+          endpoint="/admin/shop-products"
+          :fields="shopProductFields"
+          :item-options="itemOptions"
+          :card-options="cardOptions"
+          editable
+          creatable
+          deletable
+          detail-fetchable
+          search-placeholder="搜索商品"
+        />
+
+        <AdminTable
+          v-else-if="active === 'shop-purchases'"
+          title="购买记录"
+          endpoint="/admin/shop-purchases"
+          :fields="shopPurchaseFields"
+          :item-options="itemOptions"
+          :card-options="cardOptions"
+          keyword-param="uid"
+          detail-fetchable
+          search-placeholder="按账号查询"
+        />
+
+        <AdminTable
           v-else-if="active === 'announcements'"
           title="公告栏"
           endpoint="/admin/announcements"
@@ -778,6 +804,8 @@ import {
   redeemCodeFields,
   redeemUsageFields,
   routeAliases,
+  shopProductFields,
+  shopPurchaseFields,
   shopRecycleConfigFields,
   siteConfigFields,
   tradeConfigFields,
@@ -907,6 +935,9 @@ function isEnabledFlag(value: unknown): boolean {
 const itemOptions = computed<SelectOption[]>(
   () => adminOptions.value?.dropItems || [],
 );
+const cardOptions = computed<SelectOption[]>(
+  () => adminOptions.value?.cards || [],
+);
 const cardFields = computed(() => {
   const fields = createCardFields(adminOptions.value?.pools || []);
   const dropItemField = fields.find((field) => field.key === "drop_item");
@@ -1007,6 +1038,20 @@ const pageDefinitions = computed(
         key: "exchange-usages",
         label: "兑换商店记录",
         description: "查看兑换商店领取记录、消耗和奖励。",
+        group: "运营工具",
+        icon: Files,
+      },
+      {
+        key: "shop-products",
+        label: "商城商品",
+        description: "配置商品、支付、奖励和限购。",
+        group: "运营工具",
+        icon: Shop,
+      },
+      {
+        key: "shop-purchases",
+        label: "购买记录",
+        description: "查看玩家购买、消耗和奖励。",
         group: "运营工具",
         icon: Files,
       },

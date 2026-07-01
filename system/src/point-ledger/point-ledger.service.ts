@@ -33,6 +33,8 @@ const SOURCE_LABELS: Record<PointLedgerSourceType, string> = {
   pve: "关卡奖励",
   trade_buy: "交易购买",
   trade_sell: "交易出售",
+  shop_buy: "商城购买",
+  shop_reward: "商城奖励",
   shop_recycle: "商店回收",
   player_message: "消息奖励",
   vip_daily: "VIP礼包",
