@@ -64,6 +64,14 @@ WHERE NOT EXISTS (
   WHERE REPLACE(`drop_name`, ' ', '') = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
 );
 
+INSERT INTO `drop_item`
+(`drop_name`, `drop_desc`, `drop_type`, `drop_item_type`, `drop_item_value`, `disabled`, `default_fragment`, `createdAt`)
+SELECT '星核结晶', 'UR卡养成材料', 0, 0, 0, 0, 0, NOW(6)
+WHERE NOT EXISTS (
+  SELECT 1 FROM `drop_item`
+  WHERE REPLACE(`drop_name`, ' ', '') = '星核结晶' AND `drop_type` = 0 AND `disabled` = 0
+);
+
 SET @default_fragment_item_id := (
   SELECT `id` FROM `drop_item`
   WHERE `drop_type` = 0 AND `disabled` = 0 AND `default_fragment` = 1
@@ -87,6 +95,11 @@ SET @sr_fragment_item_id := (
 SET @ssr_fragment_item_id := (
   SELECT `id` FROM `drop_item`
   WHERE REPLACE(`drop_name`, ' ', '') = 'SSR碎片' AND `drop_type` = 0 AND `disabled` = 0
+  ORDER BY `id` ASC LIMIT 1
+);
+SET @star_core_item_id := (
+  SELECT `id` FROM `drop_item`
+  WHERE REPLACE(`drop_name`, ' ', '') = '星核结晶' AND `drop_type` = 0 AND `disabled` = 0
   ORDER BY `id` ASC LIMIT 1
 );
 
@@ -113,35 +126,67 @@ SELECT
       ELSE 10 + FLOOR(n / 10) * 5
     END,
     'items',
-    JSON_ARRAY(
-      JSON_OBJECT(
-        'itemId',
-        CASE
-          WHEN n >= 170 THEN @ssr_fragment_item_id
-          WHEN n >= 120 THEN @sr_fragment_item_id
-          WHEN n >= 60 THEN @r_fragment_item_id
-          ELSE @n_fragment_item_id
-        END,
-        'num',
-        CASE
-          WHEN boss_type = 'final' THEN 8
-          WHEN boss_type = 'major' THEN 5
-          WHEN boss_type = 'minor' THEN 3
-          ELSE 1
-        END
-      ),
-      JSON_OBJECT(
-        'itemId',
-        @default_fragment_item_id,
-        'num',
-        CASE
-          WHEN boss_type = 'final' THEN 80
-          WHEN boss_type = 'major' THEN 40
-          WHEN boss_type = 'minor' THEN 10
-          ELSE 2
-        END
+    CASE
+      WHEN star_core_reward > 0 THEN JSON_ARRAY(
+        JSON_OBJECT(
+          'itemId',
+          CASE
+            WHEN n >= 170 THEN @ssr_fragment_item_id
+            WHEN n >= 120 THEN @sr_fragment_item_id
+            WHEN n >= 60 THEN @r_fragment_item_id
+            ELSE @n_fragment_item_id
+          END,
+          'num',
+          CASE
+            WHEN boss_type = 'final' THEN 8
+            WHEN boss_type = 'major' THEN 5
+            WHEN boss_type = 'minor' THEN 3
+            ELSE 1
+          END
+        ),
+        JSON_OBJECT(
+          'itemId',
+          @default_fragment_item_id,
+          'num',
+          CASE
+            WHEN boss_type = 'final' THEN 80
+            WHEN boss_type = 'major' THEN 40
+            WHEN boss_type = 'minor' THEN 10
+            ELSE 2
+          END
+        ),
+        JSON_OBJECT('itemId', @star_core_item_id, 'num', star_core_reward)
       )
-    )
+      ELSE JSON_ARRAY(
+        JSON_OBJECT(
+          'itemId',
+          CASE
+            WHEN n >= 170 THEN @ssr_fragment_item_id
+            WHEN n >= 120 THEN @sr_fragment_item_id
+            WHEN n >= 60 THEN @r_fragment_item_id
+            ELSE @n_fragment_item_id
+          END,
+          'num',
+          CASE
+            WHEN boss_type = 'final' THEN 8
+            WHEN boss_type = 'major' THEN 5
+            WHEN boss_type = 'minor' THEN 3
+            ELSE 1
+          END
+        ),
+        JSON_OBJECT(
+          'itemId',
+          @default_fragment_item_id,
+          'num',
+          CASE
+            WHEN boss_type = 'final' THEN 80
+            WHEN boss_type = 'major' THEN 40
+            WHEN boss_type = 'minor' THEN 10
+            ELSE 2
+          END
+        )
+      )
+    END
   ),
   chapter,
   stage_no,
@@ -187,6 +232,14 @@ FROM (
       WHEN n IN (60, 120, 180) OR stage_no = 10 THEN ELT(MOD(n * 7 + 3, 11) + 1, '阿达', '老王', '午安', '勾月', 'Yui', '跳跳', '墨夏', '哀酱', '白猫', 'ipwz', '涛之雨')
       ELSE ''
     END AS boss_name,
+    CASE
+      WHEN n = 200 THEN 150
+      WHEN n = 180 THEN 120
+      WHEN n = 120 THEN 100
+      WHEN n = 60 THEN 80
+      WHEN stage_no = 10 AND chapter >= 12 THEN 20 + (chapter - 12) * 5
+      ELSE 0
+    END AS star_core_reward,
     traits
   FROM (
     SELECT

@@ -144,7 +144,7 @@ describe("ShopRecycleService", () => {
       priceR: 2,
       priceSR: 5,
       priceSSR: 15,
-      priceUR: 50,
+      priceUR: 0,
     });
   });
 
@@ -164,7 +164,6 @@ describe("ShopRecycleService", () => {
     ["R", 2],
     ["SR", 5],
     ["SSR", 15],
-    ["UR", 50],
   ])("回收 %s 卡按配置发放星穹币", async (rarity, price) => {
     const userCards = [createUserCard(1, rarity), createUserCard(2, rarity)];
     const { service, repositories, pointLedgerService } = createService({
@@ -324,6 +323,21 @@ describe("ShopRecycleService", () => {
     ).rejects.toThrow("可回收数量不足");
     expect(repositories.userCardRepository.save).not.toHaveBeenCalled();
     expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
+  });
+
+  it("分组回收拒绝 UR", async () => {
+    const { service } = createService({
+      userCards: [createUserCard(1, "UR"), createUserCard(2, "UR")],
+    });
+
+    await expect(
+      service.recycleCards("u1", {
+        cardId: 1,
+        rarity: "UR",
+        poolId: 1,
+        count: 1,
+      }),
+    ).rejects.toThrow("UR不可回收");
   });
 
   it("精确回收只删除指定单卡并返回 count 1", async () => {

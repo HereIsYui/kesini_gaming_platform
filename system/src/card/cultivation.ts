@@ -9,7 +9,7 @@ export const CULTIVATION_CONFIG: Record<
   R: { maxLevel: 30, costBase: 8, powerBase: 180, powerGrowth: 22 },
   SR: { maxLevel: 40, costBase: 16, powerBase: 320, powerGrowth: 38 },
   SSR: { maxLevel: 50, costBase: 30, powerBase: 600, powerGrowth: 72 },
-  UR: { maxLevel: 60, costBase: 50, powerBase: 1000, powerGrowth: 120 },
+  UR: { maxLevel: 60, costBase: 5, powerBase: 1000, powerGrowth: 120 },
 };
 
 export const STAR_MAX_LEVEL = 5;

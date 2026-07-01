@@ -13,6 +13,7 @@ import {
 import { GuildMember, GuildMemberRole } from "src/entity/guildMember.entity";
 import { GuildMessage } from "src/entity/guildMessage.entity";
 import { RedeemRewards } from "src/entity/redeemCode.entity";
+import { DropItem } from "src/entity/drop.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
 import { User } from "src/entity/user.entity";
 import { FormationService } from "src/formation/formation.service";
@@ -41,6 +42,9 @@ const MAX_MESSAGE_LENGTH = 120;
 const MAX_ANNOUNCEMENT_LENGTH = 160;
 const MAX_DESCRIPTION_LENGTH = 80;
 const GUILD_BOSS_NAME = "星渊守卫";
+const STAR_CORE_CRYSTAL_NAME = "星核结晶";
+const BOSS_CHALLENGE_STAR_CORE_REWARD = 5;
+const BOSS_DEFEAT_STAR_CORE_REWARD = 20;
 const GUILD_EXP_THRESHOLDS = [
   500,
   1200,
@@ -61,6 +65,11 @@ const CHEST_REWARDS: Record<number, number> = {
   100: 20,
   300: 50,
   600: 100,
+};
+const CHEST_STAR_CORE_REWARDS: Record<number, number> = {
+  100: 5,
+  300: 15,
+  600: 30,
 };
 
 type GuildManager = DataSource | EntityManager;
@@ -719,7 +728,13 @@ export class GuildsService {
             date_key: dateKey,
           },
         })) > 0;
-      const reward = hadDamageToday ? null : this.pointsReward(20);
+      const reward = hadDamageToday
+        ? null
+        : await this.pointsAndStarCoreReward(
+            manager,
+            20,
+            BOSS_CHALLENGE_STAR_CORE_REWARD,
+          );
       if (reward) {
         await this.rewardService.grantRewards(manager, user, reward, {
           sourceType: "guild_boss",
@@ -829,7 +844,11 @@ export class GuildsService {
       if (claimed) {
         throw new Error("已领取");
       }
-      reward = this.pointsReward(100);
+      reward = await this.pointsAndStarCoreReward(
+        manager,
+        100,
+        BOSS_DEFEAT_STAR_CORE_REWARD,
+      );
       await this.rewardService.grantRewards(manager, user, reward, {
         sourceType: "guild_boss",
         sourceId: `${guild.id}:${dateKey}:defeat`,
@@ -899,7 +918,11 @@ export class GuildsService {
       if (claimed) {
         throw new Error("已领取");
       }
-      reward = this.pointsReward(this.getChestReward(normalizedThreshold));
+      reward = await this.pointsAndStarCoreReward(
+        manager,
+        this.getChestReward(normalizedThreshold),
+        this.getChestStarCoreReward(normalizedThreshold),
+      );
       await this.rewardService.grantRewards(manager, user, reward, {
         sourceType: "guild_chest",
         sourceId: `${guild.id}:${dateKey}:${normalizedThreshold}`,
@@ -1371,17 +1394,23 @@ export class GuildsService {
       }),
     ]);
     const claimedSet = new Set(claims.map((claim) => Number(claim.threshold)));
-    return config.activeChestThresholds.map((threshold) => {
-      const claimed = claimedSet.has(threshold);
-      const unlocked = activity >= threshold;
-      return {
-        threshold,
-        reward: this.pointsReward(this.getChestReward(threshold)),
-        unlocked,
-        claimed,
-        available: unlocked && ownActivity > 0 && !claimed,
-      };
-    });
+    return Promise.all(
+      config.activeChestThresholds.map(async (threshold) => {
+        const claimed = claimedSet.has(threshold);
+        const unlocked = activity >= threshold;
+        return {
+          threshold,
+          reward: await this.pointsAndStarCoreReward(
+            manager,
+            this.getChestReward(threshold),
+            this.getChestStarCoreReward(threshold),
+          ),
+          unlocked,
+          claimed,
+          available: unlocked && ownActivity > 0 && !claimed,
+        };
+      }),
+    );
   }
 
   private async ensureDailyBoss(
@@ -1469,7 +1498,11 @@ export class GuildsService {
       attempts,
       attemptLimit: config.bossAttempts,
       myDamage,
-      reward: this.pointsReward(100),
+      reward: await this.pointsAndStarCoreReward(
+        manager,
+        100,
+        BOSS_DEFEAT_STAR_CORE_REWARD,
+      ),
       rewardClaimed,
       canClaim:
         (currentBoss.defeated === true || Number(currentBoss.hp || 0) <= 0) &&
@@ -1701,12 +1734,61 @@ export class GuildsService {
     }
   }
 
+  private async pointsAndStarCoreReward(
+    manager: GuildManager,
+    points: number,
+    starCoreCount: number,
+  ): Promise<RedeemRewards> {
+    const reward = this.pointsReward(points);
+    if (starCoreCount <= 0) {
+      return reward;
+    }
+    const starCore = await this.findStarCoreCrystalItem(manager);
+    if (!starCore) {
+      return reward;
+    }
+    return {
+      ...reward,
+      items: [
+        {
+          itemId: starCore.id,
+          itemName: starCore.drop_name,
+          num: starCoreCount,
+        } as any,
+      ],
+    };
+  }
+
   private pointsReward(points: number): RedeemRewards {
     return { points: Math.max(0, Math.round(points || 0)), items: [] };
   }
 
   private getChestReward(threshold: number) {
     return CHEST_REWARDS[threshold] || Math.max(1, Math.floor(threshold / 10));
+  }
+
+  private getChestStarCoreReward(threshold: number) {
+    return CHEST_STAR_CORE_REWARDS[threshold] || 0;
+  }
+
+  private async findStarCoreCrystalItem(
+    manager: GuildManager,
+  ): Promise<DropItem | null> {
+    const repository = manager.getRepository(DropItem);
+    const items = await repository.find({
+      where: { drop_type: 0, disabled: false },
+    });
+    return (
+      items.find(
+        (item) =>
+          this.normalizeItemName(item.drop_name) ===
+          this.normalizeItemName(STAR_CORE_CRYSTAL_NAME),
+      ) || null
+    );
+  }
+
+  private normalizeItemName(name: string) {
+    return String(name || "").replace(/\s+/g, "");
   }
 
   private currentDateKey(now = new Date()) {

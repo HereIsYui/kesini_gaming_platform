@@ -39,6 +39,7 @@ const {
   guildMemberInitial,
   guildMessageSenderName,
   guildMessageInitial,
+  formatRewards,
   loadGuild,
   loadGuildMessages,
   createGuild,
@@ -264,7 +265,7 @@ function pendingRequestId(guildId: number) {
             >
               <div>
                 <strong>{{ chest.threshold }}</strong>
-                <span>星穹币 {{ chest.reward?.points || 0 }}</span>
+                <span>{{ formatRewards(chest.reward) }}</span>
               </div>
               <button
                 class="secondary-action compact"
@@ -377,6 +378,10 @@ function pendingRequestId(guildId: number) {
               <article>
                 <small>伤害</small>
                 <strong>{{ guildBoss.myDamage }}</strong>
+              </article>
+              <article>
+                <small>奖励</small>
+                <strong>{{ formatRewards(guildBoss.reward) }}</strong>
               </article>
             </div>
             <div class="guild-boss-actions">

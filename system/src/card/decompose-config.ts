@@ -21,10 +21,10 @@ export interface DecomposeConfig {
 
 export const DEFAULT_DECOMPOSE_CONFIG: DecomposeConfig = {
   rules: {
-    N: { drops: [{ itemId: 0, min: 1, max: 10 }] },
-    R: { drops: [{ itemId: 0, min: 10, max: 20 }] },
-    SR: { drops: [{ itemId: 0, min: 20, max: 40 }] },
-    SSR: { drops: [{ itemId: 0, min: 40, max: 80 }] },
+    N: { drops: [{ itemId: 0, min: 8, max: 12 }] },
+    R: { drops: [{ itemId: 0, min: 12, max: 20 }] },
+    SR: { drops: [{ itemId: 0, min: 24, max: 40 }] },
+    SSR: { drops: [{ itemId: 0, min: 70, max: 110 }] },
   },
 };
 

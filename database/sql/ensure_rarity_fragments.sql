@@ -51,9 +51,19 @@ WHERE NOT EXISTS (
     AND `disabled` = 0
 );
 
+INSERT INTO `drop_item`
+(`drop_name`, `drop_desc`, `drop_type`, `drop_item_type`, `drop_item_value`, `disabled`, `default_fragment`, `createdAt`)
+SELECT '星核结晶', 'UR卡养成材料', 0, 0, 0, 0, 0, NOW(6)
+WHERE NOT EXISTS (
+  SELECT 1 FROM `drop_item`
+  WHERE REPLACE(`drop_name`, ' ', '') = '星核结晶'
+    AND `drop_type` = 0
+    AND `disabled` = 0
+);
+
 -- 执行后核对：
 -- SELECT id, drop_name, disabled, default_fragment, createdAt
 -- FROM drop_item
 -- WHERE drop_type = 0
---   AND REPLACE(drop_name, ' ', '') IN ('N碎片', 'R碎片', 'SR碎片', 'SSR碎片')
+--   AND REPLACE(drop_name, ' ', '') IN ('N碎片', 'R碎片', 'SR碎片', 'SSR碎片', '星核结晶')
 -- ORDER BY drop_name, id;

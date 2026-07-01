@@ -32,6 +32,9 @@ describe("PVE 200 关导入脚本", () => {
     expect(sql).toContain("WHEN stage_no = 10 THEN 'minor'");
     expect(sql).toContain("WHEN n = 200 THEN 'Yui'");
     expect(sql).toContain("WHEN n = 200 THEN 26000");
+    expect(sql).toContain("星核结晶");
+    expect(sql).toContain("SET @star_core_item_id");
+    expect(sql).toContain("WHEN n = 200 THEN 150");
     expect(sql).toContain("WHERE `name` LIKE '星域远征 %'");
     expect(sql).toContain("WHERE `name` LIKE '星域远征 %' AND `delete_flag` = 0");
   });

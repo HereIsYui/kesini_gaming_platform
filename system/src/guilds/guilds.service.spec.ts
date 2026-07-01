@@ -9,6 +9,7 @@ import { GuildJoinRequest } from "src/entity/guildJoinRequest.entity";
 import { GuildMember } from "src/entity/guildMember.entity";
 import { GuildMessage } from "src/entity/guildMessage.entity";
 import { SystemConfig } from "src/entity/systemConfig.entity";
+import { DropItem } from "src/entity/drop.entity";
 import { User } from "src/entity/user.entity";
 import { GuildsService } from "./guilds.service";
 
@@ -26,6 +27,18 @@ class GuildsTestStore {
   bossChallenges: GuildBossChallenge[] = [];
   bossRewardClaims: GuildBossRewardClaim[] = [];
   configs: SystemConfig[] = [];
+  dropItems: DropItem[] = [
+    {
+      id: 99,
+      drop_name: "星核结晶",
+      drop_desc: "UR卡养成材料",
+      drop_type: 0,
+      drop_item_type: 0,
+      drop_item_value: 0,
+      disabled: false,
+      default_fragment: false,
+    } as DropItem,
+  ];
   failNextBossSaveWithDuplicate = false;
   failNextRequestSaveWithDuplicate = false;
 
@@ -112,6 +125,9 @@ class GuildsTestStore {
       return this.createArrayRepository(this.configs, "id", () => ({
         updatedAt: this.date(this.configs.length + 240),
       }));
+    }
+    if (entity === DropItem) {
+      return this.createArrayRepository(this.dropItems, "id");
     }
     throw new Error("测试仓库未配置");
   }
@@ -551,6 +567,9 @@ describe("GuildsService 公会玩法", () => {
     const result = await service.challengeBoss("u1");
 
     expect(result.damage).toBeGreaterThan(0);
+    expect(result.reward?.items).toEqual([
+      expect.objectContaining({ itemName: "星核结晶", num: 5 }),
+    ]);
     expect(store.bosses[0].hp).toBeLessThan(900000);
     expect(store.bossChallenges).toHaveLength(1);
     expect(store.members[0].total_contribution).toBe(20);
@@ -585,6 +604,9 @@ describe("GuildsService 公会玩法", () => {
     expect(store.guilds[0].fund).toBe(100);
     expect(store.members[0].total_contribution).toBe(50);
     expect(claim.reward?.points).toBe(100);
+    expect(claim.reward?.items).toEqual([
+      expect.objectContaining({ itemName: "星核结晶", num: 20 }),
+    ]);
     expect(store.bossRewardClaims).toHaveLength(1);
     expect(rewardService.grantRewards).toHaveBeenCalledWith(
       expect.anything(),
@@ -603,6 +625,9 @@ describe("GuildsService 公会玩法", () => {
     const result = await service.claimActivityChest("u1", 100);
 
     expect(result.reward?.points).toBe(20);
+    expect(result.reward?.items).toEqual([
+      expect.objectContaining({ itemName: "星核结晶", num: 5 }),
+    ]);
     expect(store.chestClaims).toHaveLength(1);
     await expect(service.claimActivityChest("u1", 100)).rejects.toThrow(
       "已领取",

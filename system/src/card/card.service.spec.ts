@@ -1927,7 +1927,7 @@ describe("CardService 卡片养成", () => {
     userCard?: Partial<UserCard> | null;
     card?: Partial<CardItem>;
     inventory?: Partial<UserInventory> | null;
-    inventoryCounts?: Partial<Record<CardRarity | "default", number>>;
+    inventoryCounts?: Partial<Record<CardRarity | "default" | "starCore", number>>;
     activeListing?: Partial<TradeListing> | null;
   } = {}) {
     const userCard = options.userCard === null
@@ -1962,6 +1962,13 @@ describe("CardService 卡片养成", () => {
       disabled: false,
       default_fragment: true,
     } as DropItem;
+    const starCoreFragment = {
+      id: 15,
+      drop_name: "星核结晶",
+      drop_type: 0,
+      disabled: false,
+      default_fragment: false,
+    } as DropItem;
     const rarityFragments = [
       { id: 11, drop_name: "N碎片", rarity: "N" },
       { id: 12, drop_name: "R碎片", rarity: "R" },
@@ -1981,11 +1988,13 @@ describe("CardService 卡片养成", () => {
     const inventoryCountForItem = (item: DropItem & { rarity?: CardRarity }) =>
       item.id === defaultFragment.id
         ? options.inventoryCounts?.default ?? options.inventory?.num ?? 100
+        : item.id === starCoreFragment.id
+          ? options.inventoryCounts?.starCore ?? options.inventory?.num ?? 100
         : options.inventoryCounts?.[item.rarity as CardRarity] ??
           options.inventory?.num ??
           100;
     const inventories = new Map<number, UserInventory>(
-      [defaultFragment, ...rarityFragments].map((item, index) => [
+      [defaultFragment, starCoreFragment, ...rarityFragments].map((item, index) => [
         item.id,
         {
           id: index + 1,
@@ -2004,7 +2013,7 @@ describe("CardService 卡片养成", () => {
       SSR: 14,
     };
     const inventoryItemId =
-      effectiveRarity === "UR" ? 5 : rarityFragmentIds[effectiveRarity];
+      effectiveRarity === "UR" ? 15 : rarityFragmentIds[effectiveRarity];
     const inventory =
       options.inventory === null
         ? null
@@ -2020,7 +2029,7 @@ describe("CardService 卡片养成", () => {
     });
     const dropRepository = createRepository({
       find: jest.fn(async ({ where }) =>
-        rarityFragments.filter((item) => {
+        [starCoreFragment, ...rarityFragments].filter((item) => {
           if (where?.drop_type !== undefined && item.drop_type !== where.drop_type) {
             return false;
           }
@@ -2173,24 +2182,45 @@ describe("CardService 卡片养成", () => {
     },
   );
 
-  it("UR 养成消耗默认碎片", async () => {
+  it("UR 养成消耗星核结晶", async () => {
     const { service, inventories } = createUpgradeService({
       userCard: { card_level: "UR", cultivation_level: 2, cultivation_exp: 50 },
       card: { card_level: "UR" },
-      inventoryCounts: { default: 100 },
+      inventoryCounts: { default: 100, starCore: 10 },
     });
 
     const result = await service.upgradeUserCard("u1", "card-uuid");
 
-    expect(inventories.get(5)?.num).toBe(0);
+    expect(inventories.get(15)?.num).toBe(0);
+    expect(inventories.get(5)?.num).toBe(100);
     expect(result).toEqual(
       expect.objectContaining({
         rarity: "UR",
         cost: expect.objectContaining({
-          itemName: "通用碎片",
-          num: 100,
+          itemName: "星核结晶",
+          num: 10,
           remaining: 0,
         }),
+      }),
+    );
+  });
+
+  it("UR 洗练消耗 10 个星核结晶", async () => {
+    const { service, inventories } = createUpgradeService({
+      userCard: { card_level: "UR", potential_bp: 300, potential_grade: "C" },
+      card: { card_level: "UR" },
+      inventoryCounts: { default: 100, starCore: 10 },
+    });
+
+    const result = await service.rerollUserCardPotential("u1", "card-uuid");
+
+    expect(inventories.get(15)?.num).toBe(0);
+    expect(inventories.get(5)?.num).toBe(100);
+    expect(result.cost).toEqual(
+      expect.objectContaining({
+        itemName: "星核结晶",
+        num: 10,
+        remaining: 0,
       }),
     );
   });

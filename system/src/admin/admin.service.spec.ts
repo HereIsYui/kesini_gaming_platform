@@ -1489,10 +1489,10 @@ describe("AdminService", () => {
       expect.objectContaining({
         rules: expect.objectContaining({
           N: expect.objectContaining({
-            drops: [expect.objectContaining({ itemId: 0, min: 1, max: 10 })],
+            drops: [expect.objectContaining({ itemId: 0, min: 8, max: 12 })],
           }),
           SSR: expect.objectContaining({
-            drops: [expect.objectContaining({ itemId: 0, min: 40, max: 80 })],
+            drops: [expect.objectContaining({ itemId: 0, min: 70, max: 110 })],
           }),
         }),
       }),

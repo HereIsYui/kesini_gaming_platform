@@ -410,7 +410,7 @@ const shopRecycleConfig = ref<ShopRecycleConfig>({
   priceR: 2,
   priceSR: 5,
   priceSSR: 15,
-  priceUR: 50,
+  priceUR: 0,
 });
 const drawResults = useDrawResults({ notify });
 const lastResults = drawResults.lastResults;

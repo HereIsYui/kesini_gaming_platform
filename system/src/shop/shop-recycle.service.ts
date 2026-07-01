@@ -41,7 +41,7 @@ const DEFAULT_SHOP_RECYCLE_CONFIG: StoredShopRecycleConfig = {
     R: 2,
     SR: 5,
     SSR: 15,
-    UR: 50,
+    UR: 0,
   },
 };
 
@@ -82,6 +82,9 @@ export class ShopRecycleService {
     const poolId = this.normalizePositiveInteger(input.poolId, "卡池无效");
     const count = this.normalizePositiveInteger(input.count, "回收数量无效");
     const rarity = this.normalizeRarity(input.rarity);
+    if (rarity === "UR") {
+      throw new Error("UR不可回收");
+    }
     const config = await this.getStoredConfig();
     if (!config.enabled) {
       throw new Error("商店暂未开启");

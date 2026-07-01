@@ -69,6 +69,7 @@ const RARITY_ORDER: CardRarity[] = ["N", "R", "SR", "SSR", "UR"];
 const ALLOWED_DRAW_COUNTS = [1, 10];
 const DEFAULT_DRAW_POOL_ID = 1;
 const NEW_CARD_WINDOW_MS = 48 * 60 * 60 * 1000;
+const STAR_CORE_CRYSTAL_NAME = "星核结晶";
 
 type RarityCounts = Record<CardRarity, number>;
 type CardPoolByRarity = Record<CardRarity, CardItem[]>;
@@ -1062,7 +1063,12 @@ export class CardService {
       const cost = getCultivationUpgradeCost(rarity, currentLevel);
       if (!inventory || inventory.num < cost) {
         throw new Error(
-          `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${inventory?.num || 0}个`,
+          this.createInsufficientMaterialMessage(
+            rarity,
+            cost,
+            fragmentItem.drop_name,
+            inventory?.num || 0,
+          ),
         );
       }
 
@@ -1154,7 +1160,12 @@ export class CardService {
       });
       if (!inventory || inventory.num < cost) {
         throw new Error(
-          `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${inventory?.num || 0}个`,
+          this.createInsufficientMaterialMessage(
+            rarity,
+            cost,
+            fragmentItem.drop_name,
+            inventory?.num || 0,
+          ),
         );
       }
       const before = this.createPotentialSnapshot(userCard, card, rarity);
@@ -3499,7 +3510,12 @@ export class CardService {
           : current.level >= current.maxLevel
             ? "卡片已达到当前稀有度等级上限"
             : ownedFragments < cost
-              ? `碎片不足，需要${cost}个${fragmentItem.drop_name}，当前拥有${ownedFragments}个`
+              ? this.createInsufficientMaterialMessage(
+                  rarity,
+                  cost,
+                  fragmentItem.drop_name,
+                  ownedFragments,
+                )
               : "";
 
     return {
@@ -3680,7 +3696,7 @@ export class CardService {
       R: 8,
       SR: 12,
       SSR: 20,
-      UR: 30,
+      UR: 10,
     }[rarity];
   }
 
@@ -3802,9 +3818,26 @@ export class CardService {
     rarity: CardRarity,
   ): Promise<DropItem> {
     if (rarity === "UR") {
-      return this.findDefaultFragmentItem(manager);
+      return this.findStarCoreCrystalItem(manager);
     }
     return this.findRarityFragmentItem(manager, rarity);
+  }
+
+  private async findStarCoreCrystalItem(
+    manager: EntityManager,
+  ): Promise<DropItem> {
+    const fragmentItems = await manager.getRepository(DropItem).find({
+      where: { drop_type: 0, disabled: false },
+    });
+    const item = fragmentItems.find(
+      (fragmentItem) =>
+        this.normalizeFragmentName(fragmentItem.drop_name) ===
+        this.normalizeFragmentName(STAR_CORE_CRYSTAL_NAME),
+    );
+    if (!item) {
+      throw new Error("星核结晶未配置");
+    }
+    return item;
   }
 
   private async findRarityFragmentItem(
@@ -3863,6 +3896,18 @@ export class CardService {
     return String(name || "").replace(/\s+/g, "");
   }
 
+  private createInsufficientMaterialMessage(
+    rarity: CardRarity,
+    cost: number,
+    itemName: string,
+    owned: number,
+  ) {
+    if (rarity === "UR") {
+      return "星核不足";
+    }
+    return `碎片不足，需要${cost}个${itemName}，当前拥有${owned}个`;
+  }
+
   private parseDropItemIds(dropItem: string): number[] {
     if (!dropItem) {
       return [];
@@ -3895,13 +3940,13 @@ export class CardService {
   } {
     switch (rarity) {
       case "N":
-        return { min: 1, max: 10 };
+        return { min: 8, max: 12 };
       case "R":
-        return { min: 10, max: 20 };
+        return { min: 12, max: 20 };
       case "SR":
-        return { min: 20, max: 40 };
+        return { min: 24, max: 40 };
       case "SSR":
-        return { min: 40, max: 80 };
+        return { min: 70, max: 110 };
       case "UR":
         throw new Error("UR卡片不可以分解");
     }
