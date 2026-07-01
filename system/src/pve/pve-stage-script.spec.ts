@@ -4,6 +4,10 @@ import { resolve } from "path";
 describe("PVE 200 关导入脚本", () => {
   const repoRoot = resolve(__dirname, "../../..");
   const scriptPath = resolve(repoRoot, "database/sql/pve_stages_200.sql");
+  const starCorePatchPath = resolve(
+    repoRoot,
+    "database/sql/pve_stage_star_core_reward_patch.sql",
+  );
   const deprecatedScriptPath = resolve(
     repoRoot,
     "database/sql/deprecated/pve_stages_1000.deprecated.sql",
@@ -32,10 +36,26 @@ describe("PVE 200 关导入脚本", () => {
     expect(sql).toContain("WHEN stage_no = 10 THEN 'minor'");
     expect(sql).toContain("WHEN n = 200 THEN 'Yui'");
     expect(sql).toContain("WHEN n = 200 THEN 26000");
-    expect(sql).toContain("星核结晶");
-    expect(sql).toContain("SET @star_core_item_id");
-    expect(sql).toContain("WHEN n = 200 THEN 150");
+    expect(sql).not.toContain("星核结晶");
+    expect(sql).not.toContain("SET @star_core_item_id");
+    expect(sql).not.toContain("star_core_reward");
     expect(sql).toContain("WHERE `name` LIKE '星域远征 %'");
     expect(sql).toContain("WHERE `name` LIKE '星域远征 %' AND `delete_flag` = 0");
+  });
+
+  it("星核奖励使用原地更新脚本", () => {
+    expect(existsSync(starCorePatchPath)).toBe(true);
+
+    const sql = readFileSync(starCorePatchPath, "utf8");
+
+    expect(sql).toContain("不重建 pve_stage，不改变关卡 id");
+    expect(sql).toContain("CREATE TEMPORARY TABLE `_kesini_pve_star_core_targets`");
+    expect(sql).toContain("UPDATE `pve_stage` AS s");
+    expect(sql).toContain("((s.`chapter` - 1) * 10 + s.`stage_no`)");
+    expect(sql).toContain("星核结晶");
+    expect(sql).toContain("(60, 80)");
+    expect(sql).toContain("(120, 100)");
+    expect(sql).toContain("(180, 120)");
+    expect(sql).toContain("(200, 150)");
   });
 });
