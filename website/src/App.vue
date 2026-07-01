@@ -104,6 +104,7 @@ import type {
   TradePageResponse,
   TradeRecord,
   UserCatalogItem,
+  UserCardGroupCopiesResponse,
   UserCardsResponse,
   UserGachaStats,
   VipDailyClaimResponse,
@@ -454,7 +455,10 @@ const starTargetCandidates = ref<UserCardsResponse["list"]>([]);
 const starPreview = ref<CardStarPreview | null>(null);
 const selectedStarSourceUuid = ref("");
 const cardIntroTarget = ref<CardIntroTarget | null>(null);
-const bagCardDetailKey = ref("");
+const bagDetailGroupTarget = ref<UserCardsResponse["list"][number] | null>(null);
+const bagDetailCopies = ref<UserCardsResponse["list"]>([]);
+const bagDetailCopyIndex = ref(0);
+const bagDetailCopiesLoading = ref(false);
 const shareTextTarget = ref("");
 const confirmDialogTarget = ref<ConfirmDialogTarget | null>(null);
 const listingPrice = ref("");
@@ -1089,25 +1093,23 @@ const selectedPityText = computed(() => {
 const poolDetailPity = computed(() =>
   getPityForPool(poolDetailPool.value?.id || activePoolId.value),
 );
-const bagCardDetailIndex = computed(() => {
-  const key = bagCardDetailKey.value;
-  const list = userCards.value?.list || [];
-  if (!key || list.length === 0) {
-    return -1;
-  }
-  return list.findIndex((card) => createBagCardGroupKey(card) === key);
-});
 const bagCardDetailNavigation = computed<CardDetailNavigation | null>(() => {
-  const list = userCards.value?.list || [];
-  const index = bagCardDetailIndex.value;
-  if (!cardIntroTarget.value || index < 0 || list.length <= 1) {
+  if (!cardIntroTarget.value || !bagDetailGroupTarget.value) {
     return null;
   }
+  const total =
+    bagDetailCopies.value.length ||
+    Math.max(0, Number(bagDetailGroupTarget.value.count || 0));
+  if (total <= 1) {
+    return null;
+  }
+  const index = Math.min(bagDetailCopyIndex.value, total - 1);
   return {
     visible: true,
-    canPrev: index > 0,
-    canNext: index < list.length - 1,
-    label: `${index + 1}/${list.length}`,
+    canPrev: index > 0 && !bagDetailCopiesLoading.value,
+    canNext: index < total - 1 && !bagDetailCopiesLoading.value,
+    label: bagDetailCopiesLoading.value ? "同步中" : `${index + 1}/${total}`,
+    loading: bagDetailCopiesLoading.value,
   };
 });
 const localCatalogCards = computed<CatalogCard[]>(() =>
@@ -1284,7 +1286,12 @@ const recycleAvailableCount = computed(() => {
   if (!recycleTarget.value) {
     return 0;
   }
-  return Math.max(0, Number(recycleTarget.value.sellableCount || 0) - 1);
+  if (recycleTarget.value.uuid) {
+    return recycleTarget.value.recyclable === false
+      ? 0
+      : Math.min(1, Math.max(0, Number(recycleTarget.value.sellableCount || 0)));
+  }
+  return Math.max(0, Number(recycleTarget.value.sellableCount || 0));
 });
 const recycleUnitPrice = computed(() =>
   getRecyclePrice(recycleTarget.value?.cardLevel || ""),
@@ -2501,7 +2508,11 @@ function bagCardDetailActions(
       payload: card,
     });
   }
-  if (shopRecycleConfig.value.enabled && Number(card.sellableCount || 0) > 1) {
+  if (
+    shopRecycleConfig.value.enabled &&
+    Number(card.sellableCount || 0) > 0 &&
+    (card.uuid ? card.recyclable !== false : true)
+  ) {
     actions.push({
       key: "recycle",
       label: "回收",
@@ -2548,10 +2559,11 @@ function catalogCardDetailActions(item: CatalogCard): CardDetailAction[] {
   ];
 }
 
-function createBagCardGroupKey(card: UserCardsResponse["list"][number]) {
-  return [card.cardId || card.id || "", card.cardLevel || "", card.poolId || ""]
-    .map((value) => String(value))
-    .join(":");
+function clearBagDetailNavigation() {
+  bagDetailGroupTarget.value = null;
+  bagDetailCopies.value = [];
+  bagDetailCopyIndex.value = 0;
+  bagDetailCopiesLoading.value = false;
 }
 
 function openCardIntro(
@@ -2559,7 +2571,7 @@ function openCardIntro(
   options: { preserveBagNavigation?: boolean } = {},
 ) {
   if (!options.preserveBagNavigation) {
-    bagCardDetailKey.value = "";
+    clearBagDetailNavigation();
   }
   const rarity = compactCardDetailValue(target.rarity);
   const type = compactCardDetailValue(target.type);
@@ -2660,7 +2672,7 @@ function cardBattleRows(card: {
 
 function closeCardIntro() {
   cardIntroTarget.value = null;
-  bagCardDetailKey.value = "";
+  clearBagDetailNavigation();
 }
 
 function askConfirm(target: ConfirmDialogTarget) {
@@ -2709,8 +2721,11 @@ function openShowcaseCardDetail(card: ShowcaseCard) {
   });
 }
 
-function openBagCardDetail(card: UserCardsResponse["list"][number]) {
-  markNewCardSeen(card);
+function openBagCardDetailView(card: UserCardsResponse["list"][number]) {
+  const actions =
+    card.uuid || Number(card.count || 0) <= 1
+      ? bagCardDetailActions(card)
+      : [shareCardDetailAction(cardSharePayload(card))];
   openCardIntro(
     {
       name: card.cardName,
@@ -2725,33 +2740,112 @@ function openBagCardDetail(card: UserCardsResponse["list"][number]) {
       starLevel: card.starLevel,
       starMaxLevel: card.starMaxLevel,
       power: card.power,
-      locked: Boolean(card.locked || Number(card.lockedCount || 0) > 0),
-      listed: Number(card.listedCount || 0) > 0 || card.isListed === true,
-      count: card.count,
+      locked: card.uuid
+        ? card.locked === true
+        : Boolean(card.locked || Number(card.lockedCount || 0) > 0),
+      listed: card.uuid
+        ? card.isListed === true
+        : Number(card.listedCount || 0) > 0 || card.isListed === true,
+      count: card.uuid ? undefined : card.count,
       price: card.tradePrice,
       source: "背包",
       rows: cardBattleRows(card),
-      actions: bagCardDetailActions(card),
+      actions,
     },
     {
       preserveBagNavigation: true,
     },
   );
-  bagCardDetailKey.value = createBagCardGroupKey(card);
+}
+
+async function loadBagCardGroupCopies(
+  group: UserCardsResponse["list"][number],
+  preferredUuid = "",
+) {
+  if (!group.cardId || !group.cardLevel || !group.poolId) {
+    return;
+  }
+  const requestedGroup = group;
+  bagDetailCopiesLoading.value = true;
+  try {
+    const data = await request<UserCardGroupCopiesResponse>(
+      `/card/user/cards/group-copies${toQuery({
+        cardId: group.cardId,
+        rarity: group.cardLevel,
+        poolId: group.poolId,
+      })}`,
+    );
+    if (
+      !bagDetailGroupTarget.value ||
+      !isSameUserCardGroup(bagDetailGroupTarget.value, requestedGroup)
+    ) {
+      return;
+    }
+    const copies = data.list || [];
+    bagDetailCopies.value = copies;
+    if (copies.length === 0) {
+      bagDetailCopyIndex.value = 0;
+      return;
+    }
+    const preferredIndex = copies.findIndex(
+      (copy) => copy.uuid && copy.uuid === preferredUuid,
+    );
+    bagDetailCopyIndex.value = preferredIndex >= 0 ? preferredIndex : 0;
+    openBagCardDetailView(copies[bagDetailCopyIndex.value]);
+  } catch (error) {
+    if (
+      bagDetailGroupTarget.value &&
+      isSameUserCardGroup(bagDetailGroupTarget.value, requestedGroup)
+    ) {
+      bagDetailGroupTarget.value = null;
+      bagDetailCopies.value = [];
+      bagDetailCopyIndex.value = 0;
+    }
+    notify("error", "加载失败");
+  } finally {
+    if (
+      !bagDetailGroupTarget.value ||
+      isSameUserCardGroup(bagDetailGroupTarget.value, requestedGroup)
+    ) {
+      bagDetailCopiesLoading.value = false;
+    }
+  }
+}
+
+function openBagCardDetail(card: UserCardsResponse["list"][number]) {
+  markNewCardSeen(card);
+  clearBagDetailNavigation();
+  bagDetailGroupTarget.value = card;
+  openBagCardDetailView(card);
+  if (Number(card.count || 0) > 1) {
+    void loadBagCardGroupCopies(card, card.uuid || "");
+  }
+}
+
+async function refreshBagCardDetailCopies(preferredUuid = "") {
+  const group = bagDetailGroupTarget.value;
+  if (!group) {
+    return false;
+  }
+  const currentCopy = bagDetailCopies.value[bagDetailCopyIndex.value];
+  await loadBagCardGroupCopies(group, preferredUuid || currentCopy?.uuid || "");
+  return true;
 }
 
 function navigateBagCardDetail(direction: "prev" | "next") {
-  const list = userCards.value?.list || [];
-  const index = bagCardDetailIndex.value;
-  if (index < 0 || list.length <= 1) {
+  if (bagDetailCopiesLoading.value || bagDetailCopies.value.length <= 1) {
     return;
   }
-  const nextIndex = direction === "prev" ? index - 1 : index + 1;
-  const nextCard = list[nextIndex];
+  const nextIndex =
+    direction === "prev"
+      ? bagDetailCopyIndex.value - 1
+      : bagDetailCopyIndex.value + 1;
+  const nextCard = bagDetailCopies.value[nextIndex];
   if (!nextCard) {
     return;
   }
-  openBagCardDetail(nextCard);
+  bagDetailCopyIndex.value = nextIndex;
+  openBagCardDetailView(nextCard);
 }
 
 function openFormationCardDetail(card: FormationCard) {
@@ -2846,17 +2940,32 @@ async function handleCardDetailAction(action: CardDetailAction) {
     return;
   }
   if (action.key === "lock") {
+    const payload = action.payload as UserCardsResponse["list"][number];
     const updatedCard = await toggleCardLock(
-      action.payload as UserCardsResponse["list"][number],
+      payload,
     );
     if (updatedCard) {
-      openBagCardDetail(updatedCard);
+      if (bagDetailGroupTarget.value) {
+        await refreshBagCardDetailCopies(payload.uuid || candidateUuid(payload));
+      } else {
+        openBagCardDetail(updatedCard);
+      }
     }
     return;
   }
   if (action.key === "share") {
     await shareCard(action.payload as CardSharePayload);
     return;
+  }
+  if (action.key === "reroll") {
+    const payload = action.payload as UserCardsResponse["list"][number];
+    if (bagDetailGroupTarget.value && payload.uuid) {
+      const changed = await rerollCardPotential(payload);
+      if (changed) {
+        await refreshBagCardDetailCopies(payload.uuid);
+      }
+      return;
+    }
   }
   closeCardIntro();
   if (action.key === "upgrade") {
@@ -2942,6 +3051,13 @@ function closeShareText() {
 
 function cardLockAction(card: UserCardsResponse["list"][number]) {
   const hasLocked = Number(card.lockedCount || 0) > 0 || card.locked === true;
+  if (card.isListed === true) {
+    return {
+      uuid: null,
+      locked: !hasLocked,
+      label: hasLocked ? "解锁" : "锁定",
+    };
+  }
   const uuid = hasLocked
     ? card.unlockableUuid || card.uuid || null
     : card.lockableUuid || card.uuid || null;
@@ -2975,7 +3091,7 @@ async function toggleCardLock(card: UserCardsResponse["list"][number]) {
       profile: true,
       bulkPreview: true,
     });
-    return findUserCardGroup(card);
+    return findUserCardGroup(card) || card;
   } catch (error) {
     notify("error", getErrorMessage(error));
     return null;
@@ -3210,7 +3326,11 @@ function openRecycleModal(card: UserCardsResponse["list"][number]) {
     notify("info", "商店未开启");
     return;
   }
-  const available = Math.max(0, Number(card.sellableCount || 0) - 1);
+  const available = card.uuid
+    ? card.recyclable === false
+      ? 0
+      : Math.min(1, Math.max(0, Number(card.sellableCount || 0)))
+    : Math.max(0, Number(card.sellableCount || 0));
   if (available <= 0) {
     notify("info", "无可回收");
     return;
@@ -3247,7 +3367,7 @@ async function rerollCardPotential(card: UserCardsResponse["list"][number]) {
   const uuid = cardPotentialUuid(card);
   if (!uuid) {
     notify("info", "暂无卡片");
-    return;
+    return false;
   }
   busy.assets = true;
   try {
@@ -3268,8 +3388,10 @@ async function rerollCardPotential(card: UserCardsResponse["list"][number]) {
       )}`,
     );
     await loadUserCards({ preserveLoaded: true, silent: true });
+    return true;
   } catch (error) {
     notify("error", getErrorMessage(error));
+    return false;
   } finally {
     busy.assets = false;
   }
@@ -3650,18 +3772,22 @@ async function recycleCards() {
 
   busy.recycle = true;
   try {
-    const data = await request<ShopRecycleCardsResponse>(
-      "/shop/recycle/cards",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          cardId: target.cardId,
-          rarity: target.cardLevel,
-          poolId: target.poolId,
-          count,
-        }),
-      },
-    );
+    const data = target.uuid
+      ? await request<ShopRecycleCardsResponse>("/shop/recycle/card", {
+          method: "POST",
+          body: JSON.stringify({
+            cardUuid: target.uuid,
+          }),
+        })
+      : await request<ShopRecycleCardsResponse>("/shop/recycle/cards", {
+          method: "POST",
+          body: JSON.stringify({
+            cardId: target.cardId,
+            rarity: target.cardLevel,
+            poolId: target.poolId,
+            count,
+          }),
+        });
     notify("success", `回收 +${data.rewardPoints}`);
     if (stats.value) {
       stats.value.point = data.pointAfter;
@@ -3700,15 +3826,25 @@ async function createTradeListing() {
   }
   busy.trade = true;
   try {
-    await request("/trade/listings/random", {
-      method: "POST",
-      body: JSON.stringify({
-        cardId: listingTarget.value.cardId,
-        rarity: listingTarget.value.cardLevel,
-        poolId: listingTarget.value.poolId,
-        price,
-      }),
-    });
+    if (listingTarget.value.uuid) {
+      await request("/trade/listings", {
+        method: "POST",
+        body: JSON.stringify({
+          cardUuid: listingTarget.value.uuid,
+          price,
+        }),
+      });
+    } else {
+      await request("/trade/listings/random", {
+        method: "POST",
+        body: JSON.stringify({
+          cardId: listingTarget.value.cardId,
+          rarity: listingTarget.value.cardLevel,
+          poolId: listingTarget.value.poolId,
+          price,
+        }),
+      });
+    }
     notify("success", "挂售成功，卡片已锁定在交易市场");
     closeTradeListingModal();
     await refreshCardState({

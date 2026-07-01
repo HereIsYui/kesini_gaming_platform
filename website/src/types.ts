@@ -178,6 +178,8 @@ export interface UserCardRecord {
   locked?: boolean;
   lockedCount?: number;
   sellableCount?: number;
+  recyclable?: boolean;
+  recycleUnavailableReason?: string;
   lockableUuid?: string | null;
   unlockableUuid?: string | null;
   upgradeableUuid?: string | null;
@@ -220,6 +222,11 @@ export interface UserCardsResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+}
+
+export interface UserCardGroupCopiesResponse {
+  list: UserCardRecord[];
+  total: number;
 }
 
 export interface ShowcaseCard {

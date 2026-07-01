@@ -66,9 +66,25 @@ function createService(options: {
   });
   const userCardRepository = createRepository({
     find: jest.fn().mockResolvedValue(options.userCards ?? []),
+    findOne: jest.fn(async ({ where }) =>
+      (options.userCards ?? []).find(
+        (item) =>
+          (!where?.uid || item.uid === where.uid) &&
+          (!where?.card_uuid || item.card_uuid === where.card_uuid) &&
+          (where?.delete_flag === undefined ||
+            item.delete_flag === where.delete_flag),
+      ) || null,
+    ),
   });
   const listingRepository = createRepository({
     find: jest.fn().mockResolvedValue(options.listings ?? []),
+    findOne: jest.fn(async ({ where }) =>
+      (options.listings ?? []).find(
+        (item) =>
+          (!where?.card_uuid || item.card_uuid === where.card_uuid) &&
+          (!where?.status || item.status === where.status),
+      ) || null,
+    ),
   });
   const pointLedgerRepository = createRepository({
     create: jest.fn((value) => ({ id: 11, ...value })),
@@ -308,5 +324,77 @@ describe("ShopRecycleService", () => {
     ).rejects.toThrow("可回收数量不足");
     expect(repositories.userCardRepository.save).not.toHaveBeenCalled();
     expect(pointLedgerService.applyChange).not.toHaveBeenCalled();
+  });
+
+  it("精确回收只删除指定单卡并返回 count 1", async () => {
+    const userCards = [createUserCard(1, "SR"), createUserCard(2, "SR")];
+    const { service, repositories, pointLedgerService } = createService({
+      userCards,
+    });
+
+    const result = await service.recycleCard("u1", "card-1");
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        rarity: "SR",
+        count: 1,
+        unitPrice: 5,
+        rewardPoints: 5,
+        pointAfter: 15,
+      }),
+    );
+    expect(repositories.userCardRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ card_uuid: "card-1", delete_flag: true }),
+    );
+    expect(userCards[1].delete_flag).toBe(false);
+    expect(pointLedgerService.applyChange).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ uid: "u1" }),
+      5,
+      expect.objectContaining({
+        sourceType: "shop_recycle",
+        metadata: expect.objectContaining({
+          cardUuid: "card-1",
+          count: 1,
+        }),
+      }),
+    );
+  });
+
+  it("精确回收拒绝锁定、挂售和最后一张", async () => {
+    const lockedCard = createUserCard(1, "R");
+    lockedCard.locked = true;
+    await expect(
+      createService({
+        userCards: [lockedCard, createUserCard(2, "R")],
+      }).service.recycleCard("u1", "card-1"),
+    ).rejects.toThrow("已锁定");
+
+    await expect(
+      createService({
+        userCards: [createUserCard(1, "R"), createUserCard(2, "R")],
+        listings: [{ card_uuid: "card-1", status: "active" }],
+      }).service.recycleCard("u1", "card-1"),
+    ).rejects.toThrow("挂售中");
+
+    await expect(
+      createService({
+        userCards: [createUserCard(1, "R")],
+      }).service.recycleCard("u1", "card-1"),
+    ).rejects.toThrow("至少保留一张");
+  });
+
+  it("精确回收拒绝 UR 和非本人卡片", async () => {
+    await expect(
+      createService({
+        userCards: [createUserCard(1, "UR"), createUserCard(2, "UR")],
+      }).service.recycleCard("u1", "card-1"),
+    ).rejects.toThrow("UR不可回收");
+
+    await expect(
+      createService({
+        userCards: [createUserCard(1, "SSR"), createUserCard(2, "SSR")],
+      }).service.recycleCard("u2", "card-1"),
+    ).rejects.toThrow("用户没有这张卡片");
   });
 });

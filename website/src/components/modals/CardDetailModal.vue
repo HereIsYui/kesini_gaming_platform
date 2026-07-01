@@ -64,37 +64,64 @@ function actionClass(action: CardDetailAction) {
             class="card-detail-preview"
             :class="rarityClass(props.target.rarity || '')"
           >
-            <div
-              class="card-media-frame"
-              :class="{ 'has-media': hasCardMedia(props.target.cardImage) }"
-            >
-              <video
-                v-if="isCardVideo(props.target.cardImage)"
-                class="card-art-media"
-                :src="cardMediaUrl(props.target.cardImage)"
-                muted
-                loop
-                autoplay
-                playsinline
-                @error="hideBrokenCardMedia"
-              />
-              <img
-                v-else-if="cardMediaUrl(props.target.cardImage)"
-                class="card-art-media"
-                :src="cardMediaUrl(props.target.cardImage)"
-                :alt="props.target.name"
-                @error="hideBrokenCardMedia"
-              />
-              <div class="card-sigil"></div>
-              <div class="result-card-top">
-                <span v-if="props.target.rarity" class="rarity-badge">
-                  {{ props.target.rarity }}
-                </span>
-                <span v-if="props.target.type" class="card-type-pill">
-                  {{ props.target.type }}
-                </span>
+            <div class="card-detail-preview-stage">
+              <button
+                v-if="props.navigation?.visible"
+                class="card-detail-nav-button"
+                type="button"
+                :disabled="!props.navigation.canPrev"
+                aria-label="上一张"
+                @click="emit('navigate', 'prev')"
+              >
+                <ChevronLeft :size="16" />
+                上一张
+              </button>
+              <div
+                class="card-media-frame"
+                :class="{ 'has-media': hasCardMedia(props.target.cardImage) }"
+              >
+                <video
+                  v-if="isCardVideo(props.target.cardImage)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(props.target.cardImage)"
+                  muted
+                  loop
+                  autoplay
+                  playsinline
+                  @error="hideBrokenCardMedia"
+                />
+                <img
+                  v-else-if="cardMediaUrl(props.target.cardImage)"
+                  class="card-art-media"
+                  :src="cardMediaUrl(props.target.cardImage)"
+                  :alt="props.target.name"
+                  @error="hideBrokenCardMedia"
+                />
+                <div class="card-sigil"></div>
+                <div class="result-card-top">
+                  <span v-if="props.target.rarity" class="rarity-badge">
+                    {{ props.target.rarity }}
+                  </span>
+                  <span v-if="props.target.type" class="card-type-pill">
+                    {{ props.target.type }}
+                  </span>
+                </div>
               </div>
+              <button
+                v-if="props.navigation?.visible"
+                class="card-detail-nav-button"
+                type="button"
+                :disabled="!props.navigation.canNext"
+                aria-label="下一张"
+                @click="emit('navigate', 'next')"
+              >
+                下一张
+                <ChevronRight :size="16" />
+              </button>
             </div>
+            <span v-if="props.navigation?.visible" class="card-detail-nav-label">
+              {{ props.navigation.label }}
+            </span>
           </div>
           <div class="card-detail-info">
             <p>{{ props.target.desc }}</p>
@@ -105,31 +132,6 @@ function actionClass(action: CardDetailAction) {
               </div>
             </dl>
           </div>
-        </div>
-        <div
-          v-if="props.navigation?.visible"
-          class="card-detail-nav"
-          aria-label="卡片切换"
-        >
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="!props.navigation.canPrev"
-            @click="emit('navigate', 'prev')"
-          >
-            <ChevronLeft :size="16" />
-            上一张
-          </button>
-          <span>{{ props.navigation.label }}</span>
-          <button
-            class="secondary-action"
-            type="button"
-            :disabled="!props.navigation.canNext"
-            @click="emit('navigate', 'next')"
-          >
-            下一张
-            <ChevronRight :size="16" />
-          </button>
         </div>
         <footer
           v-if="props.target.actions.length"

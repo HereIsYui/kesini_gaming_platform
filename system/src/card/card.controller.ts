@@ -415,6 +415,36 @@ export class CardController {
     }
   }
 
+  @Get("user/cards/group-copies")
+  @UseGuards(JwtAuthGuard)
+  async getUserCardGroupCopies(
+    @GetUser() user: UserInfo,
+    @Query("cardId") cardId?: string,
+    @Query("rarity") rarity?: string,
+    @Query("poolId") poolId?: string,
+  ): Promise<ResponseDto<any>> {
+    if (!user || !user.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+
+    try {
+      const parsedCardId = this.parseOptionalInt(cardId, "cardId", 1);
+      const parsedPoolId = this.parseOptionalInt(poolId, "poolId", 1);
+      if (!parsedCardId || !parsedPoolId || !rarity) {
+        return ResponseDto.error("卡片无效");
+      }
+      const result = await this.cardService.getUserCardGroupCopies(
+        user.uid,
+        parsedCardId,
+        rarity,
+        parsedPoolId,
+      );
+      return ResponseDto.success(result, "获取卡片成功");
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取卡片失败");
+    }
+  }
+
   /**
    * 切换用户卡片锁定状态
    * PATCH /card/user/cards/:uuid/lock

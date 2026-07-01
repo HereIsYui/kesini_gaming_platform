@@ -1404,6 +1404,87 @@ export class CardService {
     };
   }
 
+  async getUserCardGroupCopies(
+    uid: string,
+    cardId: number,
+    rarity: string,
+    poolId: number,
+  ): Promise<{ list: any[]; total: number }> {
+    const normalizedCardId = Number(cardId);
+    const normalizedPoolId = Number(poolId);
+    if (!Number.isInteger(normalizedCardId) || normalizedCardId <= 0) {
+      throw new Error("卡片无效");
+    }
+    if (!Number.isInteger(normalizedPoolId) || normalizedPoolId <= 0) {
+      throw new Error("卡池无效");
+    }
+    const normalizedRarity = this.normalizeRarity(rarity);
+
+    const user = await this.userRepository.findOne({ where: { uid } });
+    if (!user) {
+      throw new Error("用户不存在");
+    }
+
+    const card = await this.cardRepository.findOne({
+      where: { id: normalizedCardId },
+    });
+    if (!card || Number(card.pool) !== normalizedPoolId) {
+      throw new Error("卡片不存在");
+    }
+    if (!this.cardSupportsRarity(card, normalizedRarity)) {
+      throw new Error("稀有度无效");
+    }
+
+    const ownedCards = await this.userCardRepository.find({
+      where: {
+        uid,
+        card_id: String(normalizedCardId),
+        delete_flag: false,
+      },
+      order: { id: "DESC" },
+    });
+    const sameRarityCards = ownedCards
+      .filter(
+        (userCard) =>
+          this.getEffectiveUserCardRarity(userCard, card) === normalizedRarity,
+      )
+      .sort((left, right) =>
+        this.compareGroupCopyCards(left, right, normalizedRarity),
+      );
+    const activeListings = await this.findActiveListingsByCardUuids(
+      sameRarityCards.map((userCard) => userCard.card_uuid),
+    );
+    const activeListingMap = new Map(
+      activeListings.map((listing) => [listing.card_uuid, listing]),
+    );
+    const starSourceContext = await this.createStarSourceContext(
+      uid,
+      sameRarityCards,
+      [card],
+      activeListings,
+    );
+    const starSourceMap = this.buildStarSourceMap(
+      starSourceContext.userCards,
+      starSourceContext.cards,
+      starSourceContext.protectedSets,
+    );
+    const total = sameRarityCards.length;
+
+    return {
+      list: sameRarityCards.map((userCard) =>
+        this.createUserCardCopyView(
+          userCard,
+          card,
+          normalizedRarity,
+          activeListingMap.get(userCard.card_uuid),
+          starSourceMap,
+          total,
+        ),
+      ),
+      total,
+    };
+  }
+
   private async getGroupedUserCardsResult(
     whereConditions: any[],
     page: number,
@@ -1626,6 +1707,138 @@ export class CardService {
       return nextDate;
     }
     return current;
+  }
+
+  private compareGroupCopyCards(
+    left: UserCard,
+    right: UserCard,
+    rarity: CardRarity,
+  ) {
+    const leftLevel = getCultivationLevel(left);
+    const rightLevel = getCultivationLevel(right);
+    const leftStarLevel = getCardStarLevel(left);
+    const rightStarLevel = getCardStarLevel(right);
+    const leftPower = this.createPowerView(
+      left,
+      rarity,
+      leftLevel,
+      leftStarLevel,
+    ).power;
+    const rightPower = this.createPowerView(
+      right,
+      rarity,
+      rightLevel,
+      rightStarLevel,
+    ).power;
+
+    return (
+      rightPower - leftPower ||
+      rightStarLevel - leftStarLevel ||
+      rightLevel - leftLevel ||
+      Number(right.potential_bp || 0) - Number(left.potential_bp || 0) ||
+      Number(right.id || 0) - Number(left.id || 0)
+    );
+  }
+
+  private createUserCardCopyView(
+    userCard: UserCard,
+    card: CardItem,
+    rarity: CardRarity,
+    activeListing: TradeListing | undefined,
+    starSourceMap: Map<string, string[]>,
+    groupTotal: number,
+  ) {
+    const locked = userCard.locked === true;
+    const isListed = Boolean(activeListing);
+    const cultivationLevel = getCultivationLevel(userCard);
+    const cultivationExp = getCultivationExp(userCard);
+    const starLevel = getCardStarLevel(userCard);
+    const cultivationMaxLevel = getCultivationMaxLevel(rarity);
+    const powerView = this.createPowerView(
+      userCard,
+      rarity,
+      cultivationLevel,
+      starLevel,
+    );
+    const canUpgrade =
+      !isListed && !locked && cultivationLevel < cultivationMaxLevel;
+    const canStar =
+      this.isStarTargetAvailable(userCard, isListed) &&
+      this.hasAvailableStarSource(userCard, card, rarity, starSourceMap);
+    const canOperateCopy =
+      userCard.can_sell === true &&
+      !isListed &&
+      !locked &&
+      rarity !== "UR" &&
+      groupTotal > 1;
+
+    return {
+      id: userCard.id,
+      uuid: userCard.card_uuid,
+      cardId: card.id,
+      cardName: card.card_name,
+      cardDesc: card.card_desc,
+      cardImage: card.card_image || "",
+      cardLevel: rarity,
+      cardType: card.card_type,
+      battleRole: normalizeBattleRole(card.battle_role),
+      poolId: card.pool,
+      count: 1,
+      listedCount: isListed ? 1 : 0,
+      locked,
+      lockedCount: locked ? 1 : 0,
+      sellableCount: canOperateCopy ? 1 : 0,
+      canSell: canOperateCopy,
+      canLottery: userCard.can_lottery,
+      isListed,
+      tradeListingId: activeListing?.id || null,
+      tradePrice: activeListing?.price || null,
+      cultivationLevel,
+      cultivationExp,
+      cultivationMaxLevel,
+      starLevel,
+      starMaxLevel: getCardStarMaxLevel(),
+      ...powerView,
+      canUpgrade,
+      canStar,
+      lockableUuid: !isListed && !locked ? userCard.card_uuid : null,
+      unlockableUuid: !isListed && locked ? userCard.card_uuid : null,
+      upgradeableUuid: canUpgrade ? userCard.card_uuid : null,
+      starableUuid: canStar ? userCard.card_uuid : null,
+      recyclable: canOperateCopy,
+      recycleUnavailableReason: this.getCopyRecycleUnavailableReason(
+        userCard,
+        rarity,
+        groupTotal,
+        isListed,
+      ),
+      obtainedAt: userCard.createdAt,
+      latestObtainedAt: userCard.createdAt,
+    };
+  }
+
+  private getCopyRecycleUnavailableReason(
+    userCard: UserCard,
+    rarity: CardRarity,
+    groupTotal: number,
+    isListed: boolean,
+  ) {
+    if (userCard.can_sell !== true) {
+      return "不可回收";
+    }
+    if (rarity === "UR") {
+      return "UR不可回收";
+    }
+    if (groupTotal <= 1) {
+      return "至少保留一张";
+    }
+    if (userCard.locked === true) {
+      return "已锁定";
+    }
+    if (isListed) {
+      return "挂售中";
+    }
+    return "";
   }
 
   /**

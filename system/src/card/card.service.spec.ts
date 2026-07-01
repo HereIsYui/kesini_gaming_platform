@@ -434,6 +434,9 @@ describe("CardService 背包筛选", () => {
     ] as UserCard[];
 
     const cardRepository = createRepository({
+      findOne: jest.fn(async (options?: any) =>
+        filterByWhere(cards, options?.where)[0] || null,
+      ),
       find: jest.fn(async (options?: any) =>
         filterByWhere(cards, options?.where),
       ),
@@ -730,6 +733,127 @@ describe("CardService 背包筛选", () => {
     await expect(
       service.getUserCards("u1", "X", undefined, 1, 20),
     ).rejects.toThrow("稀有度参数无效");
+  });
+
+  it("同组单卡明细只返回当前组并按战力排序", async () => {
+    const { service } = createListService([
+      {
+        id: 4,
+        uid: "u1",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "n-strong",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        cultivation_level: 5,
+        star_level: 1,
+        potential_bp: 800,
+        createdAt: new Date("2026-01-04"),
+      },
+      {
+        id: 5,
+        uid: "u1",
+        card_id: "1",
+        card_level: "SSR",
+        card_uuid: "ssr-other",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-05"),
+      },
+      {
+        id: 6,
+        uid: "u2",
+        card_id: "1",
+        card_level: "N",
+        card_uuid: "other-user",
+        can_sell: true,
+        can_lottery: true,
+        delete_flag: false,
+        createdAt: new Date("2026-01-06"),
+      },
+    ]);
+
+    const result = await service.getUserCardGroupCopies("u1", 1, "N", 1);
+
+    expect(result.total).toBe(2);
+    expect(result.list.map((card) => card.uuid)).toEqual([
+      "n-strong",
+      "n-card",
+    ]);
+    expect(result.list[0]).toEqual(
+      expect.objectContaining({
+        uuid: "n-strong",
+        count: 1,
+        sellableCount: 1,
+        recyclable: true,
+      }),
+    );
+  });
+
+  it("同组单卡明细会返回锁定、挂售和回收状态", async () => {
+    const { service } = createListService(
+      [
+        {
+          id: 4,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-locked",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          locked: true,
+          createdAt: new Date("2026-01-04"),
+        },
+        {
+          id: 5,
+          uid: "u1",
+          card_id: "1",
+          card_level: "N",
+          card_uuid: "n-listed",
+          can_sell: true,
+          can_lottery: true,
+          delete_flag: false,
+          createdAt: new Date("2026-01-05"),
+        },
+      ],
+      [{ id: 1, card_uuid: "n-listed", status: "active", price: 20 }],
+    );
+
+    const result = await service.getUserCardGroupCopies("u1", 1, "N", 1);
+    const open = result.list.find((card) => card.uuid === "n-card");
+    const locked = result.list.find((card) => card.uuid === "n-locked");
+    const listed = result.list.find((card) => card.uuid === "n-listed");
+
+    expect(open).toEqual(
+      expect.objectContaining({
+        canSell: true,
+        sellableCount: 1,
+        lockableUuid: "n-card",
+        recyclable: true,
+      }),
+    );
+    expect(locked).toEqual(
+      expect.objectContaining({
+        locked: true,
+        canSell: false,
+        sellableCount: 0,
+        unlockableUuid: "n-locked",
+        recyclable: false,
+      }),
+    );
+    expect(listed).toEqual(
+      expect.objectContaining({
+        isListed: true,
+        canSell: false,
+        sellableCount: 0,
+        tradePrice: 20,
+        lockableUuid: null,
+        recyclable: false,
+      }),
+    );
   });
 });
 

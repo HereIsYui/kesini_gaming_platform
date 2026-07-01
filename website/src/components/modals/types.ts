@@ -49,6 +49,7 @@ export type CardDetailNavigation = {
   canPrev: boolean;
   canNext: boolean;
   label: string;
+  loading?: boolean;
 };
 
 export type CardDetailInput = {

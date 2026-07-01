@@ -216,6 +216,152 @@ export class ShopRecycleService {
     });
   }
 
+  async recycleCard(uid: string, cardUuid: string) {
+    const normalizedCardUuid = String(cardUuid || "").trim();
+    if (!normalizedCardUuid) {
+      throw new Error("卡片无效");
+    }
+    const config = await this.getStoredConfig();
+    if (!config.enabled) {
+      throw new Error("商店暂未开启");
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const cardRepository = manager.getRepository(CardItem);
+      const userRepository = manager.getRepository(User);
+      const userCardRepository = manager.getRepository(UserCard);
+      const listingRepository = manager.getRepository(TradeListing);
+
+      const userCard = await userCardRepository.findOne({
+        where: {
+          uid,
+          card_uuid: normalizedCardUuid,
+          delete_flag: false,
+        },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!userCard) {
+        throw new Error("用户没有这张卡片");
+      }
+      if (userCard.can_sell !== true) {
+        throw new Error("无可回收");
+      }
+      if (userCard.locked === true) {
+        throw new Error("已锁定的卡片不能回收");
+      }
+
+      const activeListing = await listingRepository.findOne({
+        where: { card_uuid: normalizedCardUuid, status: "active" },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (activeListing) {
+        throw new Error("挂售中的卡片不能回收");
+      }
+
+      const card = await cardRepository.findOne({
+        where: { id: Number(userCard.card_id) },
+      });
+      if (!card) {
+        throw new Error("卡片不存在");
+      }
+      const rarity = this.getEffectiveUserCardRarity(userCard, card);
+      if (!rarity) {
+        throw new Error("稀有度无效");
+      }
+      if (rarity === "UR") {
+        throw new Error("UR不可回收");
+      }
+
+      const user = await userRepository.findOne({ where: { uid } });
+      if (!user) {
+        throw new Error("用户不存在");
+      }
+
+      const sameCardCopies = await userCardRepository.find({
+        where: {
+          uid,
+          card_id: userCard.card_id,
+          delete_flag: false,
+        },
+        lock: { mode: "pessimistic_write" },
+      });
+      const sameRarityCards = sameCardCopies.filter(
+        (item) => this.getEffectiveUserCardRarity(item, card) === rarity,
+      );
+      if (sameRarityCards.length <= 1) {
+        throw new Error("至少保留一张");
+      }
+
+      userCard.delete_flag = true;
+      await userCardRepository.save(userCard);
+
+      const unitPrice = config.prices[rarity];
+      const rewardPoints = unitPrice;
+      const pointBefore = Number(user.point || 0);
+      let pointAfter = pointBefore;
+      let ledger: PointLedgerRecord | null = null;
+      if (rewardPoints > 0) {
+        ledger = await this.pointLedgerService.applyChange(
+          manager,
+          user,
+          rewardPoints,
+          {
+            sourceType: "shop_recycle",
+            sourceId: `${card.id}:${rarity}:${normalizedCardUuid}`,
+            title: `商店回收：${card.card_name}`,
+            metadata: {
+              cardId: card.id,
+              cardName: card.card_name,
+              rarity,
+              poolId: card.pool,
+              cardUuid: normalizedCardUuid,
+              count: 1,
+              unitPrice,
+              rewardPoints,
+            },
+          },
+        );
+        pointAfter = ledger.point_after;
+      } else {
+        const ledgerRepository = manager.getRepository(PointLedgerRecord);
+        ledger = await ledgerRepository.save(
+          ledgerRepository.create({
+            uid: user.uid,
+            change_amount: 0,
+            point_before: pointBefore,
+            point_after: pointAfter,
+            source_type: "shop_recycle",
+            source_id: `${card.id}:${rarity}:${normalizedCardUuid}`,
+            title: `商店回收：${card.card_name}`,
+            metadata: {
+              cardId: card.id,
+              cardName: card.card_name,
+              rarity,
+              poolId: card.pool,
+              cardUuid: normalizedCardUuid,
+              count: 1,
+              unitPrice,
+              rewardPoints,
+            },
+          }),
+        );
+      }
+
+      return {
+        cardId: card.id,
+        cardName: card.card_name,
+        rarity,
+        poolId: card.pool,
+        count: 1,
+        unitPrice,
+        rewardPoints,
+        pointBefore,
+        pointAfter,
+        ledgerId: ledger?.id || null,
+      };
+    });
+  }
+
   async getRecyclePreview(uid: string, cardId: number, rarity: string) {
     const card = await this.dataSource.getRepository(CardItem).findOne({
       where: { id: this.normalizePositiveInteger(cardId, "卡片无效") },

@@ -8,7 +8,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { Type } from "class-transformer";
-import { IsInt, IsString, Min } from "class-validator";
+import { IsInt, IsNotEmpty, IsString, Min } from "class-validator";
 import { GetUser } from "src/auth/get-user.decorator";
 import { JwtAuthGuard } from "src/auth/jwt-auth.guard";
 import { ResponseDto } from "src/common/dto/response.dto";
@@ -36,6 +36,12 @@ class RecycleCardsDto {
   count: number;
 }
 
+class RecycleCardDto {
+  @IsString()
+  @IsNotEmpty()
+  cardUuid: string;
+}
+
 interface UserInfo {
   uid: string;
 }
@@ -56,6 +62,24 @@ export class ShopController {
       );
     } catch (error) {
       return ResponseDto.error(error.message || "获取回收配置失败");
+    }
+  }
+
+  @Post("recycle/card")
+  async recycleCard(
+    @GetUser() user: UserInfo,
+    @Body() body: RecycleCardDto,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.shopRecycleService.recycleCard(user.uid, body.cardUuid),
+        "回收成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "回收失败");
     }
   }
 
