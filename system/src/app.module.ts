@@ -50,6 +50,7 @@ import { OpenIdNonce } from "./entity/openIdNonce.entity";
 import { VipDailyClaim } from "./entity/vipDailyClaim.entity";
 import { MonthlyCardSubscription } from "./entity/monthlyCardSubscription.entity";
 import { MonthlyCardPurchaseRecord } from "./entity/monthlyCardPurchaseRecord.entity";
+import { CompensationGrant } from "./entity/compensationGrant.entity";
 import { ApisModule } from "./apis/apis.module";
 import { AchievementModule } from "./achievement/achievement.module";
 import { CardModule } from "./card/card.module";
@@ -75,6 +76,7 @@ import { GuildsModule } from "./guilds/guilds.module";
 import { AnnouncementModule } from "./announcement/announcement.module";
 import { PlayerMessageModule } from "./player-message/player-message.module";
 import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
+import { CompensationModule } from "./compensation/compensation.module";
 
 @Module({
   imports: [
@@ -131,6 +133,7 @@ import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
       VipDailyClaim,
       MonthlyCardSubscription,
       MonthlyCardPurchaseRecord,
+      CompensationGrant,
     ]),
     ConfigurationModule,
     SiteConfigModule,
@@ -156,6 +159,7 @@ import { MonthlyCardModule } from "./monthly-card/monthly-card.module";
     AnnouncementModule,
     PlayerMessageModule,
     MonthlyCardModule,
+    CompensationModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisUtil, UserService],

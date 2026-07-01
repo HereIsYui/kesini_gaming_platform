@@ -18,8 +18,8 @@ const GACHA_CONFIG_CACHE_PREFIX = "gacha:config:";
 const GACHA_CONFIG_VERSION_KEY = "gacha:config:ver";
 const GACHA_CONFIG_CACHE_TTL_SECONDS = 24 * 3600;
 export const DEFAULT_DRAW_COSTS: DrawCosts = {
-  once: 10,
-  ten: 100,
+  once: 100,
+  ten: 998,
 };
 
 export type EditableGachaConfig = Omit<GachaConfig, "upCards" | "pitySystem"> & {

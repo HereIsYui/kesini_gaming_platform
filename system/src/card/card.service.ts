@@ -2189,7 +2189,7 @@ export class CardService {
   }
 
   private getDrawCost(costs: DrawCosts | undefined, count: number): number {
-    const drawCosts = costs || { once: 10, ten: 100 };
+    const drawCosts = costs || { once: 100, ten: 998 };
     return count === 10 ? drawCosts.ten : drawCosts.once;
   }
 

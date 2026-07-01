@@ -41,6 +41,7 @@ import MobileNav from "./components/layout/MobileNav.vue";
 import PageHost from "./components/layout/PageHost.vue";
 import AnnouncementModal from "./components/modals/AnnouncementModal.vue";
 import CardDetailModal from "./components/modals/CardDetailModal.vue";
+import CompensationModal from "./components/modals/CompensationModal.vue";
 import ConfirmDialog from "./components/modals/ConfirmDialog.vue";
 import LaunchActivityModal from "./components/modals/LaunchActivityModal.vue";
 import RechargeModal from "./components/modals/RechargeModal.vue";
@@ -82,6 +83,7 @@ import type {
   CardStarCandidate,
   CardStarPreview,
   CardStarResponse,
+  CompensationStatusResponse,
   FishpiPointResponse,
   FormationCard,
   GachaResult,
@@ -375,6 +377,9 @@ const fishpiPoint = ref<FishpiPointResponse | null>(null);
 const fishpiPointError = ref("");
 const monthlyCardStatus = ref<MonthlyCardStatusResponse | null>(null);
 const monthlyCardError = ref("");
+const compensation = ref<CompensationStatusResponse | null>(null);
+const compensationModalOpen = ref(false);
+const compensationDismissedKey = ref("");
 const launchActivity = ref<LaunchActivityCurrentResponse | null>(null);
 const dailySignIn = ref<DailySignInStatus | null>(null);
 const tasksOverview = ref<TaskOverview | null>(null);
@@ -463,6 +468,7 @@ const busy = reactive({
   fishpiPoint: false,
   vipDaily: false,
   monthlyCard: false,
+  compensation: false,
   assets: false,
   profile: false,
   profileCandidates: false,
@@ -990,6 +996,9 @@ const modalFocusKey = computed(() => {
   if (rechargeModalOpen.value) {
     return "recharge";
   }
+  if (compensationModalOpen.value) {
+    return "compensation";
+  }
   if (launchActivityModalOpen.value) {
     return "launch";
   }
@@ -1330,6 +1339,10 @@ function closeTopOverlay() {
     closeRechargeModal();
     return true;
   }
+  if (compensationModalOpen.value) {
+    closeCompensationModal();
+    return true;
+  }
   if (launchActivityModalOpen.value) {
     closeLaunchActivityModal();
     return true;
@@ -1520,6 +1533,9 @@ function logout(message = "已退出登录") {
   fishpiPointError.value = "";
   monthlyCardStatus.value = null;
   monthlyCardError.value = "";
+  compensation.value = null;
+  compensationModalOpen.value = false;
+  compensationDismissedKey.value = "";
   resetDrawHistory();
   userCards.value = null;
   resetProfile();
@@ -1585,6 +1601,7 @@ async function loadPrivateData() {
     loadLeaderboard(),
     loadAchievements(),
     loadAchievementNotifications(),
+    loadCompensation(),
     loadPointRecords(),
     loadExchangeItems(),
     loadShopRecycleConfig(),
@@ -1663,6 +1680,29 @@ async function loadMonthlyCardStatus(showError = false) {
     }
   } finally {
     busy.monthlyCard = false;
+  }
+}
+
+async function loadCompensation() {
+  if (!isAuthed.value) {
+    compensation.value = null;
+    return;
+  }
+  try {
+    const data =
+      await request<CompensationStatusResponse>("/compensations/me");
+    compensation.value = data;
+    const batchKey = data.available ? data.batchKey || "" : "";
+    if (
+      data.available &&
+      batchKey &&
+      compensationDismissedKey.value !== batchKey
+    ) {
+      launchActivityModalOpen.value = false;
+      compensationModalOpen.value = true;
+    }
+  } catch {
+    compensation.value = null;
   }
 }
 
@@ -1771,12 +1811,59 @@ async function loadLaunchActivity() {
     if (
       data.available &&
       activityKey &&
-      launchActivityDismissedKey.value !== activityKey
+      launchActivityDismissedKey.value !== activityKey &&
+      !compensation.value?.available &&
+      !compensationModalOpen.value
     ) {
       launchActivityModalOpen.value = true;
     }
   } catch {
     launchActivity.value = null;
+  }
+}
+
+function closeCompensationModal() {
+  if (busy.compensation) {
+    return;
+  }
+  const batchKey = compensation.value?.batchKey || "";
+  if (batchKey) {
+    compensationDismissedKey.value = batchKey;
+  }
+  compensationModalOpen.value = false;
+}
+
+async function claimCompensation() {
+  if (!isAuthed.value) {
+    notify("error", "请先登录");
+    return;
+  }
+  const batchKey = compensation.value?.batchKey || "";
+  if (!compensation.value?.available || !batchKey) {
+    notify("info", "暂无补偿");
+    return;
+  }
+  busy.compensation = true;
+  try {
+    const data = await request<CompensationStatusResponse>(
+      `/compensations/${encodeURIComponent(batchKey)}/claim`,
+      { method: "POST" },
+    );
+    if (typeof data.pointAfter === "number") {
+      syncCurrentUserPoint(data.pointAfter);
+      if (stats.value) {
+        stats.value.point = data.pointAfter;
+      }
+    }
+    compensation.value = { available: false };
+    compensationDismissedKey.value = batchKey;
+    compensationModalOpen.value = false;
+    notify("success", "已领取");
+    await Promise.allSettled([loadStats(), loadPointRecords()]);
+  } catch (error) {
+    notify("error", getErrorMessage(error));
+  } finally {
+    busy.compensation = false;
   }
 }
 
@@ -4638,6 +4725,14 @@ provide(APP_CONTEXT_KEY, appContext);
         </section>
       </div>
     </Teleport>
+
+    <CompensationModal
+      :open="compensationModalOpen"
+      :compensation="compensation"
+      :loading="busy.compensation"
+      @close="closeCompensationModal"
+      @claim="claimCompensation"
+    />
 
     <LaunchActivityModal
       :open="launchActivityModalOpen"

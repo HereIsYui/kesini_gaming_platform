@@ -25,6 +25,17 @@ export interface LoginUrlResponse {
   url: string;
 }
 
+export interface CompensationStatusResponse {
+  available: boolean;
+  batchKey?: string;
+  title?: string;
+  rechargeAmount?: number;
+  monthlyAmount?: number;
+  totalAmount?: number;
+  claimed?: boolean;
+  pointAfter?: number;
+}
+
 export interface SiteConfig {
   websiteTitle: string;
   adminTitle: string;

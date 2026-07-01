@@ -119,7 +119,7 @@ describe("GachaConfigService", () => {
           SSR: 0.045,
           UR: 0,
         },
-        drawCosts: { once: 10, ten: 100 },
+        drawCosts: { once: 100, ten: 998 },
       }),
     );
   });
@@ -134,8 +134,8 @@ describe("GachaConfigService", () => {
 
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        single_draw_cost: 10,
-        ten_draw_cost: 100,
+        single_draw_cost: 100,
+        ten_draw_cost: 998,
       }),
     );
   });
