@@ -1,6 +1,6 @@
 {
   "name": "kesini-gaming-platform",
-  "version": "0.1.18",
+  "version": "1.0.1",
   "private": true,
   "workspaces": [
     "system",
