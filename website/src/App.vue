@@ -88,6 +88,7 @@ import type {
   FishpiPointResponse,
   FormationCard,
   GachaResult,
+  GuildLeaderboardEntry,
   LaunchActivityClaimResponse,
   LaunchActivityCurrentResponse,
   LeaderboardEntry,
@@ -187,6 +188,12 @@ const leaderboardTabs: Array<{
     label: "闯关榜",
     hint: "成功通关次数",
     unit: "次",
+  },
+  {
+    key: "formationPower",
+    label: "阵容战力",
+    hint: "当前阵容战力",
+    unit: "",
   },
   {
     key: "rechargeAmount",
@@ -390,6 +397,7 @@ const launchActivityModalOpen = ref(false);
 const launchActivityDismissedKey = ref("");
 const leaderboard = ref<LeaderboardResponse | null>(null);
 const leaderboardError = ref("");
+const activeLeaderboardScope = ref<"player" | "guild">("player");
 const activeLeaderboardMetric = ref<LeaderboardMetric>("totalCards");
 const achievements = ref<AchievementRecord[]>([]);
 const achievementStatusFilter = ref<"all" | "achieved" | "progressing">("all");
@@ -642,6 +650,8 @@ const guildOverview = guildSocial.guildOverview;
 const guildError = guildSocial.guildError;
 const guildMessages = guildSocial.guildMessages;
 const guildMessageError = guildSocial.guildMessageError;
+const guildLeaderboard = guildSocial.guildLeaderboard;
+const guildLeaderboardError = guildSocial.guildLeaderboardError;
 const guildMessageText = guildSocial.guildMessageText;
 const guildName = guildSocial.guildName;
 const guildDescription = guildSocial.guildDescription;
@@ -663,6 +673,7 @@ const guildActivityChests = guildSocial.guildActivityChests;
 const guildBoss = guildSocial.guildBoss;
 const guildRequests = guildSocial.guildRequests;
 const guildMessageRows = guildSocial.guildMessageRows;
+const guildLeaderboardRows = guildSocial.guildLeaderboardRows;
 const resetGuild = guildSocial.resetGuild;
 const guildRoleName = guildSocial.guildRoleName;
 const guildMemberName = guildSocial.guildMemberName;
@@ -671,6 +682,7 @@ const guildMessageSenderName = guildSocial.guildMessageSenderName;
 const guildMessageInitial = guildSocial.guildMessageInitial;
 const loadGuild = guildSocial.loadGuild;
 const loadGuildMessages = guildSocial.loadGuildMessages;
+const loadGuildLeaderboard = guildSocial.loadGuildLeaderboard;
 const refreshGuildSection = guildSocial.refreshGuildSection;
 const createGuild = guildSocial.createGuild;
 const joinGuild = guildSocial.joinGuild;
@@ -1184,6 +1196,12 @@ const podiumEntries = computed<LeaderboardEntry[]>(
 const leaderboardRows = computed<LeaderboardEntry[]>(
   () => activeLeaderboardBoard.value?.list.slice(3) || [],
 );
+const guildPodiumEntries = computed<GuildLeaderboardEntry[]>(
+  () => guildLeaderboard.value?.list.slice(0, 3) || [],
+);
+const guildLeaderboardListRows = computed<GuildLeaderboardEntry[]>(
+  () => guildLeaderboard.value?.list.slice(3) || [],
+);
 const achievementCategories = computed(() =>
   Array.from(
     new Set(
@@ -1446,6 +1464,9 @@ watch(activeSection, async (section) => {
   if (section === "tasks" && isAuthed.value) {
     await loadTasks();
   }
+  if (section === "leaderboard" && isAuthed.value) {
+    await loadLeaderboard();
+  }
   if (section === "formation" && isAuthed.value) {
     await loadFormation();
   }
@@ -1583,6 +1604,8 @@ function logout(message = "已退出登录") {
   launchActivityDismissedKey.value = "";
   leaderboard.value = null;
   leaderboardError.value = "";
+  activeLeaderboardScope.value = "player";
+  activeLeaderboardMetric.value = "totalCards";
   achievements.value = [];
   clearAchievementToasts();
   resetPointRecords();
@@ -1927,9 +1950,11 @@ async function loadLeaderboard() {
   busy.leaderboard = true;
   leaderboardError.value = "";
   try {
-    leaderboard.value = await request<LeaderboardResponse>(
-      "/card/leaderboard?limit=50",
-    );
+    const [playerLeaderboard] = await Promise.all([
+      request<LeaderboardResponse>("/card/leaderboard?limit=50"),
+      loadGuildLeaderboard(false),
+    ]);
+    leaderboard.value = playerLeaderboard;
   } catch (error) {
     leaderboardError.value = getErrorMessage(error);
     throw error;
@@ -4036,8 +4061,16 @@ function leaderboardInitial(entry: LeaderboardEntry) {
   return publicPlayerName(entry.nickname, entry.uid).slice(0, 1).toUpperCase();
 }
 
+function guildLeaderboardInitial(entry: GuildLeaderboardEntry) {
+  return String(entry.name || "公会").slice(0, 1).toUpperCase();
+}
+
 function formatLeaderboardValue(value?: number) {
   return `${value || 0}${activeLeaderboardTab.value.unit}`;
+}
+
+function formatGuildLeaderboardValue(value?: number) {
+  return `${value || 0}`;
 }
 
 function leaderboardRankLabel(rank?: number) {
@@ -4202,6 +4235,8 @@ const appContext = {
   guildError,
   guildMessages,
   guildMessageError,
+  guildLeaderboard,
+  guildLeaderboardError,
   guildMessageText,
   guildName,
   guildDescription,
@@ -4240,6 +4275,7 @@ const appContext = {
   launchActivityDismissedKey,
   leaderboard,
   leaderboardError,
+  activeLeaderboardScope,
   activeLeaderboardMetric,
   pointRecords,
   achievements,
@@ -4350,6 +4386,7 @@ const appContext = {
   guildBoss,
   guildRequests,
   guildMessageRows,
+  guildLeaderboardRows,
   modalFocusKey,
   toggleUserMenu,
   closeUserMenu,
@@ -4383,6 +4420,8 @@ const appContext = {
   activeLeaderboardBoard,
   podiumEntries,
   leaderboardRows,
+  guildPodiumEntries,
+  guildLeaderboardListRows,
   pointLedgerRows,
   achievementCategories,
   filteredAchievements,
@@ -4490,6 +4529,7 @@ const appContext = {
   guildMessageInitial,
   loadGuild,
   loadGuildMessages,
+  loadGuildLeaderboard,
   refreshGuildSection,
   createGuild,
   joinGuild,
@@ -4650,7 +4690,9 @@ const appContext = {
   resetAchievementFilters,
   achievementScopeLabel,
   leaderboardInitial,
+  guildLeaderboardInitial,
   formatLeaderboardValue,
+  formatGuildLeaderboardValue,
   leaderboardRankLabel,
 };
 

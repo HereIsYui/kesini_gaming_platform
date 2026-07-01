@@ -103,6 +103,24 @@ export class GuildsController {
     }
   }
 
+  @Get("leaderboard")
+  async getLeaderboard(
+    @GetUser() user: UserInfo,
+    @Query("limit") limit?: string,
+  ): Promise<ResponseDto<any>> {
+    if (!user?.uid) {
+      return ResponseDto.error("用户身份验证失败");
+    }
+    try {
+      return ResponseDto.success(
+        await this.guildsService.getPowerLeaderboard(user.uid, Number(limit)),
+        "获取排行成功",
+      );
+    } catch (error) {
+      return ResponseDto.error(error.message || "获取排行失败");
+    }
+  }
+
   @Get("me/messages")
   async getMessages(
     @GetUser() user: UserInfo,

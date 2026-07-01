@@ -30,6 +30,62 @@ export class FormationService {
     return this.buildFormation(this.dataSource, uid);
   }
 
+  async getFormationPowerMap(
+    uids?: string[],
+    manager: DataSource | EntityManager = this.dataSource,
+  ) {
+    const normalizedUids = Array.isArray(uids)
+      ? [...new Set(uids.map((uid) => String(uid || "").trim()).filter(Boolean))]
+      : [];
+    const slots = await manager.getRepository(UserFormationSlot).find({
+      where:
+        normalizedUids.length > 0 ? { uid: In(normalizedUids) } : undefined,
+    } as any);
+    if (slots.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const cardUuids = [
+      ...new Set(slots.map((slot) => slot.card_uuid).filter(Boolean)),
+    ];
+    const userCards = await manager.getRepository(UserCard).find({
+      where: { card_uuid: In(cardUuids), delete_flag: false },
+    });
+    const activeListings = await this.findActiveListings(manager, cardUuids);
+    const activeListingSet = new Set(
+      activeListings.map((listing) => listing.card_uuid),
+    );
+    const validUserCards = userCards.filter(
+      (card) => !activeListingSet.has(card.card_uuid),
+    );
+    const cardIds = [
+      ...new Set(validUserCards.map((userCard) => Number(userCard.card_id))),
+    ].filter((cardId) => Number.isInteger(cardId) && cardId > 0);
+    const cards =
+      cardIds.length > 0
+        ? await manager
+            .getRepository(CardItem)
+            .find({ where: { id: In(cardIds) } })
+        : [];
+    const cardMap = new Map(cards.map((card) => [card.id, card]));
+    const userCardMap = new Map(
+      validUserCards.map((userCard) => [userCard.card_uuid, userCard]),
+    );
+    const powerMap = new Map<string, number>();
+
+    slots.forEach((slot) => {
+      const userCard = userCardMap.get(slot.card_uuid);
+      const card = userCard ? cardMap.get(Number(userCard.card_id)) : null;
+      if (!userCard || !card) {
+        return;
+      }
+      const power = this.getFormationCardPower(userCard, card);
+      powerMap.set(slot.uid, (powerMap.get(slot.uid) || 0) + power);
+    });
+
+    return powerMap;
+  }
+
   async saveFormation(uid: string, slots: FormationSlotInput[]) {
     const normalizedSlots = this.normalizeSlots(slots);
     const cardUuids = normalizedSlots
@@ -172,6 +228,19 @@ export class FormationService {
       locked: userCard.locked === true,
       obtainedAt: userCard.createdAt,
     };
+  }
+
+  private getFormationCardPower(userCard: UserCard, card: CardItem) {
+    const rarity = this.getEffectiveUserCardRarity(userCard, card);
+    const level = getCultivationLevel(userCard);
+    const starLevel = getCardStarLevel(userCard);
+    const potential = resolveUserCardPotential(userCard, rarity);
+    return calculateCardPowerWithPotential(
+      rarity,
+      level,
+      starLevel,
+      potential.potentialBp,
+    ).power;
   }
 
   private normalizeSlots(slots: FormationSlotInput[]) {

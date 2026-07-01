@@ -17,6 +17,7 @@ import { RechargeRecord } from "src/entity/rechargeRecord.entity";
 import { PveChallengeRecord } from "src/entity/pveChallengeRecord.entity";
 import { AuthModule } from "src/auth/auth.module";
 import { AchievementModule } from "src/achievement/achievement.module";
+import { FormationModule } from "src/formation/formation.module";
 import { GachaConfigService } from "./gacha-config.service";
 import { PointLedgerModule } from "src/point-ledger/point-ledger.module";
 import { SocialActivityModule } from "src/social/social-activity.module";
@@ -40,6 +41,7 @@ import { RedisUtil } from "src/utils/redis";
       PveChallengeRecord,
     ]),
     AuthModule,
+    FormationModule,
     PointLedgerModule,
     AchievementModule,
     SocialActivityModule,

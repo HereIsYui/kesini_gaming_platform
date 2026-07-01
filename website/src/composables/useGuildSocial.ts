@@ -5,6 +5,8 @@ import type {
   CreateGuildRequest,
   GuildBossChallengeResult,
   GuildJoinMode,
+  GuildLeaderboardEntry,
+  GuildLeaderboardResponse,
   GuildMember,
   GuildMessage,
   GuildMessagesResponse,
@@ -50,6 +52,8 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
   const guildError = ref("");
   const guildMessages = ref<GuildMessage[]>([]);
   const guildMessageError = ref("");
+  const guildLeaderboard = ref<GuildLeaderboardResponse | null>(null);
+  const guildLeaderboardError = ref("");
   const guildMessageText = ref("");
   const guildName = ref("");
   const guildDescription = ref("");
@@ -79,7 +83,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     () => currentGuild.value?.role === "leader",
   );
   const guildTabs = computed(() => {
-    const tabs = ["总览", "成员", "首领", "消息"];
+    const tabs = ["总览", "成员", "首领", "排行", "消息"];
     if (guildCanManage.value) {
       tabs.push("申请");
     }
@@ -109,12 +113,17 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       )
       .slice(0, GUILD_MESSAGE_LIST_LIMIT),
   );
+  const guildLeaderboardRows = computed<GuildLeaderboardEntry[]>(
+    () => guildLeaderboard.value?.list || [],
+  );
 
   function resetGuild() {
     guildOverview.value = null;
     guildError.value = "";
     guildMessages.value = [];
     guildMessageError.value = "";
+    guildLeaderboard.value = null;
+    guildLeaderboardError.value = "";
     guildMessageText.value = "";
     guildName.value = "";
     guildDescription.value = "";
@@ -164,6 +173,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildError.value = "";
     try {
       guildOverview.value = await request<GuildOverviewResponse>("/guilds/me");
+      await loadGuildLeaderboard(false);
       syncGuildForms();
       if (!guildTabs.value.includes(guildActiveTab.value)) {
         guildActiveTab.value = "总览";
@@ -209,6 +219,26 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     }
   }
 
+  async function loadGuildLeaderboard(showError = options.isActive()) {
+    if (!options.isAuthed()) {
+      guildLeaderboard.value = null;
+      guildLeaderboardError.value = "";
+      return;
+    }
+    guildLeaderboardError.value = "";
+    try {
+      guildLeaderboard.value = await request<GuildLeaderboardResponse>(
+        "/guilds/leaderboard?limit=50",
+      );
+    } catch (error) {
+      guildLeaderboard.value = null;
+      guildLeaderboardError.value = options.getErrorMessage(error);
+      if (showError) {
+        options.notify("error", guildLeaderboardError.value);
+      }
+    }
+  }
+
   async function refreshGuildSection(showError = options.isActive()) {
     await loadGuild(showError);
     if (currentGuild.value) {
@@ -239,6 +269,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       syncGuildForms();
       guildActiveTab.value = "总览";
       options.notify("success", "已创建");
+      await loadGuildLeaderboard(false);
       await loadGuildMessages(false);
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -256,6 +287,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       );
       syncGuildForms();
       options.notify("success", guildOverview.value.current ? "已加入" : "已申请");
+      await loadGuildLeaderboard(false);
       await loadGuildMessages(false);
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -291,6 +323,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
       guildJoinMode.value = "open";
       guildActiveTab.value = "总览";
       options.notify("success", "已退出");
+      await loadGuildLeaderboard(false);
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
     } finally {
@@ -529,6 +562,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
         method: "POST",
       });
       syncGuildForms();
+      await loadGuildLeaderboard(false);
       options.notify("success", successText);
     } catch (error) {
       options.notify("error", options.getErrorMessage(error));
@@ -549,6 +583,8 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildError,
     guildMessages,
     guildMessageError,
+    guildLeaderboard,
+    guildLeaderboardError,
     guildMessageText,
     guildName,
     guildDescription,
@@ -570,6 +606,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildBoss,
     guildRequests,
     guildMessageRows,
+    guildLeaderboardRows,
     resetGuild,
     guildRoleName,
     guildMemberName,
@@ -578,6 +615,7 @@ export function useGuildSocial(options: UseGuildSocialOptions) {
     guildMessageInitial,
     loadGuild,
     loadGuildMessages,
+    loadGuildLeaderboard,
     refreshGuildSection,
     createGuild,
     joinGuild,

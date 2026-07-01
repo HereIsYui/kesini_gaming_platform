@@ -296,9 +296,23 @@ function createFormation(power = 18000) {
   };
 }
 
-function createService(store: GuildsTestStore, power = 18000) {
+function createService(
+  store: GuildsTestStore,
+  power = 18000,
+  formationPowers: Record<string, number> = {},
+) {
   const formationService = {
     getFormation: jest.fn(async () => createFormation(power)),
+    getFormationPowerMap: jest.fn(async (uids?: string[]) => {
+      const targetUids = Array.isArray(uids)
+        ? uids
+        : Object.keys(formationPowers);
+      return new Map(
+        targetUids
+          .map((uid) => [uid, formationPowers[uid] || 0] as const)
+          .filter(([, value]) => value > 0),
+      );
+    }),
   };
   const rewardService = {
     grantRewards: jest.fn(async (manager: GuildsTestStore, user: User, rewards: any) => {
@@ -689,6 +703,30 @@ describe("GuildsService 公会玩法", () => {
     const result = await service.listGuilds("u3");
 
     expect(result.list.map((guild) => guild.name)).toEqual(["月影会", "星海会"]);
+  });
+
+  it("公会总战力榜按成员阵容总和排序", async () => {
+    const created = createService(store, 18000, {
+      u1: 1000,
+      u2: 500,
+      u3: 2000,
+      u4: 7000,
+    });
+    service = created.service;
+    await createGuild(service, "u1", "星海会");
+    await createGuild(service, "u2", "月影会");
+    await service.joinGuild("u3", 1);
+    await service.joinGuild("u4", 2);
+
+    const result = await service.getPowerLeaderboard("u3", 10);
+
+    expect(result.list).toEqual([
+      expect.objectContaining({ name: "月影会", rank: 1, value: 7500 }),
+      expect.objectContaining({ name: "星海会", rank: 2, value: 3000 }),
+    ]);
+    expect(result.me).toEqual(
+      expect.objectContaining({ name: "星海会", rank: 2, value: 3000 }),
+    );
   });
 
   it("消息仍按时间倒序读取", async () => {

@@ -129,5 +129,6 @@ export interface LeaderboardResponse {
     completedPools: LeaderboardBoard;
     rechargeAmount: LeaderboardBoard;
     pveCleared: LeaderboardBoard;
+    formationPower: LeaderboardBoard;
   };
 }

@@ -36,6 +36,8 @@ import {
 } from "./guild.config";
 
 const GUILD_LIST_LIMIT = 30;
+const GUILD_LEADERBOARD_LIMIT = 50;
+const GUILD_LEADERBOARD_MAX_LIMIT = 100;
 const DEFAULT_MESSAGE_LIST_LIMIT = 30;
 const MAX_MESSAGE_LIST_LIMIT = 30;
 const MAX_MESSAGE_LENGTH = 120;
@@ -78,6 +80,16 @@ interface GuildSettingsInput {
   description?: string;
   announcement?: string;
   joinMode?: string;
+}
+
+interface GuildLeaderboardEntry {
+  rank: number;
+  id: number;
+  name: string;
+  level: number;
+  memberCount: number;
+  memberLimit: number;
+  value: number;
 }
 
 @Injectable()
@@ -159,6 +171,51 @@ export class GuildsService {
           },
         ),
       ),
+    };
+  }
+
+  async getPowerLeaderboard(uid: string, rawLimit = GUILD_LEADERBOARD_LIMIT) {
+    const normalizedUid = this.normalizeUid(uid);
+    await this.findUser(this.dataSource, normalizedUid);
+    const normalizedLimit = this.normalizeLeaderboardLimit(rawLimit);
+    const [guilds, members, membership] = await Promise.all([
+      this.dataSource.getRepository(Guild).find(),
+      this.dataSource.getRepository(GuildMember).find(),
+      this.findMembership(this.dataSource, normalizedUid),
+    ]);
+    const memberUids = [...new Set(members.map((member) => member.uid))];
+    const powerMap = await this.formationService.getFormationPowerMap(
+      memberUids,
+      this.dataSource,
+    );
+    const totalPowerByGuild = new Map<number, number>();
+    members.forEach((member) => {
+      const power = Number(powerMap.get(member.uid) || 0);
+      totalPowerByGuild.set(
+        member.guild_id,
+        (totalPowerByGuild.get(member.guild_id) || 0) + power,
+      );
+    });
+
+    const rankedEntries = this.assignGuildLeaderboardRanks(
+      guilds
+        .map((guild) => this.toGuildLeaderboardEntry(guild, totalPowerByGuild))
+        .filter((entry) => entry.value > 0)
+        .sort(
+          (left, right) =>
+            right.value - left.value ||
+            right.level - left.level ||
+            right.memberCount - left.memberCount ||
+            left.id - right.id,
+        ),
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      list: rankedEntries.slice(0, normalizedLimit),
+      me: membership
+        ? rankedEntries.find((entry) => entry.id === membership.guild_id) || null
+        : null,
     };
   }
 
@@ -1081,6 +1138,46 @@ export class GuildsService {
     return manager.getRepository(GuildJoinRequest).find({
       where: { uid, status: "pending" },
       order: { createdAt: "DESC", id: "DESC" } as any,
+    });
+  }
+
+  private normalizeLeaderboardLimit(limit: number) {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return GUILD_LEADERBOARD_LIMIT;
+    }
+    return Math.min(GUILD_LEADERBOARD_MAX_LIMIT, limit);
+  }
+
+  private toGuildLeaderboardEntry(
+    guild: Guild,
+    totalPowerByGuild: Map<number, number>,
+  ): GuildLeaderboardEntry {
+    return {
+      rank: 0,
+      id: guild.id,
+      name: guild.name,
+      level: Math.max(1, Number(guild.level || 1)),
+      memberCount: Number(guild.member_count || 0),
+      memberLimit:
+        Number(guild.member_limit || 0) > 0
+          ? Number(guild.member_limit)
+          : this.getMemberLimit(guild, DEFAULT_GUILD_CONFIG),
+      value: Number(totalPowerByGuild.get(guild.id) || 0),
+    };
+  }
+
+  private assignGuildLeaderboardRanks(entries: GuildLeaderboardEntry[]) {
+    let previousValue: number | undefined;
+    let currentRank = 0;
+    return entries.map((entry, index) => {
+      if (previousValue === undefined || entry.value !== previousValue) {
+        currentRank = index + 1;
+        previousValue = entry.value;
+      }
+      return {
+        ...entry,
+        rank: currentRank,
+      };
     });
   }
 

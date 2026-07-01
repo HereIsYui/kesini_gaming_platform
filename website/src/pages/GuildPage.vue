@@ -33,15 +33,21 @@ const {
   guildBoss,
   guildRequests,
   guildMessageRows,
+  guildLeaderboard,
+  guildLeaderboardError,
+  guildLeaderboardRows,
   publicProfileRoute,
   guildRoleName,
   guildMemberName,
   guildMemberInitial,
   guildMessageSenderName,
   guildMessageInitial,
+  guildLeaderboardInitial,
+  formatGuildLeaderboardValue,
   formatRewards,
   loadGuild,
   loadGuildMessages,
+  loadGuildLeaderboard,
   createGuild,
   joinGuild,
   leaveGuild,
@@ -411,6 +417,51 @@ function pendingRequestId(guildId: number) {
               </button>
             </div>
           </article>
+        </section>
+
+        <section v-else-if="guildActiveTab === '排行'" class="guild-tab-panel">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">排行</p>
+              <h3>总战力</h3>
+            </div>
+            <button
+              class="secondary-action compact"
+              type="button"
+              :disabled="busy.guild"
+              @click="loadGuildLeaderboard()"
+            >
+              <RefreshCw :size="15" :class="{ spin: busy.guild }" />
+              刷新
+            </button>
+          </div>
+          <div v-if="guildLeaderboardError" class="empty-mini">
+            加载失败
+          </div>
+          <div v-else-if="guildLeaderboardRows.length === 0" class="empty-mini">
+            暂无排行
+          </div>
+          <div v-else class="leaderboard-list guild-rank-list">
+            <article
+              v-for="entry in guildLeaderboardRows.slice(0, 20)"
+              :key="entry.id"
+              class="leaderboard-row"
+              :class="{ mine: entry.id === currentGuild.id }"
+            >
+              <b>#{{ entry.rank }}</b>
+              <span class="avatar-fallback small">{{
+                guildLeaderboardInitial(entry)
+              }}</span>
+              <div>
+                <strong>{{ entry.name }}</strong>
+                <span>Lv.{{ entry.level }} · {{ entry.memberCount }}/{{ entry.memberLimit }}</span>
+              </div>
+              <em>{{ formatGuildLeaderboardValue(entry.value) }}</em>
+            </article>
+          </div>
+          <p v-if="guildLeaderboard?.generatedAt" class="leaderboard-time">
+            更新时间：{{ formatDate(guildLeaderboard.generatedAt) }}
+          </p>
         </section>
 
         <section v-else-if="guildActiveTab === '消息'" class="guild-tab-panel">

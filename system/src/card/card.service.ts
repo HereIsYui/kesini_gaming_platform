@@ -37,6 +37,7 @@ import {
 import { PointLedgerService } from "src/point-ledger/point-ledger.service";
 import { AchievementService } from "src/achievement/achievement.service";
 import { SocialActivityService } from "src/social/social-activity.service";
+import { FormationService } from "src/formation/formation.service";
 import {
   assignUserPublicId,
   ensureUserPublicId,
@@ -151,7 +152,8 @@ type LeaderboardMetricKey =
   | "urCards"
   | "completedPools"
   | "rechargeAmount"
-  | "pveCleared";
+  | "pveCleared"
+  | "formationPower";
 type LeaderboardMetrics = Record<LeaderboardMetricKey, number>;
 
 // 与 uid 无关的完整排行榜计算结果，可全局缓存；me 在读取时按 uid 现场查找。
@@ -194,6 +196,8 @@ export class CardService {
     private readonly pveRecordRepository?: Repository<PveChallengeRecord>,
     @Optional()
     private readonly redis?: RedisUtil,
+    @Optional()
+    private readonly formationService?: FormationService,
   ) {}
 
   /**
@@ -460,11 +464,16 @@ export class CardService {
           uid,
           normalizedLimit,
         ),
+        formationPower: this.sliceLeaderboardBoard(
+          computed.rankings.formationPower,
+          uid,
+          normalizedLimit,
+        ),
       },
     };
   }
 
-  private readonly LEADERBOARD_CACHE_KEY = "leaderboard:card";
+  private readonly LEADERBOARD_CACHE_KEY = "leaderboard:card:v2";
   private readonly LEADERBOARD_CACHE_TTL_SECONDS = 3600;
 
   /**
@@ -476,7 +485,7 @@ export class CardService {
       const cached = await this.redis.get<LeaderboardComputed>(
         this.LEADERBOARD_CACHE_KEY,
       );
-      if (cached?.rankings) {
+      if (cached?.rankings?.formationPower) {
         return cached;
       }
     }
@@ -492,13 +501,21 @@ export class CardService {
   }
 
   private async computeLeaderboardRankings(): Promise<LeaderboardComputed> {
-    const [users, cards, userCards, rechargeTotals, pveTotals] =
+    const [
+      users,
+      cards,
+      userCards,
+      rechargeTotals,
+      pveTotals,
+      formationPowerTotals,
+    ] =
       await Promise.all([
         this.userRepository.find(),
         this.cardRepository.find(),
         this.userCardRepository.find({ where: { delete_flag: false } }),
         this.getRechargeLeaderboardTotals(),
         this.getPveLeaderboardTotals(),
+        this.getFormationPowerLeaderboardTotals(),
       ]);
     await ensureUsersPublicIds(this.userRepository, users);
     const cardMap = new Map(cards.map((card) => [card.id, card]));
@@ -553,6 +570,14 @@ export class CardService {
       metrics.pveCleared += total.cleared;
     });
 
+    formationPowerTotals.forEach((total) => {
+      if (!total.uid || total.power <= 0) {
+        return;
+      }
+      const metrics = this.ensureLeaderboardMetrics(metricsByUid, total.uid);
+      metrics.formationPower += total.power;
+    });
+
     const requiredVersionsByPool = this.buildRequiredPoolVersionMap(cards);
     metricsByUid.forEach((metrics, ownerUid) => {
       const ownerPools = ownedVersionsByUid.get(ownerUid);
@@ -586,6 +611,11 @@ export class CardService {
           metricsByUid,
           userMap,
           "pveCleared",
+        ),
+        formationPower: this.buildRankedEntries(
+          metricsByUid,
+          userMap,
+          "formationPower",
         ),
       },
     };
@@ -2962,6 +2992,7 @@ export class CardService {
       completedPools: 0,
       rechargeAmount: 0,
       pveCleared: 0,
+      formationPower: 0,
     };
   }
 
@@ -3002,6 +3033,19 @@ export class CardService {
     return rows.map((row) => ({
       uid: String(row.uid || ""),
       cleared: Number(row.cleared || 0),
+    }));
+  }
+
+  private async getFormationPowerLeaderboardTotals(): Promise<
+    Array<{ uid: string; power: number }>
+  > {
+    if (!this.formationService) {
+      return [];
+    }
+    const powerMap = await this.formationService.getFormationPowerMap();
+    return Array.from(powerMap.entries()).map(([uid, power]) => ({
+      uid,
+      power: Number(power || 0),
     }));
   }
 

@@ -9,6 +9,9 @@ const {
   leaderboardTabs,
   leaderboard,
   leaderboardError,
+  guildLeaderboard,
+  guildLeaderboardError,
+  activeLeaderboardScope,
   activeLeaderboardMetric,
   busy,
   isAuthed,
@@ -17,11 +20,15 @@ const {
   activeLeaderboardBoard,
   podiumEntries,
   leaderboardRows,
+  guildPodiumEntries,
+  guildLeaderboardListRows,
   publicPlayerName,
   publicProfileRoute,
   loadLeaderboard,
   leaderboardInitial,
+  guildLeaderboardInitial,
   formatLeaderboardValue,
+  formatGuildLeaderboardValue,
   leaderboardRankLabel,
 } = useAppContext() as Record<string, any>;
 </script>
@@ -34,8 +41,8 @@ const {
 >
   <div class="section-head">
     <div>
-      <p class="eyebrow">玩家排行</p>
-      <h2>玩家榜单</h2>
+      <p class="eyebrow">排行</p>
+      <h2>排行榜</h2>
     </div>
     <div class="section-actions">
       <button
@@ -52,8 +59,8 @@ const {
 
   <div v-if="!isAuthed" class="empty-state">
     <Trophy :size="30" />
-    <strong>登录后查看排行榜</strong>
-    <span>查看玩家榜单</span>
+    <strong>请先登录</strong>
+    <span>登录后查看</span>
   </div>
   <div
     v-else-if="busy.leaderboard && !leaderboard"
@@ -74,7 +81,25 @@ const {
     </button>
   </div>
   <div v-else class="leaderboard-content">
-    <div class="leaderboard-tabs" role="tablist" aria-label="排行榜类型">
+    <div class="leaderboard-scope" role="tablist" aria-label="排行">
+      <button
+        type="button"
+        :class="{ active: activeLeaderboardScope === 'player' }"
+        @click="activeLeaderboardScope = 'player'"
+      >
+        玩家
+      </button>
+      <button
+        type="button"
+        :class="{ active: activeLeaderboardScope === 'guild' }"
+        @click="activeLeaderboardScope = 'guild'"
+      >
+        公会
+      </button>
+    </div>
+
+    <template v-if="activeLeaderboardScope === 'player'">
+      <div class="leaderboard-tabs" role="tablist" aria-label="玩家排行">
       <button
         v-for="tab in leaderboardTabs"
         :key="tab.key"
@@ -85,9 +110,9 @@ const {
         <strong>{{ tab.label }}</strong>
         <span>{{ tab.hint }}</span>
       </button>
-    </div>
+      </div>
 
-    <div v-if="activeLeaderboardBoard?.me" class="my-rank-card">
+      <div v-if="activeLeaderboardBoard?.me" class="my-rank-card">
       <div>
         <small>我的排名</small>
         <strong>{{
@@ -101,14 +126,14 @@ const {
         }}</strong>
       </div>
       <span>{{ activeLeaderboardTab.hint }}</span>
-    </div>
+      </div>
 
-    <div v-if="!activeLeaderboardBoard?.list.length" class="empty-state">
+      <div v-if="!activeLeaderboardBoard?.list.length" class="empty-state">
       <Trophy :size="30" />
       <strong>当前暂无上榜玩家</strong>
       <span>产生记录后自动更新。</span>
-    </div>
-    <div v-else class="leaderboard-board">
+      </div>
+      <div v-else class="leaderboard-board">
       <div class="podium-grid">
         <RouterLink
           v-for="entry in podiumEntries"
@@ -160,10 +185,81 @@ const {
           <em>{{ formatLeaderboardValue(entry.value) }}</em>
         </RouterLink>
       </div>
-    </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div v-if="guildLeaderboard?.me" class="my-rank-card">
+        <div>
+          <small>公会排名</small>
+          <strong>{{ leaderboardRankLabel(guildLeaderboard.me.rank) }}</strong>
+        </div>
+        <div>
+          <small>总战力</small>
+          <strong>{{ formatGuildLeaderboardValue(guildLeaderboard.me.value) }}</strong>
+        </div>
+        <span>{{ guildLeaderboard.me.name }}</span>
+      </div>
+
+      <div v-if="guildLeaderboardError" class="empty-state">
+        <Trophy :size="30" />
+        <strong>加载失败</strong>
+        <span>{{ guildLeaderboardError }}</span>
+      </div>
+      <div v-else-if="!guildLeaderboard?.list.length" class="empty-state">
+        <Trophy :size="30" />
+        <strong>暂无公会</strong>
+        <span>暂无排行</span>
+      </div>
+      <div v-else class="leaderboard-board">
+        <div class="podium-grid">
+          <article
+            v-for="entry in guildPodiumEntries"
+            :key="`guild-podium-${entry.id}`"
+            class="podium-card"
+            :class="`rank-${entry.rank}`"
+          >
+            <span class="rank-badge">{{
+              leaderboardRankLabel(entry.rank)
+            }}</span>
+            <span class="avatar-fallback">{{
+              guildLeaderboardInitial(entry)
+            }}</span>
+            <h3>{{ entry.name }}</h3>
+            <p>总战力</p>
+            <strong>{{ formatGuildLeaderboardValue(entry.value) }}</strong>
+          </article>
+        </div>
+
+        <div v-if="guildLeaderboardListRows.length" class="leaderboard-list">
+          <article
+            v-for="entry in guildLeaderboardListRows"
+            :key="`guild-${entry.id}`"
+            class="leaderboard-row"
+            :class="{ mine: entry.id === guildLeaderboard?.me?.id }"
+          >
+            <b>{{ leaderboardRankLabel(entry.rank) }}</b>
+            <span class="avatar-fallback small">{{
+              guildLeaderboardInitial(entry)
+            }}</span>
+            <div>
+              <strong>{{ entry.name }}</strong>
+              <span>Lv.{{ entry.level }} · {{ entry.memberCount }}/{{ entry.memberLimit }}</span>
+            </div>
+            <em>{{ formatGuildLeaderboardValue(entry.value) }}</em>
+          </article>
+        </div>
+      </div>
+    </template>
 
     <p class="leaderboard-time">
-      更新时间：{{ formatDate(leaderboard?.generatedAt) }}
+      更新时间：{{
+        formatDate(
+          activeLeaderboardScope === 'guild'
+            ? guildLeaderboard?.generatedAt
+            : leaderboard?.generatedAt,
+        )
+      }}
     </p>
   </div>
 </section>

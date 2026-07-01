@@ -282,4 +282,35 @@ describe("FormationService 阵容编队", () => {
       locked: true,
     });
   });
+
+  it("批量计算玩家阵容战力并排除挂售卡", async () => {
+    store.userCards.push(
+      createUserCard("u2", "card-d", 1, {
+        card_level: "SSR",
+        cultivation_level: 2,
+      }),
+    );
+    await service.saveFormation("u1", [
+      { position: 1, cardUuid: "card-a" },
+      { position: 2, cardUuid: "card-b" },
+    ]);
+    await service.saveFormation("u2", [{ position: 1, cardUuid: "card-d" }]);
+    store.listings.push({
+      id: 1,
+      seller_uid: "u1",
+      card_uuid: "card-b",
+      card_id: 2,
+      card_level: "SR",
+      price: 100,
+      fee_rate: 0,
+      status: "active",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } as TradeListing);
+
+    const result = await service.getFormationPowerMap(["u1", "u2"]);
+
+    expect(result.get("u1")).toBe(744);
+    expect(result.get("u2")).toBe(672);
+  });
 });

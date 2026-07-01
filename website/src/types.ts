@@ -1221,7 +1221,8 @@ export type LeaderboardMetric =
   | "urCards"
   | "completedPools"
   | "rechargeAmount"
-  | "pveCleared";
+  | "pveCleared"
+  | "formationPower";
 
 export interface LeaderboardEntry {
   rank: number;
@@ -1240,6 +1241,22 @@ export interface LeaderboardBoard {
 export interface LeaderboardResponse {
   generatedAt: string;
   rankings: Record<LeaderboardMetric, LeaderboardBoard>;
+}
+
+export interface GuildLeaderboardEntry {
+  rank: number;
+  id: number;
+  name: string;
+  level: number;
+  memberCount: number;
+  memberLimit: number;
+  value: number;
+}
+
+export interface GuildLeaderboardResponse {
+  generatedAt: string;
+  list: GuildLeaderboardEntry[];
+  me: GuildLeaderboardEntry | null;
 }
 
 export interface TradeConfig {

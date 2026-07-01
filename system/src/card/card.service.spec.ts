@@ -875,6 +875,7 @@ describe("CardService 排行榜", () => {
       userCards?: Partial<UserCard>[];
       rechargeRecords?: Partial<RechargeRecord>[];
       pveRecords?: Partial<PveChallengeRecord>[];
+      formationPowers?: Record<string, number>;
     } = {},
   ) {
     const users = (overrides.users || [
@@ -935,6 +936,9 @@ describe("CardService 排行榜", () => {
         {} as Record<string, { uid: string; cleared: number }>,
       ),
     );
+    const formationPowerMap = new Map(
+      Object.entries(overrides.formationPowers || {}),
+    );
     const rechargeRecordRepository = createRepository({
       createQueryBuilder: jest.fn(() => ({
         select: jest.fn().mockReturnThis(),
@@ -974,6 +978,12 @@ describe("CardService 排行榜", () => {
       undefined,
       rechargeRecordRepository as any,
       pveRecordRepository as any,
+      undefined,
+      {
+        getFormationPowerMap: jest
+          .fn()
+          .mockResolvedValue(formationPowerMap),
+      } as any,
     );
 
     return { service, rechargeRecordRepository, pveRecordRepository };
@@ -1103,6 +1113,27 @@ describe("CardService 排行榜", () => {
     ]);
     expect(result.rankings.pveCleared.me).toEqual(
       expect.objectContaining({ uid: "a", rank: 2, value: 1 }),
+    );
+  });
+
+  it("阵容战力榜按当前阵容总战力排序", async () => {
+    const { service } = createLeaderboardService({
+      formationPowers: {
+        a: 1200,
+        b: 2600,
+        c: 2600,
+      },
+    });
+
+    const result = await service.getLeaderboard("a", 10);
+
+    expect(result.rankings.formationPower.list).toEqual([
+      expect.objectContaining({ uid: "b", rank: 1, value: 2600 }),
+      expect.objectContaining({ uid: "c", rank: 1, value: 2600 }),
+      expect.objectContaining({ uid: "a", rank: 3, value: 1200 }),
+    ]);
+    expect(result.rankings.formationPower.me).toEqual(
+      expect.objectContaining({ uid: "a", rank: 3, value: 1200 }),
     );
   });
 });
