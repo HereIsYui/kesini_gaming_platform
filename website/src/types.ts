@@ -339,6 +339,8 @@ export interface GuildSummary {
   name: string;
   description?: string;
   announcement?: string;
+  leaderNickname?: string;
+  leaderAvatar?: string;
   memberCount: number;
   level: number;
   exp: number;
@@ -1247,6 +1249,8 @@ export interface GuildLeaderboardEntry {
   rank: number;
   id: number;
   name: string;
+  leaderNickname?: string;
+  leaderAvatar?: string;
   level: number;
   memberCount: number;
   memberLimit: number;

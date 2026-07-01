@@ -86,6 +86,8 @@ interface GuildLeaderboardEntry {
   rank: number;
   id: number;
   name: string;
+  leaderNickname: string;
+  leaderAvatar: string;
   level: number;
   memberCount: number;
   memberLimit: number;
@@ -120,6 +122,7 @@ export class GuildsService {
         )
       : null;
     const guilds = await this.listGuildRows(this.dataSource);
+    const guildOwnerMap = await this.getGuildOwnerMap(this.dataSource, guilds);
     const pendingRequests = await this.findPendingRequestsForUser(
       this.dataSource,
       normalizedUid,
@@ -137,6 +140,7 @@ export class GuildsService {
           {
             nextLevelExp: this.getNextLevelExp(guild, config),
             applied: pendingGuildIds.has(guild.id),
+            leader: guildOwnerMap.get(guild.owner_uid) || null,
           },
         ),
       ),
@@ -159,6 +163,7 @@ export class GuildsService {
       pendingRequests.map((request) => request.guild_id),
     );
     const guilds = await this.listGuildRows(this.dataSource);
+    const guildOwnerMap = await this.getGuildOwnerMap(this.dataSource, guilds);
 
     return {
       list: guilds.map((guild) =>
@@ -168,6 +173,7 @@ export class GuildsService {
           {
             nextLevelExp: this.getNextLevelExp(guild, config),
             applied: pendingGuildIds.has(guild.id),
+            leader: guildOwnerMap.get(guild.owner_uid) || null,
           },
         ),
       ),
@@ -183,6 +189,7 @@ export class GuildsService {
       this.dataSource.getRepository(GuildMember).find(),
       this.findMembership(this.dataSource, normalizedUid),
     ]);
+    const guildOwnerMap = await this.getGuildOwnerMap(this.dataSource, guilds);
     const memberUids = [...new Set(members.map((member) => member.uid))];
     const powerMap = await this.formationService.getFormationPowerMap(
       memberUids,
@@ -199,7 +206,13 @@ export class GuildsService {
 
     const rankedEntries = this.assignGuildLeaderboardRanks(
       guilds
-        .map((guild) => this.toGuildLeaderboardEntry(guild, totalPowerByGuild))
+        .map((guild) =>
+          this.toGuildLeaderboardEntry(
+            guild,
+            totalPowerByGuild,
+            guildOwnerMap.get(guild.owner_uid) || null,
+          ),
+        )
         .filter((entry) => entry.value > 0)
         .sort(
           (left, right) =>
@@ -1021,6 +1034,9 @@ export class GuildsService {
     return {
       guild: this.toGuildView(guild, membership, {
         nextLevelExp: this.getNextLevelExp(guild, config),
+        leader: await manager
+          .getRepository(User)
+          .findOne({ where: { uid: guild.owner_uid } }),
       }),
       members: await this.getMembers(manager, guild.id, membership),
       dailyStatus: await this.buildDailyStatus(
@@ -1148,14 +1164,30 @@ export class GuildsService {
     return Math.min(GUILD_LEADERBOARD_MAX_LIMIT, limit);
   }
 
+  private async getGuildOwnerMap(manager: GuildManager, guilds: Guild[]) {
+    const ownerUids = [
+      ...new Set(guilds.map((guild) => guild.owner_uid).filter(Boolean)),
+    ];
+    if (ownerUids.length === 0) {
+      return new Map<string, User>();
+    }
+    const users = await manager.getRepository(User).find({
+      where: { uid: In(ownerUids) },
+    });
+    return new Map(users.map((user) => [user.uid, user]));
+  }
+
   private toGuildLeaderboardEntry(
     guild: Guild,
     totalPowerByGuild: Map<number, number>,
+    leader?: User | null,
   ): GuildLeaderboardEntry {
     return {
       rank: 0,
       id: guild.id,
       name: guild.name,
+      leaderNickname: this.publicName(leader || undefined, guild.owner_uid),
+      leaderAvatar: leader?.avatar || "",
       level: Math.max(1, Number(guild.level || 1)),
       memberCount: Number(guild.member_count || 0),
       memberLimit:
@@ -1746,14 +1778,17 @@ export class GuildsService {
   private toGuildView(
     guild: Guild,
     membership?: GuildMember | null,
-    options?: { nextLevelExp?: number; applied?: boolean },
+    options?: { nextLevelExp?: number; applied?: boolean; leader?: User | null },
   ) {
     const config = DEFAULT_GUILD_CONFIG;
+    const leader = options?.leader || null;
     return {
       id: guild.id,
       name: guild.name,
       description: guild.description || "",
       announcement: guild.announcement || "",
+      leaderNickname: this.publicName(leader || undefined, guild.owner_uid),
+      leaderAvatar: leader?.avatar || "",
       memberCount: Number(guild.member_count || 0),
       level: Math.max(1, Number(guild.level || 1)),
       exp: Math.max(0, Number(guild.exp || 0)),

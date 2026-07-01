@@ -375,6 +375,8 @@ describe("GuildsService 公会玩法", () => {
       memberLimit: 20,
       joinMode: "open",
       role: "leader",
+      leaderNickname: "玩家u1",
+      leaderAvatar: "https://example.com/u1.png",
     });
     expect(result.current?.members[0]).toMatchObject({
       uid: "u1",
@@ -721,8 +723,18 @@ describe("GuildsService 公会玩法", () => {
     const result = await service.getPowerLeaderboard("u3", 10);
 
     expect(result.list).toEqual([
-      expect.objectContaining({ name: "月影会", rank: 1, value: 7500 }),
-      expect.objectContaining({ name: "星海会", rank: 2, value: 3000 }),
+      expect.objectContaining({
+        name: "月影会",
+        rank: 1,
+        value: 7500,
+        leaderAvatar: "https://example.com/u2.png",
+      }),
+      expect.objectContaining({
+        name: "星海会",
+        rank: 2,
+        value: 3000,
+        leaderAvatar: "https://example.com/u1.png",
+      }),
     ]);
     expect(result.me).toEqual(
       expect.objectContaining({ name: "星海会", rank: 2, value: 3000 }),

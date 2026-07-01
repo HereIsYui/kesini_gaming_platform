@@ -4061,8 +4061,17 @@ function leaderboardInitial(entry: LeaderboardEntry) {
   return publicPlayerName(entry.nickname, entry.uid).slice(0, 1).toUpperCase();
 }
 
+function guildIconInitial(entry: {
+  name?: string | null;
+  leaderNickname?: string | null;
+}) {
+  return String(entry.leaderNickname || entry.name || "公会")
+    .slice(0, 1)
+    .toUpperCase();
+}
+
 function guildLeaderboardInitial(entry: GuildLeaderboardEntry) {
-  return String(entry.name || "公会").slice(0, 1).toUpperCase();
+  return guildIconInitial(entry);
 }
 
 function formatLeaderboardValue(value?: number) {
@@ -4690,6 +4699,7 @@ const appContext = {
   resetAchievementFilters,
   achievementScopeLabel,
   leaderboardInitial,
+  guildIconInitial,
   guildLeaderboardInitial,
   formatLeaderboardValue,
   formatGuildLeaderboardValue,

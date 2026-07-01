@@ -3,6 +3,7 @@ import { useAppContext } from "../composables/useAppContext";
 
 const {
   RefreshCw,
+  ShieldCheck,
   Trophy,
   RouterLink,
   formatDate,
@@ -26,6 +27,7 @@ const {
   publicProfileRoute,
   loadLeaderboard,
   leaderboardInitial,
+  guildIconInitial,
   guildLeaderboardInitial,
   formatLeaderboardValue,
   formatGuildLeaderboardValue,
@@ -222,9 +224,15 @@ const {
             <span class="rank-badge">{{
               leaderboardRankLabel(entry.rank)
             }}</span>
-            <span class="avatar-fallback">{{
-              guildLeaderboardInitial(entry)
-            }}</span>
+            <span class="guild-icon large">
+              <img
+                v-if="entry.leaderAvatar"
+                :src="entry.leaderAvatar"
+                :alt="entry.leaderNickname || entry.name"
+              />
+              <i v-else>{{ guildIconInitial(entry) }}</i>
+              <b><ShieldCheck :size="13" /></b>
+            </span>
             <h3>{{ entry.name }}</h3>
             <p>总战力</p>
             <strong>{{ formatGuildLeaderboardValue(entry.value) }}</strong>
@@ -239,9 +247,15 @@ const {
             :class="{ mine: entry.id === guildLeaderboard?.me?.id }"
           >
             <b>{{ leaderboardRankLabel(entry.rank) }}</b>
-            <span class="avatar-fallback small">{{
-              guildLeaderboardInitial(entry)
-            }}</span>
+            <span class="guild-icon small">
+              <img
+                v-if="entry.leaderAvatar"
+                :src="entry.leaderAvatar"
+                :alt="entry.leaderNickname || entry.name"
+              />
+              <i v-else>{{ guildLeaderboardInitial(entry) }}</i>
+              <b><ShieldCheck :size="10" /></b>
+            </span>
             <div>
               <strong>{{ entry.name }}</strong>
               <span>Lv.{{ entry.level }} · {{ entry.memberCount }}/{{ entry.memberLimit }}</span>

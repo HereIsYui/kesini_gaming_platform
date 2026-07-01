@@ -4,6 +4,7 @@ import { useAppContext } from "../composables/useAppContext";
 
 const {
   RefreshCw,
+  ShieldCheck,
   UserRound,
   UsersRound,
   RouterLink,
@@ -42,6 +43,7 @@ const {
   guildMemberInitial,
   guildMessageSenderName,
   guildMessageInitial,
+  guildIconInitial,
   guildLeaderboardInitial,
   formatGuildLeaderboardValue,
   formatRewards,
@@ -149,6 +151,15 @@ function pendingRequestId(guildId: number) {
     <div v-if="currentGuild" class="guild-layout guild-play-layout">
       <section class="guild-block guild-current">
         <div class="guild-hero">
+          <span class="guild-icon large">
+            <img
+              v-if="currentGuild.leaderAvatar"
+              :src="currentGuild.leaderAvatar"
+              :alt="currentGuild.leaderNickname || currentGuild.name"
+            />
+            <i v-else>{{ guildIconInitial(currentGuild) }}</i>
+            <b><ShieldCheck :size="13" /></b>
+          </span>
           <div>
             <strong>{{ currentGuild.name }}</strong>
             <span>{{ currentGuild.description || "暂无简介" }}</span>
@@ -449,12 +460,22 @@ function pendingRequestId(guildId: number) {
               :class="{ mine: entry.id === currentGuild.id }"
             >
               <b>#{{ entry.rank }}</b>
-              <span class="avatar-fallback small">{{
-                guildLeaderboardInitial(entry)
-              }}</span>
+              <span class="guild-icon small">
+                <img
+                  v-if="entry.leaderAvatar"
+                  :src="entry.leaderAvatar"
+                  :alt="entry.leaderNickname || entry.name"
+                />
+                <i v-else>{{ guildLeaderboardInitial(entry) }}</i>
+                <b><ShieldCheck :size="10" /></b>
+              </span>
               <div>
                 <strong>{{ entry.name }}</strong>
-                <span>Lv.{{ entry.level }} · {{ entry.memberCount }}/{{ entry.memberLimit }}</span>
+                <span>
+                  Lv.{{ entry.level }} · {{ entry.memberCount }}/{{
+                    entry.memberLimit
+                  }}
+                </span>
               </div>
               <em>{{ formatGuildLeaderboardValue(entry.value) }}</em>
             </article>
@@ -647,6 +668,15 @@ function pendingRequestId(guildId: number) {
             :key="guild.id"
             class="guild-row"
           >
+            <span class="guild-icon">
+              <img
+                v-if="guild.leaderAvatar"
+                :src="guild.leaderAvatar"
+                :alt="guild.leaderNickname || guild.name"
+              />
+              <i v-else>{{ guildIconInitial(guild) }}</i>
+              <b><ShieldCheck :size="11" /></b>
+            </span>
             <div class="guild-row-main">
               <strong>{{ guild.name }}</strong>
               <span>
