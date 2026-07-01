@@ -54,7 +54,7 @@ export class ShopPurchaseRecord {
   @Column()
   uid: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ type: "varchar", length: 255, nullable: true })
   fishpi_user_name?: string | null;
 
   @Column({ default: 1 })
@@ -81,13 +81,13 @@ export class ShopPurchaseRecord {
   @Column({ default: 0 })
   balance_after: number;
 
-  @Column({ length: 10, nullable: true })
+  @Column({ type: "varchar", length: 10, nullable: true })
   date_key?: string | null;
 
-  @Column({ length: 10, nullable: true })
+  @Column({ type: "varchar", length: 10, nullable: true })
   week_key?: string | null;
 
-  @Column({ length: 7, nullable: true })
+  @Column({ type: "varchar", length: 7, nullable: true })
   month_key?: string | null;
 
   @Column({ type: "json", nullable: true })
