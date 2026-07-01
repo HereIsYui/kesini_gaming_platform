@@ -43,6 +43,15 @@ export class ShopProduct {
   @Column({ type: "int", nullable: true })
   user_limit?: number | null;
 
+  @Column({ type: "int", nullable: true })
+  daily_limit?: number | null;
+
+  @Column({ type: "int", nullable: true })
+  weekly_limit?: number | null;
+
+  @Column({ type: "int", nullable: true })
+  monthly_limit?: number | null;
+
   @Column({ type: "datetime", nullable: true })
   starts_at?: Date | null;
 

@@ -62,6 +62,35 @@ function isInOperator(value: any) {
   return value && value._type === "in" && Array.isArray(value._value);
 }
 
+const TEST_OFFSET_MS = 8 * 60 * 60 * 1000;
+const TEST_DAY_MS = 24 * 60 * 60 * 1000;
+
+function getDateKey(date = new Date()) {
+  return new Date(date.getTime() + TEST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function getIsoWeekKey(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  const day = date.getUTCDay() || 7;
+  const thursday = new Date(date);
+  thursday.setUTCDate(date.getUTCDate() + 4 - day);
+  const year = thursday.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const week = Math.ceil(
+    ((thursday.getTime() - yearStart.getTime()) / TEST_DAY_MS + 1) / 7,
+  );
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function currentPeriodKeys() {
+  const dateKey = getDateKey();
+  return {
+    dateKey,
+    weekKey: getIsoWeekKey(dateKey),
+    monthKey: dateKey.slice(0, 7),
+  };
+}
+
 function createService({
   products = [],
   purchases = [],
@@ -241,5 +270,207 @@ describe("ShopMallService", () => {
         rewards: { points: 100, items: [] },
       }),
     ).rejects.toThrow("星穹币奖励不能高于价格");
+  });
+
+  it("商品列表返回每日每周每月限购进度", async () => {
+    const keys = currentPeriodKeys();
+    const { service } = createService({
+      products: [
+        {
+          id: 1,
+          name: "星核礼包",
+          description: "",
+          enabled: true,
+          delete_flag: false,
+          currency_type: "star_coin",
+          price: 1,
+          rewards: { points: 0, items: [{ itemId: 10, num: 1 }] },
+          used_count: 0,
+          user_limit: 10,
+          daily_limit: 2,
+          weekly_limit: 3,
+          monthly_limit: 4,
+          sort_order: 0,
+        },
+      ],
+      purchases: [
+        {
+          id: 1,
+          uid: "u1",
+          product_id: 1,
+          status: "success",
+          count: 2,
+          date_key: keys.dateKey,
+          week_key: keys.weekKey,
+          month_key: keys.monthKey,
+        },
+      ],
+    });
+
+    await expect(service.listProducts("u1")).resolves.toEqual([
+      expect.objectContaining({
+        id: 1,
+        usedByUser: 2,
+        usedToday: 2,
+        usedThisWeek: 2,
+        usedThisMonth: 2,
+        dailyLimit: 2,
+        weeklyLimit: 3,
+        monthlyLimit: 4,
+        canBuy: false,
+        unavailableReason: "今日已满",
+      }),
+    ]);
+  });
+
+  it("达到每日限购后不能继续购买", async () => {
+    const keys = currentPeriodKeys();
+    const { service } = createService({
+      products: [
+        {
+          id: 1,
+          name: "每日礼包",
+          enabled: true,
+          delete_flag: false,
+          currency_type: "star_coin",
+          price: 1,
+          rewards: { points: 0, items: [{ itemId: 10, num: 1 }] },
+          used_count: 0,
+          daily_limit: 1,
+        },
+      ],
+      purchases: [
+        {
+          id: 1,
+          uid: "u1",
+          product_id: 1,
+          status: "success",
+          count: 1,
+          date_key: keys.dateKey,
+          week_key: keys.weekKey,
+          month_key: keys.monthKey,
+        },
+      ],
+    });
+
+    await expect(
+      service.buy("u1", 1, { count: 1, requestId: "daily-limit" }),
+    ).rejects.toThrow("今日已满");
+  });
+
+  it("达到每周限购后不能继续购买", async () => {
+    const keys = currentPeriodKeys();
+    const { service } = createService({
+      products: [
+        {
+          id: 1,
+          name: "每周礼包",
+          enabled: true,
+          delete_flag: false,
+          currency_type: "star_coin",
+          price: 1,
+          rewards: { points: 0, items: [{ itemId: 10, num: 1 }] },
+          used_count: 0,
+          weekly_limit: 1,
+        },
+      ],
+      purchases: [
+        {
+          id: 1,
+          uid: "u1",
+          product_id: 1,
+          status: "success",
+          count: 1,
+          date_key: "2000-01-01",
+          week_key: keys.weekKey,
+          month_key: keys.monthKey,
+        },
+      ],
+    });
+
+    await expect(
+      service.buy("u1", 1, { count: 1, requestId: "weekly-limit" }),
+    ).rejects.toThrow("本周已满");
+  });
+
+  it("达到每月限购后不能继续购买", async () => {
+    const keys = currentPeriodKeys();
+    const { service } = createService({
+      products: [
+        {
+          id: 1,
+          name: "每月礼包",
+          enabled: true,
+          delete_flag: false,
+          currency_type: "star_coin",
+          price: 1,
+          rewards: { points: 0, items: [{ itemId: 10, num: 1 }] },
+          used_count: 0,
+          monthly_limit: 1,
+        },
+      ],
+      purchases: [
+        {
+          id: 1,
+          uid: "u1",
+          product_id: 1,
+          status: "success",
+          count: 1,
+          date_key: "2000-01-01",
+          week_key: "2000-W01",
+          month_key: keys.monthKey,
+        },
+      ],
+    });
+
+    await expect(
+      service.buy("u1", 1, { count: 1, requestId: "monthly-limit" }),
+    ).rejects.toThrow("本月已满");
+  });
+
+  it("未成功记录不计入周期限购，成功购买写入周期", async () => {
+    const keys = currentPeriodKeys();
+    const { service, repositories } = createService({
+      products: [
+        {
+          id: 1,
+          name: "每日礼包",
+          enabled: true,
+          delete_flag: false,
+          currency_type: "star_coin",
+          price: 1,
+          rewards: { points: 0, items: [{ itemId: 10, num: 1 }] },
+          used_count: 0,
+          daily_limit: 1,
+        },
+      ],
+      purchases: [
+        {
+          id: 1,
+          uid: "u1",
+          product_id: 1,
+          status: "failed",
+          count: 1,
+          date_key: keys.dateKey,
+          week_key: keys.weekKey,
+          month_key: keys.monthKey,
+        },
+      ],
+    });
+
+    await expect(
+      service.buy("u1", 1, { count: 1, requestId: "success-period" }),
+    ).resolves.toEqual(expect.objectContaining({ productId: 1, count: 1 }));
+    expect(repositories.get(ShopPurchaseRecord).rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          request_id: "success-period",
+          status: "success",
+          date_key: keys.dateKey,
+          week_key: keys.weekKey,
+          month_key: keys.monthKey,
+        }),
+      ]),
+    );
   });
 });

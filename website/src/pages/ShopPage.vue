@@ -97,6 +97,18 @@ const {
               }}
             </dd>
           </div>
+          <div v-if="item.dailyLimit">
+            <dt>今日</dt>
+            <dd>{{ item.usedToday || 0 }}/{{ item.dailyLimit }}</dd>
+          </div>
+          <div v-if="item.weeklyLimit">
+            <dt>本周</dt>
+            <dd>{{ item.usedThisWeek || 0 }}/{{ item.weeklyLimit }}</dd>
+          </div>
+          <div v-if="item.monthlyLimit">
+            <dt>本月</dt>
+            <dd>{{ item.usedThisMonth || 0 }}/{{ item.monthlyLimit }}</dd>
+          </div>
           <div>
             <dt>时间</dt>
             <dd>

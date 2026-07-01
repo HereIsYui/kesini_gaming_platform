@@ -29,6 +29,9 @@ export interface ShopProductAdminInput {
   rewards?: RedeemRewards;
   total_limit?: number | null;
   user_limit?: number | null;
+  daily_limit?: number | null;
+  weekly_limit?: number | null;
+  monthly_limit?: number | null;
   starts_at?: Date | string | null;
   ends_at?: Date | string | null;
   sort_order?: number;
@@ -47,6 +50,22 @@ const SHOP_CURRENCY_LABELS: Record<ShopCurrencyType, string> = {
   star_coin: "星穹币",
   fishpi_point: "鱼排积分",
 };
+
+const SHOP_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface ShopPeriodKeys {
+  dateKey: string;
+  weekKey: string;
+  monthKey: string;
+}
+
+interface ShopUsageStats {
+  total: number;
+  daily: number;
+  weekly: number;
+  monthly: number;
+}
 
 @Injectable()
 export class ShopMallService {
@@ -77,19 +96,21 @@ export class ShopMallService {
         return [];
       }
 
-      const usageMap = await this.loadUsageMap(
+      const periodKeys = this.currentPeriodKeys();
+      const usageMap = await this.loadUsageStatsMap(
         manager,
         uid,
         visibleProducts.map((product) => product.id),
+        periodKeys,
       );
       const rewardLookup = await this.loadRewardLookup(manager, visibleProducts);
       const fishpiAvailable = await this.isFishpiPaymentAvailable();
 
       return visibleProducts.map((product) => {
-        const usedByUser = usageMap.get(product.id) || 0;
+        const usage = usageMap.get(product.id) || this.createEmptyUsageStats();
         const reason = this.getUnavailableReason(
           product,
-          usedByUser,
+          usage,
           1,
           user,
           fishpiAvailable,
@@ -103,8 +124,14 @@ export class ShopMallService {
           price: product.price,
           rewards: this.decorateRewards(product.rewards, rewardLookup),
           remaining: this.remaining(product),
-          usedByUser,
+          usedByUser: usage.total,
           userLimit: product.user_limit ?? null,
+          dailyLimit: product.daily_limit ?? null,
+          weeklyLimit: product.weekly_limit ?? null,
+          monthlyLimit: product.monthly_limit ?? null,
+          usedToday: usage.daily,
+          usedThisWeek: usage.weekly,
+          usedThisMonth: usage.monthly,
           startsAt: product.starts_at ?? null,
           endsAt: product.ends_at ?? null,
           canBuy: reason === "",
@@ -267,14 +294,16 @@ export class ShopMallService {
       if (!user) {
         throw new Error("用户不存在");
       }
-      const usedByUser = await this.getUserUsageCount(
+      const periodKeys = this.currentPeriodKeys();
+      const usage = await this.getUserUsageStats(
         manager,
         uid,
         lockedProduct.id,
+        periodKeys,
       );
       const reason = this.getUnavailableReason(
         lockedProduct,
-        usedByUser,
+        usage,
         count,
         user,
         true,
@@ -301,6 +330,9 @@ export class ShopMallService {
           status: "pending",
           balance_before: pointBefore,
           balance_after: pointBefore,
+          date_key: periodKeys.dateKey,
+          week_key: periodKeys.weekKey,
+          month_key: periodKeys.monthKey,
           third_party_response: null,
           failure_reason: null,
         }),
@@ -352,6 +384,7 @@ export class ShopMallService {
     requestId: string,
   ) {
     const purchaseRepository = this.dataSource.getRepository(ShopPurchaseRecord);
+    const periodKeys = this.currentPeriodKeys();
     const pending = await purchaseRepository.save(
       purchaseRepository.create({
         request_id: requestId,
@@ -367,6 +400,9 @@ export class ShopMallService {
         status: "pending",
         balance_before: 0,
         balance_after: 0,
+        date_key: periodKeys.dateKey,
+        week_key: periodKeys.weekKey,
+        month_key: periodKeys.monthKey,
         third_party_response: null,
         failure_reason: null,
       }),
@@ -402,14 +438,15 @@ export class ShopMallService {
         if (!user) {
           throw new Error("用户不存在");
         }
-        const usedByUser = await this.getUserUsageCount(
+        const usage = await this.getUserUsageStats(
           manager,
           uid,
           lockedProduct.id,
+          periodKeys,
         );
         const reason = this.getUnavailableReason(
           lockedProduct,
-          usedByUser,
+          usage,
           count,
           user,
           true,
@@ -455,6 +492,9 @@ export class ShopMallService {
         lockedRecord.status = "success";
         lockedRecord.balance_before = fishpiBefore;
         lockedRecord.balance_after = fishpiAfter;
+        lockedRecord.date_key = periodKeys.dateKey;
+        lockedRecord.week_key = periodKeys.weekKey;
+        lockedRecord.month_key = periodKeys.monthKey;
         lockedRecord.third_party_response =
           this.sanitizeThirdPartyResponse(thirdPartyResponse);
         lockedRecord.failure_reason = null;
@@ -540,6 +580,18 @@ export class ShopMallService {
         body.user_limit,
         "单人限购无效",
       ),
+      daily_limit: this.normalizeNullablePositiveInt(
+        body.daily_limit,
+        "每日限购无效",
+      ),
+      weekly_limit: this.normalizeNullablePositiveInt(
+        body.weekly_limit,
+        "每周限购无效",
+      ),
+      monthly_limit: this.normalizeNullablePositiveInt(
+        body.monthly_limit,
+        "每月限购无效",
+      ),
       starts_at: startsAt,
       ends_at: endsAt,
       sort_order: this.normalizeNonNegativeInteger(
@@ -551,7 +603,7 @@ export class ShopMallService {
 
   private getUnavailableReason(
     product: ShopProduct,
-    usedByUser: number,
+    usage: ShopUsageStats,
     count: number,
     user: User,
     fishpiAvailable: boolean,
@@ -575,9 +627,30 @@ export class ShopMallService {
     if (
       product.user_limit !== null &&
       product.user_limit !== undefined &&
-      usedByUser + count > product.user_limit
+      usage.total + count > product.user_limit
     ) {
       return "已达上限";
+    }
+    if (
+      product.daily_limit !== null &&
+      product.daily_limit !== undefined &&
+      usage.daily + count > product.daily_limit
+    ) {
+      return "今日已满";
+    }
+    if (
+      product.weekly_limit !== null &&
+      product.weekly_limit !== undefined &&
+      usage.weekly + count > product.weekly_limit
+    ) {
+      return "本周已满";
+    }
+    if (
+      product.monthly_limit !== null &&
+      product.monthly_limit !== undefined &&
+      usage.monthly + count > product.monthly_limit
+    ) {
+      return "本月已满";
     }
     const costAmount = Number(product.price || 0) * count;
     if (product.currency_type === "star_coin" && Number(user.point || 0) < costAmount) {
@@ -589,13 +662,14 @@ export class ShopMallService {
     return "";
   }
 
-  private async loadUsageMap(
+  private async loadUsageStatsMap(
     manager: EntityManager,
     uid: string,
     productIds: number[],
+    periodKeys: ShopPeriodKeys,
   ) {
     if (productIds.length === 0) {
-      return new Map<number, number>();
+      return new Map<number, ShopUsageStats>();
     }
     const records = await manager.getRepository(ShopPurchaseRecord).find({
       where: {
@@ -605,23 +679,60 @@ export class ShopMallService {
       },
     });
     return records.reduce((result, record) => {
-      result.set(
-        record.product_id,
-        (result.get(record.product_id) || 0) + Number(record.count || 0),
-      );
+      const stats = result.get(record.product_id) || this.createEmptyUsageStats();
+      this.addRecordToUsageStats(stats, record, periodKeys);
+      result.set(record.product_id, stats);
       return result;
-    }, new Map<number, number>());
+    }, new Map<number, ShopUsageStats>());
   }
 
-  private async getUserUsageCount(
+  private async getUserUsageStats(
     manager: EntityManager,
     uid: string,
     productId: number,
+    periodKeys: ShopPeriodKeys,
   ) {
     const records = await manager.getRepository(ShopPurchaseRecord).find({
       where: { uid, product_id: productId, status: "success" },
     });
-    return records.reduce((sum, record) => sum + Number(record.count || 0), 0);
+    return records.reduce((stats, record) => {
+      this.addRecordToUsageStats(stats, record, periodKeys);
+      return stats;
+    }, this.createEmptyUsageStats());
+  }
+
+  private createEmptyUsageStats(): ShopUsageStats {
+    return { total: 0, daily: 0, weekly: 0, monthly: 0 };
+  }
+
+  private addRecordToUsageStats(
+    stats: ShopUsageStats,
+    record: ShopPurchaseRecord,
+    periodKeys: ShopPeriodKeys,
+  ) {
+    const count = Number(record.count || 0);
+    stats.total += count;
+    const recordKeys = this.recordPeriodKeys(record);
+    if (recordKeys.dateKey === periodKeys.dateKey) {
+      stats.daily += count;
+    }
+    if (recordKeys.weekKey === periodKeys.weekKey) {
+      stats.weekly += count;
+    }
+    if (recordKeys.monthKey === periodKeys.monthKey) {
+      stats.monthly += count;
+    }
+  }
+
+  private recordPeriodKeys(record: ShopPurchaseRecord): ShopPeriodKeys {
+    if (record.date_key && record.week_key && record.month_key) {
+      return {
+        dateKey: record.date_key,
+        weekKey: record.week_key,
+        monthKey: record.month_key,
+      };
+    }
+    return this.currentPeriodKeys(record.createdAt || new Date(0));
   }
 
   private async findExistingPurchase(uid: string, requestId: string) {
@@ -803,6 +914,32 @@ export class ShopMallService {
       return false;
     }
     return true;
+  }
+
+  private currentPeriodKeys(now = new Date()): ShopPeriodKeys {
+    const dateKey = this.getDateKey(now);
+    return {
+      dateKey,
+      weekKey: this.getIsoWeekKey(dateKey),
+      monthKey: dateKey.slice(0, 7),
+    };
+  }
+
+  private getDateKey(date = new Date()) {
+    return new Date(date.getTime() + SHOP_OFFSET_MS).toISOString().slice(0, 10);
+  }
+
+  private getIsoWeekKey(dateKey: string) {
+    const date = new Date(`${dateKey}T00:00:00.000Z`);
+    const day = date.getUTCDay() || 7;
+    const thursday = new Date(date);
+    thursday.setUTCDate(date.getUTCDate() + 4 - day);
+    const year = thursday.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const week = Math.ceil(
+      ((thursday.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7,
+    );
+    return `${year}-W${String(week).padStart(2, "0")}`;
   }
 
   private async isFishpiPaymentAvailable() {

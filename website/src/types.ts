@@ -664,6 +664,12 @@ export interface ShopProduct {
   remaining: number | null;
   usedByUser: number;
   userLimit?: number | null;
+  dailyLimit?: number | null;
+  weeklyLimit?: number | null;
+  monthlyLimit?: number | null;
+  usedToday?: number;
+  usedThisWeek?: number;
+  usedThisMonth?: number;
   startsAt?: string | null;
   endsAt?: string | null;
   canBuy: boolean;

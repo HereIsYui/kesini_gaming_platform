@@ -956,6 +956,36 @@ class ShopProductDto {
   user_limit?: number | null;
 
   @IsOptional()
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  daily_limit?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  weekly_limit?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === "" || value === null || value === undefined
+      ? null
+      : Number(value),
+  )
+  @IsInt()
+  @Min(1)
+  monthly_limit?: number | null;
+
+  @IsOptional()
   @IsDateString()
   starts_at?: string;
 

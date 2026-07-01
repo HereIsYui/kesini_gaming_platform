@@ -19,6 +19,24 @@ export type ShopPurchaseStatus =
 @Index("IDX_shop_purchase_request", ["uid", "request_id"], { unique: true })
 @Index("IDX_shop_purchase_product_user", ["product_id", "uid"])
 @Index("IDX_shop_purchase_uid_status", ["uid", "status"])
+@Index("IDX_shop_purchase_daily_limit", [
+  "product_id",
+  "uid",
+  "status",
+  "date_key",
+])
+@Index("IDX_shop_purchase_weekly_limit", [
+  "product_id",
+  "uid",
+  "status",
+  "week_key",
+])
+@Index("IDX_shop_purchase_monthly_limit", [
+  "product_id",
+  "uid",
+  "status",
+  "month_key",
+])
 @Index("IDX_shop_purchase_created", ["createdAt"])
 export class ShopPurchaseRecord {
   @PrimaryGeneratedColumn()
@@ -62,6 +80,15 @@ export class ShopPurchaseRecord {
 
   @Column({ default: 0 })
   balance_after: number;
+
+  @Column({ length: 10, nullable: true })
+  date_key?: string | null;
+
+  @Column({ length: 10, nullable: true })
+  week_key?: string | null;
+
+  @Column({ length: 7, nullable: true })
+  month_key?: string | null;
 
   @Column({ type: "json", nullable: true })
   third_party_response?: unknown | null;
