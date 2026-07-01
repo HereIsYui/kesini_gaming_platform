@@ -272,6 +272,33 @@ describe("ShopMallService", () => {
     ).rejects.toThrow("星穹币奖励不能高于价格");
   });
 
+  it("商城限购字段为 0 时按不限处理", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.createAdminProduct({
+        name: "648大礼包",
+        enabled: true,
+        currency_type: "fishpi_point",
+        price: 648,
+        total_limit: 0,
+        user_limit: 1,
+        daily_limit: 0,
+        weekly_limit: 0,
+        monthly_limit: 0,
+        rewards: { points: 1296, items: [], cards: [] },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        total_limit: null,
+        user_limit: 1,
+        daily_limit: null,
+        weekly_limit: null,
+        monthly_limit: null,
+      }),
+    );
+  });
+
   it("商品列表返回每日每周每月限购进度", async () => {
     const keys = currentPeriodKeys();
     const { service } = createService({

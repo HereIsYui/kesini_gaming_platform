@@ -904,6 +904,14 @@ class ExchangeShopItemDto {
   sort_order?: number;
 }
 
+function normalizeOptionalLimit(value: unknown) {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+  const next = Number(value);
+  return next === 0 ? null : next;
+}
+
 class ShopProductDto {
   @IsOptional()
   @IsString()
@@ -936,51 +944,31 @@ class ShopProductDto {
   };
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === "" || value === null || value === undefined
-      ? null
-      : Number(value),
-  )
+  @Transform(({ value }) => normalizeOptionalLimit(value))
   @IsInt()
   @Min(1)
   total_limit?: number | null;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === "" || value === null || value === undefined
-      ? null
-      : Number(value),
-  )
+  @Transform(({ value }) => normalizeOptionalLimit(value))
   @IsInt()
   @Min(1)
   user_limit?: number | null;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === "" || value === null || value === undefined
-      ? null
-      : Number(value),
-  )
+  @Transform(({ value }) => normalizeOptionalLimit(value))
   @IsInt()
   @Min(1)
   daily_limit?: number | null;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === "" || value === null || value === undefined
-      ? null
-      : Number(value),
-  )
+  @Transform(({ value }) => normalizeOptionalLimit(value))
   @IsInt()
   @Min(1)
   weekly_limit?: number | null;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === "" || value === null || value === undefined
-      ? null
-      : Number(value),
-  )
+  @Transform(({ value }) => normalizeOptionalLimit(value))
   @IsInt()
   @Min(1)
   monthly_limit?: number | null;

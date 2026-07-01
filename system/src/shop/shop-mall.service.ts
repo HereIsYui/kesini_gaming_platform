@@ -1000,6 +1000,9 @@ export class ShopMallService {
       return null;
     }
     const next = Number(value);
+    if (next === 0) {
+      return null;
+    }
     if (!Number.isInteger(next) || next <= 0) {
       throw new Error(message);
     }
